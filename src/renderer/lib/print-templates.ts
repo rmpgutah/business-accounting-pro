@@ -2391,7 +2391,8 @@ export function generateDemandLetterHTML(
 ): string {
   const companyName = esc(company?.name || 'Your Company');
   const cityStateZip = [company?.city, company?.state].filter(Boolean).join(', ') + (company?.zip ? ' ' + company.zip : '');
-  const companyAddr = esc([company?.address_line1, company?.address_line2, cityStateZip.trim()].filter(s => s && String(s).trim()).join(', '));
+  const _companyAddrRaw = [company?.address_line1, company?.address_line2, cityStateZip.trim()].filter(s => s && String(s).trim()).join(', ');
+  const companyAddrEsc = esc(_companyAddrRaw);
   const deadlineDays = options.deadline_days ?? 10;
   const deadlineDate = new Date(Date.now() + deadlineDays * 86_400_000)
     .toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -2407,77 +2408,6 @@ export function generateDemandLetterHTML(
   const interest = Number(debt.interest_accrued || 0);
   const fees = Number(debt.fees_accrued || 0);
 
-  const paymentRows = payments.length > 0
-    ? payments.map(p => `<tr>
-        <td>${fmtDateLocal(p.received_date)}</td>
-        <td class="text-right font-mono">${fmt(Number(p.amount || 0))}</td>
-        <td>${esc(p.method || '—')}</td>
-        <td class="text-muted">${esc(p.reference_number || '—')}</td>
-      </tr>`).join('')
-    : `<tr><td colspan="4" style="text-align:center;color:#64748b;font-style:italic;">No payments received</td></tr>`;
-
-  // ── Feature #10: days overdue indicator with weekly strip ──
-  const delinqRaw = debt.delinquent_date || debt.due_date || debt.created_at;
-  const daysOverdue = delinqRaw ? Math.max(0, Math.floor((Date.now() - new Date(delinqRaw + (typeof delinqRaw === 'string' && delinqRaw.length === 10 ? 'T12:00:00' : '')).getTime()) / 86_400_000)) : 0;
-  const daysOverdueHTML = daysOverdue > 0 ? (() => {
-    const totalCells = 18 * 7; // 126 days
-    const filled = Math.min(totalCells, daysOverdue);
-    let cells = '';
-    for (let i = 0; i < totalCells; i++) {
-      const isFilled = i < filled;
-      const isWeekStart = i % 7 === 0;
-      cells += `<span style="display:inline-block;width:7px;height:7px;margin:1px;background:${isFilled ? '#dc2626' : '#e2e8f0'};${isWeekStart ? 'margin-left:3px;' : ''}-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>`;
-    }
-    return `<div style="margin:14px 0;padding:10px 14px;background:#fef2f2;border:1.5px solid #dc2626;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      <div style="display:flex;align-items:baseline;gap:14px;">
-        <span style="font-size:32pt;font-weight:800;color:#dc2626;font-family:Georgia,serif;font-variant-numeric:tabular-nums;line-height:1;">${daysOverdue}</span>
-        <span style="font-size:10pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#991b1b;">days overdue${daysOverdue >= totalCells ? ' (chart truncated at 126 days)' : ''}</span>
-      </div>
-      <div style="margin-top:8px;line-height:0;">${cells}</div>
-    </div>`;
-  })() : '';
-
-  // ── Feature #9: aging bucket bar ──
-  const ageBuckets = [
-    { label: 'Current', max: 30, color: '#16a34a' },
-    { label: '31-60', max: 60, color: '#eab308' },
-    { label: '61-90', max: 90, color: '#f97316' },
-    { label: '90+', max: Infinity, color: '#dc2626' },
-  ];
-  const bucketIdx = ageBuckets.findIndex(b => daysOverdue <= b.max);
-  const activeBucket = bucketIdx >= 0 ? bucketIdx : ageBuckets.length - 1;
-  const agingBarHTML = balanceDue > 0 ? (() => {
-    // Distribution: weight bucket the debt falls into; show full bar with all buckets
-    const widths = ageBuckets.map((_, i) => i === activeBucket ? 40 : 20); // emphasize active
-    const sum = widths.reduce((a, b) => a + b, 0);
-    return `<div style="margin:10px 0 14px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      <div style="font-size:9pt;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#444;margin-bottom:5px;font-family:Georgia,serif;">Aging Status</div>
-      <div style="display:flex;height:14px;border:1px solid #000;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        ${ageBuckets.map((b, i) => `<div style="width:${(widths[i] / sum * 100).toFixed(2)}%;background:${b.color};opacity:${i === activeBucket ? '1' : '0.35'};-webkit-print-color-adjust:exact;print-color-adjust:exact;border-right:${i < ageBuckets.length - 1 ? '1px solid #000' : 'none'};"></div>`).join('')}
-      </div>
-      <div style="display:flex;font-size:8.5pt;color:#333;margin-top:3px;font-family:Georgia,serif;">
-        ${ageBuckets.map((b, i) => `<div style="width:${(widths[i] / sum * 100).toFixed(2)}%;text-align:center;font-weight:${i === activeBucket ? '700' : '400'};">${b.label}${i === activeBucket ? ' \u25C0' : ''}</div>`).join('')}
-      </div>
-    </div>`;
-  })() : '';
-
-  // ── Feature #19: total-due donut ──
-  const totalDueDonutHTML = (() => {
-    const segs = [
-      { value: originalAmount, color: '#0f766e', label: 'Principal' },
-      { value: interest, color: '#0891b2', label: 'Interest' },
-      { value: fees, color: '#ea580c', label: 'Fees' },
-    ];
-    if (segs.reduce((s, x) => s + x.value, 0) <= 0) return '';
-    return `<div style="float:right;margin:0 0 12px 14px;text-align:center;font-family:Georgia,serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-      ${svgDonut(segs, 90)}
-      <div style="font-size:8.5pt;color:#333;margin-top:4px;line-height:1.5;">
-        ${segs.filter(s => s.value > 0).map(s => `<div><span style="display:inline-block;width:8px;height:8px;background:${s.color};margin-right:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></span>${esc(s.label)}: ${fmt(s.value)}</div>`).join('')}
-        ${totalPaid > 0 ? `<div style="font-style:italic;color:#16a34a;">Less paid: (${fmt(totalPaid)})</div>` : ''}
-      </div>
-    </div>`;
-  })();
-
   const acctNum = (debt.debt_number || debt.id || '').toString().slice(0, 12).toUpperCase() || 'N/A';
   const phone = esc(company?.phone || '');
   const email = esc(company?.email || '');
@@ -2485,94 +2415,151 @@ export function generateDemandLetterHTML(
   const sigName = esc(options.signatory_name || 'Authorized Representative');
   const sigTitle = esc(options.signatory_title || 'Accounts Receivable Manager');
 
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Demand Letter — ${esc(debt.debtor_name)}</title><style>
-${baseStyles}
-@page { size: letter; margin: 1in; }
-body { background: #fff; }
-.legal-wrap { max-width: 6.5in; margin: 0 auto; }
-</style></head>
-<body><div class="legal-page legal-wrap">
-  <div class="legal-letterhead">
-    <div class="lh-name">${companyName}</div>
-    <div class="lh-rule"></div>
-    <div class="lh-meta">
-      ${companyAddr || ''}${phone ? ` &middot; Tel: ${phone}` : ''}${email ? ` &middot; ${email}` : ''}
-    </div>
-  </div>
+  // ── Feature #10: days overdue — classic plain-text indicator ──
+  const delinqRaw = debt.delinquent_date || debt.due_date || debt.created_at;
+  const daysOverdue = delinqRaw ? Math.max(0, Math.floor((Date.now() - new Date(delinqRaw + (typeof delinqRaw === 'string' && delinqRaw.length === 10 ? 'T12:00:00' : '')).getTime()) / 86_400_000)) : 0;
+  // Classic: render days-overdue as a plain bordered text block (no color fill)
+  const daysOverdueHTML = daysOverdue > 0
+    ? `<div style="border:1px solid #000;padding:8px 14px;margin:12px 0;font-family:Arial,sans-serif;font-size:10pt;page-break-inside:avoid;">` +
+      `<span style="font-weight:700;text-transform:uppercase;letter-spacing:1px;">Days Overdue:</span>` +
+      `<span style="font-size:18pt;font-weight:800;font-variant-numeric:tabular-nums;margin-left:10px;">${daysOverdue}${daysOverdue >= 126 ? '+' : ''}</span>` +
+      `<span style="font-size:9pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-left:6px;">days</span></div>`
+    : '';
 
-  <div class="legal-date">${todayLong}</div>
+  // ── Feature #9: aging bucket — classic text table (no color bars) ──
+  const ageBuckets = [
+    { label: 'Current (0–30)', max: 30 },
+    { label: '31–60 days', max: 60 },
+    { label: '61–90 days', max: 90 },
+    { label: '90+ days', max: Infinity },
+  ];
+  const activeBucketIdx = ageBuckets.findIndex(b => daysOverdue <= b.max);
+  const activeBucket = activeBucketIdx >= 0 ? activeBucketIdx : ageBuckets.length - 1;
+  const agingBarHTML = balanceDue > 0
+    ? `<div style="margin:8px 0 14px;font-family:Arial,sans-serif;font-size:10pt;page-break-inside:avoid;">` +
+      `<div style="font-weight:700;text-transform:uppercase;letter-spacing:0.8px;font-size:9pt;margin-bottom:4px;">Aging Status</div>` +
+      `<table style="width:100%;border-collapse:collapse;font-size:9.5pt;"><tbody><tr>` +
+      ageBuckets.map((b, i) =>
+        `<td style="border:1px solid #000;padding:5px 8px;text-align:center;font-weight:${i === activeBucket ? '800' : '400'};${i === activeBucket ? 'text-decoration:underline;' : ''}">${b.label}${i === activeBucket ? ' ◄' : ''}</td>`
+      ).join('') +
+      `</tr></tbody></table></div>`
+    : '';
 
-  <div class="legal-recipient">
-    <strong>${esc(debt.debtor_name || 'To Whom It May Concern')}</strong><br>
-    ${debt.debtor_address ? esc(debt.debtor_address).replace(/\n/g, '<br>') + '<br>' : ''}
-    ${debt.debtor_email ? esc(debt.debtor_email) : ''}
-  </div>
+  // ── Feature #19: balance breakdown — classic ruled mini-table (no donut) ──
+  const totalDueDonutHTML = (() => {
+    const total = originalAmount + interest + fees;
+    if (total <= 0) return '';
+    const rows: Array<[string, number]> = [
+      ['Principal', originalAmount],
+      ['Interest', interest],
+      ['Fees', fees],
+    ].filter(([, v]) => (v as number) > 0) as Array<[string, number]>;
+    if (rows.length === 0) return '';
+    return `<div style="float:right;margin:0 0 12px 14px;width:200px;font-family:Arial,sans-serif;font-size:9.5pt;border:1px solid #000;page-break-inside:avoid;">` +
+      `<div style="background:#000;color:#fff;font-weight:700;font-size:8.5pt;text-transform:uppercase;letter-spacing:1px;padding:4px 8px;">Balance Breakdown</div>` +
+      `<table style="width:100%;border-collapse:collapse;"><tbody>` +
+      rows.map(([lbl, v]) =>
+        `<tr><td style="padding:4px 8px;border-bottom:1px solid #000;">${lbl}</td><td style="padding:4px 8px;text-align:right;border-bottom:1px solid #000;font-variant-numeric:tabular-nums;">${fmt(v)}</td></tr>`
+      ).join('') +
+      (totalPaid > 0 ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #000;">Less Paid</td><td style="padding:4px 8px;text-align:right;border-bottom:1px solid #000;font-variant-numeric:tabular-nums;">(${fmt(totalPaid)})</td></tr>` : '') +
+      `</tbody></table></div>`;
+  })();
 
-  <div class="legal-subject">RE: Outstanding Debt — Account #${acctNum}</div>
+  // Classic co-detail for letterhead
+  const coDetailHtml = `${companyAddrEsc}${phone ? `<br>Tel: ${phone}` : ''}${email ? `<br>${email}` : ''}`;
 
-  <div class="legal-body">
-    <p class="no-indent">Dear ${esc(debt.debtor_name || 'Sir or Madam')}:</p>
+  // Payment schedule rows (classic ruled table)
+  const paymentTableHTML = payments.length > 0
+    ? ruledTable(
+        [
+          { label: 'Date' },
+          { label: 'Amount', align: 'right' as const },
+          { label: 'Method' },
+          { label: 'Reference' },
+        ],
+        payments.map(p => [
+          esc(fmtDateLocal(p.received_date)),
+          esc(fmt(Number(p.amount || 0))),
+          esc(p.method || '—'),
+          esc(p.reference_number || '—'),
+        ])
+      )
+    : '';
 
-    <p>This letter constitutes formal demand for payment of an outstanding obligation owed by you to <strong>${companyName}</strong>. Our records establish that you are indebted to ${companyName} in the sum identified below, and that despite the passage of the applicable due date this balance remains unsatisfied.</p>
+  const logoHtml = logoImg(company?.logo_data, company?.name);
 
-    ${daysOverdueHTML}
-    ${agingBarHTML}
-    ${totalDueDonutHTML}
+  const headerHtml = docHeader({
+    coName: company?.name || 'Your Company',
+    coDetailHtml: (logoHtml ? logoHtml + '<br>' : '') + coDetailHtml,
+    title: 'Demand Letter',
+    number: `Account #${acctNum}`,
+  });
 
-    <table class="legal-amount-table">
-      <tbody>
-        <tr><td>Original Principal Amount</td><td class="amt">${fmt(originalAmount)}</td></tr>
-        <tr><td>Interest Accrued</td><td class="amt">${fmt(interest)}</td></tr>
-        <tr><td>Fees and Charges Accrued</td><td class="amt">${fmt(fees)}</td></tr>
-        <tr><td>Payments Received and Applied</td><td class="amt">(${fmt(totalPaid)})</td></tr>
-        <tr class="total"><td>TOTAL DUE</td><td class="amt">${fmt(balanceDue)}</td></tr>
-      </tbody>
-    </table>
+  const dateRecipientBoxHtml = boxRow([
+    {
+      label: 'Date',
+      html: `<div style="font-size:11pt;">${esc(todayLong)}</div>`,
+    },
+    {
+      label: 'Debtor / Recipient',
+      html: `<strong>${esc(debt.debtor_name || 'To Whom It May Concern')}</strong>` +
+        (debt.debtor_address ? `<br>${esc(debt.debtor_address).replace(/\n/g, '<br>')}` : '') +
+        (debt.debtor_email ? `<br>${esc(debt.debtor_email)}` : ''),
+    },
+  ]);
 
-    ${payments.length > 0 ? `
-    <p class="no-indent" style="margin-top:18px;font-weight:700;font-size:10.5pt;text-transform:uppercase;letter-spacing:0.5px;">Schedule of Payments Received</p>
-    <table class="legal-amount-table" style="width:100%;">
-      <thead><tr><td style="font-weight:700;">Date</td><td style="font-weight:700;" class="amt">Amount</td><td style="font-weight:700;">Method</td><td style="font-weight:700;">Reference</td></tr></thead>
-      <tbody>${paymentRows}</tbody>
-    </table>` : ''}
+  const amountSummaryHtml = totalsBox([
+    { label: 'Original Principal Amount', value: fmt(originalAmount) },
+    { label: 'Interest Accrued', value: fmt(interest) },
+    { label: 'Fees and Charges Accrued', value: fmt(fees) },
+    { label: 'Payments Received and Applied', value: `(${fmt(totalPaid)})` },
+    { label: 'TOTAL DUE', value: fmt(balanceDue), grand: true },
+  ]);
 
-    <p><strong>YOU ARE HEREBY DEMANDED to pay the sum of ${fmt(balanceDue)} within ${deadlineDays} days from the date of this letter, on or before ${deadlineDate}.</strong> Payment must be tendered in certified funds and made payable to ${companyName}${options.payment_address ? `, addressed to ${esc(options.payment_address)}` : ''}.${options.online_payment_url ? ` Electronic remittance may be made at ${esc(options.online_payment_url)}.` : ''}</p>
+  // FDCPA validation notice — verbatim
+  const fdcpaNoticeHtml =
+    `<div style="border:1.5px solid #000;padding:12px 16px;margin:18px 0;font-family:Arial,sans-serif;font-size:10pt;line-height:1.6;page-break-inside:avoid;">` +
+    `<div style="font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;font-size:9.5pt;">Notice of Your Rights — Validation of Debt (15 U.S.C. &sect; 1692g)</div>` +
+    `<p style="margin:0;text-indent:0;">Unless you notify this office within 30 days after receiving this notice that you dispute the validity of this debt or any portion thereof, this office will assume this debt is valid. If you notify this office in writing within 30 days from receiving this notice that you dispute the validity of this debt or any portion thereof, this office will: obtain verification of the debt or obtain a copy of a judgment and mail you a copy of such judgment or verification. If you request this office in writing within 30 days after receiving this notice, this office will provide you with the name and address of the original creditor, if different from the current creditor.</p>` +
+    `</div>`;
 
-    <p>Should you fail to remit payment in full by the date stated above, ${companyName} will have no alternative but to pursue all lawful remedies available to it under the laws of ${jurisdiction}, including but not limited to the institution of civil proceedings to obtain a money judgment, recovery of court costs and reasonable attorneys' fees as permitted by contract or statute, post-judgment enforcement (including wage garnishment, bank levy, and judgment liens upon real property), and reporting of the delinquency to consumer credit reporting agencies.</p>
+  // Mini-Miranda — verbatim
+  const miniMirandaHtml =
+    `<div style="border-top:1px solid #000;border-bottom:1px solid #000;padding:7px 0;margin:16px 0;text-align:center;font-family:Arial,sans-serif;font-size:9pt;font-style:italic;">` +
+    `This communication is from a debt collector. This is an attempt to collect a debt and any information obtained will be used for that purpose.` +
+    `</div>`;
 
-    <div class="legal-notice">
-      <div class="ln-heading">Notice of Your Rights — Validation of Debt (15 U.S.C. &sect; 1692g)</div>
-      <p style="text-indent:0;margin-bottom:8px;">Unless you notify this office within 30 days after receiving this notice that you dispute the validity of this debt or any portion thereof, this office will assume this debt is valid. If you notify this office in writing within 30 days from receiving this notice that you dispute the validity of this debt or any portion thereof, this office will: obtain verification of the debt or obtain a copy of a judgment and mail you a copy of such judgment or verification. If you request this office in writing within 30 days after receiving this notice, this office will provide you with the name and address of the original creditor, if different from the current creditor.</p>
-    </div>
+  const bodyHtml =
+    headerHtml +
+    dateRecipientBoxHtml +
+    `<div style="padding:14px 16px;font-family:Arial,sans-serif;font-size:11pt;line-height:1.6;">` +
+    `<div style="font-weight:700;font-size:11pt;margin-bottom:12px;">RE: Outstanding Debt — Account #${acctNum}</div>` +
+    `<p style="margin-bottom:10px;">Dear ${esc(debt.debtor_name || 'Sir or Madam')}:</p>` +
+    `<p style="margin-bottom:10px;">This letter constitutes formal demand for payment of an outstanding obligation owed by you to <strong>${companyName}</strong>. Our records establish that you are indebted to ${companyName} in the sum identified below, and that despite the passage of the applicable due date this balance remains unsatisfied.</p>` +
+    daysOverdueHTML +
+    agingBarHTML +
+    totalDueDonutHTML +
+    `<div style="margin:16px 0;">${amountSummaryHtml}</div>` +
+    (payments.length > 0
+      ? `<div style="font-weight:700;font-size:10pt;text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 6px;">Schedule of Payments Received</div>${paymentTableHTML}`
+      : '') +
+    `<p style="margin:14px 0;"><strong>YOU ARE HEREBY DEMANDED to pay the sum of ${fmt(balanceDue)} within ${deadlineDays} days from the date of this letter, on or before ${deadlineDate}.</strong> Payment must be tendered in certified funds and made payable to ${companyName}${options.payment_address ? `, addressed to ${esc(options.payment_address)}` : ''}.${options.online_payment_url ? ` Electronic remittance may be made at ${esc(options.online_payment_url)}.` : ''}</p>` +
+    `<p style="margin-bottom:10px;">Should you fail to remit payment in full by the date stated above, ${companyName} will have no alternative but to pursue all lawful remedies available to it under the laws of ${jurisdiction}, including but not limited to the institution of civil proceedings to obtain a money judgment, recovery of court costs and reasonable attorneys' fees as permitted by contract or statute, post-judgment enforcement (including wage garnishment, bank levy, and judgment liens upon real property), and reporting of the delinquency to consumer credit reporting agencies.</p>` +
+    fdcpaNoticeHtml +
+    miniMirandaHtml +
+    `<p style="margin-bottom:10px;">If you believe this debt has been satisfied or has been asserted in error, or if you wish to discuss a mutually acceptable resolution, please contact the undersigned in writing at the address above${phone ? ` or by telephone at ${phone}` : ''}${email ? ` or by email at ${email}` : ''} prior to the deadline stated herein.</p>` +
+    `<p style="margin-top:28px;">Respectfully,</p>` +
+    `<div style="margin-top:36px;border-bottom:1px solid #000;width:260px;"></div>` +
+    `<div style="font-weight:700;margin-top:4px;font-family:Arial,sans-serif;font-size:10pt;">${sigName}</div>` +
+    `<div style="color:#333;font-size:9.5pt;font-family:Arial,sans-serif;">${sigTitle}</div>` +
+    `<div style="color:#333;font-size:9.5pt;font-family:Arial,sans-serif;">${companyName}</div>` +
+    `</div>` +
+    footerBar(`This communication may contain privileged or confidential information intended solely for the addressee. Sent on ${todayLong} via U.S. First Class Mail. Account #${acctNum}.`);
 
-    <div class="legal-mini-miranda">
-      This communication is from a debt collector. This is an attempt to collect a debt and any information obtained will be used for that purpose.
-    </div>
-
-    <p>If you believe this debt has been satisfied or has been asserted in error, or if you wish to discuss a mutually acceptable resolution, please contact the undersigned in writing at the address above${phone ? ` or by telephone at ${phone}` : ''}${email ? ` or by email at ${email}` : ''} prior to the deadline stated herein.</p>
-
-    <p class="no-indent" style="margin-top:28px;">Respectfully,</p>
-
-    <div class="legal-signature">
-      <div class="legal-sig-line"></div>
-      <div class="legal-sig-name">${sigName}</div>
-      <div class="legal-sig-title">${sigTitle}</div>
-      <div class="legal-sig-title">${companyName}</div>
-    </div>
-  </div>
-
-  <div class="legal-confidential-footer">
-    This communication may contain privileged or confidential information intended solely for the addressee.<br>
-    Sent on ${todayLong} via U.S. First Class Mail. Account #${acctNum}.
-  </div>
-</div></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Demand Letter — ${esc(debt.debtor_name)}</title>` +
+    `<style>${classicStyles()}@page{size:letter;margin:1in;}</style></head>` +
+    `<body style="background:#fff;">${docFrame(bodyHtml)}</body></html>`;
 }
-
-
-// ═══════════════════════════════════════════════════════════════
-// COLLECTION LETTER GENERATOR (multiple letter types)
-// ═══════════════════════════════════════════════════════════════
 export function generateCollectionLetterHTML(
   debt: any,
   payments: any[],
@@ -2597,18 +2584,14 @@ export function generateCollectionLetterHTML(
   const deadlineDate = new Date(Date.now() + 10 * 86_400_000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const thirtyDayDate = new Date(Date.now() + 30 * 86_400_000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  // Unified summary table using .legal-amount-table (defined in baseStyles).
-  // Both the account-reference and dollar-amounts now share one consistent
-  // visual language, with proper page-break-inside protection.
-  const summaryTable = `<table class="legal-amount-table">
-  <tbody>
-    <tr><td>Original Amount</td><td class="amt">${fmtAmt(originalAmt)}</td></tr>
-    <tr><td>Interest Accrued</td><td class="amt">${fmtAmt(interestAmt)}</td></tr>
-    <tr><td>Fees &amp; Charges</td><td class="amt">${fmtAmt(feesAmt)}</td></tr>
-    <tr><td>Payments Received</td><td class="amt" style="color:#16a34a;">\u2212${fmtAmt(totalPaid)}</td></tr>
-    <tr class="total"><td>BALANCE DUE</td><td class="amt">${fmtAmt(balanceDue)}</td></tr>
-  </tbody>
-</table>`;
+  // Classic amount summary — totalsBox
+  const amountSummaryHtml = totalsBox([
+    { label: 'Original Amount', value: fmtAmt(originalAmt) },
+    { label: 'Interest Accrued', value: fmtAmt(interestAmt) },
+    { label: 'Fees & Charges', value: fmtAmt(feesAmt) },
+    { label: 'Payments Received', value: `−${fmtAmt(totalPaid)}` },
+    { label: 'BALANCE DUE', value: fmtAmt(balanceDue), grand: true },
+  ]);
 
   // Shared blocks
   // SECURITY: source_id is a renderer-supplied UUID, but defensive escape keeps
@@ -2622,262 +2605,221 @@ export function generateCollectionLetterHTML(
   const daysOverdue = debt?.delinquent_date ? Math.max(0, Math.floor((Date.now() - new Date(String(debt.delinquent_date).length === 10 ? debt.delinquent_date + 'T12:00:00' : debt.delinquent_date).getTime()) / 86_400_000)) : 0;
   const settlementAmt = Math.round(balanceDue * 0.7 * 100) / 100;
 
-  // Compact 6-cell grid replaces the cluttered 6-row table. Account Reference
-  // is shown in the letterhead (lh-doc-id) so we omit it here to avoid the
-  // duplication that made the old layout look messy.
-  const accountRefBlock = `<div class="legal-keyval-strip">
-  <div class="kv-cell"><span class="kv-lbl">Original Due Date</span><span class="kv-val">${dueDate}</span></div>
-  <div class="kv-cell"><span class="kv-lbl">Date Delinquent</span><span class="kv-val">${delinquentDate}</span></div>
-  <div class="kv-cell"><span class="kv-lbl">Days Past Due</span><span class="kv-val">${daysOverdue} days</span></div>
-  <div class="kv-cell"><span class="kv-lbl">Interest Rate</span><span class="kv-val">${interestRate}</span></div>
-  <div class="kv-cell"><span class="kv-lbl">Jurisdiction</span><span class="kv-val">${jurisdiction}</span></div>
-  <div class="kv-cell"><span class="kv-lbl">Balance Due</span><span class="kv-val" style="color:#991b1b;font-weight:800;">${fmtAmt(balanceDue)}</span></div>
-</div>`;
+  // Account reference key-value block — classic metaStrip
+  const accountRefBlock = metaStrip([
+    { label: 'Original Due Date', value: dueDate },
+    { label: 'Date Delinquent', value: delinquentDate },
+    { label: 'Days Past Due', value: `${daysOverdue} days` },
+    { label: 'Interest Rate', value: interestRate },
+    { label: 'Jurisdiction', value: jurisdiction },
+    { label: 'Balance Due', value: fmtAmt(balanceDue) },
+  ]);
 
-  const paymentInstructions = `<div style="margin:16px 0;padding:14px;border:1px solid #ddd;border-left:3px solid #2563eb;background:#fafafa;">
-  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#333;margin-bottom:6px;">Payment Instructions</p>
-  <p style="font-size:12px;color:#444;line-height:1.6;">Make checks payable to <strong>${companyName}</strong> and mail to:<br>${companyAddr || '[Company Address]'}</p>
-  ${companyPhone ? `<p style="font-size:12px;color:#444;">Phone: ${companyPhone}</p>` : ''}
-  ${companyEmail ? `<p style="font-size:12px;color:#444;">Email: ${companyEmail}</p>` : ''}
-  <p style="font-size:11px;color:#666;margin-top:6px;">Please include your account reference <strong>${accountRef}</strong> with all correspondence and payments.</p>
-</div>`;
+  // Payment instructions — classic bordered block
+  const paymentInstructions =
+    `<div style="margin:16px 0;border:1px solid #000;font-family:Arial,sans-serif;font-size:10pt;">` +
+    `<div style="background:#000;color:#fff;font-weight:700;font-size:8.5pt;text-transform:uppercase;letter-spacing:1px;padding:4px 8px;">Payment Instructions</div>` +
+    `<div style="padding:10px 14px;">` +
+    `<p style="margin:0 0 6px 0;">Make checks payable to <strong>${companyName}</strong> and mail to:<br>${companyAddr || '[Company Address]'}</p>` +
+    (companyPhone ? `<p style="margin:0 0 4px 0;">Phone: ${companyPhone}</p>` : '') +
+    (companyEmail ? `<p style="margin:0 0 4px 0;">Email: ${companyEmail}</p>` : '') +
+    `<p style="margin:6px 0 0 0;font-size:9.5pt;">Please include your account reference <strong>${accountRef}</strong> with all correspondence and payments.</p>` +
+    `</div></div>`;
 
-  const fdcpaNotice = `<div style="margin:16px 0;padding:12px;border:1px solid #e5e5e5;background:#fffbf0;font-size:10px;color:#555;line-height:1.7;">
-  <p style="font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Your Rights Under Federal Law</p>
-  <p>Under the Fair Debt Collection Practices Act (15 U.S.C. &sect; 1692 et seq.), you have the right to:</p>
-  <ul style="margin:6px 0;padding-left:20px;">
-    <li>Dispute this debt in writing within thirty (30) days of receiving this notice.</li>
-    <li>Request the name and address of the original creditor, if different from the current creditor.</li>
-    <li>Request verification of the debt, including the amount owed and the name of the creditor.</li>
-  </ul>
-  <p>If you dispute this debt in writing within the 30-day period, ${companyName} will cease collection activities until verification has been provided to you. Unless you dispute this debt within 30 days after receipt of this notice, the debt will be assumed to be valid.</p>
-</div>`;
+  // FDCPA notice — verbatim text preserved
+  const fdcpaNotice =
+    `<div style="margin:16px 0;border:1.5px solid #000;font-family:Arial,sans-serif;font-size:10pt;line-height:1.7;page-break-inside:avoid;">` +
+    `<div style="background:#000;color:#fff;font-weight:700;font-size:8.5pt;text-transform:uppercase;letter-spacing:1px;padding:4px 8px;">Your Rights Under Federal Law</div>` +
+    `<div style="padding:10px 14px;">` +
+    `<p style="margin:0 0 6px 0;">Under the Fair Debt Collection Practices Act (15 U.S.C. &sect; 1692 et seq.), you have the right to:</p>` +
+    `<ul style="margin:6px 0;padding-left:20px;">` +
+    `<li>Dispute this debt in writing within thirty (30) days of receiving this notice.</li>` +
+    `<li>Request the name and address of the original creditor, if different from the current creditor.</li>` +
+    `<li>Request verification of the debt, including the amount owed and the name of the creditor.</li>` +
+    `</ul>` +
+    `<p style="margin:6px 0 0 0;">If you dispute this debt in writing within the 30-day period, ${companyName} will cease collection activities until verification has been provided to you. Unless you dispute this debt within 30 days after receipt of this notice, the debt will be assumed to be valid.</p>` +
+    `</div></div>`;
 
-  const LETTERS: Record<string, { title: string; accent: string; body: string }> = {
+  const LETTERS: Record<string, { title: string; body: string }> = {
     reminder: {
       title: 'Payment Reminder',
-      accent: '#2563eb',
-      body: `<p>We are writing to remind you that the following account has a past-due balance that requires your attention.</p>
-${accountRefBlock}
-${summaryTable}
-<p>Our records indicate that a payment of <strong>${fmtAmt(balanceDue)}</strong> was due on <strong>${dueDate}</strong> and remains unpaid as of the date of this letter. The account is now <strong>${daysOverdue} days past due</strong>.</p>
-<p>We understand that oversights can occur. If you have already submitted payment, please disregard this notice and accept our thanks. If payment has not yet been sent, we kindly request that you remit the amount due at your earliest convenience to avoid additional fees or collection activity.</p>
-${paymentInstructions}
-<p>If you are experiencing financial difficulty and would like to discuss a payment arrangement, please contact us at ${companyPhone || companyEmail || 'the number on file'}. We are committed to working with you to resolve this matter amicably.</p>`,
+      body: `<p>We are writing to remind you that the following account has a past-due balance that requires your attention.</p>` +
+        accountRefBlock + amountSummaryHtml +
+        `<p>Our records indicate that a payment of <strong>${fmtAmt(balanceDue)}</strong> was due on <strong>${dueDate}</strong> and remains unpaid as of the date of this letter. The account is now <strong>${daysOverdue} days past due</strong>.</p>` +
+        `<p>We understand that oversights can occur. If you have already submitted payment, please disregard this notice and accept our thanks. If payment has not yet been sent, we kindly request that you remit the amount due at your earliest convenience to avoid additional fees or collection activity.</p>` +
+        paymentInstructions +
+        `<p>If you are experiencing financial difficulty and would like to discuss a payment arrangement, please contact us at ${companyPhone || companyEmail || 'the number on file'}. We are committed to working with you to resolve this matter amicably.</p>`,
     },
     warning: {
       title: 'Warning Notice — Second Notice',
-      accent: '#d97706',
-      body: `<p>Despite our previous correspondence dated on or about your original due date of ${dueDate}, the balance on your account remains unpaid. This letter serves as a <strong>formal warning</strong> that failure to resolve this matter may result in additional consequences.</p>
-${accountRefBlock}
-${summaryTable}
-<p><strong>Please be advised that if payment is not received by ${thirtyDayDate}, the following actions may be taken:</strong></p>
-<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">
-  <li>Assessment of additional late fees and collection costs as permitted by law</li>
-  <li>Accrual of interest at a rate of ${interestRate} on the outstanding balance</li>
-  <li>Referral of this account to a third-party collections agency</li>
-  <li>Reporting of the delinquent account to one or more consumer credit reporting bureaus</li>
-</ul>
-<p>We strongly urge you to contact our office immediately to make payment or to arrange a mutually agreeable payment plan. This is your opportunity to resolve this debt before more serious measures are taken.</p>
-${paymentInstructions}
-${fdcpaNotice}`,
+      body: `<p>Despite our previous correspondence dated on or about your original due date of ${dueDate}, the balance on your account remains unpaid. This letter serves as a <strong>formal warning</strong> that failure to resolve this matter may result in additional consequences.</p>` +
+        accountRefBlock + amountSummaryHtml +
+        `<p><strong>Please be advised that if payment is not received by ${thirtyDayDate}, the following actions may be taken:</strong></p>` +
+        `<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">` +
+        `<li>Assessment of additional late fees and collection costs as permitted by law</li>` +
+        `<li>Accrual of interest at a rate of ${interestRate} on the outstanding balance</li>` +
+        `<li>Referral of this account to a third-party collections agency</li>` +
+        `<li>Reporting of the delinquent account to one or more consumer credit reporting bureaus</li>` +
+        `</ul>` +
+        `<p>We strongly urge you to contact our office immediately to make payment or to arrange a mutually agreeable payment plan. This is your opportunity to resolve this debt before more serious measures are taken.</p>` +
+        paymentInstructions + fdcpaNotice,
     },
     final_notice: {
       title: 'Final Notice Before Legal Action',
-      accent: '#dc2626',
-      body: `<p class="lede">This is your final notice. Immediate action is required.</p>
-<p>Multiple attempts have been made to resolve the outstanding balance on your account. As of the date of this letter, no payment or satisfactory response has been received. Your account is now <strong>${daysOverdue} days past due</strong>.</p>
-${accountRefBlock}
-${summaryTable}
-<p><strong>Unless full payment of ${fmtAmt(balanceDue)} or a satisfactory payment arrangement is received by ${deadlineDate}, ${companyName} intends to pursue one or more of the following remedies without further notice:</strong></p>
-<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">
-  <li>Filing a civil complaint in the appropriate court in ${jurisdiction}</li>
-  <li>Seeking a monetary judgment for the full amount owed plus court costs, attorney fees, and accrued interest</li>
-  <li>Pursuing post-judgment remedies including wage garnishment, bank levy, and/or property lien</li>
-  <li>Reporting the delinquent account and any resulting judgment to all major credit bureaus</li>
-  <li>Referral to an external collections agency or law firm for further action</li>
-</ul>
-<p>A judgment against you may remain on your credit report for up to seven (7) years and may affect your ability to obtain credit, housing, or employment.</p>
-<p><strong>To avoid legal proceedings, please remit payment or contact us immediately to discuss resolution options.</strong></p>
-${paymentInstructions}
-${fdcpaNotice}`,
+      body: `<p><strong>This is your final notice. Immediate action is required.</strong></p>` +
+        `<p>Multiple attempts have been made to resolve the outstanding balance on your account. As of the date of this letter, no payment or satisfactory response has been received. Your account is now <strong>${daysOverdue} days past due</strong>.</p>` +
+        accountRefBlock + amountSummaryHtml +
+        `<p><strong>Unless full payment of ${fmtAmt(balanceDue)} or a satisfactory payment arrangement is received by ${deadlineDate}, ${companyName} intends to pursue one or more of the following remedies without further notice:</strong></p>` +
+        `<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">` +
+        `<li>Filing a civil complaint in the appropriate court in ${jurisdiction}</li>` +
+        `<li>Seeking a monetary judgment for the full amount owed plus court costs, attorney fees, and accrued interest</li>` +
+        `<li>Pursuing post-judgment remedies including wage garnishment, bank levy, and/or property lien</li>` +
+        `<li>Reporting the delinquent account and any resulting judgment to all major credit bureaus</li>` +
+        `<li>Referral to an external collections agency or law firm for further action</li>` +
+        `</ul>` +
+        `<p>A judgment against you may remain on your credit report for up to seven (7) years and may affect your ability to obtain credit, housing, or employment.</p>` +
+        `<p><strong>To avoid legal proceedings, please remit payment or contact us immediately to discuss resolution options.</strong></p>` +
+        paymentInstructions + fdcpaNotice,
     },
     demand: {
       title: 'Formal Demand for Payment',
-      accent: '#111',
-      body: `<p style="font-weight:700;">RE: DEMAND FOR PAYMENT — ${accountRef}</p>
-<p>This letter constitutes a formal demand for payment pursuant to the laws of ${jurisdiction}. Please treat this correspondence with the utmost seriousness.</p>
-${accountRefBlock}
-${summaryTable}
-<p>The above-referenced debt arises from an obligation originally in the amount of <strong>${fmtAmt(originalAmt)}</strong>, which became due and payable on <strong>${dueDate}</strong>. Despite the passage of <strong>${daysOverdue} days</strong> since the date of delinquency, the obligation remains unsatisfied. Interest continues to accrue at a rate of <strong>${interestRate}</strong> until the balance is paid in full.</p>
-<p><strong>DEMAND:</strong> You are hereby demanded to pay the total sum of <strong>${fmtAmt(balanceDue)}</strong> within <strong>ten (10) calendar days</strong> of the date of this letter (i.e., by <strong>${deadlineDate}</strong>).</p>
-<p><strong>CONSEQUENCES OF NON-PAYMENT:</strong> If payment is not received by the above deadline, ${companyName} reserves the right to, and intends to, commence legal proceedings against you in a court of competent jurisdiction in ${jurisdiction} to recover the full amount owed, together with:</p>
-<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">
-  <li>Pre-judgment and post-judgment interest at the maximum rate permitted by law</li>
-  <li>Court costs, filing fees, and service of process expenses</li>
-  <li>Reasonable attorney fees as permitted by contract or statute</li>
-  <li>All additional collection costs and administrative expenses</li>
-</ul>
-<p>This letter may be tendered as evidence of demand in any subsequent legal proceeding.</p>
-${paymentInstructions}
-${fdcpaNotice}`,
+      body: `<p style="font-weight:700;">RE: DEMAND FOR PAYMENT — ${accountRef}</p>` +
+        `<p>This letter constitutes a formal demand for payment pursuant to the laws of ${jurisdiction}. Please treat this correspondence with the utmost seriousness.</p>` +
+        accountRefBlock + amountSummaryHtml +
+        `<p>The above-referenced debt arises from an obligation originally in the amount of <strong>${fmtAmt(originalAmt)}</strong>, which became due and payable on <strong>${dueDate}</strong>. Despite the passage of <strong>${daysOverdue} days</strong> since the date of delinquency, the obligation remains unsatisfied. Interest continues to accrue at a rate of <strong>${interestRate}</strong> until the balance is paid in full.</p>` +
+        `<p><strong>DEMAND:</strong> You are hereby demanded to pay the total sum of <strong>${fmtAmt(balanceDue)}</strong> within <strong>ten (10) calendar days</strong> of the date of this letter (i.e., by <strong>${deadlineDate}</strong>).</p>` +
+        `<p><strong>CONSEQUENCES OF NON-PAYMENT:</strong> If payment is not received by the above deadline, ${companyName} reserves the right to, and intends to, commence legal proceedings against you in a court of competent jurisdiction in ${jurisdiction} to recover the full amount owed, together with:</p>` +
+        `<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">` +
+        `<li>Pre-judgment and post-judgment interest at the maximum rate permitted by law</li>` +
+        `<li>Court costs, filing fees, and service of process expenses</li>` +
+        `<li>Reasonable attorney fees as permitted by contract or statute</li>` +
+        `<li>All additional collection costs and administrative expenses</li>` +
+        `</ul>` +
+        `<p>This letter may be tendered as evidence of demand in any subsequent legal proceeding.</p>` +
+        paymentInstructions + fdcpaNotice,
     },
     settlement_offer: {
       title: 'Settlement Offer',
-      accent: '#0891b2',
-      body: `<p>In an effort to resolve the outstanding balance on your account without the need for further collection activity or legal proceedings, ${companyName} is prepared to offer the following settlement.</p>
-${accountRefBlock}
-${summaryTable}
-<p style="padding:14px;border:2px solid #0891b2;background:#f0fdfa;text-align:center;margin:16px 0;">
-  <span style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#0891b2;font-weight:700;">Settlement Amount</span>
-  <span style="display:block;font-size:24px;font-weight:800;color:#111;margin:4px 0;">${fmtAmt(settlementAmt)}</span>
-  <span style="display:block;font-size:12px;color:#555;">(${Math.round((settlementAmt / balanceDue) * 100)}% of current balance — a savings of ${fmtAmt(balanceDue - settlementAmt)})</span>
-</p>
-<p><strong>Terms of this offer:</strong></p>
-<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">
-  <li>Payment of <strong>${fmtAmt(settlementAmt)}</strong> must be received in full by <strong>${thirtyDayDate}</strong>.</li>
-  <li>Payment must be made by certified check, cashier's check, or wire transfer.</li>
-  <li>Upon receipt of payment, ${companyName} will consider this account <strong>settled in full</strong> and cease all further collection activity.</li>
-  <li>A written confirmation of settlement will be provided within ten (10) business days of payment.</li>
-  <li>This offer is made without prejudice and does not constitute an admission that the balance owed is less than the full amount.</li>
-</ul>
-<p><strong>This offer expires on ${thirtyDayDate}.</strong> If payment is not received by that date, the offer is automatically withdrawn and the full balance of <strong>${fmtAmt(balanceDue)}</strong> will remain due and subject to continued collection activity, including legal action.</p>
-${paymentInstructions}
-<p style="font-size:11px;color:#666;">To accept this offer, please remit payment referencing account <strong>${accountRef}</strong> and write "Settlement" on the memo line of your check.</p>`,
+      body: `<p>In an effort to resolve the outstanding balance on your account without the need for further collection activity or legal proceedings, ${companyName} is prepared to offer the following settlement.</p>` +
+        accountRefBlock + amountSummaryHtml +
+        `<div style="border:1.5px solid #000;padding:12px 16px;text-align:center;margin:16px 0;font-family:Arial,sans-serif;page-break-inside:avoid;">` +
+        `<div style="font-size:10pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Settlement Amount</div>` +
+        `<div style="font-size:22pt;font-weight:800;font-variant-numeric:tabular-nums;margin:4px 0;">${fmtAmt(settlementAmt)}</div>` +
+        `<div style="font-size:10pt;">(${Math.round((settlementAmt / balanceDue) * 100)}% of current balance — a savings of ${fmtAmt(balanceDue - settlementAmt)})</div>` +
+        `</div>` +
+        `<p><strong>Terms of this offer:</strong></p>` +
+        `<ul style="margin:12px 0;padding-left:24px;line-height:1.9;">` +
+        `<li>Payment of <strong>${fmtAmt(settlementAmt)}</strong> must be received in full by <strong>${thirtyDayDate}</strong>.</li>` +
+        `<li>Payment must be made by certified check, cashier's check, or wire transfer.</li>` +
+        `<li>Upon receipt of payment, ${companyName} will consider this account <strong>settled in full</strong> and cease all further collection activity.</li>` +
+        `<li>A written confirmation of settlement will be provided within ten (10) business days of payment.</li>` +
+        `<li>This offer is made without prejudice and does not constitute an admission that the balance owed is less than the full amount.</li>` +
+        `</ul>` +
+        `<p><strong>This offer expires on ${thirtyDayDate}.</strong> If payment is not received by that date, the offer is automatically withdrawn and the full balance of <strong>${fmtAmt(balanceDue)}</strong> will remain due and subject to continued collection activity, including legal action.</p>` +
+        paymentInstructions +
+        `<p style="font-size:9.5pt;">To accept this offer, please remit payment referencing account <strong>${accountRef}</strong> and write "Settlement" on the memo line of your check.</p>`,
     },
     payment_confirmation: {
       title: 'Payment Confirmation & Account Update',
-      accent: '#16a34a',
-      body: `<p>We are writing to confirm receipt of your recent payment and to provide an updated summary of your account.</p>
-${accountRefBlock}
-<div style="padding:14px;border:2px solid #16a34a;background:#f0fdf4;text-align:center;margin:16px 0;">
-  <span style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#16a34a;font-weight:700;">Payment Received</span>
-  <span style="display:block;font-size:24px;font-weight:800;color:#111;margin:4px 0;">${fmtAmt(totalPaid)}</span>
-  <span style="display:block;font-size:12px;color:#555;">Applied to your account on ${todayLong}</span>
-</div>
-${summaryTable}
-${balanceDue <= 0
-  ? `<p style="font-weight:700;color:#16a34a;">Your account balance is now <strong>$0.00</strong>. This account is considered <strong>paid in full</strong>.</p>
-<p>Thank you for resolving this matter. No further action is required on your part. If you require a formal payoff letter or receipt for your records, please contact our office and we will provide one promptly.</p>`
-  : `<p>Thank you for your payment. Please note that a remaining balance of <strong>${fmtAmt(balanceDue)}</strong> is still outstanding on this account.</p>
-<p>Interest continues to accrue at a rate of <strong>${interestRate}</strong> on the unpaid balance. We encourage you to remit the remaining balance as soon as possible to avoid additional charges and to bring your account to good standing.</p>
-<p>If you would like to set up a payment plan for the remaining balance, please contact us at ${companyPhone || companyEmail || 'the number on file'} to discuss available options.</p>`}
-${paymentInstructions}
-<p style="font-size:11px;color:#666;">Please retain this letter for your records. If you believe there is a discrepancy in the payment amount or account balance shown above, contact our office within ten (10) business days.</p>`,
+      body: `<p>We are writing to confirm receipt of your recent payment and to provide an updated summary of your account.</p>` +
+        accountRefBlock +
+        `<div style="border:1.5px solid #000;padding:12px 16px;text-align:center;margin:16px 0;font-family:Arial,sans-serif;page-break-inside:avoid;">` +
+        `<div style="font-size:10pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Payment Received</div>` +
+        `<div style="font-size:22pt;font-weight:800;font-variant-numeric:tabular-nums;margin:4px 0;">${fmtAmt(totalPaid)}</div>` +
+        `<div style="font-size:10pt;">Applied to your account on ${todayLong}</div>` +
+        `</div>` +
+        amountSummaryHtml +
+        (balanceDue <= 0
+          ? `<p style="font-weight:700;">Your account balance is now <strong>$0.00</strong>. This account is considered <strong>paid in full</strong>.</p>` +
+            `<p>Thank you for resolving this matter. No further action is required on your part. If you require a formal payoff letter or receipt for your records, please contact our office and we will provide one promptly.</p>`
+          : `<p>Thank you for your payment. Please note that a remaining balance of <strong>${fmtAmt(balanceDue)}</strong> is still outstanding on this account.</p>` +
+            `<p>Interest continues to accrue at a rate of <strong>${interestRate}</strong> on the unpaid balance. We encourage you to remit the remaining balance as soon as possible to avoid additional charges and to bring your account to good standing.</p>` +
+            `<p>If you would like to set up a payment plan for the remaining balance, please contact us at ${companyPhone || companyEmail || 'the number on file'} to discuss available options.</p>`) +
+        paymentInstructions +
+        `<p style="font-size:9.5pt;">Please retain this letter for your records. If you believe there is a discrepancy in the payment amount or account balance shown above, contact our office within ten (10) business days.</p>`,
     },
   };
 
   const letter = LETTERS[letterType] || LETTERS.reminder;
 
-  // FIX (2026-05-25): the previous version used `D E T A C H &nbsp; A N D ...`
-  // which made each letter a separate "word" — so "PAYMENT" could wrap as
-  // "PAYM / ENT" mid-letter. Now uses a single string with CSS letter-spacing
-  // on .remit-tear, plus white-space:nowrap so it never wraps regardless.
-  const remitSlip = `<div class="legal-remit">
-  <div class="remit-tear">&#9986; &nbsp;&nbsp; Detach and return with payment &nbsp;&nbsp; &#9986;</div>
-  <div class="remit-grid">
-    <div class="remit-cell">
-      <span class="rc-lbl">Remit to</span>
-      <span class="rc-val"><strong>${companyName}</strong></span>
-      <span class="rc-val" style="color:#475569;">${companyAddr || ''}</span>
-    </div>
-    <div class="remit-cell">
-      <span class="rc-lbl">From</span>
-      <span class="rc-val"><strong>${debtorName}</strong></span>
-      <span class="rc-val" style="color:#475569;">${debtorAddr || ''}</span>
-    </div>
-    <div class="remit-cell">
-      <span class="rc-lbl">Account reference</span>
-      <span class="rc-val"><strong>${accountRef}</strong></span>
-    </div>
-    <div class="remit-cell">
-      <span class="rc-lbl">Amount enclosed</span>
-      <span class="rc-val">$ <span class="rc-fill"></span></span>
-    </div>
-    <div class="remit-cell">
-      <span class="rc-lbl">Balance due</span>
-      <span class="rc-val" style="color:#991b1b;font-weight:800;">${fmtAmt(balanceDue)}</span>
-    </div>
-    <div class="remit-cell">
-      <span class="rc-lbl">Date</span>
-      <span class="rc-val"><span class="rc-fill"></span></span>
-    </div>
-  </div>
-  <div class="remit-footer">Make checks payable to ${companyName}. Include account reference ${accountRef} on the memo line.</div>
-</div>`;
+  // Payment options block — classic bordered
+  const paymentOptions =
+    `<div style="border:1.5px solid #000;margin:16px 0;font-family:Arial,sans-serif;font-size:10pt;page-break-inside:avoid;">` +
+    `<div style="background:#000;color:#fff;font-weight:700;font-size:8.5pt;text-transform:uppercase;letter-spacing:1px;padding:4px 8px;">Payment Options</div>` +
+    `<div style="padding:10px 14px;">` +
+    `<p style="margin:0 0 4px 0;"><strong>By Mail:</strong> Send check or money order to ${companyName}, ${companyAddr || '[Company Address]'}.</p>` +
+    `<p style="margin:0 0 4px 0;"><strong>By ACH / Bank Transfer:</strong> Contact our office${companyPhone ? ' at ' + companyPhone : ''} for routing instructions.</p>` +
+    `<p style="margin:0;"><strong>Online:</strong> Visit our payment portal or contact us${companyEmail ? ' at ' + companyEmail : ''} for the secure payment link.</p>` +
+    `</div></div>`;
 
-  const paymentOptions = `<div class="legal-notice">
-  <div class="ln-heading">Payment Options</div>
-  <p style="text-indent:0;margin:4px 0;"><strong>By Mail:</strong> Send check or money order to ${companyName}, ${companyAddr || '[Company Address]'}.</p>
-  <p style="text-indent:0;margin:4px 0;"><strong>By ACH / Bank Transfer:</strong> Contact our office${companyPhone ? ' at ' + companyPhone : ''} for routing instructions.</p>
-  <p style="text-indent:0;margin:4px 0;"><strong>Online:</strong> Visit our payment portal or contact us${companyEmail ? ' at ' + companyEmail : ''} for the secure payment link.</p>
-</div>`;
+  // Mini-Miranda — verbatim
+  const miniMiranda =
+    `<div style="border-top:1px solid #000;border-bottom:1px solid #000;padding:7px 0;margin:16px 0;text-align:center;font-family:Arial,sans-serif;font-size:9pt;font-style:italic;">` +
+    `This communication is from a debt collector. This is an attempt to collect a debt and any information obtained will be used for that purpose.` +
+    `</div>`;
 
-  // Map letter type to severity tone — drives the accent bar and subject styling
-  const toneMap: Record<string, string> = {
-    reminder: 'reminder',
-    warning: 'warning',
-    final_notice: 'final',
-    demand: 'demand',
-    settlement_offer: 'settlement',
-    payment_confirmation: 'confirm',
-  };
-  const tone = toneMap[letterType] || 'reminder';
+  // Remit slip — classic: dashed border box, plain text
+  // FIX (2026-05-25): uses CSS letter-spacing on a single string + white-space:nowrap
+  const remitSlip =
+    `<div style="border:1.5px dashed #000;margin-top:28px;padding:16px 20px;font-family:Arial,sans-serif;font-size:9.5pt;page-break-inside:avoid;">` +
+    `<div style="text-align:center;font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:0.42em;white-space:nowrap;overflow:hidden;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed #000;">&#9986; &nbsp;&nbsp; Detach and return with payment &nbsp;&nbsp; &#9986;</div>` +
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-bottom:10px;">` +
+    `<div><div style="font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#000;margin-bottom:2px;">Remit to</div>` +
+    `<div><strong>${companyName}</strong></div><div style="font-size:9pt;">${companyAddr || ''}</div></div>` +
+    `<div><div style="font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#000;margin-bottom:2px;">From</div>` +
+    `<div><strong>${debtorName}</strong></div><div style="font-size:9pt;">${debtorAddr || ''}</div></div>` +
+    `<div><div style="font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#000;margin-bottom:2px;">Account reference</div>` +
+    `<div><strong>${accountRef}</strong></div></div>` +
+    `<div><div style="font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#000;margin-bottom:2px;">Amount enclosed</div>` +
+    `<div>$ <span style="display:inline-block;border-bottom:1px solid #000;min-width:80px;"></span></div></div>` +
+    `<div><div style="font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#000;margin-bottom:2px;">Balance due</div>` +
+    `<div style="font-weight:800;font-variant-numeric:tabular-nums;">${fmtAmt(balanceDue)}</div></div>` +
+    `<div><div style="font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#000;margin-bottom:2px;">Date</div>` +
+    `<div><span style="display:inline-block;border-bottom:1px solid #000;min-width:120px;"></span></div></div>` +
+    `</div>` +
+    `<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #000;font-size:8pt;font-style:italic;text-align:center;">Make checks payable to ${companyName}. Include account reference ${accountRef} on the memo line.</div>` +
+    `</div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(letter.title)} — ${debtorName}</title><style>
-${baseStyles}
-@page { size: letter; margin: 0.75in; }   /* Tighter margins = more content per page */
-body { background: #fff; }
-.legal-wrap { max-width: 100%; margin: 0; }
-</style></head><body>
-<div class="legal-page legal-wrap">
-  <div class="legal-accent-bar tone-${tone}"></div>
+  const logoHtml = logoImg(company?.logo_data, company?.name);
+  const coDetailHtml = `${companyAddr || ''}${companyPhone ? `<br>Tel: ${companyPhone}` : ''}${companyEmail ? `<br>${companyEmail}` : ''}`;
 
-  <div class="legal-letterhead">
-    <div>
-      <div class="lh-name">${companyName}</div>
-      <div class="lh-meta">
-        ${companyAddr || ''}${companyPhone ? ` &middot; Tel: ${companyPhone}` : ''}${companyEmail ? ` &middot; ${companyEmail}` : ''}
-      </div>
-    </div>
-    <div class="lh-doc-id">
-      <div class="id-lbl">${todayLong}</div>
-      <div class="id-val">${accountRef}</div>
-    </div>
-  </div>
+  const headerHtml = docHeader({
+    coName: company?.name || 'Your Company',
+    coDetailHtml: (logoHtml ? logoHtml + '<br>' : '') + coDetailHtml,
+    title: esc(letter.title),
+    numberHtml: `<div style="margin-top:4px;font-size:10pt;">${todayLong}</div><div style="font-size:10pt;margin-top:2px;">${accountRef}</div>`,
+  });
 
-  <div class="legal-recipient">
-    <div class="rcpt-lbl">Addressed to</div>
-    <div class="rcpt-name">${debtorName}</div>
-    ${debtorAddr ? `<div style="color:#475569;margin-top:2px;">${debtorAddr}</div>` : ''}
-  </div>
+  const recipientBoxHtml = boxRow([
+    {
+      label: 'Addressed To',
+      html: `<strong>${debtorName}</strong>` + (debtorAddr ? `<br>${debtorAddr}` : ''),
+    },
+  ]);
 
-  <div class="legal-subject tone-${tone}">${esc(letter.title)}</div>
+  const bodyHtml =
+    headerHtml +
+    recipientBoxHtml +
+    `<div style="padding:14px 16px;font-family:Arial,sans-serif;font-size:11pt;line-height:1.6;">` +
+    `<p>Dear ${debtorName}:</p>` +
+    letter.body +
+    `</div>` +
+    paymentOptions +
+    `<div style="padding:0 16px;">` +
+    miniMiranda +
+    `<div style="margin-top:28px;font-family:Arial,sans-serif;">` +
+    `<p style="margin-bottom:0;">Sincerely,</p>` +
+    `<div style="border-bottom:1px solid #000;width:260px;margin-top:28px;"></div>` +
+    `<div style="font-weight:700;margin-top:4px;font-size:10pt;">${companyName}</div>` +
+    `<div style="font-size:9.5pt;">Collections Department</div>` +
+    `</div>` +
+    remitSlip +
+    `</div>` +
+    footerBar('This communication may contain privileged or confidential information intended solely for the addressee.');
 
-  <div class="legal-body">
-    <p>Dear ${debtorName}:</p>
-    ${letter.body}
-  </div>
-
-  ${paymentOptions}
-
-  <div class="legal-mini-miranda">
-    This communication is from a debt collector. This is an attempt to collect a debt and any information obtained will be used for that purpose.
-  </div>
-
-  <div class="legal-signature">
-    <p style="margin-bottom:0;">Sincerely,</p>
-    <div class="legal-sig-line"></div>
-    <div class="legal-sig-name">${companyName}</div>
-    <div class="legal-sig-title">Collections Department</div>
-  </div>
-
-  ${remitSlip}
-
-  <div class="legal-confidential-footer">
-    This communication may contain privileged or confidential information intended solely for the addressee.
-  </div>
-</div></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(letter.title)} — ${debtorName}</title>` +
+    `<style>${classicStyles()}@page{size:letter;margin:0.75in;}</style></head>` +
+    `<body style="background:#fff;">${docFrame(bodyHtml)}</body></html>`;
 }
 
 
@@ -3329,18 +3271,19 @@ export function generateCourtPacketHTML(data: {
 }): string {
   const { debt, company, communications, payments, evidence, compliance, auditLog, settlements, contacts, disputes, legalActions } = data;
 
-  const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const escL = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const cfmt = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
   const dfmt = (d: string) => {
-    if (!d) return '\u2014';
+    if (!d) return '—';
     const s = String(d);
     const dt = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T12:00:00') : new Date(s);
-    if (isNaN(dt.getTime())) return '\u2014';
+    if (isNaN(dt.getTime())) return '—';
     return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
   const caseRef = debt.id ? String(debt.id).substring(0, 8).toUpperCase() : 'N/A';
   const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const companyName = esc(company?.name || 'Company');
+  const companyName = escL(company?.name || 'Company');
+  const jurisdiction = escL(debt?.jurisdiction || '________________');
 
   const sectionCounts = [
     { title: 'Account Summary', count: 1 },
@@ -3356,95 +3299,99 @@ export function generateCourtPacketHTML(data: {
     { title: 'Generation Certificate', count: 1 },
   ];
 
-  const tableHead = (cols: string[]) => `<thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
-  const td = (v: any) => `<td>${esc(v)}</td>`;
-  const noRecords = '<p style="color:#888;font-style:italic;margin:12px 0;">No records available.</p>';
+  // Classic ruled-table helpers
+  const tableHead = (cols: string[]) =>
+    `<thead><tr>${cols.map(c => `<th style="background:#000;color:#fff;border:1px solid #000;padding:6px 8px;text-align:left;font-size:9.5pt;text-transform:uppercase;letter-spacing:0.5px;font-family:Arial,sans-serif;">${c}</th>`).join('')}</tr></thead>`;
+  const td = (v: any) => `<td style="border:1px solid #000;padding:6px 8px;font-size:10pt;font-family:Arial,sans-serif;">${escL(v)}</td>`;
+  const noRecords = '<p style="font-style:italic;margin:12px 0;font-family:Arial,sans-serif;font-size:10pt;">No records available.</p>';
 
   const sectionHeader = (n: number, title: string, count: number) =>
-    `<div class="section" id="section-${n}">
-      <h2 style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;color:#111;">SECTION ${n}: ${esc(title)}</h2>
-      <div style="font-size:11px;color:#666;margin-bottom:8px;">(${count} item${count !== 1 ? 's' : ''})</div>
-      <hr style="border:none;border-top:2px solid #333;margin-bottom:16px;">`;
+    `<div class="section" id="section-${n}" style="page-break-before:always;">` +
+    `<div style="font-size:12pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;color:#000;font-family:Arial,sans-serif;">SECTION ${n}: ${escL(title)}</div>` +
+    `<div style="font-size:10pt;font-family:Arial,sans-serif;margin-bottom:8px;">(${count} item${count !== 1 ? 's' : ''})</div>` +
+    `<div style="border-top:2px solid #000;margin-bottom:16px;"></div>`;
+
+  const tbl = (cols: string[], rows: string) =>
+    `<table style="width:100%;border-collapse:collapse;margin-bottom:12px;">${tableHead(cols)}<tbody>${rows}</tbody></table>`;
 
   // ── Section 1: Account Summary ──
-  const section1 = `${sectionHeader(1, 'Account Summary', 1)}
-    <table><tbody>
-      <tr><td style="font-weight:700;width:40%;">Debtor Name</td>${td(debt.debtor_name)}</tr>
-      <tr><td style="font-weight:700;">Original Amount</td><td>${cfmt(debt.original_amount)}</td></tr>
-      <tr><td style="font-weight:700;">Accrued Interest</td><td>${cfmt(debt.interest_accrued)}</td></tr>
-      <tr><td style="font-weight:700;">Fees &amp; Costs</td><td>${cfmt(debt.fees_accrued)}</td></tr>
-      <tr><td style="font-weight:700;">Payments Applied</td><td>${cfmt(debt.payments_made)}</td></tr>
-      <tr><td style="font-weight:700;">Balance Due</td><td style="font-weight:700;color:#b91c1c;">${cfmt(debt.balance_due)}</td></tr>
-      <tr><td style="font-weight:700;">Due Date</td>${td(dfmt(debt.due_date))}</tr>
-      <tr><td style="font-weight:700;">Delinquent Date</td>${td(dfmt(debt.delinquent_date))}</tr>
-      <tr><td style="font-weight:700;">Jurisdiction</td>${td(debt.jurisdiction || 'N/A')}</tr>
-      <tr><td style="font-weight:700;">Interest Rate</td><td>${debt.interest_rate ? (Number(debt.interest_rate) * 100).toFixed(2) + '%' : 'N/A'}</td></tr>
-      <tr><td style="font-weight:700;">Interest Type</td>${td(debt.interest_type || 'N/A')}</tr>
-    </tbody></table>
-  </div>`;
+  const section1 = sectionHeader(1, 'Account Summary', 1) +
+    `<table style="width:100%;border-collapse:collapse;">` +
+    `<tbody>` +
+    `<tr><td style="font-weight:700;width:40%;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Debtor Name</td>${td(debt.debtor_name)}</tr>` +
+    `<tr><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Original Amount</td><td style="border:1px solid #000;padding:6px 8px;font-size:10pt;font-family:Arial,sans-serif;">${cfmt(debt.original_amount)}</td></tr>` +
+    `<tr><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Accrued Interest</td><td style="border:1px solid #000;padding:6px 8px;font-size:10pt;font-family:Arial,sans-serif;">${cfmt(debt.interest_accrued)}</td></tr>` +
+    `<tr><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Fees &amp; Costs</td><td style="border:1px solid #000;padding:6px 8px;font-size:10pt;font-family:Arial,sans-serif;">${cfmt(debt.fees_accrued)}</td></tr>` +
+    `<tr><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Payments Applied</td><td style="border:1px solid #000;padding:6px 8px;font-size:10pt;font-family:Arial,sans-serif;">${cfmt(debt.payments_made)}</td></tr>` +
+    `<tr><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Balance Due</td><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-size:10pt;font-family:Arial,sans-serif;">${cfmt(debt.balance_due)}</td></tr>` +
+    `<tr><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Due Date</td>${td(dfmt(debt.due_date))}</tr>` +
+    `<tr><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Delinquent Date</td>${td(dfmt(debt.delinquent_date))}</tr>` +
+    `<tr><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Jurisdiction</td>${td(debt.jurisdiction || 'N/A')}</tr>` +
+    `<tr><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Interest Rate</td><td style="border:1px solid #000;padding:6px 8px;font-size:10pt;font-family:Arial,sans-serif;">${debt.interest_rate ? (Number(debt.interest_rate) * 100).toFixed(2) + '%' : 'N/A'}</td></tr>` +
+    `<tr><td style="font-weight:700;border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">Interest Type</td>${td(debt.interest_type || 'N/A')}</tr>` +
+    `</tbody></table></div>`;
 
   // ── Section 2: Communication Log ──
-  const section2 = `${sectionHeader(2, 'Communication Log', communications.length)}
-    ${communications.length === 0 ? noRecords : `<table>${tableHead(['Date', 'Type', 'Direction', 'Subject', 'Outcome'])}
-    <tbody>${communications.map(c => `<tr>${td(dfmt(c.logged_at))}${td(c.type)}${td(c.direction)}${td(c.subject)}${td(c.outcome)}</tr>`).join('')}</tbody></table>`}
-  </div>`;
+  const section2 = sectionHeader(2, 'Communication Log', communications.length) +
+    (communications.length === 0 ? noRecords : tbl(['Date', 'Type', 'Direction', 'Subject', 'Outcome'],
+      communications.map(c => `<tr>${td(dfmt(c.logged_at))}${td(c.type)}${td(c.direction)}${td(c.subject)}${td(c.outcome)}</tr>`).join(''))) +
+    `</div>`;
 
   // ── Section 3: Payment History ──
-  const section3 = `${sectionHeader(3, 'Payment History', payments.length)}
-    ${payments.length === 0 ? noRecords : `<table>${tableHead(['Date', 'Amount', 'Method', 'Reference', 'Applied To'])}
-    <tbody>${payments.map(p => `<tr>${td(dfmt(p.received_date))}<td>${cfmt(p.amount)}</td>${td(p.method)}${td(p.reference_number)}${td(p.applied_to)}</tr>`).join('')}</tbody></table>`}
-  </div>`;
+  const section3 = sectionHeader(3, 'Payment History', payments.length) +
+    (payments.length === 0 ? noRecords : tbl(['Date', 'Amount', 'Method', 'Reference', 'Applied To'],
+      payments.map(p => `<tr>${td(dfmt(p.received_date))}<td style="border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">${cfmt(p.amount)}</td>${td(p.method)}${td(p.reference_number)}${td(p.applied_to)}</tr>`).join(''))) +
+    `</div>`;
 
   // ── Section 4: Evidence Inventory ──
-  const section4 = `${sectionHeader(4, 'Evidence Inventory', evidence.length)}
-    ${evidence.length === 0 ? noRecords : `<table>${tableHead(['Type', 'Title', 'Court Relevance', 'Date', 'Description'])}
-    <tbody>${evidence.map(e => `<tr>${td(e.evidence_type)}${td(e.title)}${td(e.court_relevance)}${td(dfmt(e.date_of_evidence))}<td>${esc(String(e.description || '').substring(0, 120))}${(e.description || '').length > 120 ? '&hellip;' : ''}</td></tr>`).join('')}</tbody></table>`}
-  </div>`;
+  const section4 = sectionHeader(4, 'Evidence Inventory', evidence.length) +
+    (evidence.length === 0 ? noRecords : tbl(['Type', 'Title', 'Court Relevance', 'Date', 'Description'],
+      evidence.map(e => `<tr>${td(e.evidence_type)}${td(e.title)}${td(e.court_relevance)}${td(dfmt(e.date_of_evidence))}<td style="border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">${escL(String(e.description || '').substring(0, 120))}${(e.description || '').length > 120 ? '&hellip;' : ''}</td></tr>`).join(''))) +
+    `</div>`;
 
   // ── Section 5: FDCPA/TCPA Compliance Timeline ──
-  const section5 = `${sectionHeader(5, 'FDCPA/TCPA Compliance Timeline', compliance.length)}
-    ${compliance.length === 0 ? noRecords : `<table>${tableHead(['Date', 'Event Type', 'Notes'])}
-    <tbody>${compliance.map(c => `<tr>${td(dfmt(c.event_date))}${td(c.event_type)}${td(c.notes)}</tr>`).join('')}</tbody></table>`}
-  </div>`;
+  const section5 = sectionHeader(5, 'FDCPA/TCPA Compliance Timeline', compliance.length) +
+    (compliance.length === 0 ? noRecords : tbl(['Date', 'Event Type', 'Notes'],
+      compliance.map(c => `<tr>${td(dfmt(c.event_date))}${td(c.event_type)}${td(c.notes)}</tr>`).join(''))) +
+    `</div>`;
 
   // ── Section 6: Chain of Custody (Audit Trail) ──
-  const section6 = `${sectionHeader(6, 'Chain of Custody (Audit Trail)', auditLog.length)}
-    ${auditLog.length === 0 ? noRecords : `<table>${tableHead(['Timestamp', 'Action', 'Field', 'Old Value', 'New Value', 'Performed By'])}
-    <tbody>${auditLog.map(a => `<tr>${td(dfmt(a.performed_at))}${td(a.action)}${td(a.field_name)}${td(a.old_value)}${td(a.new_value)}${td(a.performed_by)}</tr>`).join('')}</tbody></table>`}
-  </div>`;
+  const section6 = sectionHeader(6, 'Chain of Custody (Audit Trail)', auditLog.length) +
+    (auditLog.length === 0 ? noRecords : tbl(['Timestamp', 'Action', 'Field', 'Old Value', 'New Value', 'Performed By'],
+      auditLog.map(a => `<tr>${td(dfmt(a.performed_at))}${td(a.action)}${td(a.field_name)}${td(a.old_value)}${td(a.new_value)}${td(a.performed_by)}</tr>`).join(''))) +
+    `</div>`;
 
   // ── Section 7: Settlement History ──
-  const section7 = `${sectionHeader(7, 'Settlement History', settlements.length)}
-    ${settlements.length === 0 ? noRecords : `<table>${tableHead(['Date', 'Offer Amount', 'Response', 'Counter Amount', 'Accepted Date'])}
-    <tbody>${settlements.map(s => `<tr>${td(dfmt(s.created_at))}<td>${cfmt(s.offer_amount)}</td>${td(s.response)}${s.counter_amount ? `<td>${cfmt(s.counter_amount)}</td>` : td('')}${td(dfmt(s.accepted_date))}</tr>`).join('')}</tbody></table>`}
-  </div>`;
+  const section7 = sectionHeader(7, 'Settlement History', settlements.length) +
+    (settlements.length === 0 ? noRecords : tbl(['Date', 'Offer Amount', 'Response', 'Counter Amount', 'Accepted Date'],
+      settlements.map(s => `<tr>${td(dfmt(s.created_at))}<td style="border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">${cfmt(s.offer_amount)}</td>${td(s.response)}${s.counter_amount ? `<td style="border:1px solid #000;padding:6px 8px;font-family:Arial,sans-serif;font-size:10pt;">${cfmt(s.counter_amount)}</td>` : td('')}${td(dfmt(s.accepted_date))}</tr>`).join(''))) +
+    `</div>`;
 
   // ── Section 8: Contact Directory ──
-  const section8 = `${sectionHeader(8, 'Contact Directory', contacts.length)}
-    ${contacts.length === 0 ? noRecords : `<table>${tableHead(['Role', 'Name', 'Email', 'Phone', 'Company'])}
-    <tbody>${contacts.map(c => `<tr>${td(c.role)}${td(c.name)}${td(c.email)}${td(c.phone)}${td(c.company_name)}</tr>`).join('')}</tbody></table>`}
-  </div>`;
+  const section8 = sectionHeader(8, 'Contact Directory', contacts.length) +
+    (contacts.length === 0 ? noRecords : tbl(['Role', 'Name', 'Email', 'Phone', 'Company'],
+      contacts.map(c => `<tr>${td(c.role)}${td(c.name)}${td(c.email)}${td(c.phone)}${td(c.company_name)}</tr>`).join(''))) +
+    `</div>`;
 
   // ── Section 9: Dispute History ──
-  const section9 = `${sectionHeader(9, 'Dispute History', disputes.length)}
-    ${disputes.length === 0 ? noRecords : `<table>${tableHead(['Date', 'Reason', 'Status', 'Resolution'])}
-    <tbody>${disputes.map(d => `<tr>${td(dfmt(d.created_at))}${td(d.reason)}${td(d.status)}${td(d.resolution)}</tr>`).join('')}</tbody></table>`}
-  </div>`;
+  const section9 = sectionHeader(9, 'Dispute History', disputes.length) +
+    (disputes.length === 0 ? noRecords : tbl(['Date', 'Reason', 'Status', 'Resolution'],
+      disputes.map(d => `<tr>${td(dfmt(d.created_at))}${td(d.reason)}${td(d.status)}${td(d.resolution)}</tr>`).join(''))) +
+    `</div>`;
 
   // ── Section 10: Legal Actions ──
-  const section10 = `${sectionHeader(10, 'Legal Actions', legalActions.length)}
-    ${legalActions.length === 0 ? noRecords : `<table>${tableHead(['Type', 'Status', 'Court', 'Case Number', 'Hearing Date'])}
-    <tbody>${legalActions.map(l => `<tr>${td(l.action_type)}${td(l.status)}${td(l.court_name)}${td(l.case_number)}${td(dfmt(l.hearing_date))}</tr>`).join('')}</tbody></table>`}
-  </div>`;
+  const section10 = sectionHeader(10, 'Legal Actions', legalActions.length) +
+    (legalActions.length === 0 ? noRecords : tbl(['Type', 'Status', 'Court', 'Case Number', 'Hearing Date'],
+      legalActions.map(l => `<tr>${td(l.action_type)}${td(l.status)}${td(l.court_name)}${td(l.case_number)}${td(dfmt(l.hearing_date))}</tr>`).join(''))) +
+    `</div>`;
 
   // ── Section 11: Generation Certificate ──
-  const section11 = `${sectionHeader(11, 'Generation Certificate', 1)}
-    <div style="border:2px solid #333;padding:24px;margin:12px 0;">
-      <p style="margin-bottom:12px;">This document was generated on <strong>${generatedDate}</strong> from the business records of <strong>${companyName}</strong>. Records are maintained in the regular course of business by persons with knowledge of the recorded acts.</p>
-      <p style="margin-bottom:12px;">The information contained herein is a true and accurate representation of the records as stored in the electronic database at the time of generation.</p>
-      <div style="margin-top:36px;border-top:1px solid #333;width:50%;padding-top:8px;font-size:11px;color:#666;">Authorized Signature / Date</div>
-    </div>
-  </div>`;
+  const section11 = sectionHeader(11, 'Generation Certificate', 1) +
+    `<div style="border:2px solid #000;padding:24px;margin:12px 0;font-family:Arial,sans-serif;font-size:11pt;line-height:1.6;">` +
+    `<p style="margin-bottom:12px;">This document was generated on <strong>${generatedDate}</strong> from the business records of <strong>${companyName}</strong>. Records are maintained in the regular course of business by persons with knowledge of the recorded acts.</p>` +
+    `<p style="margin-bottom:12px;">The information contained herein is a true and accurate representation of the records as stored in the electronic database at the time of generation.</p>` +
+    `<div style="margin-top:36px;border-top:1px solid #000;width:50%;padding-top:8px;font-size:10pt;">Authorized Signature / Date</div>` +
+    `</div></div>`;
 
   const exhibitLetter = (n: number) => String.fromCharCode(64 + n); // 1->A
   const exhibits = [
@@ -3460,101 +3407,78 @@ export function generateCourtPacketHTML(data: {
     { letter: exhibitLetter(10), title: 'Legal Actions' },
     { letter: exhibitLetter(11), title: 'Custodian Certification' },
   ];
-  const jurisdiction = esc(debt?.jurisdiction || '________________');
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Court Packet — ${esc(debt.debtor_name)}</title>
-<style>
-${baseStyles}
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; color: #111; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  html { counter-reset: bates; }
-  @page {
-    size: letter;
-    margin: 1in 1in 1.1in 1in;
-    @bottom-right { content: "BAP-" counter(bates, decimal-leading-zero); font-family: 'SF Mono', Menlo, monospace; font-size: 9pt; color: #333; }
-    @bottom-left { content: "Confidential — Prepared for Legal Proceedings"; font-family: Georgia, serif; font-size: 8.5pt; color: #555; font-style: italic; }
-  }
-  body { counter-increment: bates; }
-  @media print {
-    .section { page-break-before: always; counter-increment: bates; }
-    .cover { page-break-after: always; counter-increment: bates; }
-    .ex-cover-page { counter-increment: bates; }
-    tr { page-break-inside: avoid; break-inside: avoid; orphans: 3; widows: 3; }
-    thead { display: table-header-group; }
-    h1, h2, h3 { page-break-after: avoid; break-after: avoid; }
-    p { orphans: 3; widows: 3; }
-  }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: auto; }
-  thead { display: table-header-group; }
-  tr { page-break-inside: avoid; break-inside: avoid; }
-  th, td { padding: 7px 10px; text-align: left; border: 1px solid #555; font-size: 10.5pt; word-wrap: break-word; overflow-wrap: anywhere; font-family: Georgia, 'Times New Roman', serif; }
-  th { background: #ececec; font-weight: 700; text-transform: uppercase; font-size: 9.5pt; letter-spacing: 0.6px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
-  .court-cover { text-align: center; padding-top: 0.5in; font-family: Georgia, 'Times New Roman', serif; }
-  .court-caption { border-top: 3px double #000; border-bottom: 3px double #000; padding: 16px 0; margin-bottom: 36px; }
-  .court-caption .court-name { font-weight: 700; text-transform: uppercase; letter-spacing: 2px; font-size: 12pt; }
-  .court-caption .case-line { font-style: italic; font-size: 11pt; margin-top: 6px; }
-  .cover h1 { font-size: 26pt; font-weight: 700; letter-spacing: 5px; margin: 36px 0 14px; text-transform: uppercase; }
-  .cover .subtitle { font-size: 13pt; color: #333; margin-bottom: 8px; font-style: italic; }
-  .cover .meta { font-size: 12pt; color: #222; margin-bottom: 4px; }
-  .cover .confidential { margin-top: 60px; font-size: 11pt; font-weight: 700; letter-spacing: 2px; color: #000; text-transform: uppercase; border: 2px solid #000; display: inline-block; padding: 8px 20px; }
-  .exhibit-list { margin: 36px auto; max-width: 5in; text-align: left; border: 1px solid #000; padding: 18px 22px; }
-  .exhibit-list h3 { font-size: 12pt; text-transform: uppercase; letter-spacing: 2px; text-align: center; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 6px; }
-  .exhibit-list .ex-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11pt; border-bottom: 1px dotted #aaa; }
-  .exhibit-list .ex-row:last-child { border-bottom: none; }
-  .exhibit-list .ex-letter { font-weight: 700; width: 1.2in; }
-  .ex-cover-page { text-align: center; padding-top: 2.8in; page-break-before: always; page-break-after: always; }
-  .ex-cover-page .ex-tab { display: inline-block; border: 4px solid #000; padding: 26px 56px; font-size: 64pt; font-weight: 700; letter-spacing: 10px; font-family: Georgia, 'Times New Roman', serif; }
-  .ex-cover-page .ex-label { font-size: 16pt; text-transform: uppercase; letter-spacing: 4px; margin-top: 28px; font-style: italic; }
-  .bates-footer { position: fixed; bottom: 0.4in; right: 0.7in; font-size: 9pt; color: #333; font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, monospace; }
-  .court-conf-footer { position: fixed; bottom: 0.4in; left: 0.7in; font-size: 8.5pt; color: #555; font-style: italic; font-family: Georgia, serif; }
-</style></head><body>
+  const logoHtml = logoImg(company?.logo_data, company?.name);
+  const coDetailHtml = (logoHtml ? logoHtml + '<br>' : '') +
+    escL([company?.address_line1, company?.address_line2, [company?.city, company?.state].filter(Boolean).join(', ') + (company?.zip ? ' ' + company.zip : '')].filter(Boolean).join(', '));
 
-<div class="bates-footer">BAP-${caseRef.padStart(6, '0')}</div>
-<div class="court-conf-footer">Confidential — Prepared for Legal Proceedings</div>
+  const coverBodyHtml =
+    // Classic double-rule court caption
+    `<div style="text-align:center;padding-top:0.5in;font-family:Arial,sans-serif;">` +
+    `<div style="border-top:3px solid #000;border-bottom:3px solid #000;padding:16px 0;margin-bottom:36px;">` +
+    `<div style="font-weight:700;text-transform:uppercase;letter-spacing:2px;font-size:12pt;">In the Court of Competent Jurisdiction</div>` +
+    `<div style="font-weight:700;text-transform:uppercase;letter-spacing:2px;font-size:12pt;margin-top:4px;">${jurisdiction}</div>` +
+    `<div style="font-style:italic;font-size:11pt;margin-top:14px;">${companyName},<br><span style="font-size:10pt;font-style:normal;">Plaintiff,</span></div>` +
+    `<div style="text-align:center;margin:6px 0;font-style:italic;font-size:11pt;">vs.</div>` +
+    `<div style="font-style:italic;font-size:11pt;">${escL(debt.debtor_name)},<br><span style="font-size:10pt;font-style:normal;">Defendant.</span></div>` +
+    `<div style="margin-top:14px;font-size:10pt;">Case Ref. No. BAP-${caseRef}</div>` +
+    `</div>` +
+    `<div style="font-size:24pt;font-weight:700;letter-spacing:5px;margin:36px 0 14px;text-transform:uppercase;">Court Packet</div>` +
+    `<div style="font-size:13pt;font-style:italic;margin-bottom:8px;">Bates-Numbered Evidentiary Bundle</div>` +
+    `<div style="font-size:12pt;margin-bottom:4px;">Compiled by: <strong>${companyName}</strong></div>` +
+    `<div style="font-size:12pt;margin-bottom:4px;">Date of Compilation: ${generatedDate}</div>` +
+    // Exhibit list — classic bordered
+    `<div style="margin:36px auto;max-width:5in;text-align:left;border:1px solid #000;padding:18px 22px;">` +
+    `<div style="font-size:11pt;text-transform:uppercase;letter-spacing:2px;text-align:center;margin-bottom:10px;border-bottom:1px solid #000;padding-bottom:6px;font-weight:700;">List of Exhibits</div>` +
+    exhibits.map(ex =>
+      `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:11pt;border-bottom:1px solid #ddd;">` +
+      `<span style="font-weight:700;width:1.2in;display:inline-block;">Exhibit ${ex.letter}</span>` +
+      `<span>${escL(ex.title)}</span></div>`
+    ).join('') +
+    `</div>` +
+    // Exhibit thumbnail grid — classic: black borders, white bg, no colors
+    `<div style="margin:24px auto 0;max-width:6.5in;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;page-break-inside:avoid;">` +
+    exhibits.map(ex =>
+      `<div style="border:1.5px solid #000;padding:10px 6px 8px;text-align:center;background:#fff;">` +
+      `<div style="font-family:Arial,sans-serif;font-size:22pt;font-weight:700;letter-spacing:3px;border:2px solid #000;padding:6px 0;margin-bottom:6px;background:#fff;">${ex.letter}</div>` +
+      `<div style="font-family:Arial,sans-serif;font-size:7.5pt;line-height:1.25;color:#000;min-height:2.4em;">${escL(ex.title)}</div>` +
+      `</div>`
+    ).join('') +
+    `</div>` +
+    `<div style="margin-top:60px;font-size:11pt;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:2px solid #000;display:inline-block;padding:8px 20px;">Confidential &mdash; For Legal Proceedings Only</div>` +
+    `</div>`;
 
-<div class="cover">
-  <div class="court-caption">
-    <div class="court-name">In the Court of Competent Jurisdiction</div>
-    <div class="court-name" style="margin-top:4px;">${jurisdiction}</div>
-    <div class="case-line" style="margin-top:14px;">${companyName},<br><span style="font-size:10pt;font-style:normal;">Plaintiff,</span></div>
-    <div style="text-align:center;margin:6px 0;font-style:italic;">vs.</div>
-    <div class="case-line">${esc(debt.debtor_name)},<br><span style="font-size:10pt;font-style:normal;">Defendant.</span></div>
-    <div style="margin-top:14px;font-size:10pt;">Case Ref. No. BAP-${caseRef}</div>
-  </div>
-  <h1>Court Packet</h1>
-  <div class="subtitle">Bates-Numbered Evidentiary Bundle</div>
-  <div class="meta" style="margin-top:18px;">Compiled by: <strong>${companyName}</strong></div>
-  <div class="meta">Date of Compilation: ${generatedDate}</div>
+  const sections = [section1, section2, section3, section4, section5, section6, section7, section8, section9, section10, section11];
+  const sectionsWithCovers = sections.map((s, i) =>
+    `<div style="text-align:center;padding-top:2.8in;page-break-before:always;page-break-after:always;font-family:Arial,sans-serif;">` +
+    `<div style="display:inline-block;border:4px solid #000;padding:26px 56px;font-size:56pt;font-weight:700;letter-spacing:10px;">${exhibits[i].letter}</div>` +
+    `<div style="font-size:16pt;text-transform:uppercase;letter-spacing:4px;margin-top:28px;font-style:italic;">Exhibit ${exhibits[i].letter}</div>` +
+    `<div style="font-size:13pt;letter-spacing:2px;margin-top:8px;">${escL(exhibits[i].title)}</div>` +
+    `</div>` +
+    s
+  ).join('');
 
-  <div class="exhibit-list">
-    <h3>List of Exhibits</h3>
-    ${exhibits.map(ex => `<div class="ex-row"><span class="ex-letter">Exhibit ${ex.letter}</span><span>${esc(ex.title)}</span></div>`).join('')}
-  </div>
+  // Classic page-level styles (Arial, black rules)
+  const styles = classicStyles() + `
+    @page { size: letter; margin: 1in 1in 1.1in 1in; }
+    body { font-size: 11pt; line-height: 1.6; }
+    .section { page-break-before: always; }
+    .cover { page-break-after: always; }
+    @media print {
+      tr { page-break-inside: avoid; break-inside: avoid; orphans: 3; widows: 3; }
+      thead { display: table-header-group; }
+      h1, h2, h3 { page-break-after: avoid; break-after: avoid; }
+      p { orphans: 3; widows: 3; }
+    }
+  `;
 
-  <!-- Feature #11: exhibit thumbnail contact-sheet strip -->
-  <div style="margin:24px auto 0;max-width:6.5in;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-    ${exhibits.map(ex => `
-      <div style="border:1.5px solid #000;padding:10px 6px 8px;text-align:center;background:#fafaf6;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-        <div style="font-family:Georgia,'Times New Roman',serif;font-size:22pt;font-weight:700;letter-spacing:3px;border:2px solid #000;padding:6px 0;margin-bottom:6px;background:#fff;">${ex.letter}</div>
-        <div style="font-family:Georgia,serif;font-size:7.5pt;line-height:1.25;color:#222;min-height:2.4em;">${esc(ex.title)}</div>
-      </div>
-    `).join('')}
-  </div>
-
-  <div class="confidential">Confidential &mdash; For Legal Proceedings Only</div>
-</div>
-
-${[section1, section2, section3, section4, section5, section6, section7, section8, section9, section10, section11].map((s, i) => `
-<div class="ex-cover-page">
-  <div class="ex-tab">${exhibits[i].letter}</div>
-  <div class="ex-label">Exhibit ${exhibits[i].letter}</div>
-  <div class="ex-label" style="font-size:13pt;letter-spacing:2px;font-style:normal;margin-top:8px;">${esc(exhibits[i].title)}</div>
-</div>
-${s}`).join('')}
-
-</body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Court Packet — ${escL(debt.debtor_name)}</title>` +
+    `<style>${styles}</style></head><body>` +
+    `<div style="font-size:8.5pt;font-style:italic;text-align:center;padding:4px 0;border-bottom:1px solid #000;font-family:Arial,sans-serif;">Confidential — Prepared for Legal Proceedings</div>` +
+    `<div class="cover">${coverBodyHtml}</div>` +
+    sectionsWithCovers +
+    `</body></html>`;
 }
-
 // ─── Verification Affidavit ────────────────────────────────
 export function generateVerificationAffidavitHTML(
   debt: any,
@@ -3574,45 +3498,8 @@ export function generateVerificationAffidavitHTML(
   const acctNum = (debt?.debt_number || debt?.id || '').toString().slice(0, 12).toUpperCase() || 'N/A';
   const sigTitle = esc(debt?.signatory_title || 'Authorized Custodian of Records');
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Affidavit of Debt Verification</title><style>
-${baseStyles}
-@page { size: letter; margin: 1in; }
-body { background: #fff; }
-.legal-wrap { max-width: 6.5in; margin: 0 auto; }
-</style></head><body>
-<div class="legal-page legal-wrap">
-
-  <div class="legal-caption">
-    <div class="cap-state">STATE OF ${stateName}</div>
-    <div class="cap-state">COUNTY OF ${countyName}</div>
-    <div class="cap-title">Affidavit of Debt Verification</div>
-    <div style="font-size:10pt;font-style:italic;margin-top:6px;">Account No. ${acctNum}</div>
-  </div>
-
-  <p style="margin-bottom:18px;">BEFORE ME, the undersigned authority, personally appeared <strong>${sigName}</strong>, who, being first duly sworn upon oath, deposes and states as follows:</p>
-
-  <div class="legal-numbered">
-    <p class="lp">I am the ${sigTitle} of ${companyName}, with its principal place of business located at ${companyAddr || '________________'}. I am over the age of eighteen (18) years and competent to testify to the matters set forth herein.</p>
-
-    <p class="lp">I am authorized to make this Affidavit on behalf of ${companyName}, and the statements set forth herein are made upon my personal knowledge derived from the business records of ${companyName} maintained in the regular and ordinary course of its business.</p>
-
-    <p class="lp">The records of ${companyName} are made at or near the time of the events recorded by, or from information transmitted by, persons with knowledge of those events; such records are kept in the course of regularly conducted business activity, and the making of such records is a regular practice of that business activity, satisfying the business records exception to the rule against hearsay under <em>Fed. R. Evid. 803(6)</em>.</p>
-
-    <p class="lp">The records of ${companyName} reflect that <strong>${debtorName}</strong> ("Debtor") is indebted to ${companyName} in connection with Account No. ${acctNum}, and as of ${todayLong} the indebtedness is itemized as follows:</p>
-  </div>
-
-  <table class="legal-amount-table">
-    <tbody>
-      <tr><td>Original Principal Amount</td><td class="amt">${fmtAmt(debt?.original_amount)}</td></tr>
-      <tr><td>Interest Accrued</td><td class="amt">${fmtAmt(debt?.interest_accrued)}</td></tr>
-      <tr><td>Fees and Charges Accrued</td><td class="amt">${fmtAmt(debt?.fees_accrued)}</td></tr>
-      <tr><td>Payments Received and Applied</td><td class="amt">(${fmtAmt(debt?.payments_made)})</td></tr>
-      <tr class="total"><td>TOTAL AMOUNT DUE AND OWING</td><td class="amt">${fmtAmt(debt?.balance_due)}</td></tr>
-    </tbody>
-  </table>
-
-  ${(() => {
-    // ── Feature #20: chronological event ribbon ──
+  // ── Feature #20: chronological event ribbon — classic ruled table (no color) ──
+  const chronologyHTML = (() => {
     const events: Array<{ label: string; date: string }> = [];
     if (debt?.origination_date) events.push({ label: 'Origination', date: debt.origination_date });
     else if (debt?.created_at) events.push({ label: 'Record Created', date: String(debt.created_at).slice(0, 10) });
@@ -3628,65 +3515,100 @@ body { background: #fff; }
       return isFinite(t);
     });
     if (valid.length < 2) return '';
-    const times = valid.map(e => new Date(e.date + 'T12:00:00').getTime());
-    const min = Math.min(...times), max = Math.max(...times);
-    const span = Math.max(1, max - min);
-    return `<div style="margin:14px 0 18px;padding:14px 18px;border:1px solid #000;background:#fafaf6;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;">
-      <div style="font-size:9pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#222;margin-bottom:10px;font-family:Georgia,serif;">Chronology</div>
-      <div style="position:relative;height:36px;margin:0 12px;">
-        <div style="position:absolute;left:0;right:0;top:14px;height:2px;background:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;"></div>
-        ${valid.map((e, i) => {
-          const t = new Date(e.date + 'T12:00:00').getTime();
-          const pct = ((t - min) / span) * 100;
-          const isLast = i === valid.length - 1;
-          return `<div style="position:absolute;left:${pct.toFixed(1)}%;top:8px;transform:translateX(-50%);text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-            <div style="width:14px;height:14px;border-radius:50%;background:${isLast ? '#dc2626' : '#000'};border:2px solid #fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0 auto;"></div>
-          </div>`;
-        }).join('')}
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:8.5pt;color:#333;margin-top:4px;font-family:Georgia,serif;">
-        ${valid.map(e => `<div style="text-align:center;flex:1;"><div style="font-weight:700;">${esc(e.label)}</div><div style="font-style:italic;">${esc(new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }))}</div></div>`).join('')}
-      </div>
-    </div>`;
-  })()}
+    // Classic: render as a plain ruled table instead of SVG ribbon
+    return `<div style="margin:14px 0 18px;border:1px solid #000;font-family:Arial,sans-serif;page-break-inside:avoid;">` +
+      `<div style="background:#000;color:#fff;font-weight:700;font-size:8.5pt;text-transform:uppercase;letter-spacing:1px;padding:4px 8px;">Chronology</div>` +
+      `<table style="width:100%;border-collapse:collapse;"><tbody><tr>` +
+      valid.map(e =>
+        `<td style="border:1px solid #000;padding:6px 8px;text-align:center;font-size:9.5pt;">` +
+        `<div style="font-weight:700;">${esc(e.label)}</div>` +
+        `<div style="font-style:italic;margin-top:2px;">${esc(new Date(e.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }))}</div>` +
+        `</td>`
+      ).join('') +
+      `</tr></tbody></table></div>`;
+  })();
 
-  <div class="legal-numbered" style="counter-reset: legalpara 4;">
-    <p class="lp">Demand has been duly made upon the Debtor for the payment of said indebtedness; however, no portion of said indebtedness has been paid except as credited above, and the entire balance set forth above remains due, owing, and unpaid.</p>
+  const logoHtml = logoImg(company?.logo_data, company?.name);
+  const coDetailHtml = (logoHtml ? logoHtml + '<br>' : '') +
+    `${companyAddr || '________________'}`;
 
-    <p class="lp">${companyName} is the lawful owner and holder of the debt described herein, and no other person or entity has any interest in or claim to said debt.</p>
+  const amountTable = totalsBox([
+    { label: 'Original Principal Amount', value: fmtAmt(debt?.original_amount) },
+    { label: 'Interest Accrued', value: fmtAmt(debt?.interest_accrued) },
+    { label: 'Fees and Charges Accrued', value: fmtAmt(debt?.fees_accrued) },
+    { label: 'Payments Received and Applied', value: `(${fmtAmt(debt?.payments_made)})` },
+    { label: 'TOTAL AMOUNT DUE AND OWING', value: fmtAmt(debt?.balance_due), grand: true },
+  ]);
 
-    <p class="lp">I declare under penalty of perjury under the laws of the State of ${stateName} that the foregoing is true and correct.</p>
-  </div>
+  const bodyHtml =
+    docHeader({
+      coName: company?.name || 'Company',
+      coDetailHtml,
+      title: 'Affidavit of Debt Verification',
+      number: `Account No. ${acctNum}`,
+    }) +
+    // Legal caption — classic double-rule centered block
+    `<div style="text-align:center;font-family:Arial,sans-serif;font-size:12pt;line-height:1.7;padding:16px;border-bottom:3px solid #000;">` +
+    `<div style="font-weight:700;letter-spacing:2px;text-transform:uppercase;">STATE OF ${stateName}</div>` +
+    `<div style="font-weight:700;letter-spacing:2px;text-transform:uppercase;">COUNTY OF ${countyName}</div>` +
+    `<div style="font-weight:700;text-transform:uppercase;letter-spacing:3px;font-size:14pt;margin-top:12px;">Affidavit of Debt Verification</div>` +
+    `<div style="font-size:10pt;font-style:italic;margin-top:6px;">Account No. ${acctNum}</div>` +
+    `</div>` +
+    `<div style="padding:14px 16px;font-family:Arial,sans-serif;font-size:11pt;line-height:1.6;">` +
+    `<p style="margin-bottom:18px;">BEFORE ME, the undersigned authority, personally appeared <strong>${sigName}</strong>, who, being first duly sworn upon oath, deposes and states as follows:</p>` +
+    // Numbered paragraphs — verbatim legal text
+    `<div style="counter-reset:legalpara;">` +
+    [
+      `I am the ${sigTitle} of ${companyName}, with its principal place of business located at ${companyAddr || '________________'}. I am over the age of eighteen (18) years and competent to testify to the matters set forth herein.`,
+      `I am authorized to make this Affidavit on behalf of ${companyName}, and the statements set forth herein are made upon my personal knowledge derived from the business records of ${companyName} maintained in the regular and ordinary course of its business.`,
+      `The records of ${companyName} are made at or near the time of the events recorded by, or from information transmitted by, persons with knowledge of those events; such records are kept in the course of regularly conducted business activity, and the making of such records is a regular practice of that business activity, satisfying the business records exception to the rule against hearsay under <em>Fed. R. Evid. 803(6)</em>.`,
+      `The records of ${companyName} reflect that <strong>${debtorName}</strong> ("Debtor") is indebted to ${companyName} in connection with Account No. ${acctNum}, and as of ${todayLong} the indebtedness is itemized as follows:`,
+    ].map((text, i) =>
+      `<div style="display:flex;gap:12px;margin-bottom:14px;text-align:justify;">` +
+      `<span style="font-weight:700;min-width:24px;text-align:right;flex-shrink:0;">${i + 1}.</span>` +
+      `<span>${text}</span></div>`
+    ).join('') +
+    `</div>` +
+    `<div style="margin:16px 0;">${amountTable}</div>` +
+    chronologyHTML +
+    // Numbered paragraphs continued (5–7)
+    `<div>` +
+    [
+      `Demand has been duly made upon the Debtor for the payment of said indebtedness; however, no portion of said indebtedness has been paid except as credited above, and the entire balance set forth above remains due, owing, and unpaid.`,
+      `${companyName} is the lawful owner and holder of the debt described herein, and no other person or entity has any interest in or claim to said debt.`,
+      `I declare under penalty of perjury under the laws of the State of ${stateName} that the foregoing is true and correct.`,
+    ].map((text, i) =>
+      `<div style="display:flex;gap:12px;margin-bottom:14px;text-align:justify;">` +
+      `<span style="font-weight:700;min-width:24px;text-align:right;flex-shrink:0;">${i + 5}.</span>` +
+      `<span>${text}</span></div>`
+    ).join('') +
+    `</div>` +
+    `<p style="margin-top:30px;">FURTHER AFFIANT SAYETH NAUGHT.</p>` +
+    // Signature block
+    `<div style="margin-top:28px;page-break-inside:avoid;">` +
+    `<div style="border-bottom:1px solid #000;width:260px;margin-top:28px;"></div>` +
+    `<div style="font-weight:700;margin-top:4px;font-size:10pt;">${sigName}</div>` +
+    `<div style="font-size:9.5pt;">${sigTitle}, ${companyName}</div>` +
+    `</div>` +
+    `</div>` +
+    // Jurat / notary block — classic boxed (verbatim jurat text)
+    `<div style="border:1.5px solid #000;padding:18px 22px;margin:36px 16px 16px;font-family:Arial,sans-serif;font-size:11pt;line-height:1.9;page-break-inside:avoid;">` +
+    `<div style="text-align:center;font-weight:700;text-transform:uppercase;letter-spacing:2px;font-size:11pt;margin-bottom:12px;border-bottom:1px solid #000;padding-bottom:6px;">Jurat</div>` +
+    `<div style="float:right;width:130px;height:130px;border:2px dashed #555;margin-left:16px;text-align:center;padding:50px 6px;font-size:9pt;font-style:italic;">[NOTARY<br>SEAL]</div>` +
+    `<p style="text-indent:0;margin:0 0 4px 0;">STATE OF <span style="display:inline-block;border-bottom:1px solid #000;min-width:60px;padding:0 4px;">${stateName}</span></p>` +
+    `<p style="text-indent:0;margin:0 0 10px 0;">COUNTY OF <span style="display:inline-block;border-bottom:1px solid #000;min-width:60px;padding:0 4px;">${countyName}</span></p>` +
+    `<p style="text-indent:0;margin:10px 0 0 0;">Subscribed and sworn to (or affirmed) before me this <span style="display:inline-block;border-bottom:1px solid #000;min-width:60px;padding:0 4px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> day of <span style="display:inline-block;border-bottom:1px solid #000;min-width:100px;padding:0 4px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>, 20<span style="display:inline-block;border-bottom:1px solid #000;min-width:30px;padding:0 4px;">&nbsp;&nbsp;&nbsp;</span>, by ${sigName}, who is personally known to me or who has produced satisfactory identification.</p>` +
+    `<div style="margin-top:36px;clear:both;">` +
+    `<div style="border-top:1px solid #000;width:280px;padding-top:4px;">Notary Public — Signature</div>` +
+    `<p style="text-indent:0;margin-top:8px;">Printed Name: <span style="display:inline-block;border-bottom:1px solid #000;min-width:200px;padding:0 4px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></p>` +
+    `<p style="text-indent:0;">My Commission Expires: <span style="display:inline-block;border-bottom:1px solid #000;min-width:160px;padding:0 4px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></p>` +
+    `</div></div>` +
+    footerBar('This communication may contain privileged or confidential information intended solely for the addressee.');
 
-  <p style="margin-top:30px;">FURTHER AFFIANT SAYETH NAUGHT.</p>
-
-  <div class="legal-signature">
-    <div class="legal-sig-line"></div>
-    <div class="legal-sig-name">${sigName}</div>
-    <div class="legal-sig-title">${sigTitle}, ${companyName}</div>
-  </div>
-
-  <div class="legal-jurat">
-    <div class="seal-box">[NOTARY<br>SEAL]</div>
-    <div class="jurat-title">Jurat</div>
-    <p style="text-indent:0;">STATE OF <span class="jurat-blank">${stateName}</span></p>
-    <p style="text-indent:0;">COUNTY OF <span class="jurat-blank">${countyName}</span></p>
-    <p style="text-indent:0;margin-top:10px;">Subscribed and sworn to (or affirmed) before me this <span class="jurat-blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> day of <span class="jurat-blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>, 20<span class="jurat-blank">&nbsp;&nbsp;&nbsp;</span>, by ${sigName}, who is personally known to me or who has produced satisfactory identification.</p>
-    <div style="margin-top:36px;clear:both;">
-      <div style="border-top: 1px solid #000; width: 280px; padding-top: 4px;">
-        Notary Public — Signature
-      </div>
-      <p style="text-indent:0;margin-top:8px;">Printed Name: <span class="jurat-blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></p>
-      <p style="text-indent:0;">My Commission Expires: <span class="jurat-blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></p>
-    </div>
-  </div>
-
-  <div class="legal-confidential-footer">
-    This communication may contain privileged or confidential information intended solely for the addressee.
-  </div>
-</div></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Affidavit of Debt Verification</title>` +
+    `<style>${classicStyles()}@page{size:letter;margin:1in;}</style></head>` +
+    `<body style="background:#fff;">${docFrame(bodyHtml)}</body></html>`;
 }
-
 // ═══════════════════════════════════════════════════════════════
 // SHARED HELPERS (Bill / PO / Expense templates)
 // ═══════════════════════════════════════════════════════════════
