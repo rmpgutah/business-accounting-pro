@@ -167,10 +167,10 @@ function downloadJSONBlob(data: unknown, filename: string): void {
 }
 
 /**
- * Open a print-ready report in a new window using a Blob URL (no document.write,
- * which is XSS-prone and deprecated). The window auto-fires its print dialog.
+ * Print a report via Electron's headless printToPDF→print pipeline.
+ * Replaces the legacy window.open/Blob URL approach.
  */
-function printHTML(title: string, bodyHTML: string): void {
+async function printHTML(title: string, bodyHTML: string): Promise<void> {
   const html =
     `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>` +
     `<style>` +
@@ -182,17 +182,8 @@ function printHTML(title: string, bodyHTML: string): void {
     `tfoot td{font-weight:700;background:#fafafa;}` +
     `@media print{button{display:none;}}` +
     `</style></head><body>${bodyHTML}` +
-    `<div style="margin-top:24px"><button onclick="window.print()">Print</button></div>` +
-    `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250);});<\/script>` +
     `</body></html>`;
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const w = window.open(url, '_blank', 'width=900,height=700');
-  if (!w) {
-    URL.revokeObjectURL(url);
-    return;
-  }
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  await api.print(html);
 }
 
 const esc = (s: unknown): string =>
