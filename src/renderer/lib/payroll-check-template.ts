@@ -328,7 +328,7 @@ export function generatePaycheckHTML(
           <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent);">Check No.</div>
           <div class="chk-num">${chk}</div>
           ${coFraction ? `<div style="font-size:7.5px;margin-top:1px;color:var(--ink-soft);">${coFraction}</div>` : ''}
-          <div style="border:1px solid var(--accent);padding:3px 10px;text-align:center;margin-top:6px;">
+          <div style="border-bottom:1px solid var(--ink);padding:3px 10px 2px;text-align:center;margin-top:6px;">
             <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent);">Date</div>
             <div style="font-size:10px;font-weight:600;">${payDate}</div>
           </div>
@@ -343,7 +343,7 @@ export function generatePaycheckHTML(
           <div style="font-family:var(--font-display);font-size:15px;font-weight:600;">${empName}</div>
           <div style="font-size:8.5px;margin-top:1px;color:var(--ink-soft);">${[empAddr1, empAddr2, empCSZ].filter(Boolean).join(', ')}</div>
         </div>
-        <div style="border:1.5px solid var(--accent);padding:4px 16px;text-align:center;background:var(--accent-wash);">
+        <div style="border:1px solid var(--accent);padding:4px 16px;text-align:center;">
           <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);">Amount</div>
           <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);">${fmt(net)}</div>
         </div>
