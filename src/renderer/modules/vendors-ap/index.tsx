@@ -6,7 +6,7 @@
 
 import React, { useState } from 'react';
 import {
-  LayoutDashboard, Building2, CheckSquare, Banknote, FileText, ShieldCheck, Inbox,
+  LayoutDashboard, Building2, CheckSquare, Banknote, FileText, ShieldCheck, Inbox, Activity,
 } from 'lucide-react';
 import Overview from './Overview';
 import Directory from './Directory';
@@ -16,8 +16,9 @@ import PaymentsCenter from './PaymentsCenter';
 import TaxCompliance1099 from './TaxCompliance1099';
 import ComplianceHub from './ComplianceHub';
 import PortalAdmin from './PortalAdmin';
+import Intelligence from './Intelligence';
 
-type TabId = 'overview' | 'directory' | 'approvals' | 'payments' | 'tax1099' | 'compliance' | 'portal';
+type TabId = 'overview' | 'directory' | 'approvals' | 'payments' | 'tax1099' | 'compliance' | 'portal' | 'intelligence';
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={14} /> },
   { id: 'directory', label: 'Directory', icon: <Building2 size={14} /> },
@@ -26,6 +27,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'tax1099', label: '1099 & Tax', icon: <FileText size={14} /> },
   { id: 'compliance', label: 'Compliance', icon: <ShieldCheck size={14} /> },
   { id: 'portal', label: 'Vendor Portal', icon: <Inbox size={14} /> },
+  { id: 'intelligence', label: 'Intelligence', icon: <Activity size={14} /> },
 ];
 
 const VendorsApModule: React.FC = () => {
@@ -47,7 +49,7 @@ const VendorsApModule: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-1 px-4 border-b" style={{ borderColor: 'var(--color-border-primary)' }}>
+          <div className="flex flex-wrap items-center gap-1 px-4 border-b" style={{ borderColor: 'var(--color-border-primary)' }}>
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -69,6 +71,7 @@ const VendorsApModule: React.FC = () => {
             {tab === 'tax1099' && <TaxCompliance1099 onViewVendor={viewVendor} />}
             {tab === 'compliance' && <ComplianceHub onViewVendor={viewVendor} />}
             {tab === 'portal' && <PortalAdmin />}
+            {tab === 'intelligence' && <Intelligence onViewVendor={viewVendor} />}
           </div>
         </>
       )}
