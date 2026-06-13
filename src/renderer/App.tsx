@@ -57,6 +57,9 @@ const EsignModule = lazy(() => import('./modules/esign'));
 const ComponentLibraryModule = lazy(() => import('./modules/component-library/ComponentLibrary'));
 const CustomizationModule = lazy(() => import('./modules/customization/CustomizationCenter'));
 
+// One-time FTS search-index backfill guard (once per company per session).
+const backfilledCompanies = new Set<string>();
+
 // ─── Module Name Map ────────────────────────────────────
 const MODULE_NAMES: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -233,6 +236,14 @@ const App: React.FC = () => {
       usePersonalizationStore.getState().loadFromCloud(authUser.id);
     }
   }, [authUser?.id]);
+
+  // One-time FTS search-index backfill, once per company per session (non-blocking).
+  useEffect(() => {
+    const companyId = activeCompany?.id;
+    if (!authUser?.id || !companyId || backfilledCompanies.has(companyId)) return;
+    backfilledCompanies.add(companyId);
+    api.searchBackfill().catch(() => backfilledCompanies.delete(companyId));
+  }, [authUser?.id, activeCompany?.id]);
 
   // Stable handlers so QuickCreate doesn't re-render on every parent render.
   const handleQuickCreateNavigate = useCallback(

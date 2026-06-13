@@ -37,6 +37,8 @@ import { calculateFullPayroll } from '../services/TaxCalculationEngine';
 import { bootstrapBuiltinCommands } from '../services/CommandRegistry';
 import { eventBus } from '../services/EventBus';
 import { workflowEngine } from '../services/WorkflowEngine';
+import { reindexEntity, removeFromIndex } from '../services/intelligence/searchIndex';
+import { INDEXED_TABLES } from '../services/intelligence/indexConfig';
 import http from 'http';
 import https from 'https';
 
@@ -99,6 +101,24 @@ function scheduleAutoBackup() {
       console.warn('Auto-backup error:', err);
     }
   }, 30000); // 30 second debounce
+}
+
+// Coalesce rapid re-index calls per (table,id) onto a microtask-ish timer so
+// bulk writes don't thrash FTS. Best-effort; never throws into the write path.
+const reindexTimers = new Map<string, NodeJS.Timeout>();
+function scheduleReindex(table: string, id: string, op: 'upsert' | 'delete'): void {
+  if (!INDEXED_TABLES.has(table)) return;
+  const key = `${table}:${id}`;
+  const existing = reindexTimers.get(key);
+  if (existing) clearTimeout(existing);
+  reindexTimers.set(key, setTimeout(() => {
+    reindexTimers.delete(key);
+    try {
+      const d = db.getDb();
+      if (op === 'delete') removeFromIndex(d, table, id);
+      else reindexEntity(d, table, id);
+    } catch (e) { console.warn('[search-index] reindex failed', table, id, e); }
+  }, 150));
 }
 
 let _lastLoginEmail: string | null = null;
@@ -760,6 +780,7 @@ export function registerIpcHandlers(): void {
       }
       const record = db.create(table, payload);
       if (companyId) db.logAudit(companyId, table, record.id, 'create');
+      scheduleReindex(table, record.id as string, 'upsert');
       // Debt child table audit
       const DEBT_CHILD_AUDIT: Record<string, string> = {
         debt_payments: 'payment_recorded',
@@ -832,6 +853,7 @@ export function registerIpcHandlers(): void {
         }
         db.logAudit(companyId, table, id, 'update', changes);
       }
+      scheduleReindex(table, id, 'upsert');
       // Debt audit: log each changed field
       if (table === 'debts' && id && old) {
         try {
@@ -977,6 +999,7 @@ export function registerIpcHandlers(): void {
         cleanupReferencesBeforeDelete(table, id);
       }
       db.remove(table, id);
+      scheduleReindex(table, id, 'delete');
       syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
     } catch (err) {
@@ -4632,44 +4655,67 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── Global Search ───────────────────────────────────
-  ipcMain.handle('search:global', (_event, query) => {
-    if (!query || query.length > 200) return [];
-    const results: Array<{ type: string; id: string; title: string; subtitle: string }> = [];
-    const q = `%${query}%`;
+  ipcMain.handle('search:index', (_e, { query, limit }: { query: string; limit?: number }) => {
     const companyId = db.getCurrentCompanyId();
-    if (!companyId) return results;
+    if (!companyId || !query) return [];
+    try {
+      const { search } = require('../services/intelligence/searchIndex');
+      return search(db.getDb(), companyId, query, Math.min(limit || 20, 50));
+    } catch (e) { console.warn('[search:index] failed', e); return []; }
+  });
 
-    const dbInstance = db.getDb();
+  ipcMain.handle('search:backfill', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { indexed: 0 };
+    try {
+      const { backfillCompany } = require('../services/intelligence/searchIndex');
+      return { indexed: backfillCompany(db.getDb(), companyId) };
+    } catch (e) { console.warn('[search:backfill] failed', e); return { indexed: 0, error: String(e) }; }
+  });
 
-    const clients = dbInstance.prepare(
-      'SELECT id, name, email FROM clients WHERE company_id = ? AND (name LIKE ? OR email LIKE ?) LIMIT 5'
-    ).all(companyId, q, q) as any[];
-    for (const c of clients) {
-      results.push({ type: 'client', id: c.id, title: c.name, subtitle: c.email || '' });
+  // Intelligence Core (B1) — role-checked mutation dispatch. Role enforced in main; never trust renderer.
+  ipcMain.handle('action:invoke', (_e, { actionId, params }: { actionId: string; params?: any }) => {
+    const companyId = db.getCurrentCompanyId();
+    const userId = db.getCurrentUserId();
+    if (!companyId || !userId) return { error: 'Not authenticated' };
+    const { MUTATE_ACTIONS, ROLE_RANK } = require('../../shared/action-registry');
+    const action = MUTATE_ACTIONS.find((a: any) => a.id === actionId);
+    if (!action) return { error: 'Unknown or non-mutating action' };
+    // Role check — never trust the renderer.
+    const userRow: any = db.runQuery('SELECT role FROM users WHERE id = ?', [userId])[0];
+    const role = (userRow?.role || 'viewer');
+    if (action.requiredRole && (ROLE_RANK[role] ?? 0) < ROLE_RANK[action.requiredRole]) {
+      return { error: `Requires ${action.requiredRole} role` };
     }
+    try {
+      let result: any;
+      if (actionId === 'invoice.markPaid') {
+        if (!params?.invoiceId) return { error: 'invoiceId required' };
+        result = db.update('invoices', params.invoiceId, { status: 'paid' });
+        db.logAudit(companyId, 'invoices', params.invoiceId, 'update', { status: { new: 'paid' } });
+      } else if (actionId === 'client.createQuick') {
+        if (!params?.name) return { error: 'name required' };
+        result = db.create('clients', { company_id: companyId, name: params.name, email: params.email || '' });
+        db.logAudit(companyId, 'clients', result.id, 'create');
+      } else {
+        return { error: 'No handler' };
+      }
+      scheduleReindex(actionId.startsWith('invoice') ? 'invoices' : 'clients',
+        (params.invoiceId || result.id), 'upsert');
+      scheduleAutoBackup();
+      return { ok: true, result };
+    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+  });
 
-    const invoices = dbInstance.prepare(
-      'SELECT id, invoice_number, status FROM invoices WHERE company_id = ? AND invoice_number LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const i of invoices) {
-      results.push({ type: 'invoice', id: i.id, title: `Invoice ${i.invoice_number}`, subtitle: i.status });
-    }
-
-    const expenses = dbInstance.prepare(
-      'SELECT id, description, amount FROM expenses WHERE company_id = ? AND description LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const e of expenses) {
-      results.push({ type: 'expense', id: e.id, title: e.description || 'Expense', subtitle: `$${e.amount}` });
-    }
-
-    const projects = dbInstance.prepare(
-      'SELECT id, name, status FROM projects WHERE company_id = ? AND name LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const p of projects) {
-      results.push({ type: 'project', id: p.id, title: p.name, subtitle: p.status });
-    }
-
-    return results.slice(0, 20);
+  ipcMain.handle('search:global', (_event, query) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId || !query || String(query).length > 200) return [];
+    try {
+      const { search } = require('../services/intelligence/searchIndex');
+      return search(db.getDb(), companyId, String(query), 20).map((h: any) => ({
+        type: h.entity_type, id: h.entity_id, title: h.title, subtitle: h.subtitle || '',
+      }));
+    } catch (e) { console.warn('[search:global] failed', e); return []; }
   });
 
   // ─── Notifications ───────────────────────────────────
@@ -9253,6 +9299,28 @@ export function registerIpcHandlers(): void {
       GROUP BY due_date ORDER BY due_date
     `).all(companyId, d);
     return { inflow, outflow };
+  });
+
+  ipcMain.handle('intelligence:entity-hint', (_e, { entityType, id }: { entityType: string; id: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId || !id) return '';
+    try {
+      if (entityType === 'client') {
+        const row: any = db.runQuery(
+          `SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS amt FROM invoices
+           WHERE company_id = ? AND client_id = ? AND status NOT IN ('paid','cancelled','draft')
+             AND COALESCE(due_date,'') <> '' AND date(due_date) < date('now')`,
+          [companyId, id])[0];
+        if (row?.n > 0) return `${row.n} overdue invoice${row.n > 1 ? 's' : ''} ($${Math.round(row.amt).toLocaleString()})`;
+      } else if (entityType === 'vendor') {
+        const row: any = db.runQuery(
+          `SELECT COUNT(*) AS n FROM expenses WHERE company_id = ? AND vendor_id = ?
+             AND instr(COALESCE(tags,''),'anomaly') > 0`,
+          [companyId, id])[0];
+        if (row?.n > 0) return `${row.n} flagged charge${row.n > 1 ? 's' : ''}`;
+      }
+      return '';
+    } catch { return ''; }
   });
 
   // ─── Rules Engine ────────────────────────────────────────
