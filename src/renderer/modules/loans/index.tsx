@@ -5,7 +5,7 @@
 // active loans on the list view.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle, RefreshCw, Calculator, Settings } from 'lucide-react';
+import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle, RefreshCw, Calculator, Settings, BarChart2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import { useAppStore } from '../../stores/appStore';
@@ -15,8 +15,9 @@ import AggregateDebtChart from './AggregateDebtChart';
 import LoanWizard from './LoanWizard';
 import Calculators from './Calculators';
 import Servicing from './Servicing';
+import Portfolio from './Portfolio';
 
-type View = 'list' | 'form' | 'detail' | 'wizard' | 'calculators' | 'servicing';
+type View = 'list' | 'form' | 'detail' | 'wizard' | 'calculators' | 'servicing' | 'portfolio';
 
 const fmt$ = (n: number, currency: string = 'USD'): string => {
   try {
@@ -134,6 +135,27 @@ const LoansModule: React.FC = () => {
     );
   }
 
+  if (view === 'portfolio') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: '1px solid var(--structure)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => setView('list')} className="block-btn" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+              <Landmark size={13} /> Loans & Debt
+            </button>
+            <ChevronRight size={14} style={{ color: 'var(--color-text-muted)' }} />
+            <span style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <BarChart2 size={14} /> Portfolio Analytics
+            </span>
+          </div>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          <Portfolio />
+        </div>
+      </div>
+    );
+  }
+
   // List view
   return (
     <div style={{ padding: 24, maxWidth: 1200 }}>
@@ -155,6 +177,13 @@ const LoansModule: React.FC = () => {
             title="Loan servicing — refi compare/execute, modifications, recast, biweekly, lump-sum, covenants, DSCR/LTV/stress"
           >
             <Settings size={14} /> Servicing
+          </button>
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={() => setView('portfolio')}
+            title="Portfolio risk analytics — aging, vintage, concentration, stress test, CECL reserves, charge-offs + bank linkage"
+          >
+            <BarChart2 size={14} /> Portfolio
           </button>
           <button
             className="block-btn flex items-center gap-2"
