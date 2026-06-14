@@ -1124,13 +1124,16 @@ export function generateInvoiceHTML(
         }).join('')}
       </div>`
     : '';
+  // Tax always shows on the document (even $0.00) so the record is auditable —
+  // a reader can tell tax was genuinely zero vs. accidentally omitted. Quotes
+  // skip it (no tax is charged on an estimate).
   const taxBreakdownHTML = hasMultipleRates
     ? taxBreakdownBar + sortedRates.map(rate =>
         `<div class="totals-row"><span>Tax @ ${rate}% on ${fmt(taxByRate[rate].taxable)}</span><span>${fmt(taxByRate[rate].tax)}</span></div>`
       ).join('')
-    : (taxAmount > 0
-        ? `<div class="totals-row"><span>Tax</span><span>${fmt(taxAmount)}</span></div>`
-        : '');
+    : ((invoice.invoice_type === 'quote' || invoice.document_type === 'quote') && taxAmount <= 0
+        ? ''
+        : `<div class="totals-row"><span>Tax${invoice.tax_inclusive ? ' (incl.)' : ''}</span><span>${fmt(taxAmount)}</span></div>`);
 
   const discountAmount = Number(invoice.discount_amount || 0);
   const amountPaid     = Number(invoice.amount_paid || 0);
