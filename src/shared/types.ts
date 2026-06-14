@@ -195,6 +195,9 @@ export interface Expense {
   shipping_line_ref?: string | null;
   created_at: string;
   updated_at: string;
+  // JOIN-populated fields (rawQuery only — not returned by db:query)
+  category_name?: string;
+  vendor_name?: string;
 }
 
 export interface Vendor {

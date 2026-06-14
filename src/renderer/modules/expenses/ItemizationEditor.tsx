@@ -147,8 +147,9 @@ export interface IzLine {
   project_id?: string;
   client_id?: string;
   // Per-line billing: when is_billable is true, this line is billable/rebillable
-  // to the selected client_id (vs. a company-only cost). Used for reporting and
-  // reimbursable/rebill filtering.
+  // to the selected client_id (vs. a company-only cost). Independent of the
+  // header is_billable flag so a single expense can mix billable + non-billable
+  // items. Used for reporting and reimbursable/rebill filtering.
   is_billable?: boolean;
   discount_amount?: number;
   discount_percent?: number;
@@ -157,9 +158,6 @@ export interface IzLine {
   notes?: string;
   item_type?: 'item' | 'service' | 'reimbursement';
   tags?: string[];
-  // Bill this line to its client_id. Independent of the header is_billable
-  // flag so a single expense can mix billable + non-billable items.
-  is_billable?: boolean;
   // Stamped when this line is added to an invoice. Suppresses re-billing.
   billed_invoice_id?: string | null;
 }
@@ -245,7 +243,7 @@ const emptyLine = (): IzLine => ({
   discount_amount: 0, discount_percent: 0,
   is_tax_deductible: true, is_tax_exempt: false,
   notes: '', item_type: 'item', tags: [],
-  is_billable: false, billed_invoice_id: null,
+  billed_invoice_id: null,
 });
 
 export default function ItemizationEditor({

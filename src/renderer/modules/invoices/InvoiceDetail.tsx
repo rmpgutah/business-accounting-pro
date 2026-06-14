@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import PortalShareModal from '../../components/PortalShareModal';
 import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
+import { computeInvoicePaidStatus } from '../../../shared/payment-math';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { useNavigation } from '../../lib/navigation';

@@ -627,7 +627,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 notes: l.notes || '',
                 item_type: (l.item_type as any) || 'item',
                 tags: parseJSON<string[]>(l.tags, []),
-                is_billable: !!l.is_billable,
                 billed_invoice_id: l.billed_invoice_id || null,
               })));
               setUseLineItems(true);
@@ -968,13 +967,12 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             discount_percent: li.discount_percent || 0,
             is_tax_deductible: li.is_tax_deductible === false ? 0 : 1,
             is_tax_exempt: li.is_tax_exempt ? 1 : 0,
+            // Per-line billable. Persists the flag and any prior invoice
+            // stamp so re-saving doesn't unmark already-billed lines.
             is_billable: li.is_billable ? 1 : 0,
             notes: li.notes || null,
             item_type: li.item_type || 'item',
             tags: JSON.stringify(li.tags || []),
-            // Per-line billable. Persists the flag and any prior invoice
-            // stamp so re-saving doesn't unmark already-billed lines.
-            is_billable: li.is_billable ? 1 : 0,
             billed_invoice_id: li.billed_invoice_id || null,
           }))
         : [];

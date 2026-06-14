@@ -424,6 +424,169 @@ export function generateBalanceSheetHTML(
   return classicDocument({ title: `Balance Sheet ${opts.asOfDate}`, bodyHtml: body });
 }
 
+// ─── Expenses by Category ────────────────────────────────────────────────────
+
+export interface EBCRow {
+  category: string;
+  amount: number;
+}
+
+export interface EBCPriorRow {
+  category: string;
+  amount: number;
+}
+
+export interface EBCOpts {
+  startDate: string;
+  endDate: string;
+  totalExpenses: number;
+  /** When true, the prior-month columns are included in the PDF. */
+  showMoM?: boolean;
+  priorMonthData?: EBCPriorRow[];
+  /** Vendor rows (top 10 by spend). */
+  vendors?: { vendor_name: string; total_spend: number; transaction_count: number }[];
+}
+
+/**
+ * Generates a classic-style Expenses by Category HTML document.
+ *
+ * @param rows    The category rows as displayed on screen (ordered by amount desc).
+ * @param company The active company (for header).
+ * @param opts    Date range, totals, and optional MoM / vendor data already loaded.
+ */
+export function generateExpenseByCategoryHTML(
+  rows: EBCRow[],
+  company: Company,
+  opts: EBCOpts,
+): string {
+  const period = `${opts.startDate} to ${opts.endDate}`;
+
+  const header = docHeader({
+    coName: company.name || 'Company',
+    coDetailHtml: coDetailHtml(company),
+    title: 'Expenses by Category',
+    number: period,
+  });
+
+  // KPI summary strip
+  const categoriesUsed = rows.length;
+  const avgPerCategory = categoriesUsed > 0 ? opts.totalExpenses / categoriesUsed : 0;
+  const largest = rows.length > 0 ? rows[0] : null;
+
+  const meta = metaStrip([
+    { label: 'Period', value: period },
+    { label: 'Total Expenses', value: `$${fmt(opts.totalExpenses)}` },
+    { label: 'Categories', value: String(categoriesUsed) },
+    { label: 'Generated', value: generated() },
+  ]);
+
+  // ── Main category table ──
+  // Build prior-month lookup
+  const priorMap = new Map<string, number>();
+  if (opts.showMoM && opts.priorMonthData) {
+    for (const p of opts.priorMonthData) priorMap.set(p.category, p.amount);
+  }
+
+  const columns: import('./classic-styles').RuledColumn[] = [
+    { label: 'Category' },
+    { label: 'Amount', align: 'right', width: '130px' },
+    { label: '% of Total', align: 'right', width: '90px' },
+    ...(opts.showMoM
+      ? ([
+          { label: 'Prior Month', align: 'right', width: '130px' },
+          { label: 'Change %', align: 'right', width: '90px' },
+        ] as import('./classic-styles').RuledColumn[])
+      : []),
+  ];
+
+  const tableRows: string[][] = rows.map((cat) => {
+    const pct = opts.totalExpenses > 0 ? (cat.amount / opts.totalExpenses) * 100 : 0;
+    const row: string[] = [
+      esc(cat.category),
+      `$${fmt(cat.amount)}`,
+      `${pct.toFixed(1)}%`,
+    ];
+    if (opts.showMoM) {
+      const priorAmt = priorMap.get(cat.category) || 0;
+      const changeP = priorAmt > 0 ? ((cat.amount - priorAmt) / priorAmt) * 100 : 0;
+      row.push(`$${fmt(priorAmt)}`);
+      row.push(priorAmt > 0 ? `${changeP > 0 ? '+' : ''}${changeP.toFixed(1)}%` : '—');
+    }
+    return row;
+  });
+
+  // Grand-total row (bold)
+  const totalRow: string[] = [
+    '<strong>TOTAL</strong>',
+    `<strong>$${fmt(opts.totalExpenses)}</strong>`,
+    '<strong>100.0%</strong>',
+  ];
+  if (opts.showMoM) {
+    const priorTotal = opts.priorMonthData
+      ? opts.priorMonthData.reduce((s, p) => s + p.amount, 0)
+      : 0;
+    totalRow.push(`<strong>$${fmt(priorTotal)}</strong>`);
+    totalRow.push('');
+  }
+  tableRows.push(totalRow);
+
+  const categoryTable = ruledTable(columns, tableRows);
+
+  // ── KPI summary box ──
+  const kpiHtml =
+    `<div style="display:flex;gap:0;border:1px solid #000;margin-bottom:12px;">` +
+    [
+      { label: 'Total Expenses', value: `$${fmt(opts.totalExpenses)}` },
+      { label: 'Categories Used', value: String(categoriesUsed) },
+      { label: 'Avg Per Category', value: `$${fmt(avgPerCategory)}` },
+      { label: 'Largest Category', value: largest ? `${esc(largest.category)} ($${fmt(largest.amount)})` : '—' },
+    ].map(k =>
+      `<div style="flex:1;padding:10px 12px;border-right:1px solid #000;text-align:center;font-size:11px;">` +
+      `<div style="font-size:13px;font-weight:bold;font-variant-numeric:tabular-nums;">${k.value}</div>` +
+      `<div style="font-size:9px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;margin-top:4px;color:#555;">${esc(k.label)}</div>` +
+      `</div>`
+    ).join('') +
+    `</div>`.replace(/border-right:1px solid #000;<\/div><\/div>$/, `border-right:none;</div></div>`);
+
+  // ── Vendor spend table (if provided) ──
+  let vendorSection = '';
+  if (opts.vendors && opts.vendors.length > 0) {
+    const vRows: string[][] = opts.vendors.slice(0, 10).map(v => [
+      esc(v.vendor_name),
+      `$${fmt(v.total_spend)}`,
+      String(v.transaction_count),
+    ]);
+    const vendorTable = ruledTable(
+      [
+        { label: 'Vendor' },
+        { label: 'Total Spend', align: 'right', width: '130px' },
+        { label: 'Transactions', align: 'right', width: '90px' },
+      ],
+      vRows,
+    );
+    vendorSection =
+      `<div style="margin-top:16px;">` +
+      `<div style="font-size:10px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;` +
+      `padding:7px 8px;border:1px solid #000;border-bottom:none;background:#000;color:#fff;">` +
+      `Top Vendors by Spend</div>` +
+      vendorTable +
+      `</div>`;
+  }
+
+  const body = docFrame(
+    header +
+    meta +
+    `<div style="padding:12px 16px;">` +
+    kpiHtml +
+    categoryTable +
+    vendorSection +
+    `</div>` +
+    footerBar(`${company.name} · Expenses by Category · ${period} · ${categoriesUsed} categories`),
+  );
+
+  return classicDocument({ title: `Expenses by Category ${period}`, bodyHtml: body });
+}
+
 // ─── Cash Flow Statement ─────────────────────────────────────────────────────
 
 export interface CFData {

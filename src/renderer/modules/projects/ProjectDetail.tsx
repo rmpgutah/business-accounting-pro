@@ -59,6 +59,8 @@ interface Expense {
   date: string;
   category?: string;
   vendor?: string;
+  category_name?: string;
+  vendor_name?: string;
 }
 
 interface Invoice {

@@ -1,0 +1,27 @@
+#!/bin/sh
+# Pre-push gate: block pushes that don't type-check.
+#
+# This exists because concurrent sessions once merged work that didn't
+# compile straight onto a shared branch (main went red). A fast `tsc
+# --noEmit` here catches that before it ever reaches the remote.
+#
+# Wired via `core.hooksPath=scripts/git-hooks` (set by the package.json
+# "prepare" script on install, and committed so every clone gets it).
+#
+# Emergency override:  SKIP_TYPECHECK=1 git push ...
+if [ "$SKIP_TYPECHECK" = "1" ]; then
+  echo "[pre-push] SKIP_TYPECHECK=1 set — skipping type-check."
+  exit 0
+fi
+
+echo "[pre-push] Running npm run typecheck before push..."
+if npm run typecheck; then
+  echo "[pre-push] ✓ type-check passed — pushing."
+  exit 0
+else
+  echo ""
+  echo "[pre-push] ✗ type-check FAILED — push blocked."
+  echo "           Fix the errors above, or override once with:"
+  echo "           SKIP_TYPECHECK=1 git push"
+  exit 1
+fi
