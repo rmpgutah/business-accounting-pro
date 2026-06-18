@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit --project tsconfig.main.json && tsc --noEmit --project tsconfig.json",
     "test:loan": "npm run build:main && node scripts/test-loan-calculator.cjs",
     "test:search": "npm run build:main && node scripts/test-search-index.cjs",
+    "test:cockpit": "node scripts/test-cockpit-layout.cjs",
     "test:classic": "node scripts/test-classic-styles.cjs",
     "test:micr": "node scripts/test-micr.cjs",
     "prepare": "git config core.hooksPath scripts/git-hooks || true",
