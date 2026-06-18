@@ -3621,6 +3621,16 @@ const api = {
   lkCashflowTimeline: (loan_id: string, opts?: { since?: string; until?: string }) => window.electronAPI.invoke('lk:cashflow-timeline', { loan_id, opts: opts || {} }),
   lkLoanContextForExpense: (expense_id: string) => window.electronAPI.invoke('lk:loan-context-for-expense', { expense_id }),
 
+  // ─── Vendor Locations ────────────────────────────────────────────────
+  vendorLocationsList: (vendor_id: string): Promise<any[]> =>
+    window.electronAPI.invoke('vendor-locations:list', { vendor_id }),
+  vendorLocationsSync: (vendor_id: string, locations: any[]) =>
+    window.electronAPI.invoke('vendor-locations:sync', { vendor_id, locations }),
+  vendorLocationsDelete: (id: string) =>
+    window.electronAPI.invoke('vendor-locations:delete', { id }),
+  vendorLocationsSetPrimary: (id: string, vendor_id: string) =>
+    window.electronAPI.invoke('vendor-locations:set-primary', { id, vendor_id }),
+
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
 

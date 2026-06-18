@@ -281,9 +281,10 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   'analytics_snapshots',
   'withholding_tracking',
   'section_179_elections',
-  'vendor_w9_records',
-  'vendor_insurance_policies',
   'vendor_disputes',
+  'vendor_insurance_policies',
+  'vendor_locations',
+  'vendor_w9_records',
 
   // ── 4. Append-only log / audit tables (no scoping by design) ────
   'anomaly_log',

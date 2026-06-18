@@ -1061,7 +1061,8 @@ export function registerIpcHandlers(): void {
       const tx = dbi.transaction(() => {
         const run = (sql: string) => { try { dbi.prepare(sql).run(id); } catch { /* table may not exist */ } };
         // Null all enforced + soft FK references so nothing dangles.
-        run("UPDATE expenses SET vendor_id = NULL WHERE vendor_id = ?");
+        run("DELETE FROM vendor_locations WHERE vendor_id = ?");
+        run("UPDATE expenses SET vendor_id = NULL, vendor_location_id = NULL WHERE vendor_id = ?");
         run("UPDATE bills SET vendor_id = NULL WHERE vendor_id = ?");
         run("UPDATE purchase_orders SET vendor_id = NULL WHERE vendor_id = ?");
         run("UPDATE bank_rules SET action_vendor_id = NULL WHERE action_vendor_id = ?");
@@ -1082,6 +1083,61 @@ export function registerIpcHandlers(): void {
     } catch (err: any) {
       return { error: err?.message || 'Delete failed' };
     }
+  });
+
+  // ─── Vendor Locations ─────────────────────────────────────────────────
+  ipcMain.handle('vendor-locations:list', (_event, { vendor_id }: { vendor_id: string }) => {
+    try {
+      const rows = db.getDb()
+        .prepare("SELECT * FROM vendor_locations WHERE vendor_id = ? ORDER BY is_primary DESC, name ASC")
+        .all(vendor_id);
+      return rows;
+    } catch (err: any) { return { error: err?.message || 'Query failed' }; }
+  });
+
+  ipcMain.handle('vendor-locations:sync', (_event, { vendor_id, locations }: { vendor_id: string; locations: any[] }) => {
+    try {
+      const dbi = db.getDb();
+      dbi.transaction(() => {
+        dbi.prepare("DELETE FROM vendor_locations WHERE vendor_id = ?").run(vendor_id);
+        const stmt = dbi.prepare(
+          `INSERT INTO vendor_locations
+           (id, vendor_id, name, location_type, address_line1, address_line2,
+            city, state, zip, country, phone, email, is_primary, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+        );
+        for (const loc of locations) {
+          stmt.run(
+            loc.id || uuid(), vendor_id, loc.name || '', loc.location_type || 'physical',
+            loc.address_line1 || '', loc.address_line2 || '',
+            loc.city || '', loc.state || '', loc.zip || '', loc.country || '',
+            loc.phone || '', loc.email || '', loc.is_primary ? 1 : 0, loc.notes || '',
+          );
+        }
+      })();
+      try { scheduleAutoBackup(); } catch { /* non-fatal */ }
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message || 'Sync failed' }; }
+  });
+
+  ipcMain.handle('vendor-locations:delete', (_event, { id }: { id: string }) => {
+    try {
+      db.getDb().prepare("DELETE FROM vendor_locations WHERE id = ?").run(id);
+      try { scheduleAutoBackup(); } catch { /* non-fatal */ }
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message || 'Delete failed' }; }
+  });
+
+  ipcMain.handle('vendor-locations:set-primary', (_event, { id, vendor_id }: { id: string; vendor_id: string }) => {
+    try {
+      const dbi = db.getDb();
+      dbi.transaction(() => {
+        dbi.prepare("UPDATE vendor_locations SET is_primary = 0 WHERE vendor_id = ?").run(vendor_id);
+        dbi.prepare("UPDATE vendor_locations SET is_primary = 1 WHERE id = ?").run(id);
+      })();
+      try { scheduleAutoBackup(); } catch { /* non-fatal */ }
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message || 'Set primary failed' }; }
   });
 
   // ─── Fixed Asset delete (dedicated, supports full/permanent delete) ──

@@ -84,6 +84,7 @@ export interface ExpenseFormData {
   shipping_taxable: boolean;
   shipping_scope: 'order' | 'item';
   shipping_line_ref: string;
+  vendor_location_id: string;
 }
 
 export interface DropdownOption {
@@ -337,4 +338,5 @@ export const emptyForm: ExpenseFormData = {
   shipping_taxable: false,
   shipping_scope: 'order',
   shipping_line_ref: '',
+  vendor_location_id: '',
 };
