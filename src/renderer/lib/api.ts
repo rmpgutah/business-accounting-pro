@@ -3623,6 +3623,20 @@ const api = {
 
   // Events
   on: (channel: string, callback: (...args: any[]) => void) => window.electronAPI.on(channel, callback),
+
+  // ─── B3: AI Copilot ──────────────────────────────────────
+  copilotAsk: (streamId: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>) =>
+    window.electronAPI.invoke('copilot:ask', { streamId, messages }),
+  copilotStop: (streamId: string) =>
+    window.electronAPI.invoke('copilot:stop', { streamId }),
+  copilotThreadsList: (): Promise<Array<{ id: string; title: string; created_at: string; updated_at: string }>> =>
+    window.electronAPI.invoke('copilot:threads:list'),
+  copilotThreadsLoad: (threadId: string): Promise<{ id: string; title: string; messages: any[] } | null> =>
+    window.electronAPI.invoke('copilot:threads:load', { threadId }),
+  copilotThreadsSave: (threadId: string, title: string, messages: any[]) =>
+    window.electronAPI.invoke('copilot:threads:save', { threadId, title, messages }),
+  copilotThreadsDelete: (threadId: string) =>
+    window.electronAPI.invoke('copilot:threads:delete', { threadId }),
 };
 
 export default api;

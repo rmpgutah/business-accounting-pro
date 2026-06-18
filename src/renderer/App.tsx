@@ -15,6 +15,7 @@ import { subscribeCustomizationGlobals } from './customization/applyGlobals';
 import PersonalizationWizard from './components/onboarding/PersonalizationWizard';
 import OnboardingWizard from './components/OnboardingWizard';
 import { useOnboarding } from './modules/companies/useOnboarding';
+import CopilotPanel from './modules/copilot/CopilotPanel';
 
 // ─── Lazy-loaded Modules ─────────────────────────────────
 const Dashboard = lazy(() => import('./modules/dashboard/Dashboard'));
@@ -200,6 +201,9 @@ const App: React.FC = () => {
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const copilotOpen = useAppStore((s) => s.copilotOpen);
+  const setCopilotOpen = useAppStore((s) => s.setCopilotOpen);
+  const toggleCopilot = useAppStore((s) => s.toggleCopilot);
 
   // ─── Onboarding wizard (industry preset + setup) ─────────
   const activeCompany = useCompanyStore((s) => s.activeCompany);
@@ -280,6 +284,18 @@ const App: React.FC = () => {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  // Cmd+\ (Ctrl+\ on Win/Linux) — toggle AI Copilot panel.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === '\\' || e.key === '|')) {
+        e.preventDefault();
+        toggleCopilot();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [toggleCopilot]);
 
   useEffect(() => {
     const init = async () => {
@@ -371,28 +387,35 @@ const App: React.FC = () => {
   }
 
   return (
-    <AppShell>
-      <ModuleView />
-      {quickCreateOpen && (
-        <QuickCreate
-          onNavigate={handleQuickCreateNavigate}
-          onClose={handleQuickCreateClose}
-        />
+    <div className="flex h-screen w-screen overflow-hidden">
+      <div className="flex-1 min-w-0">
+        <AppShell>
+          <ModuleView />
+          {quickCreateOpen && (
+            <QuickCreate
+              onNavigate={handleQuickCreateNavigate}
+              onClose={handleQuickCreateClose}
+            />
+          )}
+          {!personalization.onboardingComplete && (
+            <PersonalizationWizard
+              onClose={() => usePersonalizationStore.getState().set({ onboardingComplete: true })}
+            />
+          )}
+          {activeCompany && onboarding.open && personalization.onboardingComplete && (
+            <OnboardingWizard
+              companyId={activeCompany.id}
+              onClose={onboarding.dismiss}
+              onComplete={onboarding.dismiss}
+            />
+          )}
+          <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
+        </AppShell>
+      </div>
+      {copilotOpen && (
+        <CopilotPanel onClose={() => setCopilotOpen(false)} />
       )}
-      {!personalization.onboardingComplete && (
-        <PersonalizationWizard
-          onClose={() => usePersonalizationStore.getState().set({ onboardingComplete: true })}
-        />
-      )}
-      {activeCompany && onboarding.open && personalization.onboardingComplete && (
-        <OnboardingWizard
-          companyId={activeCompany.id}
-          onClose={onboarding.dismiss}
-          onComplete={onboarding.dismiss}
-        />
-      )}
-      <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
-    </AppShell>
+    </div>
   );
 };
 

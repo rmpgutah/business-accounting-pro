@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow, dialog, shell } from 'electron';
 import { v4 as uuid } from 'uuid';
+import Anthropic from '@anthropic-ai/sdk';
 import * as db from '../database';
 import { TABLES_WITHOUT_COMPANY_ID } from '../database/tableConfig';
 import crypto from 'crypto';
@@ -45,6 +46,9 @@ import https from 'https';
 
 // ─── Server Sync Config ──────────────────────────────────
 const SYNC_SERVER = process.env.SYNC_SERVER_URL || 'https://accounting.rmpgutah.us';
+
+// ─── B3 AI Copilot — active stream registry ──────────────
+const copilotStreams = new Map<string, AbortController>();
 
 // Debounced auto-backup: waits 30s after last write, then uploads DB to server
 // CONCURRENCY: a single global timer is correct here — the SQLite file holds
@@ -16890,6 +16894,259 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('esign:get-audit-log', (_event, { documentId }: { documentId: string }) => {
     return db.getDb().prepare('SELECT * FROM esign_audit_log WHERE document_id = ? ORDER BY created_at DESC').all(documentId);
+  });
+
+  // ─── B3: AI Copilot ──────────────────────────────────────────────────────────
+
+  ipcMain.handle('copilot:ask', async (event, params: {
+    streamId: string;
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  }) => {
+    const { streamId, messages } = params;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      event.sender.send('copilot:chunk', {
+        streamId, type: 'error',
+        error: 'ANTHROPIC_API_KEY not configured. Add it to your .env file and restart.',
+      });
+      return null;
+    }
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) {
+      event.sender.send('copilot:chunk', { streamId, type: 'error', error: 'No active company selected.' });
+      return null;
+    }
+
+    const abortController = new AbortController();
+    copilotStreams.set(streamId, abortController);
+    const anthropic = new Anthropic({ apiKey });
+
+    const tools: Anthropic.Messages.Tool[] = [
+      {
+        name: 'search_records',
+        description: 'Search across invoices, expenses, clients, and vendors using full-text search. Returns up to 5 matching records.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            query: { type: 'string', description: 'The search query text' },
+            entity_type: {
+              type: 'string',
+              enum: ['invoice', 'expense', 'client', 'vendor', 'any'],
+              description: 'Filter by record type (default: any)',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'get_financial_summary',
+        description: 'Get total income (paid invoices), total expenses, and net profit for a date range.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            start_date: { type: 'string', description: 'Start date in YYYY-MM-DD format' },
+            end_date: { type: 'string', description: 'End date in YYYY-MM-DD format' },
+          },
+          required: ['start_date', 'end_date'],
+        },
+      },
+      {
+        name: 'get_anomalies',
+        description: 'List recently detected financial anomalies and duplicate invoice groups.',
+        input_schema: { type: 'object' as const, properties: {}, required: [] },
+      },
+      {
+        name: 'forecast_cash_flow',
+        description: 'Forecast cash flow for the next N days based on historical bank transaction patterns.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            days_ahead: { type: 'number', description: 'Number of days to forecast (default: 30, max: 90)' },
+          },
+          required: [],
+        },
+      },
+      {
+        name: 'propose_action',
+        description: 'Propose an action for the user to review and approve. Use this instead of executing mutations directly. The user sees a confirmation card.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            action_type: {
+              type: 'string',
+              enum: ['navigate', 'create_invoice', 'create_expense', 'export_report', 'run_report'],
+              description: 'Type of action to propose',
+            },
+            description: { type: 'string', description: 'Clear human-readable description of what will happen if approved' },
+            params: { type: 'object', description: 'Action parameters (module name for navigate, template data for create_*, report name for reports)' },
+          },
+          required: ['action_type', 'description'],
+        },
+      },
+    ];
+
+    function executeTool(toolName: string, input: Record<string, any>): string {
+      try {
+        switch (toolName) {
+          case 'search_records': {
+            const query = String(input.query ?? '').trim();
+            if (!query) return JSON.stringify({ results: [] });
+            const entityType = input.entity_type ?? 'any';
+            const typeClause = entityType !== 'any' ? `AND entity_type = '${entityType}'` : '';
+            const rows = db.getDb().prepare(`
+              SELECT entity_type, entity_id, title, subtitle
+              FROM search_index
+              WHERE company_id = ? AND search_index MATCH ?
+              ${typeClause}
+              LIMIT 5
+            `).all(companyId, query + '*') as Array<{ entity_type: string; entity_id: string; title: string; subtitle: string }>;
+            return JSON.stringify({ results: rows.map(r => ({ type: r.entity_type, id: r.entity_id, title: r.title, subtitle: r.subtitle })) });
+          }
+          case 'get_financial_summary': {
+            const { start_date, end_date } = input;
+            const incomeRow = db.getDb().prepare(
+              `SELECT COALESCE(SUM(total), 0) as total FROM invoices WHERE company_id = ? AND status = 'paid' AND issue_date BETWEEN ? AND ?`
+            ).get(companyId, start_date, end_date) as { total: number };
+            const expenseRow = db.getDb().prepare(
+              `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE company_id = ? AND date BETWEEN ? AND ?`
+            ).get(companyId, start_date, end_date) as { total: number };
+            const income = incomeRow?.total ?? 0;
+            const expenses = expenseRow?.total ?? 0;
+            return JSON.stringify({ start_date, end_date, income, expenses, net: income - expenses });
+          }
+          case 'get_anomalies': {
+            const anomalies = db.getDb().prepare(
+              `SELECT type, description, severity, detected_at FROM financial_anomalies WHERE company_id = ? ORDER BY detected_at DESC LIMIT 10`
+            ).all(companyId) as any[];
+            const { intelligenceService } = require('../services/IntelligenceService');
+            const duplicates = intelligenceService.detectDuplicateInvoices(companyId) as string[][];
+            return JSON.stringify({ anomaly_count: anomalies.length, anomalies, duplicate_invoice_groups: duplicates });
+          }
+          case 'forecast_cash_flow': {
+            const daysAhead = Math.min(Number(input.days_ahead ?? 30), 90);
+            const { intelligenceService } = require('../services/IntelligenceService');
+            const forecast = intelligenceService.forecastCashFlow(companyId, daysAhead) as { predicted: number; low: number; high: number };
+            return JSON.stringify({ days_ahead: daysAhead, ...forecast });
+          }
+          case 'propose_action': {
+            const proposal = {
+              proposalId: uuid(),
+              action_type: input.action_type,
+              description: input.description,
+              params: input.params ?? {},
+            };
+            event.sender.send('copilot:chunk', { streamId, type: 'proposal', proposal });
+            return JSON.stringify({ status: 'proposal_shown_to_user', proposalId: proposal.proposalId });
+          }
+          default:
+            return JSON.stringify({ error: `Unknown tool: ${toolName}` });
+        }
+      } catch (err: any) {
+        return JSON.stringify({ error: err?.message ?? 'Tool execution failed' });
+      }
+    }
+
+    const apiMessages: Anthropic.Messages.MessageParam[] = messages.map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
+
+    try {
+      let continueLoop = true;
+      while (continueLoop) {
+        if (abortController.signal.aborted) break;
+
+        const stream = anthropic.messages.stream(
+          {
+            model: 'claude-opus-4-8',
+            system: `You are an AI Copilot embedded in Business Accounting Pro, a professional desktop accounting application.
+You have read-only access to the user's financial data via tools. Help them analyze finances, find records, spot anomalies, and forecast cash flow.
+CRITICAL RULE: Never execute data mutations or money movements. Always use propose_action to suggest changes — the user must approve before anything is created or modified.
+Be concise and data-driven. Format dollar amounts with $ and two decimal places. Use tables or bullet lists for structured data.`,
+            messages: apiMessages,
+            tools,
+            thinking: { type: 'adaptive' },
+            max_tokens: 4096,
+          },
+          { signal: abortController.signal }
+        );
+
+        stream.on('text', (text: string) => {
+          event.sender.send('copilot:chunk', { streamId, type: 'delta', text });
+        });
+
+        const response = await stream.finalMessage();
+        apiMessages.push({ role: 'assistant', content: response.content });
+
+        if (response.stop_reason === 'tool_use') {
+          const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+          for (const block of response.content) {
+            if (block.type === 'tool_use') {
+              event.sender.send('copilot:chunk', { streamId, type: 'tool_call', toolName: block.name });
+              const result = executeTool(block.name, block.input as Record<string, any>);
+              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
+            }
+          }
+          apiMessages.push({ role: 'user', content: toolResults });
+        } else {
+          continueLoop = false;
+        }
+      }
+      event.sender.send('copilot:chunk', { streamId, type: 'done' });
+      return { ok: true };
+    } catch (err: any) {
+      if (err?.name !== 'AbortError' && !abortController.signal.aborted) {
+        event.sender.send('copilot:chunk', { streamId, type: 'error', error: err?.message ?? 'Unexpected error from AI service.' });
+      } else {
+        event.sender.send('copilot:chunk', { streamId, type: 'done' });
+      }
+      return null;
+    } finally {
+      copilotStreams.delete(streamId);
+    }
+  });
+
+  ipcMain.handle('copilot:stop', (_event, { streamId }: { streamId: string }) => {
+    const ac = copilotStreams.get(streamId);
+    if (ac) { ac.abort(); copilotStreams.delete(streamId); }
+    return { ok: true };
+  });
+
+  ipcMain.handle('copilot:threads:list', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    return db.getDb().prepare(
+      `SELECT id, title, created_at, updated_at FROM copilot_threads WHERE company_id = ? ORDER BY updated_at DESC LIMIT 20`
+    ).all(companyId);
+  });
+
+  ipcMain.handle('copilot:threads:load', (_event, { threadId }: { threadId: string }) => {
+    const row = db.getDb().prepare(`SELECT * FROM copilot_threads WHERE id = ?`).get(threadId) as any;
+    if (!row) return null;
+    return { ...row, messages: JSON.parse(row.messages_json || '[]') };
+  });
+
+  ipcMain.handle('copilot:threads:save', (_event, p: { threadId: string; title: string; messages: any[] }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const exists = db.getDb().prepare(`SELECT id FROM copilot_threads WHERE id = ?`).get(p.threadId);
+    if (exists) {
+      db.getDb().prepare(
+        `UPDATE copilot_threads SET title = ?, messages_json = ?, updated_at = datetime('now') WHERE id = ?`
+      ).run(p.title, JSON.stringify(p.messages), p.threadId);
+    } else {
+      db.getDb().prepare(
+        `INSERT INTO copilot_threads (id, company_id, title, messages_json) VALUES (?, ?, ?, ?)`
+      ).run(p.threadId, companyId, p.title, JSON.stringify(p.messages));
+    }
+    scheduleAutoBackup();
+    return { ok: true };
+  });
+
+  ipcMain.handle('copilot:threads:delete', (_event, { threadId }: { threadId: string }) => {
+    db.getDb().prepare(`DELETE FROM copilot_threads WHERE id = ?`).run(threadId);
+    scheduleAutoBackup();
+    return { ok: true };
   });
 }
 

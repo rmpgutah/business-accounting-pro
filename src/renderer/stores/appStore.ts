@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 interface AppState {
   currentModule: string;
   sidebarCollapsed: boolean;
+  copilotOpen: boolean;
   searchQuery: string;
   searchResults: Array<{ type: string; id: string; title: string; subtitle: string }>;
   searchOpen: boolean;
@@ -17,6 +18,8 @@ interface AppState {
 
   setModule: (module: string) => void;
   toggleSidebar: () => void;
+  toggleCopilot: () => void;
+  setCopilotOpen: (open: boolean) => void;
   setSearchQuery: (query: string) => void;
   setSearchResults: (results: any[]) => void;
   setSearchOpen: (open: boolean) => void;
@@ -32,6 +35,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       currentModule: 'dashboard',
       sidebarCollapsed: false,
+      copilotOpen: false,
       searchQuery: '',
       searchResults: [],
       searchOpen: false,
@@ -41,6 +45,8 @@ export const useAppStore = create<AppState>()(
 
       setModule: (module) => set({ currentModule: module }),
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      toggleCopilot: () => set((state) => ({ copilotOpen: !state.copilotOpen })),
+      setCopilotOpen: (open) => set({ copilotOpen: open }),
       setSearchQuery: (query) => set({ searchQuery: query }),
       setSearchResults: (results) => set({ searchResults: results }),
       setSearchOpen: (open) => set({ searchOpen: open }),

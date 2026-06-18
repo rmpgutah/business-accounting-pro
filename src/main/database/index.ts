@@ -9344,6 +9344,16 @@ export function initDatabase(): Database.Database {
   // Vendor logo: stored as base64 data-URI so it embeds directly in PDF output
   // (file:// URIs are blocked by Electron's headless PDF renderer).
   "ALTER TABLE vendors ADD COLUMN logo_data TEXT DEFAULT ''",
+  // B3 AI Copilot — conversation threads persisted per company
+  `CREATE TABLE IF NOT EXISTS copilot_threads (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    title TEXT DEFAULT '',
+    messages_json TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_copilot_threads_company ON copilot_threads(company_id, updated_at DESC)",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
