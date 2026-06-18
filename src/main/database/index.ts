@@ -9354,6 +9354,28 @@ export function initDatabase(): Database.Database {
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
   "CREATE INDEX IF NOT EXISTS idx_copilot_threads_company ON copilot_threads(company_id, updated_at DESC)",
+
+  // ── Multi-location vendors ───────────────────────────────────────────────
+  `CREATE TABLE IF NOT EXISTS vendor_locations (
+    id TEXT PRIMARY KEY,
+    vendor_id TEXT NOT NULL,
+    name TEXT DEFAULT '',
+    location_type TEXT DEFAULT 'physical',
+    address_line1 TEXT DEFAULT '',
+    address_line2 TEXT DEFAULT '',
+    city TEXT DEFAULT '',
+    state TEXT DEFAULT '',
+    zip TEXT DEFAULT '',
+    country TEXT DEFAULT '',
+    phone TEXT DEFAULT '',
+    email TEXT DEFAULT '',
+    is_primary INTEGER DEFAULT 0,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_vendor_locations_vendor ON vendor_locations(vendor_id)",
+  "ALTER TABLE expenses ADD COLUMN vendor_location_id TEXT DEFAULT NULL",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

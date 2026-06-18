@@ -111,6 +111,7 @@ const TrialBalance: React.FC = () => {
   const [fxRate, setFxRate] = useState<number>(1);
   const [showPostClose, setShowPostClose] = useState(true);
   const [expandedHierarchy, setExpandedHierarchy] = useState<Set<string>>(new Set());
+  const [rolling12Labels, setRolling12Labels] = useState<string[]>([]);
   const [walkerOpen, setWalkerOpen] = useState(false);
   const [whatIfOpen, setWhatIfOpen] = useState(false);
   const [whatIfDraft, setWhatIfDraft] = useState<{ accountId: string; debit: number; credit: number }[]>([
@@ -377,8 +378,7 @@ const TrialBalance: React.FC = () => {
           return out;
         });
         setLines(mapped);
-        // store rolling12 labels in window for render
-        (window as any).__tbRolling12Labels = rolling12Labels;
+        setRolling12Labels(rolling12Labels);
       } catch (err: any) {
         console.error('Failed to load Trial Balance:', err);
         if (!cancelled) setError(err?.message || 'Failed to load Trial Balance');
@@ -478,10 +478,8 @@ const TrialBalance: React.FC = () => {
       if (Math.abs(prior) > 0.01 && Math.abs((l.balance - prior) / prior) > 0.5) {
         out.push({ line: l, reason: `Balance changed > 50% (was ${formatCurrency(prior)})` });
       }
-      if (l.balance < 0 && l.normal_side === 'debit') out.push({ line: l, reason: 'Asset/Expense gone negative' });
-      if (l.balance > 0 && l.normal_side === 'credit' && l.account_type !== 'liability' && l.account_type !== 'equity' && l.account_type !== 'revenue' && l.account_type !== 'income') {
-        // not really negative — skip
-      }
+      if (l.balance < 0 && l.normal_side === 'debit') out.push({ line: l, reason: 'Asset/Expense gone negative (abnormal credit balance)' });
+      if (l.balance < 0 && l.normal_side === 'credit') out.push({ line: l, reason: 'Liability/Equity/Revenue gone negative (abnormal debit balance)' });
     }
     return out;
   }, [view, visible]);
@@ -762,7 +760,7 @@ const TrialBalance: React.FC = () => {
                 <th>Code</th><th>Account</th>
                 {view === 'monthly'
                   ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m) => <th key={m} className="text-right">{m}</th>)
-                  : ((window as any).__tbRolling12Labels || []).map((m: string) => <th key={m} className="text-right">{m.slice(2)}</th>)}
+                  : rolling12Labels.map((m: string) => <th key={m} className="text-right">{m.slice(2)}</th>)}
                 <th className="text-right">{view === 'monthly' ? 'YTD' : 'Total'}</th>
               </tr>
             </thead>

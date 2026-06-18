@@ -102,6 +102,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   // (so re-picking a category re-suggests, but a manual pick is never clobbered).
   const [accountAutoSet, setAccountAutoSet] = useState(false);
   const [vendors, setVendors] = useState<Array<DropdownOption & { is_1099_eligible?: number; w9_status?: string }>>([]);
+  const [vendorLocations, setVendorLocations] = useState<Array<{ id: string; name: string; location_type: string; address_line1: string; city: string }>>([]);
   const [projects, setProjects] = useState<DropdownOption[]>([]);
   const [clients, setClients] = useState<DropdownOption[]>([]);
   // Loan Linkage: loans list for the "Linked to Loan" picker. Only active
@@ -383,6 +384,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   // Feature 17 / 18 — denormalize vendor 1099 / w9 status when vendor changes
   const selectedVendor = vendors.find(v => v.id === form.vendor_id);
 
+  // Multi-location: load locations whenever the vendor changes
+  useEffect(() => {
+    if (!form.vendor_id) { setVendorLocations([]); return; }
+    api.vendorLocationsList(form.vendor_id).then((rows: any) => {
+      setVendorLocations(Array.isArray(rows) ? rows : []);
+    }).catch(() => setVendorLocations([]));
+  }, [form.vendor_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Feature 3 — budget cap warning (>= 80% of monthly_cap)
   const capWarning = useMemo(() => {
     if (!selectedCategory) return null;
@@ -563,6 +572,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               shipping_taxable: !!existing.shipping_taxable,
               shipping_scope: existing.shipping_scope === 'item' ? 'item' : 'order',
               shipping_line_ref: existing.shipping_line_ref || '',
+              vendor_location_id: existing.vendor_location_id || '',
               employee_id: existing.employee_id || '',
               entry_mode: (existing.entry_mode as any) || 'standard',
               odometer_start: existing.odometer_start?.toString() || '',
@@ -718,6 +728,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
           shipping_taxable: form.shipping_taxable ? 1 : 0,
           shipping_scope: form.shipping_scope,
           shipping_line_ref: form.shipping_scope === 'item' ? (form.shipping_line_ref || null) : null,
+          vendor_location_id: form.vendor_id ? (form.vendor_location_id || null) : null,
           entry_mode: form.entry_mode,
           odometer_start: parseFloat(form.odometer_start) || 0,
           odometer_end: parseFloat(form.odometer_end) || 0,
@@ -955,6 +966,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         shipping_taxable: form.shipping_taxable ? 1 : 0,
         shipping_scope: form.shipping_scope,
         shipping_line_ref: form.shipping_scope === 'item' ? (form.shipping_line_ref || null) : null,
+        vendor_location_id: form.vendor_id ? (form.vendor_location_id || null) : null,
       };
 
       const lineItemsPayload = useLineItems
@@ -1650,8 +1662,16 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               value={form.vendor_id}
               onChange={(e) => {
                 if (e.target.value === '__new__') { setShowQuickVendor(true); return; }
-                setForm(p => ({ ...p, vendor_id: e.target.value }));
+                const vid = e.target.value;
+                setForm(p => ({ ...p, vendor_id: vid, vendor_location_id: '' }));
                 setVendorText('');
+                if (vid) {
+                  api.vendorLocationsList(vid).then((rows: any) => {
+                    setVendorLocations(Array.isArray(rows) ? rows : []);
+                  }).catch(() => setVendorLocations([]));
+                } else {
+                  setVendorLocations([]);
+                }
               }}
             >
               <option value="">Select vendor...</option>
@@ -1689,6 +1709,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               </div>
             )}
           </div>
+
+          {/* Vendor Location — only shown when the selected vendor has multiple locations */}
+          {form.vendor_id && vendorLocations.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                Location <span className="text-text-muted text-[10px]">(optional)</span>
+              </label>
+              <select
+                className="block-select"
+                value={form.vendor_location_id}
+                onChange={(e) => setForm(p => ({ ...p, vendor_location_id: e.target.value }))}
+              >
+                <option value="">Any / unspecified location</option>
+                {vendorLocations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name || loc.location_type || 'Location'}{loc.city ? ` — ${loc.city}` : ''}{loc.address_line1 ? `, ${loc.address_line1}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Payment Method */}
           <div>

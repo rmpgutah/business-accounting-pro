@@ -37,7 +37,11 @@ interface VendorContact {
 }
 interface VendorAddress {
   id: string;
+  name: string;
   type: 'billing' | 'shipping' | 'remit' | 'physical';
+  phone: string;
+  email: string;
+  is_primary: boolean;
   line1: string;
   line2: string;
   city: string;
@@ -95,7 +99,7 @@ interface VendorFormProps {
 }
 
 const newContact = (primary = false): VendorContact => ({ id: crypto.randomUUID(), name: '', role: '', email: '', phone: '', is_primary: primary });
-const newAddress = (type: VendorAddress['type'] = 'billing'): VendorAddress => ({ id: crypto.randomUUID(), type, line1: '', line2: '', city: '', state: '', zip: '', country: 'US' });
+const newAddress = (type: VendorAddress['type'] = 'billing'): VendorAddress => ({ id: crypto.randomUUID(), name: '', type, phone: '', email: '', is_primary: false, line1: '', line2: '', city: '', state: '', zip: '', country: 'US' });
 
 const emptyForm: VendorFormData = {
   name: '', vendor_type: '', status: 'active', website: '', business_registration_no: '', logo_data: '',
@@ -236,8 +240,28 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
     let cancelled = false;
     (async () => {
       try {
-        const data: any = await api.get('vendors', vendorId);
+        const [data, locRows]: [any, any[]] = await Promise.all([
+          api.get('vendors', vendorId),
+          api.vendorLocationsList(vendorId).catch(() => []),
+        ]);
         if (data && !cancelled) {
+          // Prefer relational vendor_locations table; fall back to JSON blob for old records.
+          const addressesFromTable: VendorAddress[] = Array.isArray(locRows) && locRows.length > 0
+            ? locRows.map((l: any) => ({
+                id: l.id,
+                name: l.name || '',
+                type: (l.location_type || 'physical') as VendorAddress['type'],
+                phone: l.phone || '',
+                email: l.email || '',
+                is_primary: !!l.is_primary,
+                line1: l.address_line1 || '',
+                line2: l.address_line2 || '',
+                city: l.city || '',
+                state: l.state || '',
+                zip: l.zip || '',
+                country: l.country || '',
+              }))
+            : parseJson(data.additional_addresses_json, []);
           setForm({
             name: data.name || '',
             vendor_type: data.vendor_type || '',
@@ -250,7 +274,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
             address: data.address || '',
             notes: data.notes || '',
             contacts: parseJson(data.contacts_json, []),
-            additional_addresses: parseJson(data.additional_addresses_json, []),
+            additional_addresses: addressesFromTable,
             tax_id: data.tax_id || '',
             w9_status: data.w9_status ?? 'not_collected',
             is_1099_eligible: Boolean(data.is_1099_eligible),
@@ -375,10 +399,30 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
         default_expense_account_id: form.default_expense_account_id || null,
         default_ap_account_id: form.default_ap_account_id || null,
       };
+      let savedId = vendorId || '';
       if (isEditing && vendorId) {
         await api.update('vendors', vendorId, payload);
       } else {
-        await api.create('vendors', payload);
+        const created: any = await api.create('vendors', payload);
+        savedId = created?.id || '';
+      }
+      // Sync vendor_locations table (replaces the JSON blob for structured storage).
+      if (savedId) {
+        await api.vendorLocationsSync(savedId, form.additional_addresses.map(a => ({
+          id: a.id,
+          name: a.name || '',
+          location_type: a.type || 'physical',
+          address_line1: a.line1 || '',
+          address_line2: a.line2 || '',
+          city: a.city || '',
+          state: a.state || '',
+          zip: a.zip || '',
+          country: a.country || '',
+          phone: a.phone || '',
+          email: a.email || '',
+          is_primary: a.is_primary ? 1 : 0,
+          notes: '',
+        })));
       }
       onSaved();
     } catch (err: any) {
@@ -595,12 +639,27 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                 )}
                 {form.additional_addresses.map(a => (
                   <div key={a.id} className="tform-address-card">
-                    <select className={`tform-address-type ${a.type}`} value={a.type} onChange={(e) => updateAddress(a.id, { type: e.target.value as VendorAddress['type'] })} style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 4, color: 'inherit', fontSize: 9, padding: '2px 6px' }}>
-                      <option value="billing">Billing</option>
-                      <option value="shipping">Shipping</option>
-                      <option value="remit">Remit-to</option>
-                      <option value="physical">Physical</option>
-                    </select>
+                    <div className="flex items-center gap-2 mb-1">
+                      <select className={`tform-address-type ${a.type}`} value={a.type} onChange={(e) => updateAddress(a.id, { type: e.target.value as VendorAddress['type'] })} style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 4, color: 'inherit', fontSize: 9, padding: '2px 6px' }}>
+                        <option value="billing">Billing</option>
+                        <option value="shipping">Shipping</option>
+                        <option value="remit">Remit-to</option>
+                        <option value="physical">Physical</option>
+                      </select>
+                      <input className="block-input text-xs flex-1" placeholder="Location name (e.g. Main Warehouse, Downtown Branch)" value={a.name} onChange={(e) => updateAddress(a.id, { name: e.target.value })} />
+                      <label style={{ fontSize: 10, display: 'flex', gap: 4, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                        <input type="checkbox" checked={!!a.is_primary} onChange={(e) => {
+                          const checked = e.target.checked;
+                          setForm(p => ({ ...p, additional_addresses: p.additional_addresses.map(x =>
+                            x.id === a.id ? { ...x, is_primary: checked } : (checked ? { ...x, is_primary: false } : x)
+                          )}));
+                        }} />
+                        Primary
+                      </label>
+                      <button type="button" onClick={() => removeAddress(a.id)} style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', flexShrink: 0 }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                     <div>
                       <input className="block-input text-xs" placeholder="Street line 1" value={a.line1} onChange={(e) => updateAddress(a.id, { line1: e.target.value })} />
                       <input className="block-input text-xs mt-1" placeholder="Street line 2 (apt, suite, etc.)" value={a.line2} onChange={(e) => updateAddress(a.id, { line2: e.target.value })} />
@@ -610,16 +669,18 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                         <input className="block-input text-xs" placeholder="ZIP / Postal" value={a.zip} onChange={(e) => updateAddress(a.id, { zip: e.target.value })} />
                         <input className="block-input text-xs" placeholder="Country" value={a.country} onChange={(e) => updateAddress(a.id, { country: e.target.value })} />
                       </div>
+                      <div className="grid gap-1 mt-1" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                        <input className="block-input text-xs" placeholder="Phone (optional)" value={a.phone} onChange={(e) => updateAddress(a.id, { phone: e.target.value })} />
+                        <input className="block-input text-xs" placeholder="Email (optional)" value={a.email} onChange={(e) => updateAddress(a.id, { email: e.target.value })} />
+                      </div>
                     </div>
-                    <button type="button" onClick={() => removeAddress(a.id)} style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
-                      <Trash2 size={14} />
-                    </button>
                   </div>
                 ))}
                 <div className="flex gap-2 mt-2">
                   <button type="button" className="tform-add-btn" onClick={() => addAddress('billing')}><Plus size={11} /> Billing</button>
                   <button type="button" className="tform-add-btn" onClick={() => addAddress('shipping')}><Plus size={11} /> Shipping</button>
                   <button type="button" className="tform-add-btn" onClick={() => addAddress('remit')}><Plus size={11} /> Remit-to</button>
+                  <button type="button" className="tform-add-btn" onClick={() => addAddress('physical')}><Plus size={11} /> Physical</button>
                 </div>
               </div>
             )}

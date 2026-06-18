@@ -575,14 +575,13 @@ const GeneralLedger: React.FC = () => {
     const selected = flatLines.filter((l) => selectedLineIds.has(l.line_id));
     if (selected.length === 0) return;
     try {
-      // Create a balancing journal entry per source-account: move from old account to new
-      const grouped: Record<string, GLTransaction[]> = {};
+      const byAcct: Record<string, GLTransaction[]> = {};
       for (const l of selected) {
-        if (!grouped[l.account_id]) grouped[l.account_id] = [];
-        grouped[l.account_id].push(l);
+        if (!byAcct[l.account_id]) byAcct[l.account_id] = [];
+        byAcct[l.account_id].push(l);
       }
       const dateStr = format(new Date(), 'yyyy-MM-dd');
-      const entryNo = `RCLS-${Date.now().toString().slice(-6)}`;
+      const entryNo = await api.nextJournalNumber();
       const entryRes = await api.create('journal_entries', {
         company_id: activeCompany.id,
         entry_number: entryNo,
@@ -592,20 +591,25 @@ const GeneralLedger: React.FC = () => {
         is_adjusting: 1,
         is_posted: 1,
       });
-      const entryId = entryRes?.id || entryRes;
-      for (const fromAcct of Object.keys(grouped)) {
-        const ls = grouped[fromAcct];
-        const totalDebit = ls.reduce((s, l) => s + (l.debit || 0), 0);
-        const totalCredit = ls.reduce((s, l) => s + (l.credit || 0), 0);
-        // Reverse out of original account
-        if (totalDebit > 0) {
-          await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: fromAcct, debit: 0, credit: totalDebit, description: 'Reclassify out' });
-          await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: reclassifyTarget, debit: totalDebit, credit: 0, description: 'Reclassify in' });
+      const entryId = entryRes?.id;
+      if (!entryId) throw new Error('Reclassify entry header was not created');
+      try {
+        for (const fromAcct of Object.keys(byAcct)) {
+          const ls = byAcct[fromAcct];
+          const totalDebit = ls.reduce((s, l) => s + (l.debit || 0), 0);
+          const totalCredit = ls.reduce((s, l) => s + (l.credit || 0), 0);
+          if (totalDebit > 0) {
+            await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: fromAcct, debit: 0, credit: totalDebit, description: 'Reclassify out' });
+            await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: reclassifyTarget, debit: totalDebit, credit: 0, description: 'Reclassify in' });
+          }
+          if (totalCredit > 0) {
+            await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: fromAcct, debit: totalCredit, credit: 0, description: 'Reclassify out' });
+            await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: reclassifyTarget, debit: 0, credit: totalCredit, description: 'Reclassify in' });
+          }
         }
-        if (totalCredit > 0) {
-          await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: fromAcct, debit: totalCredit, credit: 0, description: 'Reclassify out' });
-          await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: reclassifyTarget, debit: 0, credit: totalCredit, description: 'Reclassify in' });
-        }
+      } catch (lineErr: any) {
+        await api.remove('journal_entries', entryId).catch(() => {});
+        throw new Error(`Line creation failed — reclassify entry rolled back (${lineErr?.message || lineErr})`);
       }
       setReclassifyOpen(false);
       setSelectedLineIds(new Set());
@@ -783,8 +787,14 @@ const GeneralLedger: React.FC = () => {
   const drillSubLedger = (t: GLTransaction) => {
     if (!t.source_type || !t.source_id) { alert('No sub-ledger source linked'); return; }
     useAppStore.getState().setFocusEntity({ type: t.source_type, id: t.source_id });
-    const map: Record<string, string> = { invoice: 'invoices', bill: 'bills', payment: 'payments' };
-    useAppStore.getState().setModule(map[t.source_type] || 'invoices');
+    const map: Record<string, string> = {
+      invoice: 'invoices', bill: 'bills', payment: 'payments',
+      expense: 'expenses', vendor: 'expenses', purchase_order: 'purchase-orders',
+      loan: 'loans', payroll: 'payroll', payroll_run: 'payroll',
+      bank_transaction: 'bank-recon', client: 'clients', quote: 'quotes',
+      debt: 'debt-collection',
+    };
+    useAppStore.getState().setModule(map[t.source_type] || 'accounts');
   };
 
   // Feature #29 print check stub
@@ -835,9 +845,9 @@ const GeneralLedger: React.FC = () => {
     const csv = ['Date,Entry,Account,Description,Debit,Credit'].concat(
       sel.map((t) => `${t.date},${t.entry_number},"${t.account_name}","${(t.description || '').replace(/"/g, '""')}",${t.debit},${t.credit}`)
     ).join('%0D%0A');
-    const subject = `GL lines export (${sel.length})`;
+    const subject = encodeURIComponent(`GL lines export (${sel.length})`);
     const body = `Selected GL lines:%0D%0A%0D%0A${csv}`;
-    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${body}`;
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
   };
 
   // Feature #32 mention
