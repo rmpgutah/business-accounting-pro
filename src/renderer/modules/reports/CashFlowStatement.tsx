@@ -12,6 +12,7 @@ import { downloadCSVBlob } from '../../lib/csv-export';
 import { CHART_INCOME, CHART_EXPENSE } from '../../lib/chart-palette';
 import PrintReportHeader from '../../components/PrintReportHeader';
 import PrintReportFooter from '../../components/PrintReportFooter';
+import { generateCashFlowHTML } from '../../lib/financial-statement-templates';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -534,10 +535,29 @@ const CashFlowStatement: React.FC = () => {
             {method === 'direct' ? 'Direct' : 'Indirect'}
           </button>
           <button
-            onClick={() => window.print()}
+            onClick={async () => {
+              if (!activeCompany) return;
+              const html = generateCashFlowHTML(
+                data,
+                indirectData,
+                activeCompany,
+                {
+                  startDate,
+                  endDate,
+                  method,
+                  netOperating,
+                  netInvesting,
+                  netFinancing,
+                  netChange,
+                  endingCash,
+                  indirectOperatingCF,
+                },
+              );
+              await api.printPreview(html, `Cash Flow Statement — ${startDate} to ${endDate}`);
+            }}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '6px' }}
-            title="Print"
+            title="Print / Save PDF"
           >
             <Printer size={15} />
           </button>

@@ -30,8 +30,15 @@ interface MileageEntry {
   vehicle: string;
   project_id?: string | null;
   client_id?: string | null;
+  is_billable?: boolean;
+  billed_invoice_id?: string | null;
+  // Joined on list (rawQuery), not persisted.
+  project_name?: string;
+  client_name?: string;
   notes: string;
 }
+
+interface DropdownOption { id: string; name: string; }
 
 const EMPTY_ENTRY = (today: string): MileageEntry => ({
   trip_date: today,
@@ -42,6 +49,9 @@ const EMPTY_ENTRY = (today: string): MileageEntry => ({
   rate_per_mile: 0,
   deduction_amount: 0,
   vehicle: '',
+  project_id: null,
+  client_id: null,
+  is_billable: false,
   notes: '',
 });
 
@@ -56,15 +66,40 @@ const MileageModule: React.FC = () => {
   const [currentRate, setCurrentRate] = useState(0.70);
   const [editing, setEditing] = useState<MileageEntry | null>(null);
   const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState<DropdownOption[]>([]);
+  const [clients, setClients] = useState<DropdownOption[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await api.mileageList({ year });
-      if (Array.isArray(list)) setEntries(list as MileageEntry[]);
-      const s = await api.mileageSummary(year);
+      // Hydrate trips with project/client display names so the table can show
+      // them without per-row joins. api.mileageList still returns flat rows;
+      // we enrich them client-side from the loaded option lists.
+      const [list, s, r, projList, clientList] = await Promise.all([
+        api.mileageList({ year }),
+        api.mileageSummary(year),
+        api.mileageCurrentRate(year),
+        api.query('projects', {}),
+        api.query('clients', {}),
+      ]);
+      const projOpts: DropdownOption[] = Array.isArray(projList)
+        ? projList.map((p: any) => ({ id: p.id, name: p.name }))
+        : [];
+      const clientOpts: DropdownOption[] = Array.isArray(clientList)
+        ? clientList.map((c: any) => ({ id: c.id, name: c.name }))
+        : [];
+      setProjects(projOpts);
+      setClients(clientOpts);
+      const projMap = new Map(projOpts.map(p => [p.id, p.name]));
+      const clientMap = new Map(clientOpts.map(c => [c.id, c.name]));
+      if (Array.isArray(list)) {
+        setEntries((list as MileageEntry[]).map(e => ({
+          ...e,
+          project_name: e.project_id ? projMap.get(e.project_id) : undefined,
+          client_name: e.client_id ? clientMap.get(e.client_id) : undefined,
+        })));
+      }
       if (!s.error) setSummary(s);
-      const r = await api.mileageCurrentRate(year);
       if (!r.error) setCurrentRate(r.business_rate);
     } finally {
       setLoading(false);
@@ -146,8 +181,8 @@ const MileageModule: React.FC = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border-primary)' }}>
-                {['Date', 'Purpose', 'From → To', 'Miles', 'Rate', 'Deduction', ''].map((h, i) => (
-                  <th key={h} style={{ padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 800, color: 'var(--color-text-muted)', textAlign: i >= 3 && i <= 5 ? 'right' : 'left' }}>{h}</th>
+                {['Date', 'Purpose', 'From → To', 'Project / Client', 'Miles', 'Rate', 'Deduction', 'Bill', ''].map((h, i) => (
+                  <th key={h} style={{ padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 800, color: 'var(--color-text-muted)', textAlign: i >= 4 && i <= 6 ? 'right' : 'left' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -159,9 +194,26 @@ const MileageModule: React.FC = () => {
                   <td style={{ padding: '8px 12px', fontSize: 11, color: 'var(--color-text-muted)' }}>
                     {e.start_location || '—'}{e.end_location ? ' → ' + e.end_location : ''}
                   </td>
+                  <td style={{ padding: '8px 12px', fontSize: 11 }}>
+                    {(e.project_name || e.client_name)
+                      ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          {e.project_name && <span style={{ color: 'var(--color-text-primary)' }}>{e.project_name}</span>}
+                          {e.client_name && <span style={{ color: 'var(--color-text-muted)', fontSize: 10 }}>{e.client_name}</span>}
+                        </div>
+                      )
+                      : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                  </td>
                   <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{e.miles.toFixed(1)}</td>
                   <td style={{ padding: '8px 12px', fontSize: 11, textAlign: 'right', color: 'var(--color-text-muted)' }}>${e.rate_per_mile.toFixed(3)}</td>
                   <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right', fontWeight: 700, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-positive)' }}>${e.deduction_amount.toFixed(2)}</td>
+                  <td style={{ padding: '8px 12px', fontSize: 11, textAlign: 'center' }}>
+                    {e.billed_invoice_id
+                      ? <span title="Already invoiced" style={{ color: 'var(--color-positive)', fontSize: 10 }}>✓ inv.</span>
+                      : e.is_billable
+                        ? <span title="Marked billable" style={{ color: 'var(--color-accent-blue)' }}>✓</span>
+                        : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                  </td>
                   <td style={{ padding: '8px 12px', textAlign: 'right' }}>
                     <button
                       onClick={() => setEditing(e)}
@@ -263,6 +315,52 @@ const MileageModule: React.FC = () => {
                   placeholder={'Default ' + currentRate.toFixed(3)}
                 />
               </Field>
+              {/* Project / Client linkage — drives billable mileage into the
+                  same invoice prefill pipeline used by billable expenses. */}
+              <Field label="Project (optional)">
+                <select
+                  className="block-input"
+                  value={editing.project_id || ''}
+                  onChange={(ev) => setEditing({ ...editing, project_id: ev.target.value || null })}
+                >
+                  <option value="">— None —</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Client (optional)">
+                <select
+                  className="block-input"
+                  value={editing.client_id || ''}
+                  onChange={(ev) => setEditing({ ...editing, client_id: ev.target.value || null })}
+                >
+                  <option value="">— None —</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+              <div style={{ gridColumn: 'span 2' }}>
+                <label
+                  className="flex items-center gap-2 text-xs"
+                  title={editing.billed_invoice_id
+                    ? 'Already invoiced — uncheck not available'
+                    : !editing.client_id
+                      ? 'Pick a Client first to make this trip billable'
+                      : 'Bill this trip on the next invoice for the selected client'}
+                  style={{ cursor: editing.billed_invoice_id || !editing.client_id ? 'not-allowed' : 'pointer' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!editing.is_billable}
+                    disabled={!!editing.billed_invoice_id || !editing.client_id}
+                    onChange={(ev) => setEditing({ ...editing, is_billable: ev.target.checked })}
+                  />
+                  <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                    Bill to client
+                  </span>
+                  {editing.billed_invoice_id && (
+                    <span style={{ color: 'var(--color-positive)', fontSize: 10 }}>· invoiced</span>
+                  )}
+                </label>
+              </div>
               <div style={{ gridColumn: 'span 2' }}>
                 <Field label="Notes">
                   <textarea

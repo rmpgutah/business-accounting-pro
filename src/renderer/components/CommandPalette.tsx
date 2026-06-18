@@ -5,7 +5,8 @@ import api from '../lib/api';
 import { useAppStore } from '../stores/appStore';
 import { useCompanyStore } from '../stores/companyStore';
 import { parseCommand } from '../lib/commandParser';
-import { RENDERER_COMMANDS, findCommands, type RendererCommand } from './CommandPaletteCommands';
+import { RENDERER_COMMANDS } from './CommandPaletteCommands';
+import { findActions, type AppAction } from '../../shared/action-registry';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -14,7 +15,7 @@ interface CommandPaletteProps {
 
 interface SearchResult {
   type: 'command' | 'entity' | 'parsed';
-  command?: RendererCommand;
+  command?: AppAction;
   entity?: { id: string; type: string; label: string; subtitle?: string };
   parsed?: { description: string; action: () => void };
 }
@@ -23,7 +24,8 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [entities, setEntities] = useState<any[]>([]);
-  const [recent, setRecent] = useState<RendererCommand[]>([]);
+  const [hints, setHints] = useState<Record<string, string>>({});
+  const [recent, setRecent] = useState<AppAction[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const setModule = useAppStore((s) => s.setModule);
   const setFocusEntity = useAppStore((s) => s.setFocusEntity);
@@ -45,26 +47,29 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
     if (!query.trim() || !activeCompany) { setEntities([]); return; }
     const q = query.trim();
     if (q.length < 2) { setEntities([]); return; }
-    const sql = `
-      SELECT 'invoice' as type, id, invoice_number as label, total as subtitle
-      FROM invoices WHERE company_id = ? AND (invoice_number LIKE ? OR notes LIKE ?) LIMIT 5
-      UNION ALL
-      SELECT 'client' as type, id, name as label, email as subtitle
-      FROM clients WHERE company_id = ? AND (name LIKE ? OR email LIKE ?) LIMIT 5
-      UNION ALL
-      SELECT 'expense' as type, id, description as label, CAST(amount AS TEXT) as subtitle
-      FROM expenses WHERE company_id = ? AND description LIKE ? LIMIT 5
-    `;
-    const like = `%${q}%`;
-    api.rawQuery(sql, [activeCompany.id, like, like, activeCompany.id, like, like, activeCompany.id, like])
-      .then((rows: any[]) => setEntities(Array.isArray(rows) ? rows : []))
-      .catch(() => setEntities([]));
+    let cancelled = false;
+    api.searchIndex(q, 12).then((rows: any[]) => {
+      if (!cancelled) setEntities(Array.isArray(rows) ? rows.map(r => ({
+        type: r.entity_type, id: r.entity_id, label: r.title, subtitle: r.subtitle,
+      })) : []);
+    }).catch(() => { if (!cancelled) setEntities([]); });
+    return () => { cancelled = true; };
   }, [query, activeCompany]);
+
+  useEffect(() => {
+    const targets = entities.filter(e => e.type === 'client' || e.type === 'vendor');
+    if (!targets.length) { setHints({}); return; }
+    let cancelled = false;
+    Promise.all(targets.map(e =>
+      api.entityHint(e.type, e.id).then((h: string) => [`${e.type}:${e.id}`, h] as const).catch(() => [`${e.type}:${e.id}`, ''] as const)
+    )).then(pairs => { if (!cancelled) setHints(Object.fromEntries(pairs.filter(p => p[1]))); });
+    return () => { cancelled = true; };
+  }, [entities]);
 
   const parsed = useMemo(() => parseCommand(query), [query]);
 
   const results = useMemo<SearchResult[]>(() => {
-    const cmds: SearchResult[] = findCommands(query).map(c => ({ type: 'command' as const, command: c }));
+    const cmds: SearchResult[] = findActions(query).map(c => ({ type: 'command' as const, command: c }));
     const ents: SearchResult[] = entities.map(e => ({
       type: 'entity' as const,
       entity: { id: e.id, type: e.type, label: e.label || '(unnamed)', subtitle: e.subtitle ? String(e.subtitle) : undefined },
@@ -94,19 +99,21 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const executeResult = async (r: SearchResult) => {
     const t0 = performance.now();
     if (r.type === 'command' && r.command) {
-      r.command.execute({ setModule, setFocusEntity });
-      try {
-        await api.logCommandExecution({
-          command_id: r.command.id,
-          params: {},
-          result: 'success',
-          duration_ms: performance.now() - t0,
-        });
-      } catch {}
+      const a = r.command as AppAction;
+      if (a.kind === 'navigate' && a.module) {
+        setModule(a.module);
+      } else if (a.kind === 'mutate') {
+        // B1: mutation actions that need params open their module form (proposal-first).
+        // Param-less safe mutations could call api.invokeAction(a.id) here in a later pass.
+        if (a.module) setModule(a.module);
+      }
+      try { await api.logCommandExecution({ command_id: a.id, params: {}, result: 'success', duration_ms: performance.now() - t0 }); } catch {}
     } else if (r.type === 'entity' && r.entity) {
       const moduleMap: Record<string, string> = {
         invoice: 'invoicing', expense: 'expenses', client: 'clients',
-        vendor: 'vendors', quote: 'quotes', debt: 'debt-collection',
+        vendor: 'expenses', quote: 'quotes', debt: 'debt-collection',
+        bill: 'bills', account: 'accounts', employee: 'payroll',
+        project: 'projects', purchase_order: 'purchase-orders', payment: 'invoicing',
       };
       const mod = moduleMap[r.entity.type] || r.entity.type;
       setFocusEntity?.({ type: r.entity.type, id: r.entity.id });
@@ -156,7 +163,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
           width: '600px', maxWidth: '90vw',
           maxHeight: '70vh', overflow: 'hidden',
           display: 'flex', flexDirection: 'column',
-          borderRadius: '6px',
+          borderRadius: 'var(--app-radius)',
         }}
       >
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border-primary">
@@ -171,7 +178,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
           />
           <span
             className="text-[10px] text-text-muted font-mono px-2 py-1 border border-border-primary"
-            style={{ borderRadius: '4px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             ESC
           </span>
@@ -209,6 +216,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
                     : r.parsed!.description
                   }
                   subtitle={r.type === 'entity' ? r.entity!.subtitle : undefined}
+                  badge={r.type === 'entity' ? hints[`${r.entity!.type}:${r.entity!.id}`] : undefined}
                   icon={
                     r.type === 'parsed' ? <Zap size={14} className="text-accent-blue" />
                     : <ArrowRight size={14} className="text-text-muted" />
@@ -238,8 +246,8 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
 
 const ResultRow: React.FC<{
   label: string; subtitle?: string; icon: React.ReactNode;
-  selected: boolean; onClick: () => void;
-}> = ({ label, subtitle, icon, selected, onClick }) => (
+  selected: boolean; onClick: () => void; badge?: string;
+}> = ({ label, subtitle, icon, selected, onClick, badge }) => (
   <button
     onClick={onClick}
     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
@@ -249,7 +257,12 @@ const ResultRow: React.FC<{
     {icon}
     <div className="flex-1 min-w-0">
       <div className="text-sm font-medium truncate">{label}</div>
-      {subtitle && <div className="text-xs text-text-muted truncate">{subtitle}</div>}
+      {(subtitle || badge) && (
+        <div className="text-xs text-text-muted truncate">
+          {subtitle}
+          {badge && <span className="text-accent-warning ml-1">{badge}</span>}
+        </div>
+      )}
     </div>
   </button>
 );

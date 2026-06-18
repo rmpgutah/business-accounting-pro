@@ -6,6 +6,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
+import { generateGeneralLedgerHTML } from '../../lib/financial-statement-templates';
 import EntityChip from '../../components/EntityChip';
 import ErrorBanner from '../../components/ErrorBanner';
 import PrintReportHeader from '../../components/PrintReportHeader';
@@ -545,12 +546,10 @@ const GeneralLedger: React.FC = () => {
   }, [filteredAccounts, startDate, endDate]);
 
   const handlePrintPDF = async () => {
-    const html = document.getElementById('gl-print-area')?.outerHTML || '';
-    try {
-      await api.printPreview(`<html><head><style>body{font-family:system-ui;padding:24px;}table{width:100%;border-collapse:collapse;}th,td{padding:6px;border-bottom:1px solid #ddd;font-size:11px;}.acc-neg::before{content:"(";}.acc-neg::after{content:")";}</style></head><body>${html}</body></html>`, `General Ledger ${startDate} to ${endDate}`);
-    } catch {
-      window.print();
-    }
+    if (!activeCompany) return;
+    const title = `General Ledger ${startDate} to ${endDate}`;
+    const html = generateGeneralLedgerHTML(filteredAccounts, activeCompany, { startDate, endDate });
+    await api.printPreview(html, title);
   };
 
   // Save line note

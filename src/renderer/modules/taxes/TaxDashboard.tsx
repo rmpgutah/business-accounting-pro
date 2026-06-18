@@ -252,8 +252,11 @@ const TaxDashboard: React.FC = () => {
       ).catch(() => [{ py_taxes: 0 }]),
       // Revenue (from invoices if available)
       api.rawQuery(
+        // 'void' is not a valid invoice status (the column CHECK allows
+        // cancelled, not void), so the old filter excluded nothing and counted
+        // cancelled invoices as revenue. The real exclusion is 'cancelled'.
         `SELECT COALESCE(SUM(total), 0) as total_revenue FROM invoices
-         WHERE company_id = ? AND issue_date >= ? AND issue_date <= ? AND status != 'void'`,
+         WHERE company_id = ? AND issue_date >= ? AND issue_date <= ? AND status != 'cancelled'`,
         [companyId, yearStart, yearEnd]
       ).catch(() => [{ total_revenue: 0 }]),
     ])

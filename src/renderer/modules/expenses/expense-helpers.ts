@@ -99,6 +99,34 @@ export async function categoryMonthlyUsage(
   }
 }
 
+/**
+ * Single source of truth for an expense's tax-inclusive grand total.
+ *
+ * FINAL-PRICE rule v4: amount + tax + shipping + shipping_tax − header_discount.
+ *   • amount / tax_amount  = goods subtotal + goods tax (shipping NOT folded in)
+ *   • shipping_amount / shipping_tax_amount = Shipping & Handling, added on top
+ *   • discount (flat $ AND %) applied AFTER tax/shipping, to match the invoice
+ *     convention. Both subtract independently; the total is clamped at 0.
+ *
+ * Used by the list, the detail header, and the print/voucher templates so every
+ * surface reconciles to the same number.
+ */
+export function expenseGrandTotal(e: {
+  amount?: number;
+  tax_amount?: number;
+  shipping_amount?: number;
+  shipping_tax_amount?: number;
+  discount_amount?: number;
+  discount_percent?: number;
+}): number {
+  const gross =
+    (e.amount || 0) + (e.tax_amount || 0) +
+    (e.shipping_amount || 0) + (e.shipping_tax_amount || 0);
+  const flat = e.discount_amount || 0;
+  const pct = e.discount_percent || 0;
+  return Math.max(0, gross - flat - gross * (pct / 100));
+}
+
 /** Parse JSON string safely. */
 export function parseJSON<T>(s: any, fallback: T): T {
   if (s == null) return fallback;

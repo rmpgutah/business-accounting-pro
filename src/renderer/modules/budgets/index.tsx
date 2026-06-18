@@ -147,30 +147,29 @@ const BudgetModule: React.FC = () => {
             0
           );
 
-          // Compute actual from journal entries (debits to budget account_ids in period)
-          const accountIds = (lines || [])
-            .map((l) => l.account_id)
-            .filter((x): x is string => !!x);
+          // Actuals must match BudgetDetail/BudgetList, which sum expenses by
+          // category NAME. Budget lines created via BudgetForm only set
+          // `category` (free text) and leave `account_id` null, so the old
+          // GL-by-account_id query returned 0 for every normally-created
+          // budget — zeroing Actual/Variance/risk across the whole dashboard.
+          const lineCategories = (lines || [])
+            .map((l) => (l.category || '').toLowerCase().trim())
+            .filter((c) => !!c);
 
           let actual = 0;
-          if (accountIds.length > 0) {
+          if (lineCategories.length > 0) {
             try {
-              const placeholders = accountIds.map(() => '?').join(',');
               const rows: any[] = await api.rawQuery(
-                `SELECT SUM(jel.debit - jel.credit) AS spend
-                 FROM journal_entry_lines jel
-                 JOIN journal_entries je ON je.id = jel.journal_entry_id
-                 WHERE je.company_id = ?
-                   AND jel.account_id IN (${placeholders})
-                   AND je.date >= ? AND je.date <= ?`,
-                [
-                  activeCompany.id,
-                  ...accountIds,
-                  budget.start_date,
-                  budget.end_date,
-                ]
+                `SELECT LOWER(c.name) AS cat, COALESCE(SUM(e.amount), 0) AS spend
+                 FROM expenses e
+                 LEFT JOIN categories c ON e.category_id = c.id
+                 WHERE e.company_id = ? AND date(e.date) BETWEEN date(?) AND date(?)
+                 GROUP BY LOWER(c.name)`,
+                [activeCompany.id, budget.start_date, budget.end_date]
               );
-              actual = Number(rows?.[0]?.spend) || 0;
+              const spendByCat: Record<string, number> = {};
+              for (const r of rows || []) spendByCat[String(r.cat)] = Number(r.spend) || 0;
+              actual = lineCategories.reduce((s, cat) => s + (spendByCat[cat] || 0), 0);
             } catch {
               actual = 0;
             }

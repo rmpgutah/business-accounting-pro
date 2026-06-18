@@ -3,6 +3,7 @@ import { X, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
 import { todayLocal } from '../../lib/date-helpers';
 import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
+import { computeInvoicePaidStatus } from '../../../shared/payment-math';
 
 // ─── Payment Methods ────────────────────────────────────
 const PAYMENT_METHODS = [
@@ -125,6 +126,16 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
           reference: reference || '',
           attachment_path: attachmentPath || '',
         });
+        // Editing a payment used to leave the invoice header (amount_paid,
+        // status, balance due) showing the OLD figure — the create path
+        // recomputes but the edit path never did. Re-derive from the full
+        // payment set so the invoice agrees with its rows.
+        const allPayments = await api.query('payments', { invoice_id: invoiceId });
+        const { amountPaid, status } = computeInvoicePaidStatus(
+          invoiceTotal,
+          (allPayments || []).map((p: any) => p.amount),
+        );
+        await api.update('invoices', invoiceId, { amount_paid: amountPaid, status });
       } else {
         const res = await api.recordInvoicePayment(invoiceId, parsedAmount, date, method, reference);
         // Persist the uploaded proof onto the just-created payment row.

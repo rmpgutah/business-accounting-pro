@@ -991,6 +991,22 @@ CREATE TABLE IF NOT EXISTS rules (
 
 CREATE INDEX IF NOT EXISTS idx_rules_company_category ON rules(company_id, category, is_active);
 
+-- Per-rule run log. Read by the Rules module's run-history accordion
+-- (rule_id, status, detail, ran_at) and the system-wide report (company_id,
+-- created_at). The table was referenced everywhere but never actually created,
+-- so every log lookup threw "no such table" (swallowed → permanently empty).
+-- Hard-deletable, no updated_at, no auto company scoping (see tableConfig.ts).
+CREATE TABLE IF NOT EXISTS rule_logs (
+  id TEXT PRIMARY KEY,
+  company_id TEXT,
+  rule_id TEXT REFERENCES rules(id) ON DELETE CASCADE,
+  status TEXT DEFAULT '',
+  detail TEXT DEFAULT '',
+  ran_at TEXT DEFAULT (datetime('now')),
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rule_logs_rule ON rule_logs(rule_id);
+
 CREATE TABLE IF NOT EXISTS approval_queue (
   id TEXT PRIMARY KEY,
   company_id TEXT NOT NULL REFERENCES companies(id),
