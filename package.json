@@ -34,6 +34,9 @@
   "author": "RMPG",
   "license": "ISC",
   "type": "commonjs",
+  "overrides": {
+    "js-yaml": ">=4.2.0"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",
     "@types/archiver": "^7.0.0",
