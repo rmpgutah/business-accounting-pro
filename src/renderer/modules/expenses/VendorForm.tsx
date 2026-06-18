@@ -17,7 +17,7 @@
  * callers don't need to change.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Building2, X, Plus, Trash2, User, MapPin, Shield, CreditCard, FileText, Activity } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
@@ -120,6 +120,96 @@ const TABS: Array<{ key: TabKey; label: string; icon: any }> = [
   { key: 'posting', label: 'Posting & Performance', icon: Activity },
 ];
 
+// ─── Background removal ──────────────────────────────────
+// Flood-fills from all 4 corners so only the *connected* background region is
+// erased — interior white spaces (inside letters, white design elements) are
+// left intact. Pixels near the tolerance boundary get a graduated alpha so
+// edges don't look jagged. Always outputs PNG (JPEG has no alpha channel).
+async function removeBackground(dataUrl: string): Promise<string> {
+  if (dataUrl.startsWith('data:image/svg+xml')) return dataUrl; // SVGs are already transparent vectors
+
+  return new Promise<string>((resolve) => {
+    const img = new Image();
+    img.onerror = () => resolve(dataUrl); // fallback: return original unchanged
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+
+      const w = img.width, h = img.height;
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const data = imageData.data;
+
+      const px = (x: number, y: number) => (y * w + x) * 4;
+
+      // Sample opaque corners to estimate the background color
+      const cornerIdxs = [px(0, 0), px(w - 1, 0), px(0, h - 1), px(w - 1, h - 1)];
+      const opaque = cornerIdxs.filter(i => data[i + 3] > 200);
+      if (opaque.length === 0) { resolve(canvas.toDataURL('image/png')); return; }
+
+      const bg = {
+        r: Math.round(opaque.reduce((s, i) => s + data[i],     0) / opaque.length),
+        g: Math.round(opaque.reduce((s, i) => s + data[i + 1], 0) / opaque.length),
+        b: Math.round(opaque.reduce((s, i) => s + data[i + 2], 0) / opaque.length),
+      };
+
+      // Bail if corners are inconsistent (already transparent / complex bg)
+      const variance = opaque.reduce((s, i) =>
+        s + Math.abs(data[i] - bg.r) + Math.abs(data[i + 1] - bg.g) + Math.abs(data[i + 2] - bg.b), 0
+      ) / opaque.length;
+      if (variance > 30) { resolve(canvas.toDataURL('image/png')); return; }
+
+      const TOLERANCE = 38;
+      const colorDist = (i: number) => {
+        const dr = data[i] - bg.r, dg = data[i + 1] - bg.g, db = data[i + 2] - bg.b;
+        return Math.sqrt(dr * dr + dg * dg + db * db);
+      };
+
+      // BFS flood-fill from all 4 corners
+      const visited = new Uint8Array(w * h);
+      const queue: number[] = [];
+      for (const ci of cornerIdxs) {
+        const pixIdx = ci / 4;
+        if (!visited[pixIdx] && data[ci + 3] > 200 && colorDist(ci) < TOLERANCE) {
+          visited[pixIdx] = 1;
+          queue.push(pixIdx);
+        }
+      }
+
+      while (queue.length > 0) {
+        const p = queue.pop()!;
+        const i = p * 4;
+        const dist = colorDist(i);
+        // Soft fade near the tolerance boundary to avoid hard fringing
+        data[i + 3] = dist < TOLERANCE * 0.55
+          ? 0
+          : Math.round(255 * ((dist - TOLERANCE * 0.55) / (TOLERANCE * 0.45)));
+
+        const x = p % w, y = Math.floor(p / w);
+        for (const n of [
+          y > 0     ? p - w : -1,
+          y < h - 1 ? p + w : -1,
+          x > 0     ? p - 1 : -1,
+          x < w - 1 ? p + 1 : -1,
+        ]) {
+          if (n < 0 || visited[n]) continue;
+          const ni = n * 4;
+          if (data[ni + 3] > 200 && colorDist(ni) < TOLERANCE) {
+            visited[n] = 1;
+            queue.push(n);
+          }
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.src = dataUrl;
+  });
+}
+
 // ─── Component ──────────────────────────────────────────
 const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) => {
   const [form, setForm] = useState<VendorFormData>({ ...emptyForm });
@@ -219,6 +309,25 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
   const addAddress = (type: VendorAddress['type'] = 'billing') => setForm(p => ({ ...p, additional_addresses: [...p.additional_addresses, newAddress(type)] }));
   const updateAddress = (id: string, patch: Partial<VendorAddress>) => setForm(p => ({ ...p, additional_addresses: p.additional_addresses.map(a => a.id === id ? { ...a, ...patch } : a) }));
   const removeAddress = (id: string) => setForm(p => ({ ...p, additional_addresses: p.additional_addresses.filter(a => a.id !== id) }));
+
+  const handleLogoUpload = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { alert('Logo must be smaller than 5 MB'); return; }
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const raw = e.target?.result as string;
+        const processed = await removeBackground(raw);
+        setForm(p => ({ ...p, logo_data: processed }));
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }, []);
 
   const handleSubmit = async () => {
     if (saving) return;
@@ -348,71 +457,39 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                 <div className="flex items-start gap-4 mb-4">
                   {form.logo_data ? (
                     <div className="flex flex-col items-start gap-2">
-                      <img
-                        src={form.logo_data}
-                        alt="Vendor logo"
-                        style={{ maxWidth: 160, maxHeight: 80, objectFit: 'contain', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', padding: 6, background: 'var(--color-bg-secondary)' }}
-                      />
-                      <button
-                        type="button"
-                        className="block-btn text-xs"
-                        style={{ color: 'var(--color-accent-expense)' }}
-                        onClick={() => setForm(p => ({ ...p, logo_data: '' }))}
-                      >
-                        Remove logo
-                      </button>
+                      {/* Checkerboard behind preview so transparency is visible */}
+                      <div style={{
+                        backgroundImage: 'linear-gradient(45deg,#ccc 25%,transparent 25%),linear-gradient(-45deg,#ccc 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ccc 75%),linear-gradient(-45deg,transparent 75%,#ccc 75%)',
+                        backgroundSize: '12px 12px', backgroundPosition: '0 0,0 6px,6px -6px,-6px 0',
+                        border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', padding: 6,
+                      }}>
+                        <img
+                          src={form.logo_data}
+                          alt="Vendor logo"
+                          style={{ maxWidth: 160, maxHeight: 80, objectFit: 'contain', display: 'block' }}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="button" className="block-btn text-xs" onClick={handleLogoUpload}>Replace</button>
+                        <button
+                          type="button"
+                          className="block-btn text-xs"
+                          style={{ color: 'var(--color-accent-expense)' }}
+                          onClick={() => setForm(p => ({ ...p, logo_data: '' }))}
+                        >Remove</button>
+                      </div>
                     </div>
                   ) : (
                     <div
                       style={{ width: 160, height: 80, border: '2px dashed var(--color-border-primary)', borderRadius: 'var(--app-radius)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: 'var(--color-bg-secondary)' }}
-                      onClick={() => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml';
-                        input.onchange = () => {
-                          const file = input.files?.[0];
-                          if (!file) return;
-                          if (file.size > 500 * 1024) { alert('Logo must be smaller than 500 KB'); return; }
-                          const reader = new FileReader();
-                          reader.onload = (e) => {
-                            const dataUrl = e.target?.result as string;
-                            setForm(p => ({ ...p, logo_data: dataUrl }));
-                          };
-                          reader.readAsDataURL(file);
-                        };
-                        input.click();
-                      }}
+                      onClick={handleLogoUpload}
                     >
                       <span className="text-xs text-text-muted">Click to upload logo</span>
                     </div>
                   )}
-                  {form.logo_data && (
-                    <button
-                      type="button"
-                      className="block-btn text-xs self-end"
-                      onClick={() => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml';
-                        input.onchange = () => {
-                          const file = input.files?.[0];
-                          if (!file) return;
-                          if (file.size > 500 * 1024) { alert('Logo must be smaller than 500 KB'); return; }
-                          const reader = new FileReader();
-                          reader.onload = (e) => {
-                            const dataUrl = e.target?.result as string;
-                            setForm(p => ({ ...p, logo_data: dataUrl }));
-                          };
-                          reader.readAsDataURL(file);
-                        };
-                        input.click();
-                      }}
-                    >
-                      Replace logo
-                    </button>
-                  )}
-                  <p className="text-xs text-text-muted self-center" style={{ maxWidth: 200 }}>
-                    Shown on expense prints next to vendor info. PNG, JPG, GIF, WebP or SVG, max 500 KB.
+                  <p className="text-xs text-text-muted self-center" style={{ maxWidth: 220 }}>
+                    Shown on expense prints. Background is auto-removed to make the logo transparent.
+                    PNG, JPG, GIF, WebP or SVG — max 5 MB.
                   </p>
                 </div>
 

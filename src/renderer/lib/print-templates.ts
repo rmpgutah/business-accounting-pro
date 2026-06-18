@@ -3483,7 +3483,7 @@ export function generateExpenseReceiptHTML(
   // Vendor logo: stored as a data-URI (base64). Grayscale to match the classic B&W theme.
   const vendorLogoSrc = vendor?.logo_data;
   const vendorLogoHTML = vendorLogoSrc && /^data:image\//i.test(String(vendorLogoSrc))
-    ? `<div style="margin-bottom:6px;"><img src="${cesc(String(vendorLogoSrc))}" alt="Vendor logo" style="max-width:140px;max-height:56px;object-fit:contain;filter:grayscale(1);display:block;"></div>`
+    ? `<div style="margin-bottom:6px;"><img src="${cesc(String(vendorLogoSrc))}" alt="Vendor logo" style="max-width:140px;max-height:56px;object-fit:contain;display:block;"></div>`
     : '';
   const vendorHtml =
     vendorLogoHTML +
