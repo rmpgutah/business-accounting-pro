@@ -682,6 +682,8 @@ export function initDatabase(): Database.Database {
   "ALTER TABLE expense_line_items ADD COLUMN tax_jurisdictions TEXT DEFAULT '[]'",
   // Per-line billing: 1 = this line is billable/rebillable to client_id; 0 = company-only cost.
   "ALTER TABLE expense_line_items ADD COLUMN is_billable INTEGER DEFAULT 0",
+  // Invoice payment upload: file path of an uploaded payment proof / remittance.
+  "ALTER TABLE payments ADD COLUMN attachment_path TEXT DEFAULT ''",
   "ALTER TABLE expenses ADD COLUMN is_tax_deductible INTEGER DEFAULT 1",
   "ALTER TABLE expenses ADD COLUMN schedule_c_line TEXT DEFAULT ''",
   "ALTER TABLE expenses ADD COLUMN foreign_tax_amount REAL DEFAULT 0",

@@ -393,15 +393,27 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         ? (localStorage.getItem('expenses:last-used-date') || todayLocal())
         : todayLocal();
     const taxRateDefault = Number(get('expenses-default-tax-rate') ?? 0);
+    // FALLBACK REPAIR: the store's get() ALWAYS returns the descriptor default
+    // (never null), so the old `?? emptyForm.x` fallbacks were dead code — an
+    // out-of-set descriptor default leaked straight into the field. Descriptor
+    // defaults are free-text/label values that don't always match this form's
+    // option set (the payment-method descriptor defaults to 'card', which is
+    // NOT one of this form's values), so seed a field only when the value is
+    // valid; otherwise fall back to emptyForm.
+    const pickValid = (raw: unknown, allowed: string[], fallback: string): string => {
+      const v = String(raw ?? '').trim();
+      return v && allowed.includes(v) ? v : fallback;
+    };
+    const currencyPref = String(get('expenses-default-currency') ?? '').trim().toUpperCase();
     return {
       ...emptyForm,
       date: startDate,
-      payment_method: String(get('expenses-default-payment-method') ?? '') || emptyForm.payment_method,
-      currency: String(get('expenses-default-currency') ?? 'usd').toUpperCase() || emptyForm.currency,
-      is_billable: Boolean(get('expenses-default-billable') ?? false),
-      is_reimbursable: Boolean(get('expenses-default-reimbursable') ?? false),
-      status: String(get('expenses-default-status') ?? emptyForm.status),
-      tax_inclusive: Boolean(get('expenses-default-tax-inclusive') ?? emptyForm.tax_inclusive),
+      payment_method: pickValid(get('expenses-default-payment-method'), PAYMENT_METHODS.map((m) => m.value), emptyForm.payment_method),
+      currency: /^[A-Z]{3}$/.test(currencyPref) ? currencyPref : emptyForm.currency,
+      is_billable: Boolean(get('expenses-default-billable')),
+      is_reimbursable: Boolean(get('expenses-default-reimbursable')),
+      status: pickValid(get('expenses-default-status'), ['pending', 'approved', 'paid'], emptyForm.status),
+      tax_inclusive: Boolean(get('expenses-default-tax-inclusive')),
       tax_rate: taxRateDefault > 0 ? String(taxRateDefault) : emptyForm.tax_rate,
       // We intentionally keep `category_id`/`vendor_id`/`account_id` empty —
       // the descriptors store FREE-TEXT names ("Operating Checking") which

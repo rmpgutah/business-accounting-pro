@@ -522,6 +522,7 @@ CREATE TABLE IF NOT EXISTS payments (
   payment_method TEXT DEFAULT '',
   reference TEXT DEFAULT '',
   notes TEXT DEFAULT '',
+  attachment_path TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 );
 

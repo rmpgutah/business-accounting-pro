@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
+import { optionKey } from '../../customization/registry';
 import ClientContacts, { ClientContact } from './ClientContacts';
 import {
   CLIENT_TIER, CLIENT_INDUSTRY, CLIENT_SEGMENT, CLIENT_LIFECYCLE, CLIENT_RISK,
@@ -80,6 +82,36 @@ const EMPTY_CLIENT: ClientData = {
   risk_rating: '',
 };
 
+// Seed a NEW client from the Clients › Defaults customization options. Mirrors
+// the Expense form's robust pattern: a customization default is honored only
+// when it's a VALID value for the field; otherwise the EMPTY_CLIENT default is
+// kept. Descriptor values are labels (status enum, "net30", "United States")
+// that don't map 1:1 to the form's field types, so each is validated/converted.
+function seededClientDefaults(): Partial<ClientData> {
+  const get = (id: string) => useCustomizationStore.getState().get(optionKey('clients', id));
+  const out: Partial<ClientData> = {};
+
+  const status = String(get('clients-default-status') ?? '').trim().toLowerCase();
+  if (status === 'active' || status === 'inactive' || status === 'prospect') out.status = status;
+
+  // Payment terms: descriptor is a label ("net30", "due_on_receipt"); field is a number of days.
+  const ptRaw = String(get('clients-default-payment-terms') ?? '').trim().toLowerCase();
+  if (ptRaw) {
+    if (ptRaw === 'due_on_receipt' || ptRaw === 'receipt' || ptRaw === 'net0') out.payment_terms = 0;
+    else { const m = ptRaw.match(/\d+/); if (m) out.payment_terms = Number(m[0]); }
+  }
+
+  // Country: descriptor may be a name ("United States"); field stores a code.
+  const country = String(get('clients-default-country') ?? '').trim();
+  if (/^[A-Za-z]{2}$/.test(country)) out.country = country.toUpperCase();
+  else if (/^(united states|usa|u\.?s\.?a?\.?)$/i.test(country)) out.country = 'US';
+
+  const creditLimit = Number(get('clients-default-credit-limit'));
+  if (Number.isFinite(creditLimit) && creditLimit > 0) out.credit_limit = creditLimit;
+
+  return out;
+}
+
 interface ClientFormProps {
   clientId?: string | null;
   onClose: () => void;
@@ -102,8 +134,14 @@ const Field: React.FC<{
 
 // ─── Component ──────────────────────────────────────────
 const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) => {
-  const [data, setData] = useState<ClientData>({ ...EMPTY_CLIENT });
-  const [paymentTermsRaw, setPaymentTermsRaw] = useState<string>(String(EMPTY_CLIENT.payment_terms));
+  // New clients seed from the Clients › Defaults customization (validated);
+  // editing a client ignores them — the load effect overwrites with the row.
+  const initialClient = useMemo<ClientData>(
+    () => (clientId ? { ...EMPTY_CLIENT } : { ...EMPTY_CLIENT, ...seededClientDefaults() }),
+    [clientId],
+  );
+  const [data, setData] = useState<ClientData>(initialClient);
+  const [paymentTermsRaw, setPaymentTermsRaw] = useState<string>(String(initialClient.payment_terms));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
