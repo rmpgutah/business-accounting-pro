@@ -555,6 +555,11 @@ const api = {
     window.electronAPI.invoke('invoice:from-time-entries', { project_id, company_id }),
   invoiceFromBillableExpenses: (opts: { client_id?: string; project_id?: string; company_id: string }) =>
     window.electronAPI.invoke('invoice:from-billable-expenses', opts),
+  // Push local users + their pbkdf2 hashes up to the cloud companion so the
+  // user can sign in on the cloud with their existing desktop password.
+  // Idempotent — re-runs just refresh hashes. Handler: cloud:bootstrap-users.
+  cloudBootstrapUsers: (): Promise<{ ok?: boolean; error?: string; imported?: { users?: number; companies?: number } }> =>
+    window.electronAPI.invoke('cloud:bootstrap-users'),
 
   // ─── Debt Collection ─────────────────────────
   debtStats: (companyId: string): Promise<{

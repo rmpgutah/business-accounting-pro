@@ -137,10 +137,12 @@ interface ExpenseLineItem {
   discount_percent?: number;
   is_tax_deductible?: boolean;
   is_tax_exempt?: boolean;
-  is_billable?: boolean;
   notes?: string;
   item_type?: 'item' | 'service' | 'reimbursement';
   tags?: string[];
+  // Per-line billable-to-client. Independent of the header is_billable so a
+  // single expense can mix billable and non-billable items. billed_invoice_id
+  // is stamped when the line is added to an invoice (suppresses re-billing).
   is_billable?: boolean;
   billed_invoice_id?: string | null;
 }
@@ -876,10 +878,11 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
                 discount_percent: l.discount_percent || 0,
                 is_tax_deductible: l.is_tax_deductible == null ? true : !!l.is_tax_deductible,
                 is_tax_exempt: !!l.is_tax_exempt,
-                is_billable: !!l.is_billable,
                 notes: l.notes || '',
                 item_type: (l.item_type as any) || 'item',
                 tags: parseJSON<string[]>(l.tags, []),
+                // Per-line billable + invoice-stamp survives round-trip so the
+                // bundler treats already-invoiced lines as such.
                 is_billable: !!l.is_billable,
                 billed_invoice_id: l.billed_invoice_id || null,
               })));
@@ -1171,7 +1174,6 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             discount_percent: li.discount_percent || 0,
             is_tax_deductible: li.is_tax_deductible === false ? 0 : 1,
             is_tax_exempt: li.is_tax_exempt ? 1 : 0,
-            is_billable: li.is_billable ? 1 : 0,
             notes: li.notes || null,
             item_type: li.item_type || 'item',
             tags: JSON.stringify(li.tags || []),

@@ -146,10 +146,6 @@ export interface IzLine {
   category_id?: string;
   project_id?: string;
   client_id?: string;
-  // Per-line billing: when is_billable is true, this line is billable/rebillable
-  // to the selected client_id (vs. a company-only cost). Used for reporting and
-  // reimbursable/rebill filtering.
-  is_billable?: boolean;
   discount_amount?: number;
   discount_percent?: number;
   is_tax_deductible?: boolean;
@@ -157,10 +153,12 @@ export interface IzLine {
   notes?: string;
   item_type?: 'item' | 'service' | 'reimbursement';
   tags?: string[];
-  // Bill this line to its client_id. Independent of the header is_billable
-  // flag so a single expense can mix billable + non-billable items.
+  // Per-line billing: when true AND a client_id is set, this line is
+  // billable/rebillable to that client (vs. a company-only cost). Independent
+  // of the header is_billable so a single expense can mix billable + non-billable.
   is_billable?: boolean;
-  // Stamped when this line is added to an invoice. Suppresses re-billing.
+  // Stamped when this line is added to an invoice — suppresses re-billing
+  // by the billable-bundler IPC.
   billed_invoice_id?: string | null;
 }
 
@@ -241,7 +239,7 @@ const makeId = () => crypto.randomUUID();
 const emptyLine = (): IzLine => ({
   id: makeId(), description: '', quantity: 1, unit_price: 0, amount: 0, account_id: '',
   tax_rate: 0, tax_amount: 0, tax_jurisdictions: [],
-  category_id: '', project_id: '', client_id: '', is_billable: false,
+  category_id: '', project_id: '', client_id: '',
   discount_amount: 0, discount_percent: 0,
   is_tax_deductible: true, is_tax_exempt: false,
   notes: '', item_type: 'item', tags: [],
