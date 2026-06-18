@@ -9341,6 +9341,9 @@ export function initDatabase(): Database.Database {
   )`,
   "CREATE INDEX IF NOT EXISTS idx_wage_withholding_employee ON employee_wage_withholdings(employee_id)",
   "CREATE INDEX IF NOT EXISTS idx_wage_withholding_debt ON employee_wage_withholdings(debt_id)",
+  // Vendor logo: stored as base64 data-URI so it embeds directly in PDF output
+  // (file:// URIs are blocked by Electron's headless PDF renderer).
+  "ALTER TABLE vendors ADD COLUMN logo_data TEXT DEFAULT ''",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

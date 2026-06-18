@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS vendors (
   notes TEXT DEFAULT '',
   status TEXT DEFAULT 'active' CHECK(status IN ('active','inactive')),
   custom_fields TEXT DEFAULT '{}',
+  logo_data TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );

@@ -52,6 +52,7 @@ interface VendorFormData {
   status: string;
   website: string;
   business_registration_no: string;
+  logo_data: string;
   email: string;
   phone: string;
   address: string;
@@ -97,7 +98,7 @@ const newContact = (primary = false): VendorContact => ({ id: crypto.randomUUID(
 const newAddress = (type: VendorAddress['type'] = 'billing'): VendorAddress => ({ id: crypto.randomUUID(), type, line1: '', line2: '', city: '', state: '', zip: '', country: 'US' });
 
 const emptyForm: VendorFormData = {
-  name: '', vendor_type: '', status: 'active', website: '', business_registration_no: '',
+  name: '', vendor_type: '', status: 'active', website: '', business_registration_no: '', logo_data: '',
   email: '', phone: '', address: '', notes: '',
   contacts: [], additional_addresses: [],
   tax_id: '', w9_status: 'not_collected', is_1099_eligible: false, form_1099_box: '',
@@ -153,6 +154,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
             status: data.status || 'active',
             website: data.website || '',
             business_registration_no: data.business_registration_no || '',
+            logo_data: data.logo_data || '',
             email: data.email || '',
             phone: data.phone || '',
             address: data.address || '',
@@ -234,6 +236,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
         status: form.status,
         website: form.website || null,
         business_registration_no: form.business_registration_no || null,
+        logo_data: form.logo_data || null,
         email: form.email || null,
         phone: form.phone || null,
         address: form.address || null,
@@ -340,6 +343,79 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
 
             {!loading && tab === 'identity' && (
               <div>
+                {/* Vendor Logo */}
+                <div className="tform-section">Vendor Logo</div>
+                <div className="flex items-start gap-4 mb-4">
+                  {form.logo_data ? (
+                    <div className="flex flex-col items-start gap-2">
+                      <img
+                        src={form.logo_data}
+                        alt="Vendor logo"
+                        style={{ maxWidth: 160, maxHeight: 80, objectFit: 'contain', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', padding: 6, background: 'var(--color-bg-secondary)' }}
+                      />
+                      <button
+                        type="button"
+                        className="block-btn text-xs"
+                        style={{ color: 'var(--color-accent-expense)' }}
+                        onClick={() => setForm(p => ({ ...p, logo_data: '' }))}
+                      >
+                        Remove logo
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      style={{ width: 160, height: 80, border: '2px dashed var(--color-border-primary)', borderRadius: 'var(--app-radius)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: 'var(--color-bg-secondary)' }}
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml';
+                        input.onchange = () => {
+                          const file = input.files?.[0];
+                          if (!file) return;
+                          if (file.size > 500 * 1024) { alert('Logo must be smaller than 500 KB'); return; }
+                          const reader = new FileReader();
+                          reader.onload = (e) => {
+                            const dataUrl = e.target?.result as string;
+                            setForm(p => ({ ...p, logo_data: dataUrl }));
+                          };
+                          reader.readAsDataURL(file);
+                        };
+                        input.click();
+                      }}
+                    >
+                      <span className="text-xs text-text-muted">Click to upload logo</span>
+                    </div>
+                  )}
+                  {form.logo_data && (
+                    <button
+                      type="button"
+                      className="block-btn text-xs self-end"
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml';
+                        input.onchange = () => {
+                          const file = input.files?.[0];
+                          if (!file) return;
+                          if (file.size > 500 * 1024) { alert('Logo must be smaller than 500 KB'); return; }
+                          const reader = new FileReader();
+                          reader.onload = (e) => {
+                            const dataUrl = e.target?.result as string;
+                            setForm(p => ({ ...p, logo_data: dataUrl }));
+                          };
+                          reader.readAsDataURL(file);
+                        };
+                        input.click();
+                      }}
+                    >
+                      Replace logo
+                    </button>
+                  )}
+                  <p className="text-xs text-text-muted self-center" style={{ maxWidth: 200 }}>
+                    Shown on expense prints next to vendor info. PNG, JPG, GIF, WebP or SVG, max 500 KB.
+                  </p>
+                </div>
+
                 <div className="tform-section">Basic Identity</div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>

@@ -3480,7 +3480,13 @@ export function generateExpenseReceiptHTML(
     vendor?.address_line2,
     [vendor?.city, vendor?.state, vendor?.zip].filter(Boolean).join(', '),
   ].filter(Boolean).map(l => cesc(l as string)).join('<br>');
+  // Vendor logo: stored as a data-URI (base64). Grayscale to match the classic B&W theme.
+  const vendorLogoSrc = vendor?.logo_data;
+  const vendorLogoHTML = vendorLogoSrc && /^data:image\//i.test(String(vendorLogoSrc))
+    ? `<div style="margin-bottom:6px;"><img src="${cesc(String(vendorLogoSrc))}" alt="Vendor logo" style="max-width:140px;max-height:56px;object-fit:contain;filter:grayscale(1);display:block;"></div>`
+    : '';
   const vendorHtml =
+    vendorLogoHTML +
     `<b>${cesc(vendor?.name || expense.vendor_name || '—')}</b>` +
     (vendorAddrHtml ? '<br>' + vendorAddrHtml : '') +
     (vendor?.phone   ? '<br>' + cesc(vendor.phone)   : '') +
