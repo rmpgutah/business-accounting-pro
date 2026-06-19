@@ -551,7 +551,7 @@ async function loadPortalContext(env: Env, token: string): Promise<{ clientId: s
 function simpleErrorPage(msg: string): string {
   // Minimal styled error — same tokens as the shell so it doesn't look orphaned.
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error</title>
-<style>body{font-family:-apple-system,sans-serif;background:#050508;color:#e4e4ef;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:20px}.box{max-width:420px;background:#0e0e14;border:1px solid #1e1e2e;border-radius:2px;padding:32px}.box h1{font-size:1.3rem;color:#fff;margin:0 0 12px;font-weight:800}.box p{color:#8888a0;font-size:0.95rem;margin:0}</style></head>
+<style>body{font-family:-apple-system,sans-serif;background:#0a0a0a;color:#f0f0f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:20px}.box{max-width:420px;background:#141414;border:1px solid #2e2e2e;border-radius:2px;padding:32px}.box h1{font-size:1.3rem;color:#f0f0f0;margin:0 0 12px;font-weight:800}.box p{color:#a0a0a0;font-size:0.95rem;margin:0}</style></head>
 <body><div class="box"><h1>Access denied</h1><p>${esc(msg)}</p></div></body></html>`;
 }
 
