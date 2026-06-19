@@ -743,8 +743,9 @@ app.post('/api/rpc/public', async (c) => {
 app.post('/api/rpc', requireUserAPI, async (c) => {
   const body = await c.req.json<{ channel: string; args: any[] }>();
   const cid = c.get('companyId') ?? '';
+  const uid = c.get('userId') ?? '';
   try {
-    const result = await handleRpc(body.channel, body.args || [], cid, c.env.DB, c.env.JWT_SECRET);
+    const result = await handleRpc(body.channel, body.args || [], cid, c.env.DB, c.env.JWT_SECRET, uid);
     return c.json(result ?? null);
   } catch (err: any) {
     return c.json({ error: err?.message || 'RPC error' }, 400);
