@@ -319,7 +319,7 @@ function buildCFHTML(cur: CashFlowData, prior: CashFlowData | null, companyName:
 
 // ─── On-screen comparative rows ─────────────────────────
 const SectionHeader: React.FC<{ label: string; compare: boolean }> = ({ label, compare }) => (
-  <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
+  <tr style={{ background: 'var(--color-bg-elevated)' }}>
     <td colSpan={compare ? 4 : 2} className="px-6 py-2 text-xs font-bold text-text-primary uppercase tracking-wider">{label}</td>
   </tr>
 );
@@ -332,7 +332,7 @@ const Row: React.FC<{ line: CompLine; indent?: number; bold?: boolean; total?: b
   const v = variance(line.current, line.prior);
   const cs = basePct ? ` · ${((line.current / basePct) * 100).toFixed(1)}%` : '';
   return (
-    <tr className={total ? 'border-b-2 border-border-primary' : 'border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors'} style={total ? { background: 'rgba(255,255,255,0.02)' } : undefined}>
+    <tr className={total ? 'border-b-2 border-border-primary' : 'border-b border-border-primary/30 hover:bg-bg-hover/30 transition-colors'} style={total ? { background: 'var(--color-bg-elevated)' } : undefined}>
       <td className={`py-1.5 text-xs ${bold || total ? 'font-bold text-text-primary' : 'text-text-secondary'}`} style={{ paddingLeft: `${24 + indent * 18}px` }}>
         {line.name}{basePct ? <span className="text-text-muted font-normal">{cs}</span> : null}
       </td>
@@ -492,7 +492,7 @@ const FinancialStatements: React.FC = () => {
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${tab === t.id ? 'text-white' : 'text-text-secondary hover:text-text-primary'}`}
-              style={{ borderRadius: '6px', background: tab === t.id ? 'rgba(59,130,246,0.8)' : 'rgba(255,255,255,0.04)' }}>
+              style={{ borderRadius: '6px', background: tab === t.id ? 'var(--color-accent-blue)' : 'var(--color-border-primary)' }}>
               {t.label}
             </button>
           ))}
@@ -550,7 +550,7 @@ const FinancialStatements: React.FC = () => {
         <div className="flex items-center justify-center h-64 text-text-muted text-sm font-mono">Loading statement...</div>
       ) : (
         <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
-          <div className="px-6 py-4 border-b border-border-primary" style={{ background: 'rgba(255,255,255,0.02)' }}>
+          <div className="px-6 py-4 border-b border-border-primary" style={{ background: 'var(--color-bg-elevated)' }}>
             <h2 className="text-sm font-bold text-text-primary">{companyName}</h2>
             <p className="text-xs text-text-muted mt-0.5">
               {tab === 'pnl' && `Profit & Loss: ${startDate} to ${endDate}`}

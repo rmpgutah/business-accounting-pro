@@ -544,11 +544,11 @@ const GLAnalytics: React.FC = () => {
       <Card title="Journal Entry Volume — Last 12 Months">
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={jeVolume}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis dataKey="label" stroke="#9ca3af" fontSize={11} />
-            <YAxis stroke="#9ca3af" fontSize={11} />
-            <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151' }} />
-            <Bar dataKey="count" fill="#3b82f6" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" />
+            <XAxis dataKey="label" stroke="var(--color-text-muted)" fontSize={11} />
+            <YAxis stroke="var(--color-text-muted)" fontSize={11} />
+            <Tooltip contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--structure)' }} />
+            <Bar dataKey="count" fill="var(--color-accent-blue)" />
           </BarChart>
         </ResponsiveContainer>
       </Card>
@@ -560,11 +560,11 @@ const GLAnalytics: React.FC = () => {
         ) : (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={topAccountsByActivity} layout="vertical" margin={{ left: 140 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis type="number" stroke="#9ca3af" fontSize={11} />
-              <YAxis dataKey="name" type="category" stroke="#9ca3af" fontSize={10} width={140} />
-              <Tooltip contentStyle={{ background: '#1f2937', border: '1px solid #374151' }} />
-              <Bar dataKey="count" fill="#22c55e" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" />
+              <XAxis type="number" stroke="var(--color-text-muted)" fontSize={11} />
+              <YAxis dataKey="name" type="category" stroke="var(--color-text-muted)" fontSize={10} width={140} />
+              <Tooltip contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--structure)' }} />
+              <Bar dataKey="count" fill="var(--color-accent-income)" />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -581,7 +581,7 @@ const GLAnalytics: React.FC = () => {
                 <Pie data={bySource} dataKey="value" nameKey="name" outerRadius={90} label={(e: any) => `${e.name}`}>
                   {bySource.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ background: '#1f2937', border: '1px solid #374151' }} />
+                <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--structure)' }} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -597,11 +597,11 @@ const GLAnalytics: React.FC = () => {
               </div>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={cashPosition.rows}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} hide />
-                  <YAxis stroke="#9ca3af" fontSize={11} />
-                  <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ background: '#1f2937', border: '1px solid #374151' }} />
-                  <Line type="monotone" dataKey="balance" stroke="#06b6d4" dot={false} strokeWidth={2} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" />
+                  <XAxis dataKey="date" stroke="var(--color-text-muted)" fontSize={10} hide />
+                  <YAxis stroke="var(--color-text-muted)" fontSize={11} />
+                  <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--structure)' }} />
+                  <Line type="monotone" dataKey="balance" stroke="var(--color-accent-blue)" dot={false} strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </>
@@ -637,14 +637,14 @@ const GLAnalytics: React.FC = () => {
           <>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={accountHistory}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="label" stroke="#9ca3af" fontSize={11} />
-                <YAxis stroke="#9ca3af" fontSize={11} />
-                <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ background: '#1f2937', border: '1px solid #374151' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" />
+                <XAxis dataKey="label" stroke="var(--color-text-muted)" fontSize={11} />
+                <YAxis stroke="var(--color-text-muted)" fontSize={11} />
+                <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--structure)' }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="debit" fill="#3b82f6" name="Debits" />
-                <Bar dataKey="credit" fill="#ef4444" name="Credits" />
-                <Line type="monotone" dataKey="balance" stroke="#22c55e" name="Running Balance" />
+                <Bar dataKey="debit" fill="var(--color-accent-blue)" name="Debits" />
+                <Bar dataKey="credit" fill="var(--color-accent-expense)" name="Credits" />
+                <Line type="monotone" dataKey="balance" stroke="var(--color-accent-income)" name="Running Balance" />
               </BarChart>
             </ResponsiveContainer>
             <div className="overflow-auto max-h-96 mt-3">

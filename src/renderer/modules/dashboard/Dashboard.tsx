@@ -181,7 +181,7 @@ function actionBadgeStyle(action: string): { bg: string; text: string } {
     case 'delete':
       return { bg: 'var(--color-accent-expense-bg)', text: 'var(--color-accent-expense)' };
     default:
-      return { bg: 'rgba(255,255,255,0.06)', text: 'var(--color-text-muted)' };
+      return { bg: 'var(--color-border-primary)', text: 'var(--color-text-muted)' };
   }
 }
 
@@ -282,7 +282,7 @@ const TreemapContent: React.FC<any> = (props: any) => {
         height={height}
         style={{
           fill: fill || CHART_INCOME,
-          stroke: '#0a0a0a',
+          stroke: 'var(--color-bg-base)',
           strokeWidth: 2,
         }}
       />
@@ -292,7 +292,7 @@ const TreemapContent: React.FC<any> = (props: any) => {
             x={x + width / 2}
             y={y + height / 2 - 7}
             textAnchor="middle"
-            fill="#fff"
+            fill="var(--color-text-on-solid)"
             fontSize={11}
             fontWeight={600}
           >
@@ -302,9 +302,10 @@ const TreemapContent: React.FC<any> = (props: any) => {
             x={x + width / 2}
             y={y + height / 2 + 9}
             textAnchor="middle"
-            fill="#ffffffaa"
+            fill="var(--color-text-on-solid)"
             fontSize={10}
             fontFamily="monospace"
+            opacity={0.67}
           >
             {fmtCompact(size)}
           </text>
@@ -946,7 +947,7 @@ const Dashboard: React.FC = () => {
           in print/PDF, where .report-summary-tiles collapses it to an inline
           summary line. */}
       {isOn('kpis') && (
-      <div className={`grid ${isMini('kpis') ? 'grid-cols-8' : 'grid-cols-4'} report-summary-tiles print-only`} style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
+      <div className={`hidden print:grid ${isMini('kpis') ? 'grid-cols-8' : 'grid-cols-4'} report-summary-tiles`} style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
         <KpiTile
           label="Revenue"
           value={stats.revenue}
@@ -1328,7 +1329,7 @@ const Dashboard: React.FC = () => {
                     type="monotone"
                     dataKey="lower"
                     stroke="none"
-                    fill="#0a0a0a"
+                    fill="var(--color-bg-base)"
                     fillOpacity={1}
                   />
                   <Line
@@ -1336,7 +1337,7 @@ const Dashboard: React.FC = () => {
                     dataKey="projected"
                     stroke={CHART_SERIES[2]}
                     strokeWidth={2}
-                    dot={{ r: 4, fill: CHART_SERIES[2], stroke: '#0a0a0a', strokeWidth: 2 }}
+                    dot={{ r: 4, fill: CHART_SERIES[2], stroke: 'var(--color-bg-base)', strokeWidth: 2 }}
                     activeDot={{ r: 6, fill: CHART_SERIES[2] }}
                   />
                 </AreaChart>
@@ -1386,7 +1387,7 @@ const Dashboard: React.FC = () => {
                   data={expenseCategories as any[]}
                   dataKey="size"
                   nameKey="name"
-                  stroke="#0a0a0a"
+                  stroke="var(--color-bg-base)"
                   content={<TreemapContent />}
                 />
               </ResponsiveContainer>
@@ -1523,7 +1524,7 @@ const Dashboard: React.FC = () => {
                   <div
                     key={entry.id}
                     className="activity-feed-row flex items-center gap-3 py-3"
-                    style={{ borderBottom: '1px solid #2e2e2e' }}
+                    style={{ borderBottom: '1px solid var(--hairline)' }}
                   >
                     <span
                       className="text-[10px] font-mono font-semibold uppercase px-2 py-1"
@@ -1576,7 +1577,7 @@ const Dashboard: React.FC = () => {
                     <div
                       key={inv.id}
                       className="flex items-center gap-3 py-3"
-                      style={{ borderBottom: '1px solid #2e2e2e' }}
+                      style={{ borderBottom: '1px solid var(--hairline)' }}
                     >
                       <span
                         style={{
@@ -1644,7 +1645,7 @@ const Dashboard: React.FC = () => {
                     <DataBar
                       value={client.total_paid}
                       total={maxClientRevenue}
-                      color="#3b82f6"
+                      color="var(--color-accent-blue)"
                       thickness={6}
                     />
                   </div>

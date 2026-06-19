@@ -46,11 +46,11 @@ type SortKey = 'issue_date' | 'due_date' | 'total' | 'days_outstanding';
 
 const TYPE_BADGE_COLORS: Record<string, string> = {
   standard:    '',
-  service:     '#3b82f6',
-  product:     '#8b5cf6',
-  retainer:    '#d97706',
-  credit_note: '#22c55e',
-  proforma:    '#6b7280',
+  service:     'var(--color-accent-blue)',
+  product:     'var(--color-accent-purple)',
+  retainer:    'var(--color-accent-warning)',
+  credit_note: 'var(--color-accent-income)',
+  proforma:    'var(--color-text-muted)',
 };
 
 interface Client {
@@ -207,12 +207,12 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
 
   // Helper: risk dot color based on aging
   const riskColor = (inv: Invoice): string => {
-    if (inv.status === 'paid') return '#22c55e';
+    if (inv.status === 'paid') return 'var(--color-accent-income)';
     const d = daysOutstanding(inv);
-    if (d <= 0) return '#22c55e';
-    if (d <= 30) return '#facc15';
-    if (d <= 60) return '#f97316';
-    return '#ef4444';
+    if (d <= 0) return 'var(--color-accent-income)';
+    if (d <= 30) return 'var(--color-accent-warning)';
+    if (d <= 60) return 'var(--color-accent-warning)';
+    return 'var(--color-accent-expense)';
   };
 
   // Overdue → debt conversion
@@ -828,16 +828,16 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       {candidates.length > 0 && !bannerDismissed && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '10px 16px', background: 'rgba(239,68,68,0.08)',
-          border: '1px solid #ef4444', borderRadius: 6,
+          padding: '10px 16px', background: 'var(--color-accent-expense-bg)',
+          border: '1px solid var(--color-accent-expense)', borderRadius: 6,
         }}>
-          <span style={{ fontSize: 13, color: '#ef4444', fontWeight: 600 }}>
+          <span style={{ fontSize: 13, color: 'var(--color-accent-expense)', fontWeight: 600 }}>
             {candidates.length} overdue invoice{candidates.length !== 1 ? 's' : ''} eligible for debt collection
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="block-btn text-xs py-1 px-3"
-              style={{ color: '#ef4444', borderColor: '#ef4444' }}
+              style={{ color: 'var(--color-accent-expense)', borderColor: 'var(--color-accent-expense)' }}
               onClick={() => setShowConvertModal(true)}
             >
               Review
@@ -1048,9 +1048,9 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 const rowBg = isSelected
                   ? undefined // handled via Tailwind class below
                   : prefs.overdueHighlight && isOverdue
-                    ? 'rgba(239, 68, 68, 0.06)'
+                    ? 'var(--color-accent-expense-bg)'
                     : prefs.zebra && rowIdx % 2 === 1
-                      ? 'rgba(255, 255, 255, 0.02)'
+                      ? 'var(--hairline)'
                       : undefined;
                 return (
                   <tr
@@ -1086,8 +1086,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         {inv.invoice_type && inv.invoice_type !== 'standard' && (
                           <span style={{
                             fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, textTransform: 'uppercase',
-                            background: (TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280') + '22',
-                            color: TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280',
+                            background: 'var(--color-bg-elevated)',
+                            color: TYPE_BADGE_COLORS[inv.invoice_type] || 'var(--color-text-muted)',
                           }}>
                             {humanizeLabel(inv.invoice_type)}
                           </span>
@@ -1127,12 +1127,12 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={badge.className}>{badge.label}</span>
                         {(inv as any).dunning_stage > 0 && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'var(--color-accent-warning-bg)', color: 'var(--color-accent-warning)' }}>
                             {['', 'REMIND', 'FIRM', 'FINAL', 'COLLECT'][(inv as any).dunning_stage] || `D${(inv as any).dunning_stage}`}
                           </span>
                         )}
                         {(inv as any).late_fee_applied === 1 && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444422', color: '#f87171' }}>FEE</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'var(--color-accent-expense-bg)', color: 'var(--color-accent-expense)' }}>FEE</span>
                         )}
                       </div>
                     </td>
@@ -1163,7 +1163,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
-            background: 'rgba(18,20,28,0.80)',
+            background: 'var(--color-bg-elevated)',
             borderRadius: '6px',
             minWidth: '500px',
           }}
@@ -1194,7 +1194,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleExportSelected}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export CSV
@@ -1215,7 +1215,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               setTimeout(() => setFeedback(null), 4000);
             }}
             disabled={batchLoading}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <FileText size={13} />
             Export PDF
@@ -1226,7 +1226,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             onClick={handleBulkSendReminders}
             disabled={batchLoading}
             title="Schedule reminders for selected invoices"
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Bell size={13} />
             Send Reminders
@@ -1237,7 +1237,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             onClick={handleBulkApplyLateFee}
             disabled={batchLoading}
             title="Apply late fees to all eligible invoices"
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <DollarSign size={13} />
             Apply Late Fee
@@ -1247,7 +1247,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             <button
               className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
               onClick={() => setShowBulkTag(true)}
-              style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <TagIcon size={13} />
               Tag
@@ -1274,7 +1274,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => { setShowBulkTag(false); setBulkTagText(''); }}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>
@@ -1316,7 +1316,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => setShowDeleteConfirm(false)}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

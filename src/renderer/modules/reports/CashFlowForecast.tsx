@@ -88,9 +88,9 @@ const CashFlowForecast: React.FC<Props> = ({ onBack }) => {
           <div className="block-card" style={{ padding: 16, marginBottom: 12 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
               <Stat label="Starting" value={fmt$(data.totals.startingBalance)} />
-              <Stat label="Inflows" value={fmt$(data.totals.inflow)} color="#16a34a" />
-              <Stat label="Outflows" value={fmt$(data.totals.outflow)} color="#dc2626" />
-              <Stat label="Net" value={fmt$(data.totals.net)} color={data.totals.net >= 0 ? '#16a34a' : '#dc2626'} />
+              <Stat label="Inflows" value={fmt$(data.totals.inflow)} color="var(--color-accent-income)" />
+              <Stat label="Outflows" value={fmt$(data.totals.outflow)} color="var(--color-accent-expense)" />
+              <Stat label="Net" value={fmt$(data.totals.net)} color={data.totals.net >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)'} />
               <Stat label="Ending" value={fmt$(data.totals.endingBalance)} highlight />
             </div>
           </div>
@@ -99,8 +99,8 @@ const CashFlowForecast: React.FC<Props> = ({ onBack }) => {
           {dangerCrossed && (
             <div style={{
               padding: 12,
-              border: '1px solid var(--color-warning, #d97706)',
-              borderLeft: '3px solid var(--color-warning, #d97706)',
+              border: '1px solid var(--color-warning)',
+              borderLeft: '3px solid var(--color-warning)',
               background: 'rgba(217, 119, 6, 0.08)',
               borderRadius: 6,
               marginBottom: 12,
@@ -108,7 +108,7 @@ const CashFlowForecast: React.FC<Props> = ({ onBack }) => {
               gap: 10,
               alignItems: 'flex-start',
             }}>
-              <AlertTriangle size={16} style={{ color: 'var(--color-warning, #d97706)', flexShrink: 0, marginTop: 2 }} />
+              <AlertTriangle size={16} style={{ color: 'var(--color-warning)', flexShrink: 0, marginTop: 2 }} />
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-primary)' }}>
                   Projected cash shortfall on {data.lowestBalance.date}
@@ -134,10 +134,10 @@ const CashFlowForecast: React.FC<Props> = ({ onBack }) => {
                 {data.projection.filter((p) => p.inflow > 0 || p.outflow > 0).map((p) => (
                   <tr key={p.date} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
                     <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace' }}>{p.date}</td>
-                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: p.inflow > 0 ? '#16a34a' : 'var(--color-text-muted)' }}>{p.inflow > 0 ? fmt$(p.inflow) : '—'}</td>
-                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: p.outflow > 0 ? '#dc2626' : 'var(--color-text-muted)' }}>{p.outflow > 0 ? fmt$(p.outflow) : '—'}</td>
-                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 600, color: p.net >= 0 ? '#16a34a' : '#dc2626' }}>{fmt$(p.net)}</td>
-                    <td style={{ padding: '6px 10px', fontSize: 12, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700, color: p.balance < 0 ? '#dc2626' : 'var(--color-text-primary)' }}>{fmt$(p.balance)}</td>
+                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: p.inflow > 0 ? 'var(--color-accent-income)' : 'var(--color-text-muted)' }}>{p.inflow > 0 ? fmt$(p.inflow) : '—'}</td>
+                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: p.outflow > 0 ? 'var(--color-accent-expense)' : 'var(--color-text-muted)' }}>{p.outflow > 0 ? fmt$(p.outflow) : '—'}</td>
+                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 600, color: p.net >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)' }}>{fmt$(p.net)}</td>
+                    <td style={{ padding: '6px 10px', fontSize: 12, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700, color: p.balance < 0 ? 'var(--color-accent-expense)' : 'var(--color-text-primary)' }}>{fmt$(p.balance)}</td>
                     <td style={{ padding: '6px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>
                       <span title={p.entries.map((e) => e.reference + ' ' + (e.type === 'inflow' ? '+' : '-') + fmt$(e.amount)).join(' · ')}>
                         {p.entries.length} {p.entries.length === 1 ? 'item' : 'items'}

@@ -409,7 +409,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
                       <div className="lf-disclosure-name">Loan Estimate (LE)</div>
                       <div className="lf-disclosure-meta">3-page TRID disclosure — required within 3 business days of application</div>
                     </div>
-                    <span className="lf-disclosure-status" style={{ background: 'rgba(96,165,250,0.15)', color: '#60a5fa' }}>Generate later</span>
+                    <span className="lf-disclosure-status" style={{ background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>Generate later</span>
                   </div>
                   <div className="lf-disclosure-card">
                     <div className="lf-disclosure-icon"><FileText size={18} /></div>
@@ -417,7 +417,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
                       <div className="lf-disclosure-name">Closing Disclosure (CD)</div>
                       <div className="lf-disclosure-meta">5-page document required 3 business days before closing</div>
                     </div>
-                    <span className="lf-disclosure-status" style={{ background: 'rgba(96,165,250,0.15)', color: '#60a5fa' }}>Generate later</span>
+                    <span className="lf-disclosure-status" style={{ background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>Generate later</span>
                   </div>
                 </>
               )}
@@ -427,7 +427,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
                   <div className="lf-disclosure-name">Truth in Lending (TIL)</div>
                   <div className="lf-disclosure-meta">APR, finance charge, amount financed, total of payments</div>
                 </div>
-                <span className="lf-disclosure-status" style={{ background: 'rgba(96,165,250,0.15)', color: '#60a5fa' }}>Generate later</span>
+                <span className="lf-disclosure-status" style={{ background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>Generate later</span>
               </div>
               {(selectedType.key === 'business' || selectedType.key === 'sba' || selectedType.key === 'personal') && (
                 <div className="lf-disclosure-card">
@@ -436,7 +436,7 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
                     <div className="lf-disclosure-name">Promissory Note</div>
                     <div className="lf-disclosure-meta">Borrower's written promise to repay — required for non-mortgage loans</div>
                   </div>
-                  <span className="lf-disclosure-status" style={{ background: 'rgba(96,165,250,0.15)', color: '#60a5fa' }}>Generate later</span>
+                  <span className="lf-disclosure-status" style={{ background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>Generate later</span>
                 </div>
               )}
             </div>

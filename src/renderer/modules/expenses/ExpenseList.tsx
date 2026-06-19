@@ -832,17 +832,17 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 {/* NOTE: SQLite stores booleans as 0/1 integers. Use ternaries or
                     !! coercion — a bare `{flag && <X/>}` renders a literal "0" when
                     flag is the integer 0 (the stray-0 bug fixed here). */}
-                {exp.is_recurring ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>RECURRING</span> : null}
-                {(!!exp.is_reimbursable && !exp.reimbursed) ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>REIMBURSE</span> : null}
-                {exp.reimbursed ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#16a34a22', color: '#16a34a' }}>REIMBURSED</span> : null}
+                {exp.is_recurring ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>RECURRING</span> : null}
+                {(!!exp.is_reimbursable && !exp.reimbursed) ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>REIMBURSE</span> : null}
+                {exp.reimbursed ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>REIMBURSED</span> : null}
                 {matchHint ? <span title="A bank transaction matches this expense" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#06b6d422', color: '#06b6d4' }}><Banknote size={10} style={{ display: 'inline', marginRight: 2 }} />MATCH?</span> : null}
                 {exp.custom_fields && exp.custom_fields !== '{}' && <span title="Has detailed info"><FileText size={12} className="text-accent-blue shrink-0" /></span>}
-                {exp.flagged_for_review ? <span title={exp.flag_reason || 'Flagged for review'} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444422', color: '#ef4444' }}>FLAGGED</span> : null}
-                {exp.auto_categorized ? <span title="Auto-categorized" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#a855f722', color: '#a855f7' }}>AUTO</span> : null}
-                {(exp as any).related_debt_id ? <span title={`Collection cost${(exp as any).is_recoverable ? ' (recoverable from debtor)' : ''}`} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}>DEBT{(exp as any).is_recoverable ? '·R' : ''}</span> : null}
+                {exp.flagged_for_review ? <span title={exp.flag_reason || 'Flagged for review'} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>FLAGGED</span> : null}
+                {exp.auto_categorized ? <span title="Auto-categorized" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-purple) 13%, transparent)', color: 'var(--color-accent-purple)' }}>AUTO</span> : null}
+                {(exp as any).related_debt_id ? <span title={`Collection cost${(exp as any).is_recoverable ? ' (recoverable from debtor)' : ''}`} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>DEBT{(exp as any).is_recoverable ? '·R' : ''}</span> : null}
                 {Number((exp as any).allocation_count) > 0 ? <span title={`Split across ${(exp as any).allocation_count} allocation target${Number((exp as any).allocation_count) !== 1 ? 's' : ''}`} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#0ea5e922', color: '#38bdf8' }}>SPLIT×{(exp as any).allocation_count}</span> : null}
-                {isAnomaly ? <span title="Unusually high amount for this vendor" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444433', color: '#ef4444' }}>ANOMALY</span> : null}
-                {isRecent ? <span title="Added in the last 3 days" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#22c55e22', color: '#22c55e' }}>NEW</span> : null}
+                {isAnomaly ? <span title="Unusually high amount for this vendor" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 20%, transparent)', color: 'var(--color-accent-expense)' }}>ANOMALY</span> : null}
+                {isRecent ? <span title="Added in the last 3 days" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>NEW</span> : null}
                 {/* Capture #2: receipt thumbnail with hover preview */}
                 {exp.receipt_path ? (
                   <span className="relative group inline-flex" title={exp.receipt_path.split(/[/\\]/).pop()}>
@@ -875,8 +875,8 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               <span className="inline-flex items-center gap-1.5" onDoubleClick={(e) => { e.stopPropagation(); startEdit(exp.id, 'category_id', exp.category_id || ''); }}>
                 <span className="inline-block w-2 h-2 shrink-0" style={{ background: exp.category_color || '#6b7280', borderRadius: '50%' }} />
                 <span className="truncate">{exp.category_name || '-'}</span>
-                {exp.vendor_is_1099 ? <span title="1099-relevant" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: '#2563eb22', color: '#60a5fa' }}>1099</span> : null}
-                {exp.is_tax_deductible === 0 ? <span title="Non-deductible" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: '#6b728022', color: '#94a3b8' }}>NON-DED</span> : null}
+                {exp.vendor_is_1099 ? <span title="1099-relevant" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>1099</span> : null}
+                {exp.is_tax_deductible === 0 ? <span title="Non-deductible" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', color: 'var(--color-text-muted)' }}>NON-DED</span> : null}
               </span>
             )}
           </td>
@@ -892,7 +892,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               <div className="flex items-center gap-1">
                 <EntityChip type="project" id={exp.project_id} label={exp.project_name || ''} variant="inline" />
                 {proj && (proj.budget || 0) > 0 && (
-                  <span title={`${formatCurrency(projBal)} of ${formatCurrency(proj.budget || 0)} budget`} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 4, background: projOver ? '#ef444422' : '#22c55e22', color: projOver ? '#ef4444' : '#22c55e' }}>
+                  <span title={`${formatCurrency(projBal)} of ${formatCurrency(proj.budget || 0)} budget`} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 4, background: projOver ? 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)' : 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: projOver ? 'var(--color-accent-expense)' : 'var(--color-accent-income)' }}>
                     {projOver ? 'OVER' : `${Math.round((projBal / (proj.budget || 1)) * 100)}%`}
                   </span>
                 )}
@@ -934,13 +934,13 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             {(() => {
               const a = (exp.approval_status || '').toLowerCase();
               const map: Record<string, { bg: string; fg: string; label: string }> = {
-                approved: { bg: '#16a34a22', fg: '#16a34a', label: 'APPROVED' },
-                pending: { bg: '#d9770622', fg: '#f59e0b', label: 'PENDING' },
-                submitted: { bg: '#2563eb22', fg: '#60a5fa', label: 'SUBMITTED' },
-                rejected: { bg: '#ef444422', fg: '#ef4444', label: 'REJECTED' },
-                draft: { bg: '#6b728022', fg: '#94a3b8', label: 'DRAFT' },
+                approved: { bg: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', fg: 'var(--color-accent-income)', label: 'APPROVED' },
+                pending: { bg: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', fg: 'var(--color-accent-warning)', label: 'PENDING' },
+                submitted: { bg: 'var(--color-accent-blue-bg)', fg: 'var(--color-accent-blue)', label: 'SUBMITTED' },
+                rejected: { bg: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', fg: 'var(--color-accent-expense)', label: 'REJECTED' },
+                draft: { bg: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', fg: 'var(--color-text-muted)', label: 'DRAFT' },
               };
-              const s = map[a] || { bg: '#6b728022', fg: '#94a3b8', label: (exp.approval_status || '-').toUpperCase() };
+              const s = map[a] || { bg: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', fg: 'var(--color-text-muted)', label: (exp.approval_status || '-').toUpperCase() };
               return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: s.bg, color: s.fg }}>{s.label}</span>;
             })()}
           </td>
@@ -955,9 +955,9 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         {colVisible('taxded') && (
           <td>
             {exp.is_tax_deductible === 0 ? (
-              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#6b728022', color: '#94a3b8' }}>Non-Deductible</span>
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', color: 'var(--color-text-muted)' }}>Non-Deductible</span>
             ) : (
-              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#16a34a22', color: '#16a34a' }}>Deductible</span>
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>Deductible</span>
             )}
           </td>
         )}
@@ -1474,7 +1474,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={() => setShowBulkEdit(true)}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '6px 12px' }}
           >
             <Edit size={13} /> Bulk Edit
           </button>
@@ -1510,7 +1510,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 alert(e?.message || 'Bulk link failed');
               }
             }}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '6px 12px' }}
             title="Link selected expenses to a debt-collection case as collection costs"
           >
             <Scale size={13} /> Link to Debt
@@ -1527,7 +1527,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               if (v === 'paid') setBulkStatusConfirm('paid');
               else handleBulkStatus(v);
             }}
-            style={{ background: 'rgba(28,30,38,0.65)', color: 'var(--color-text-primary)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 10px' }}
+            style={{ background: 'var(--color-bg-elevated)', color: 'var(--color-text-primary)', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '6px 10px' }}
           >
             <option value="">Change status…</option>
             <option value="pending">Pending</option>
@@ -1545,7 +1545,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               e.target.value = '';
               if (id) handleBatchRecategorize(id);
             }}
-            style={{ background: 'rgba(28,30,38,0.65)', color: 'var(--color-text-primary)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 10px' }}
+            style={{ background: 'var(--color-bg-elevated)', color: 'var(--color-text-primary)', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '6px 10px' }}
             title="Re-categorize selected"
           >
             <option value="">Re-categorize...</option>
@@ -1558,7 +1558,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleExportSelected}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export CSV
@@ -1569,7 +1569,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBulkAutoCategorize}
             disabled={batchLoading}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(168,85,247,0.40)', color: '#a855f7', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-purple) 40%, transparent)', color: 'var(--color-accent-purple)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             title="Auto-categorize via vendor history"
           >
             Auto-Cat
@@ -1578,7 +1578,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBulkFlag}
             disabled={batchLoading}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(239,68,68,0.40)', color: '#ef4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-expense) 40%, transparent)', color: 'var(--color-accent-expense)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             title="Flag selected for review"
           >
             Flag
@@ -1587,7 +1587,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBulkMarkDeductible}
             disabled={batchLoading}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(34,197,94,0.40)', color: '#16a34a', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-income) 40%, transparent)', color: 'var(--color-accent-income)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             title="Mark as tax deductible"
           >
             Tax-Ded
@@ -1596,7 +1596,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBulkConvertUSD}
             disabled={batchLoading}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(96,165,250,0.40)', color: '#60a5fa', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-blue) 40%, transparent)', color: 'var(--color-accent-blue)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             title="Convert to USD"
           >
             → USD
@@ -1625,7 +1625,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => setShowDeleteConfirm(false)}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

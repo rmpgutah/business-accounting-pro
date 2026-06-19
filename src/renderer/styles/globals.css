@@ -281,7 +281,10 @@ body {
 }
 
 /* ─── Print ─────────────────────────────────────────────── */
-.print-only { display: none !important; }
+/* Elements that must be invisible on screen but appear in print/PDF output */
+.print-only,
+.print-report-header,
+.print-report-footer { display: none !important; }
 
 @media print {
   /* Hide app chrome when printing a module view */
@@ -303,6 +306,8 @@ body {
   }
   .no-print { display: none !important; }
   .print-only { display: grid !important; }
+  .print-report-header { display: block !important; }
+  .print-report-footer { display: flex !important; }
   tr, td, th { page-break-inside: avoid; break-inside: avoid; }
   thead { display: table-header-group; }
 }

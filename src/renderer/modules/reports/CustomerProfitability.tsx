@@ -90,10 +90,10 @@ const CustomerProfitability: React.FC<Props> = ({ onBack }) => {
           <div className="block-card" style={{ padding: 16, marginBottom: 12 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
               <Stat label="Clients" value={String(data.totals.client_count)} />
-              <Stat label="Revenue" value={fmt$(data.totals.revenue)} color="#16a34a" />
-              <Stat label="Direct Expenses" value={fmt$(data.totals.expenses)} color="#dc2626" />
-              <Stat label="Profit" value={fmt$(data.totals.profit)} highlight color={data.totals.profit >= 0 ? '#16a34a' : '#dc2626'} />
-              <Stat label="Unpaid AR" value={fmt$(data.totals.unpaid)} color="#d97706" />
+              <Stat label="Revenue" value={fmt$(data.totals.revenue)} color="var(--color-accent-income)" />
+              <Stat label="Direct Expenses" value={fmt$(data.totals.expenses)} color="var(--color-accent-expense)" />
+              <Stat label="Profit" value={fmt$(data.totals.profit)} highlight color={data.totals.profit >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)'} />
+              <Stat label="Unpaid AR" value={fmt$(data.totals.unpaid)} color="var(--color-accent-warning)" />
             </div>
           </div>
 
@@ -144,11 +144,11 @@ const CustomerProfitability: React.FC<Props> = ({ onBack }) => {
                       {r.client_email && <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{r.client_email}</div>}
                     </td>
                     <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{r.invoice_count}</td>
-                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>{fmt$(r.revenue)}</td>
-                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: r.expenses > 0 ? '#dc2626' : 'var(--color-text-muted)' }}>{r.expenses > 0 ? fmt$(r.expenses) : '—'}</td>
-                    <td style={{ padding: '6px 10px', fontSize: 12, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700, color: r.profit >= 0 ? '#16a34a' : '#dc2626' }}>{fmt$(r.profit)}</td>
-                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: r.margin_pct >= 30 ? '#16a34a' : r.margin_pct < 0 ? '#dc2626' : 'var(--color-text-muted)' }}>{r.margin_pct.toFixed(1)}%</td>
-                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: r.unpaid > 0 ? '#d97706' : 'var(--color-text-muted)' }}>{r.unpaid > 0 ? fmt$(r.unpaid) : '—'}</td>
+                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-income)' }}>{fmt$(r.revenue)}</td>
+                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: r.expenses > 0 ? 'var(--color-accent-expense)' : 'var(--color-text-muted)' }}>{r.expenses > 0 ? fmt$(r.expenses) : '—'}</td>
+                    <td style={{ padding: '6px 10px', fontSize: 12, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700, color: r.profit >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)' }}>{fmt$(r.profit)}</td>
+                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: r.margin_pct >= 30 ? 'var(--color-accent-income)' : r.margin_pct < 0 ? 'var(--color-accent-expense)' : 'var(--color-text-muted)' }}>{r.margin_pct.toFixed(1)}%</td>
+                    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: r.unpaid > 0 ? 'var(--color-accent-warning)' : 'var(--color-text-muted)' }}>{r.unpaid > 0 ? fmt$(r.unpaid) : '—'}</td>
                   </tr>
                 ))}
                 {sorted.length === 0 && (

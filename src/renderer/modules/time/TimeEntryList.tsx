@@ -209,7 +209,7 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
                 style={{
                   borderBottom:
                     idx < group.entries.length - 1
-                      ? '1px solid #2e2e2e'
+                      ? '1px solid var(--hairline)'
                       : 'none',
                 }}
               >

@@ -87,7 +87,7 @@ const PaymentScheduleEditor: React.FC<Props> = ({ milestones, onChange, totalAmo
           Add Milestone
         </button>
         {remaining !== null && milestones.length > 0 && (
-          <div style={{ fontSize: '12px', color: remaining < -0.005 ? '#ef4444' : remaining > 0.005 ? '#d97706' : '#16a34a' }}>
+          <div style={{ fontSize: '12px', color: remaining < -0.005 ? 'var(--color-accent-expense)' : remaining > 0.005 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)' }}>
             Allocated: {fmt.format(allocatedTotal)}
             {' · '}
             {remaining > 0.005 ? `Remaining: ${fmt.format(remaining)}` : remaining < -0.005 ? `Over by: ${fmt.format(-remaining)}` : 'Fully allocated ✓'}

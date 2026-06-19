@@ -330,8 +330,9 @@ const AnomalyDetector: React.FC<Props> = ({ accounts, entries, lines, vendors = 
                   {heatmap.grid[i].map((v, h) => {
                     const intensity = heatmap.max ? v / heatmap.max : 0;
                     const after = (h >= 20 || h < 6 || i === 0 || i === 6);
-                    const bg = v === 0 ? 'transparent' : `rgba(${after ? '239,68,68' : '59,130,246'}, ${0.15 + intensity * 0.85})`;
-                    return <td key={h} title={`${d} ${h}:00 — ${v} JEs`} style={{ background: bg, width: 18, height: 18, textAlign: 'center', border: '1px solid #1f2937' }}>{v || ''}</td>;
+                    const alpha = 0.15 + intensity * 0.85;
+                    const bg = v === 0 ? 'transparent' : `color-mix(in srgb, ${after ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)'} ${Math.round(alpha * 100)}%, transparent)`;
+                    return <td key={h} title={`${d} ${h}:00 — ${v} JEs`} style={{ background: bg, width: 18, height: 18, textAlign: 'center', border: '1px solid var(--color-border-secondary)' }}>{v || ''}</td>;
                   })}
                 </tr>
               ))}

@@ -139,7 +139,7 @@ const WeeklySummary: React.FC<WeeklySummaryProps> = ({
               className="h-full"
               style={{
                 width: `${stats.billablePercent}%`,
-                backgroundColor: '#22c55e',
+                backgroundColor: 'var(--color-accent-income)',
                 transition: 'width 0.3s ease',
               }}
             />
@@ -147,7 +147,7 @@ const WeeklySummary: React.FC<WeeklySummaryProps> = ({
               className="h-full"
               style={{
                 width: `${100 - stats.billablePercent}%`,
-                backgroundColor: '#3a3a3a',
+                backgroundColor: 'var(--color-border-primary)',
               }}
             />
           </div>
@@ -185,10 +185,10 @@ const WeeklySummary: React.FC<WeeklySummaryProps> = ({
                     style={{
                       height: `${Math.max(heightPct, minutes > 0 ? 4 : 0)}%`,
                       backgroundColor: isToday
-                        ? '#3b82f6'
+                        ? 'var(--color-accent-blue)'
                         : minutes > 0
-                        ? '#22c55e'
-                        : '#2e2e2e',
+                        ? 'var(--color-accent-income)'
+                        : 'var(--color-border-primary)',
                       borderRadius: '1px 1px 0 0',
                       transition: 'height 0.3s ease',
                     }}

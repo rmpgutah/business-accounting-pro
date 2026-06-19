@@ -70,7 +70,7 @@ const KpiCard: React.FC<{
   hint?: string;
   icon?: React.ReactNode;
   accent?: string;
-}> = ({ label, value, hint, icon, accent = '#3b82f6' }) => (
+}> = ({ label, value, hint, icon, accent = 'var(--color-accent-blue)' }) => (
   <div className="block-card p-4" style={{ borderRadius: '6px' }}>
     <div className="flex items-start justify-between mb-2">
       <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
@@ -353,11 +353,11 @@ const QuoteAnalytics: React.FC = () => {
     return (
       <div
         style={{
-          background: 'rgba(248,113,113,0.08)',
-          border: '1px solid #ef4444',
+          background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
+          border: '1px solid var(--color-accent-expense)',
           borderRadius: '6px',
           padding: '12px 16px',
-          color: '#ef4444',
+          color: 'var(--color-accent-expense)',
           fontSize: '13px',
         }}
       >
@@ -384,28 +384,28 @@ const QuoteAnalytics: React.FC = () => {
           value={avgSalesCycle.days ? `${avgSalesCycle.days}d` : '—'}
           hint={`${avgSalesCycle.count} closed deal${avgSalesCycle.count === 1 ? '' : 's'}`}
           icon={<Clock size={14} />}
-          accent="#3b82f6"
+          accent="var(--color-accent-blue)"
         />
         <KpiCard
           label="Forecast (Weighted)"
           value={formatCurrency(forecast.weighted)}
           hint={`Raw pipeline ${formatCurrency(forecast.raw)}`}
           icon={<Target size={14} />}
-          accent="#22c55e"
+          accent="var(--color-accent-income)"
         />
         <KpiCard
           label="Open Quotes"
           value={String(forecast.count)}
           hint="Draft + Sent"
           icon={<DollarSign size={14} />}
-          accent="#f59e0b"
+          accent="var(--color-accent-warning)"
         />
         <KpiCard
           label="Lost Deals"
           value={String(quotes.filter((q) => q.status === 'rejected').length)}
           hint={`${lostReasonData.length} unique reason${lostReasonData.length === 1 ? '' : 's'}`}
           icon={<TrendingUp size={14} />}
-          accent="#ef4444"
+          accent="var(--color-accent-expense)"
         />
       </div>
 
@@ -420,12 +420,12 @@ const QuoteAnalytics: React.FC = () => {
           <ResponsiveContainer>
             <LineChart data={winRateTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="month" stroke="#6b7280" fontSize={11} />
-              <YAxis stroke="#6b7280" fontSize={11} domain={[0, 100]} />
+              <XAxis dataKey="month" stroke="var(--color-text-muted)" fontSize={11} />
+              <YAxis stroke="var(--color-text-muted)" fontSize={11} domain={[0, 100]} />
               <Tooltip
                 contentStyle={{
-                  background: '#1a1b22',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'var(--color-bg-elevated)',
+                  border: '1px solid var(--color-border-primary)',
                   borderRadius: '6px',
                   fontSize: '12px',
                 }}
@@ -438,7 +438,7 @@ const QuoteAnalytics: React.FC = () => {
                 type="monotone"
                 dataKey="winRate"
                 name="Win %"
-                stroke="#22c55e"
+                stroke="var(--color-accent-income)"
                 strokeWidth={2}
                 dot={{ r: 3 }}
               />
@@ -446,7 +446,7 @@ const QuoteAnalytics: React.FC = () => {
                 type="monotone"
                 dataKey="wins"
                 name="Wins"
-                stroke="#3b82f6"
+                stroke="var(--color-accent-blue)"
                 strokeWidth={1}
                 dot={{ r: 2 }}
               />
@@ -454,7 +454,7 @@ const QuoteAnalytics: React.FC = () => {
                 type="monotone"
                 dataKey="losses"
                 name="Losses"
-                stroke="#ef4444"
+                stroke="var(--color-accent-expense)"
                 strokeWidth={1}
                 dot={{ r: 2 }}
               />
@@ -475,17 +475,17 @@ const QuoteAnalytics: React.FC = () => {
             <ResponsiveContainer>
               <BarChart data={conversionHistogram}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="label" stroke="#6b7280" fontSize={11} />
-                <YAxis stroke="#6b7280" fontSize={11} allowDecimals={false} />
+                <XAxis dataKey="label" stroke="var(--color-text-muted)" fontSize={11} />
+                <YAxis stroke="var(--color-text-muted)" fontSize={11} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{
-                    background: '#1a1b22',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border-primary)',
                     borderRadius: '6px',
                     fontSize: '12px',
                   }}
                 />
-                <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="var(--color-accent-blue)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -522,8 +522,8 @@ const QuoteAnalytics: React.FC = () => {
                   </Pie>
                   <Tooltip
                     contentStyle={{
-                      background: '#1a1b22',
-                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: 'var(--color-bg-elevated)',
+                      border: '1px solid var(--color-border-primary)',
                       borderRadius: '6px',
                       fontSize: '12px',
                     }}
@@ -589,22 +589,22 @@ const QuoteAnalytics: React.FC = () => {
             <ResponsiveContainer>
               <BarChart data={pipelineVelocity}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="stage" stroke="#6b7280" fontSize={11} />
+                <XAxis dataKey="stage" stroke="var(--color-text-muted)" fontSize={11} />
                 <YAxis
-                  stroke="#6b7280"
+                  stroke="var(--color-text-muted)"
                   fontSize={11}
                   tickFormatter={(v) => formatCurrency(v)}
                 />
                 <Tooltip
                   contentStyle={{
-                    background: '#1a1b22',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border-primary)',
                     borderRadius: '6px',
                     fontSize: '12px',
                   }}
                   formatter={(v: any) => formatCurrency(Number(v))}
                 />
-                <Bar dataKey="avgValue" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="avgValue" fill="var(--color-accent-purple)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -636,8 +636,8 @@ const QuoteAnalytics: React.FC = () => {
                 </Pie>
                 <Tooltip
                   contentStyle={{
-                    background: '#1a1b22',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border-primary)',
                     borderRadius: '6px',
                     fontSize: '12px',
                   }}
@@ -664,12 +664,12 @@ const QuoteAnalytics: React.FC = () => {
             <ResponsiveContainer>
               <BarChart data={closeBySize}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="size" stroke="#6b7280" fontSize={11} />
-                <YAxis stroke="#6b7280" fontSize={11} allowDecimals={false} />
+                <XAxis dataKey="size" stroke="var(--color-text-muted)" fontSize={11} />
+                <YAxis stroke="var(--color-text-muted)" fontSize={11} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{
-                    background: '#1a1b22',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border-primary)',
                     borderRadius: '6px',
                     fontSize: '12px',
                   }}
@@ -678,8 +678,8 @@ const QuoteAnalytics: React.FC = () => {
                   }
                 />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="avgDays" name="Avg days" fill="#06b6d4" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="deals" name="Deals" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="avgDays" name="Avg days" fill="var(--color-accent-blue)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="deals" name="Deals" fill="var(--color-accent-warning)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

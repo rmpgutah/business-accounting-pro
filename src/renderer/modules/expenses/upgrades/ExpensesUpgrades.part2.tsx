@@ -51,16 +51,25 @@ interface DaysToPayRow { vendor_id: string; name: string; avg_days: number; paid
 // ─── Theme color tokens (read at runtime; never hard-coded hex) ──────────
 function tokenColors() {
   if (typeof window === 'undefined') {
-    return { income: '#10b981', expense: '#f43f5e', blue: '#3b82f6', warning: '#f59e0b', muted: '#94a3b8' };
+    // SSR / test path: return CSS var() strings so intent is preserved even
+    // when computed styles are unavailable. Chromium SVG honours var() in
+    // presentation attributes, so these are safe to pass to fill/stroke/style.
+    return {
+      income: 'var(--color-accent-income)',
+      expense: 'var(--color-accent-expense)',
+      blue: 'var(--color-accent-blue)',
+      warning: 'var(--color-accent-warning)',
+      muted: 'var(--color-text-muted)',
+    };
   }
   const cs = getComputedStyle(document.documentElement);
   const read = (name: string, fallback: string) => (cs.getPropertyValue(name).trim() || fallback);
   return {
-    income: read('--color-accent-income', '#10b981'),
-    expense: read('--color-accent-expense', '#f43f5e'),
-    blue: read('--color-accent-blue', '#3b82f6'),
-    warning: read('--color-accent-warning', '#f59e0b'),
-    muted: read('--color-text-muted', '#94a3b8'),
+    income: read('--color-accent-income', 'var(--color-accent-income)'),
+    expense: read('--color-accent-expense', 'var(--color-accent-expense)'),
+    blue: read('--color-accent-blue', 'var(--color-accent-blue)'),
+    warning: read('--color-accent-warning', 'var(--color-accent-warning)'),
+    muted: read('--color-text-muted', 'var(--color-text-muted)'),
   };
 }
 

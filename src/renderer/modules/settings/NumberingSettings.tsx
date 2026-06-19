@@ -173,7 +173,7 @@ const NumberingSettings: React.FC = () => {
                 {gapsResult[seq.entity_type].error ? (
                   <span className="text-accent-expense">Error: {gapsResult[seq.entity_type].error}</span>
                 ) : gapsResult[seq.entity_type].gaps?.length === 0 ? (
-                  <span style={{ color: '#10b981' }}>No gaps. {gapsResult[seq.entity_type].total ?? 0} records.</span>
+                  <span style={{ color: 'var(--color-accent-income)' }}>No gaps. {gapsResult[seq.entity_type].total ?? 0} records.</span>
                 ) : (
                   <span>Gaps detected: {(gapsResult[seq.entity_type].gaps || []).slice(0, 20).join(', ')}{gapsResult[seq.entity_type].gaps?.length > 20 ? '…' : ''}</span>
                 )}

@@ -119,7 +119,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
           <div className="text-[9px] font-bold uppercase tracking-wider text-text-muted">7-Day Velocity</div>
           {velocity ? (
             <>
-              <div className="text-lg font-bold font-mono mt-1" style={{ color: velocity.isAccelerating ? '#ef4444' : 'var(--color-text-primary)' }}>
+              <div className="text-lg font-bold font-mono mt-1" style={{ color: velocity.isAccelerating ? 'var(--color-accent-expense)' : 'var(--color-text-primary)' }}>
                 {velocity.velocityPct > 0 ? '+' : ''}{velocity.velocityPct}%
               </div>
               <div className="text-[10px] text-text-muted">{formatCurrency(velocity.recentSpend)} vs {formatCurrency(velocity.priorPeriodSpend)} prior week{velocity.isAccelerating ? ' · ACCELERATING' : ''}</div>
@@ -139,7 +139,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
           <div className="text-[9px] font-bold uppercase tracking-wider text-text-muted">Expense : Revenue (YTD)</div>
           {ratio ? (
             <>
-              <div className="text-lg font-bold font-mono mt-1" style={{ color: ratio.ratio > 80 ? '#ef4444' : ratio.ratio > 60 ? '#f59e0b' : '#16a34a' }}>{ratio.ratio}%</div>
+              <div className="text-lg font-bold font-mono mt-1" style={{ color: ratio.ratio > 80 ? 'var(--color-accent-expense)' : ratio.ratio > 60 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)' }}>{ratio.ratio}%</div>
               <div className="text-[10px] text-text-muted">{formatCurrency(ratio.ytdExpenses)} of {formatCurrency(ratio.ytdRevenue)}</div>
             </>
           ) : <div className="text-text-muted text-xs mt-1">—</div>}
@@ -148,7 +148,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
           <div className="text-[9px] font-bold uppercase tracking-wider text-text-muted">Category Concentration</div>
           {concentration ? (
             <>
-              <div className="text-lg font-bold font-mono mt-1 capitalize" style={{ color: concentration.concentration === 'high' ? '#ef4444' : concentration.concentration === 'moderate' ? '#f59e0b' : '#16a34a' }}>
+              <div className="text-lg font-bold font-mono mt-1 capitalize" style={{ color: concentration.concentration === 'high' ? 'var(--color-accent-expense)' : concentration.concentration === 'moderate' ? 'var(--color-accent-warning)' : 'var(--color-accent-income)' }}>
                 {concentration.concentration}
               </div>
               <div className="text-[10px] text-text-muted">HHI {concentration.hhi} across {concentration.categories} categories</div>
@@ -170,7 +170,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
                       <Td mono>{formatDate(d.date)}</Td>
                       <Td>{d.vendor_name || '—'}</Td>
                       <Td>{(d.description || '').slice(0, 40)}</Td>
-                      <Td right mono color="#f59e0b">{formatCurrency(d.amount)} ×2</Td>
+                      <Td right mono color="var(--color-accent-warning)">{formatCurrency(d.amount)} ×2</Td>
                       <Td right>
                         <button className="block-btn text-[10px]" onClick={() => open(d.id2)}>Review</button>
                       </Td>
@@ -228,7 +228,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
                 <div key={b.label} className="flex items-center gap-2 text-[11px]">
                   <span style={{ width: 70 }} className="text-text-muted">{b.label}</span>
                   <div style={{ flex: 1, height: 6, background: 'var(--color-bg-tertiary)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(100, (b.count / Math.max(1, ...aging.map((x: any) => x.count))) * 100)}%`, height: '100%', background: b.label.startsWith('90') || b.label.startsWith('61') ? '#ef4444' : '#60a5fa' }} />
+                    <div style={{ width: `${Math.min(100, (b.count / Math.max(1, ...aging.map((x: any) => x.count))) * 100)}%`, height: '100%', background: b.label.startsWith('90') || b.label.startsWith('61') ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)' }} />
                   </div>
                   <span className="font-mono" style={{ width: 90, textAlign: 'right' }}>{b.count} · {formatCurrency(b.total)}</span>
                 </div>
@@ -256,7 +256,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
                       <Td right mono>{formatCurrency(r.avg_amount)}</Td>
                       <Td right mono>{r.avg_days_apart}d</Td>
                       <Td right mono>{formatCurrency(r.est_monthly)}</Td>
-                      <Td right mono color="#f59e0b">{formatCurrency(r.est_annual)}</Td>
+                      <Td right mono color="var(--color-accent-warning)">{formatCurrency(r.est_annual)}</Td>
                       <Td right mono>{r.occurrences}×</Td>
                     </tr>
                   ))}
@@ -278,7 +278,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
                   {anomalies.slice(0, 12).map((a: any) => (
                     <tr key={a.id} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
                       <Td>{a.vendor_name || '—'}</Td>
-                      <Td right mono color="#ef4444">{formatCurrency(a.amount)}</Td>
+                      <Td right mono color="var(--color-accent-expense)">{formatCurrency(a.amount)}</Td>
                       <Td right mono>{formatCurrency(a.avg_amt)}</Td>
                       <Td right mono>{Number(a.z_score).toFixed(1)}</Td>
                       <Td right><button className="block-btn text-[10px]" onClick={() => open(a.id)}>View</button></Td>
@@ -353,7 +353,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
                 <tbody>
                   {reimbAging.slice(0, 10).map((r: any) => (
                     <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
-                      <Td mono color={r.days_outstanding > 30 ? '#ef4444' : undefined}>{r.days_outstanding}d</Td>
+                      <Td mono color={r.days_outstanding > 30 ? 'var(--color-accent-expense)' : undefined}>{r.days_outstanding}d</Td>
                       <Td>{(r.description || '').slice(0, 25)}</Td>
                       <Td right mono>{formatCurrency(r.amount)}</Td>
                     </tr>
@@ -374,7 +374,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
                 <div key={d.day_num} className="flex items-center gap-2 text-[11px]">
                   <span style={{ width: 76 }} className="text-text-muted">{d.day_name}</span>
                   <div style={{ flex: 1, height: 6, background: 'var(--color-bg-tertiary)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${(d.total / maxDayTotal) * 100}%`, height: '100%', background: 'var(--cust-series-expense, #f87171)' }} />
+                    <div style={{ width: `${(d.total / maxDayTotal) * 100}%`, height: '100%', background: 'var(--cust-series-expense, var(--color-accent-expense))' }} />
                   </div>
                   <span className="font-mono" style={{ width: 100, textAlign: 'right' }}>{formatCurrency(d.total)}</span>
                 </div>
@@ -395,7 +395,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
                       <tr key={g.month} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
                         <Td mono>{g.month}</Td>
                         <Td right mono>{formatCurrency(g.total)}</Td>
-                        <Td right mono color={delta == null ? undefined : delta > 0 ? '#ef4444' : '#16a34a'}>
+                        <Td right mono color={delta == null ? undefined : delta > 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'}>
                           {delta == null ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`}
                         </Td>
                       </tr>

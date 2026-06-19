@@ -109,7 +109,7 @@ const KpiCard: React.FC<{
   hint?: string;
   icon?: React.ReactNode;
   accent?: string;
-}> = ({ label, value, hint, icon, accent = '#3b82f6' }) => (
+}> = ({ label, value, hint, icon, accent = 'var(--color-accent-blue)' }) => (
   <div className="block-card p-4" style={{ borderRadius: '6px' }}>
     <div className="flex items-start justify-between mb-2">
       <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
@@ -439,11 +439,11 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
         </button>
         <div
           style={{
-            background: 'rgba(248,113,113,0.08)',
-            border: '1px solid #ef4444',
+            background: 'rgba(var(--color-accent-expense-rgb, 239,68,68),0.08)',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: '6px',
             padding: '12px 16px',
-            color: '#ef4444',
+            color: 'var(--color-accent-expense)',
             fontSize: '13px',
           }}
         >
@@ -467,12 +467,12 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
       : `Expired ${formatDate(validityInfo.expDate)}`;
   const validityAccent =
     validityInfo === null
-      ? '#6b7280'
+      ? 'var(--color-text-muted)'
       : validityInfo.diffDays < 0
-      ? '#ef4444'
+      ? 'var(--color-accent-expense)'
       : validityInfo.diffDays <= 7
-      ? '#f59e0b'
-      : '#22c55e';
+      ? 'var(--color-accent-warning)'
+      : 'var(--color-accent-income)';
 
   const isClosed = ['converted', 'rejected', 'expired'].includes(quote.status);
 
@@ -535,9 +535,9 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
               disabled={busy}
               style={{
                 borderRadius: '6px',
-                background: 'rgba(59,130,246,0.12)',
-                border: '1px solid rgba(59,130,246,0.25)',
-                color: '#3b82f6',
+                background: 'var(--color-accent-blue-bg)',
+                border: '1px solid color-mix(in srgb, var(--color-accent-blue) 25%, transparent)',
+                color: 'var(--color-accent-blue)',
                 cursor: busy ? 'not-allowed' : 'pointer',
               }}
             >
@@ -555,7 +555,7 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
             className="block-btn flex items-center gap-1.5"
             onClick={handleDelete}
             disabled={busy}
-            style={{ color: '#ef4444' }}
+            style={{ color: 'var(--color-accent-expense)' }}
           >
             <Trash2 size={14} /> Delete
           </button>
@@ -569,14 +569,14 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
           value={formatCurrency(quote.total)}
           hint={(quote.currency || 'USD').toUpperCase()}
           icon={<DollarSign size={14} />}
-          accent="#3b82f6"
+          accent="var(--color-accent-blue)"
         />
         <KpiCard
           label="Status"
           value={statusBadge?.label || quote.status}
           hint={quote.sent_date ? `Sent ${formatDate(quote.sent_date)}` : `Issued ${formatDate(quote.issue_date)}`}
           icon={<Target size={14} />}
-          accent="#8b5cf6"
+          accent="var(--color-accent-purple)"
         />
         <KpiCard
           label="Probability"
@@ -587,7 +587,7 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
               : 'No close date'
           }
           icon={<Target size={14} />}
-          accent="#22c55e"
+          accent="var(--color-accent-income)"
         />
         <KpiCard
           label="Validity"
@@ -602,11 +602,11 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
       {validityInfo && validityInfo.diffDays >= 0 && validityInfo.diffDays <= 7 && quote.status === 'sent' && (
         <div
           style={{
-            background: 'rgba(245,158,11,0.10)',
-            border: '1px solid rgba(245,158,11,0.35)',
+            background: 'color-mix(in srgb, var(--color-accent-warning) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--color-accent-warning) 35%, transparent)',
             borderRadius: '6px',
             padding: '10px 14px',
-            color: '#f59e0b',
+            color: 'var(--color-accent-warning)',
             fontSize: '13px',
             fontWeight: 600,
           }}
@@ -847,7 +847,7 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
           </div>
           <div
             className="flex justify-between text-sm font-bold text-text-primary pt-2 mt-2"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
+            style={{ borderTop: '1px solid var(--hairline)' }}
           >
             <span>Total</span>
             <span className="font-mono">{formatCurrency(quote.total)}</span>
@@ -872,7 +872,7 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
                 key={a.id}
                 className="flex items-start gap-2 text-xs"
                 style={{
-                  borderLeft: '2px solid rgba(255,255,255,0.08)',
+                  borderLeft: '2px solid var(--hairline)',
                   paddingLeft: 8,
                 }}
               >

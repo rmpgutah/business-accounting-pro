@@ -207,7 +207,7 @@ const ImportTransactions: React.FC = () => {
       {/* Bank Account Selector */}
       <div
         className="block-card p-4"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         <div className="flex items-center gap-4">
           <div className="flex-1">
@@ -234,7 +234,7 @@ const ImportTransactions: React.FC = () => {
       {/* CSV Input */}
       <div
         className="block-card p-4 space-y-3"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         <div className="flex items-center gap-2">
           <FileText size={16} className="text-text-muted" />
@@ -274,7 +274,7 @@ const ImportTransactions: React.FC = () => {
             onClick={handleParse}
             disabled={!csvContent.trim()}
             className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Upload size={14} />
             Parse CSV
@@ -283,7 +283,7 @@ const ImportTransactions: React.FC = () => {
             <button
               onClick={clearPreview}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover transition-colors"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <Trash2 size={14} />
               Clear
@@ -296,7 +296,7 @@ const ImportTransactions: React.FC = () => {
       {parseError && (
         <div
           className="flex items-center gap-2 px-4 py-2 text-xs text-accent-expense bg-accent-expense/10 border border-accent-expense/20"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <AlertTriangle size={14} />
           {parseError}
@@ -306,7 +306,7 @@ const ImportTransactions: React.FC = () => {
       {importResult && importResult.success && (
         <div
           className="flex items-center gap-2 px-4 py-2 text-xs text-accent-income bg-accent-income/10 border border-accent-income/20"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <Check size={14} />
           Successfully imported {importResult.count} transaction
@@ -325,7 +325,7 @@ const ImportTransactions: React.FC = () => {
               onClick={handleImport}
               disabled={importing || selectedCount === 0 || !selectedBankId}
               className="block-btn-primary flex items-center gap-1.5 px-4 py-2 text-xs font-semibold disabled:opacity-40"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <Check size={14} />
               {importing
@@ -336,7 +336,7 @@ const ImportTransactions: React.FC = () => {
 
           <div
             className="block-card p-0 overflow-hidden"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <table className="w-full text-sm">
               <thead>

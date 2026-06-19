@@ -40,10 +40,10 @@ interface RiskScore {
 const fmt$ = (n: number): string => '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 const COLOR_MAP: Record<string, string> = {
-  green: '#16a34a',
-  yellow: '#d97706',
-  orange: '#ea580c',
-  red: '#dc2626',
+  green: 'var(--color-accent-income)',
+  yellow: 'var(--color-accent-warning)',
+  orange: 'var(--color-accent-expense)',
+  red: 'var(--color-accent-expense)',
 };
 
 const BAND_LABEL: Record<string, string> = {
@@ -110,7 +110,7 @@ const ClientRiskDashboard: React.FC<Props> = ({ onBack }) => {
               <BandStat label="Moderate" count={summary.moderate} color={COLOR_MAP.yellow} />
               <BandStat label="Low" count={summary.low} color={COLOR_MAP.green} />
               <Stat label="Total AR" value={fmt$(summary.total_outstanding)} />
-              <Stat label="At-Risk AR" value={fmt$(summary.high_risk_outstanding)} color="#dc2626" highlight />
+              <Stat label="At-Risk AR" value={fmt$(summary.high_risk_outstanding)} color="var(--color-accent-expense)" highlight />
             </div>
           </div>
 
@@ -270,7 +270,7 @@ const ComponentBar: React.FC<{ label: string; value: number; weight: number }> =
       <div style={{
         width: value + '%',
         height: '100%',
-        background: value >= 70 ? '#dc2626' : value >= 50 ? '#ea580c' : value >= 25 ? '#d97706' : '#16a34a',
+        background: value >= 70 ? 'var(--color-accent-expense)' : value >= 50 ? 'var(--color-accent-expense)' : value >= 25 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)',
       }} />
     </div>
   </div>

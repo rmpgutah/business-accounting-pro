@@ -353,7 +353,7 @@ const SpreadsheetGrid: React.FC<Props> = ({
                     position: 'sticky', top: 0,
                     left: sticky ? 0 : undefined,
                     zIndex: sticky ? 3 : 2,
-                    background: '#1f2937',
+                    background: 'var(--color-bg-elevated)',
                     width: colWidth(c),
                     minWidth: colWidth(c),
                     maxWidth: colWidth(c),
@@ -399,14 +399,14 @@ const SpreadsheetGrid: React.FC<Props> = ({
                     style={{
                       position: sticky ? 'sticky' : 'relative',
                       left: sticky ? 0 : undefined,
-                      background: isActive ? '#1e3a5f' : inFill ? '#1e293b' : (sticky ? '#111827' : undefined),
+                      background: isActive ? 'var(--color-accent-blue-bg)' : inFill ? 'var(--color-bg-tertiary)' : (sticky ? 'var(--color-bg-elevated)' : undefined),
                       width: colWidth(c),
                       minWidth: colWidth(c),
                       maxWidth: colWidth(c),
                       textAlign: c.align || (isNum ? 'right' : 'left'),
                       fontFamily: isNum ? 'ui-monospace, monospace' : undefined,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      outline: isActive ? '2px solid #3b82f6' : undefined,
+                      outline: isActive ? '2px solid var(--color-accent-blue)' : undefined,
                       cursor: c.editable ? 'cell' : 'default',
                     }}
                   >
@@ -426,7 +426,7 @@ const SpreadsheetGrid: React.FC<Props> = ({
                         title="Drag to fill"
                         style={{
                           position: 'absolute', right: -2, bottom: -2,
-                          width: 8, height: 8, background: '#3b82f6',
+                          width: 8, height: 8, background: 'var(--color-accent-blue)',
                           cursor: 'crosshair', border: '1px solid white',
                         }}
                       />
@@ -437,7 +437,7 @@ const SpreadsheetGrid: React.FC<Props> = ({
             </tr>
           ))}
           {sortedRows.length === 0 && (
-            <tr><td colSpan={visibleCols.length} style={{ padding: 12, textAlign: 'center', color: '#9ca3af' }}>No rows.</td></tr>
+            <tr><td colSpan={visibleCols.length} style={{ padding: 12, textAlign: 'center', color: 'var(--color-text-muted)' }}>No rows.</td></tr>
           )}
         </tbody>
       </table>

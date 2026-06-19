@@ -708,8 +708,9 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
         </div>
       )}
 
-      {/* List Tab Stats */}
+      {/* List Tab */}
       {activeTab === 'list' && (
+        <>
         <div className="grid grid-cols-4 gap-3">
           {[
             { label: 'Total Assets', value: String(stats.count), icon: <Boxes size={16} /> },
@@ -726,11 +727,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
             </div>
           ))}
         </div>
-      )}
 
-      {/* List Tab Content */}
-      {activeTab === 'list' && (
-      <>
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Status tabs */}
@@ -766,7 +763,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
 
       {/* Bulk Action Bar */}
       {selectedIds.size > 0 && (
-        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'rgba(59,130,246,0.3)' }}>
+        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'var(--color-accent-blue)' }}>
           <span className="text-xs font-semibold text-text-primary">
             {selectedIds.size} asset{selectedIds.size !== 1 ? 's' : ''} selected
           </span>

@@ -21,18 +21,18 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Bar colors ─────────────────────────────────────────
 const BAR_COLORS = [
-  '#3b82f6',
-  '#ef4444',
-  '#22c55e',
-  '#f59e0b',
-  '#a855f7',
-  '#ec4899',
-  '#06b6d4',
-  '#f97316',
-  '#84cc16',
-  '#6366f1',
-  '#14b8a6',
-  '#e11d48',
+  'var(--color-accent-blue)',
+  'var(--color-accent-expense)',
+  'var(--color-accent-income)',
+  'var(--color-accent-warning)',
+  'var(--color-accent-purple)',
+  'var(--color-accent-expense)',
+  'var(--color-accent-blue)',
+  'var(--color-accent-warning)',
+  'var(--color-accent-income)',
+  'var(--color-accent-purple)',
+  'var(--color-accent-income)',
+  'var(--color-accent-expense)',
 ];
 
 // ─── Component ──────────────────────────────────────────

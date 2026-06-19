@@ -181,12 +181,12 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
   ) => {
     const toneColor =
       info.tone === 'danger'
-        ? '#ef4444'
+        ? 'var(--color-accent-expense)'
         : info.tone === 'warn'
-        ? '#f59e0b'
+        ? 'var(--color-accent-warning)'
         : info.tone === 'ok'
-        ? '#22c55e'
-        : '#6b7280';
+        ? 'var(--color-accent-income)'
+        : 'var(--color-text-muted)';
     return (
       <tr key={q.id}>
         <td className="font-mono font-semibold text-text-primary">
@@ -272,11 +272,11 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
     return (
       <div
         style={{
-          background: 'rgba(248,113,113,0.08)',
-          border: '1px solid #ef4444',
+          background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
+          border: '1px solid var(--color-accent-expense)',
           borderRadius: '6px',
           padding: '12px 16px',
-          color: '#ef4444',
+          color: 'var(--color-accent-expense)',
           fontSize: '13px',
         }}
       >
@@ -311,8 +311,8 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
         <div
           className="px-4 py-3 flex items-center justify-between"
           style={{
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
-            background: 'rgba(239,68,68,0.06)',
+            borderBottom: '1px solid var(--hairline)',
+            background: 'color-mix(in srgb, var(--color-accent-expense) 6%, transparent)',
           }}
         >
           <div className="flex items-center gap-2">
@@ -358,7 +358,7 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
       <div className="block-card p-0 overflow-hidden">
         <div
           className="px-4 py-3 flex items-center justify-between"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+          style={{ borderBottom: '1px solid var(--hairline)' }}
         >
           <div className="flex items-center gap-2">
             <Bell size={14} className="text-accent-blue" />
@@ -409,15 +409,15 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
         <div
           className="px-4 py-3 flex items-center justify-between"
           style={{
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
-            background: 'rgba(245,158,11,0.06)',
+            borderBottom: '1px solid var(--hairline)',
+            background: 'color-mix(in srgb, var(--color-accent-warning) 6%, transparent)',
           }}
         >
           <div className="flex items-center gap-2">
-            <Clock size={14} style={{ color: '#f59e0b' }} />
+            <Clock size={14} style={{ color: 'var(--color-accent-warning)' }} />
             <span
               className="text-xs font-semibold uppercase tracking-wider"
-              style={{ color: '#f59e0b' }}
+              style={{ color: 'var(--color-accent-warning)' }}
             >
               Expiring Soon (Sent, Within 7 Days)
             </span>
@@ -461,7 +461,7 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
       <div className="block-card p-0 overflow-hidden">
         <div
           className="px-4 py-3 flex items-center justify-between"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+          style={{ borderBottom: '1px solid var(--hairline)' }}
         >
           <div className="flex items-center gap-2">
             <Eye size={14} className="text-accent-info" />

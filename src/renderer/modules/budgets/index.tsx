@@ -61,10 +61,10 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 ];
 
 const HEALTH_COLORS = {
-  on_track: '#22c55e',
-  warning: '#eab308',
-  critical: '#f97316',
-  over: '#ef4444',
+  on_track: 'var(--color-accent-income)',
+  warning: 'var(--color-accent-warning)',
+  critical: 'var(--color-accent-warning)',
+  over: 'var(--color-accent-expense)',
 };
 
 const computeBudgetHealth = (
@@ -300,8 +300,8 @@ const BudgetModule: React.FC = () => {
             className="block-card p-3 flex items-start gap-3"
             style={{
               borderRadius: '6px',
-              borderColor: 'rgba(239,68,68,0.4)',
-              background: 'rgba(239,68,68,0.08)',
+              borderColor: 'color-mix(in srgb, var(--color-accent-expense) 40%, transparent)',
+              background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
             }}
           >
             <AlertTriangle

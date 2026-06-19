@@ -127,8 +127,8 @@ const PeriodCloseSettings: React.FC = () => {
           </Field>
           <div style={{
             marginTop: 12, padding: 10, fontSize: 11,
-            background: 'rgba(217, 119, 6, 0.08)',
-            border: '1px solid rgba(217, 119, 6, 0.3)',
+            background: 'color-mix(in srgb, var(--color-accent-warning) 8%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--color-accent-warning) 30%, transparent)',
             borderRadius: 6,
             color: 'var(--color-text-primary)',
             display: 'flex', gap: 8, alignItems: 'flex-start',

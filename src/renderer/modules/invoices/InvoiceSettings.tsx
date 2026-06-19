@@ -600,8 +600,8 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
 
         {/* Preview pane */}
         {showPreview && (
-          <div style={{ flex: 1, overflow: 'hidden', background: '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '8px 12px', fontSize: '11px', color: '#64748b', fontWeight: 600, background: '#e2e8f0', borderBottom: '1px solid #cbd5e1', flexShrink: 0 }}>
+          <div style={{ flex: 1, overflow: 'hidden', background: 'var(--color-bg-secondary)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600, background: 'var(--color-bg-elevated)', borderBottom: '1px solid var(--color-text-secondary)', flexShrink: 0 }}>
               SAMPLE PREVIEW — updates live as you change settings
             </div>
             <PdfPreview

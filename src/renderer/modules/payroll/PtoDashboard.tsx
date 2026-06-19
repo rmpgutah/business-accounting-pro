@@ -115,7 +115,7 @@ const PtoDashboard: React.FC = () => {
                   <tr>
                     <td className="font-semibold">{b.employee_name}</td>
                     <td className="text-text-muted text-xs">{b.policy_name || '—'}</td>
-                    <td className="text-right font-mono" style={{ color: b.balance_hours < 8 ? '#ef4444' : 'var(--color-text-primary)' }}>
+                    <td className="text-right font-mono" style={{ color: b.balance_hours < 8 ? 'var(--color-accent-expense)' : 'var(--color-text-primary)' }}>
                       {Number(b.balance_hours).toFixed(1)}h
                     </td>
                     <td className="text-right font-mono text-text-secondary">{Number(b.used_hours_ytd).toFixed(1)}h</td>

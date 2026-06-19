@@ -614,9 +614,9 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
             onClick={handleConvert}
             style={{
               borderRadius: '6px',
-              background: 'rgba(59,130,246,0.12)',
-              border: '1px solid rgba(59,130,246,0.25)',
-              color: '#3b82f6',
+              background: 'color-mix(in srgb, var(--color-accent-blue) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-accent-blue) 25%, transparent)',
+              color: 'var(--color-accent-blue)',
               cursor: 'pointer',
             }}
           >
@@ -630,11 +630,11 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
       {convertSuccess && (
         <div
           style={{
-            background: 'rgba(34,197,94,0.08)',
-            border: '1px solid #22c55e',
+            background: 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)',
+            border: '1px solid var(--color-accent-income)',
             borderRadius: '6px',
             padding: '12px 16px',
-            color: '#22c55e',
+            color: 'var(--color-accent-income)',
             fontSize: '13px',
             fontWeight: 600,
           }}
@@ -647,15 +647,15 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
       {errors.length > 0 && (
         <div
           style={{
-            background: 'rgba(248,113,113,0.08)',
-            border: '1px solid #ef4444',
+            background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: '6px',
             padding: '12px 16px',
           }}
         >
           <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
             {errors.map((err, i) => (
-              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
+              <li key={i} style={{ color: 'var(--color-accent-expense)', fontSize: '13px', lineHeight: '1.6' }}>
                 {err}
               </li>
             ))}
@@ -766,8 +766,8 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
                   }}
                   className="text-[10px] font-semibold px-2 py-1 text-text-secondary hover:text-text-primary"
                   style={{
-                    background: 'rgba(59,130,246,0.08)',
-                    border: '1px solid rgba(59,130,246,0.20)',
+                    background: 'color-mix(in srgb, var(--color-accent-blue) 8%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--color-accent-blue) 20%, transparent)',
                     borderRadius: '6px',
                     cursor: 'pointer',
                   }}
@@ -1102,9 +1102,9 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
             <div
               className="w-72 space-y-2 p-4"
               style={{
-                background: 'rgba(18,19,24,0.60)',
+                background: 'var(--color-bg-elevated)',
                 borderRadius: '6px',
-                border: '1px solid rgba(255,255,255,0.06)',
+                border: '1px solid var(--color-border-primary)',
               }}
             >
               <div className="flex justify-between text-sm text-text-secondary">
@@ -1123,7 +1123,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               )}
               <div
                 className="flex justify-between text-sm font-bold text-text-primary pt-2 mt-2"
-                style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
+                style={{ borderTop: '1px solid var(--hairline)' }}
               >
                 <span>Total</span>
                 <span className="font-mono">{formatCurrency(grandTotal)}</span>

@@ -6,10 +6,10 @@ import { formatCurrency } from '../../lib/format';
 // Route through shared formatter — guards NaN/Infinity ($0.00 instead of $NaN).
 const fmt = { format: (v: number | string | null | undefined) => formatCurrency(v) };
 
-const RESPONSE_BADGE: Record<string, { label: string; color: string }> = {
-  pending: { label: 'Pending', color: '#d97706' },
-  accepted: { label: 'Accepted', color: '#22c55e' },
-  rejected: { label: 'Rejected', color: '#ef4444' },
+const RESPONSE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  pending: { label: 'Pending', color: 'var(--color-accent-warning)', bg: 'var(--color-accent-warning-bg, color-mix(in srgb, var(--color-accent-warning) 13%, transparent))' },
+  accepted: { label: 'Accepted', color: 'var(--color-accent-income)', bg: 'var(--color-accent-income-bg, color-mix(in srgb, var(--color-accent-income) 13%, transparent))' },
+  rejected: { label: 'Rejected', color: 'var(--color-accent-expense)', bg: 'var(--color-accent-expense-bg, color-mix(in srgb, var(--color-accent-expense) 13%, transparent))' },
 };
 
 interface Props {
@@ -228,7 +228,7 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
                       color: badge.color,
                       padding: '2px 8px',
                       borderRadius: 6,
-                      background: badge.color + '20',
+                      background: badge.bg,
                     }}
                   >
                     {badge.label}
