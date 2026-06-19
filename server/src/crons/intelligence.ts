@@ -7,6 +7,12 @@ export async function runIntelligence() {
 }
 
 async function detectAnomalies() {
+  // Guard: replica.db may not have been populated yet (no client has synced)
+  const tableExists = db.prepare(
+    `SELECT 1 FROM sqlite_master WHERE type='table' AND name='invoices'`
+  ).get();
+  if (!tableExists) return;
+
   const companies = db.prepare(`SELECT DISTINCT company_id FROM invoices`).all() as any[];
 
   for (const { company_id } of companies) {

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { X, Paperclip } from 'lucide-react';
 import { debtDb } from './dbHelpers';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
 
 // ─── Types ──────────────────────────────────────────────
 interface EvidenceFormData {
@@ -44,12 +46,14 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
   const [form, setForm] = useState<EvidenceFormData>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!evidenceId);
+  const [error, setError] = useState('');
 
   // ── Load existing record for edit ──
   useEffect(() => {
     if (!evidenceId) return;
     let cancelled = false;
     const load = async () => {
+      setError('');
       try {
         const row = await api.get('debt_evidence', evidenceId);
         if (row && !cancelled) {
@@ -64,8 +68,9 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
             notes: row.notes || '',
           });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load evidence:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load evidence');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -84,10 +89,8 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
   const handleAttachFile = async () => {
     try {
       const result = await api.openFileDialog();
-      if (result && !result.canceled && result.filePaths?.length > 0) {
-        const fullPath = result.filePaths[0];
-        const fileName = fullPath.split(/[\\/]/).pop() || fullPath;
-        setForm((prev) => ({ ...prev, file_path: fullPath, file_name: fileName }));
+      if (result && result.path) {
+        setForm((prev) => ({ ...prev, file_path: result.path, file_name: result.name }));
       }
     } catch (err) {
       console.error('File dialog error:', err);
@@ -98,6 +101,7 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
     e.preventDefault();
     if (saving || !form.title.trim()) return;
     setSaving(true);
+    setError('');
 
     const payload = {
       debt_id: debtId,
@@ -119,42 +123,54 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
         await debtDb.createEvidence(payload);
       }
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-evidence errors instead of swallowing
       console.error('Failed to save evidence:', err);
+      setError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
   };
 
+  // A11Y: ESC close, body scroll lock, focus trap, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
     <>
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black/60 z-40"
         onClick={onClose}
+        role="presentation"
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="block-card-elevated w-full max-w-[600px] max-h-[90vh] overflow-y-auto"
+          ref={containerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="evidence-form-title"
+          tabIndex={-1}
+          onKeyDown={trapFocusOnKeyDown(containerRef)}
+          className="block-card-elevated w-full max-w-[600px] max-h-[90vh] overflow-y-auto cursor-pointer"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-5 pb-4 border-b border-border-primary">
-            <h3 className="text-base font-bold text-text-primary">
+            <h3 id="evidence-form-title" className="text-base font-bold text-text-primary">
               {evidenceId ? 'Edit Evidence' : 'Add Evidence'}
             </h3>
             <button
               type="button"
               onClick={onClose}
               className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <X size={16} />
             </button>
           </div>
 
+          {error && <ErrorBanner message={error} title="Evidence error" onDismiss={() => setError('')} />}
           {loading ? (
             <div className="flex items-center justify-center py-12 text-text-muted text-sm">
               Loading...
@@ -173,15 +189,15 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
                     value={form.type}
                     onChange={handleChange}
                   >
-                    <option value="contract">Contract</option>
-                    <option value="invoice">Invoice</option>
                     <option value="communication">Communication</option>
-                    <option value="payment_record">Payment Record</option>
+                    <option value="contract">Contract</option>
                     <option value="delivery_proof">Delivery Proof</option>
+                    <option value="invoice">Invoice</option>
+                    <option value="other">Other</option>
+                    <option value="payment_record">Payment Record</option>
+                    <option value="photo">Photo</option>
                     <option value="signed_agreement">Signed Agreement</option>
                     <option value="witness_statement">Witness Statement</option>
-                    <option value="photo">Photo</option>
-                    <option value="other">Other</option>
                   </select>
                 </div>
                 <div>
@@ -195,8 +211,8 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
                     onChange={handleChange}
                   >
                     <option value="high">High</option>
-                    <option value="medium">Medium</option>
                     <option value="low">Low</option>
+                    <option value="medium">Medium</option>
                   </select>
                 </div>
               </div>

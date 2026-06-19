@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  FileText, Upload, Search, Filter, Eye, File, Image, FileSpreadsheet,
+  FileText, Upload, Search, Filter, Eye, File, Image, FileSpreadsheet, Pencil, Trash2, X,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface Document {
@@ -53,23 +54,52 @@ const Documents: React.FC = () => {
   const [search, setSearch] = useState('');
   const [entityFilter, setEntityFilter] = useState<EntityFilter>('');
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null);
+  const [editForm, setEditForm] = useState({ entity_type: '', tags: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  type DocSortField = 'filename' | 'entity_type' | 'file_size' | 'uploaded_at';
+  type DocSortDir = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<DocSortField>('uploaded_at');
+  const [sortDir, setSortDir] = useState<DocSortDir>('desc');
+  const [opSuccess, setOpSuccess] = useState('');
+  const [opError, setOpError] = useState('');
+  const [error, setError] = useState('');
+
+  const handleDocSort = (f: DocSortField) => { if (sortField === f) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortField(f); setSortDir('asc'); } };
+
+  const loadDocuments = async () => {
+    if (!activeCompany) return;
+    setError('');
+    try {
+      // Perf: cap at 1000 most-recent documents; older docs surfaced via search/filter UI.
+      // Resolve the polymorphic entity FK to a readable name (the flat query
+      // returned only entity_id, so the Entity column showed a raw uuid). Unknown
+      // entity types fall through to NULL → entity_id, the prior behavior.
+      const rows = await api.rawQuery(
+        `SELECT d.*,
+           CASE d.entity_type
+             WHEN 'client'  THEN (SELECT name FROM clients WHERE id = d.entity_id)
+             WHEN 'invoice' THEN (SELECT invoice_number FROM invoices WHERE id = d.entity_id)
+             WHEN 'project' THEN (SELECT name FROM projects WHERE id = d.entity_id)
+             WHEN 'expense' THEN (SELECT description FROM expenses WHERE id = d.entity_id)
+           END AS entity_name
+         FROM documents d
+         WHERE d.company_id = ?
+         ORDER BY d.uploaded_at DESC
+         LIMIT 1000`,
+        [activeCompany.id]
+      );
+      setDocuments(Array.isArray(rows) ? rows : []);
+    } catch (err: any) {
+      console.error('Failed to load documents:', err);
+      setError(err?.message || 'Failed to load documents');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      if (!activeCompany) return;
-      try {
-        // Bug fix #15: was fetching all companies' documents — scoped to active company.
-        const rows = await api.query('documents', { company_id: activeCompany.id });
-        if (!cancelled) setDocuments(Array.isArray(rows) ? rows : []);
-      } catch (err) {
-        console.error('Failed to load documents:', err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
+    loadDocuments();
   }, [activeCompany]);
 
   const handleUpload = async () => {
@@ -96,13 +126,54 @@ const Documents: React.FC = () => {
       });
 
       setDocuments((prev) => [doc, ...prev]);
-    } catch (err) {
+      setOpSuccess('Document uploaded'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      // VISIBILITY: surface upload errors via banner instead of duplicate alert
       console.error('Failed to upload document:', err);
+      setOpError('Failed to upload: ' + (err?.message || String(err))); setTimeout(() => setOpError(''), 5000);
+    }
+  };
+
+  const handleEditDoc = (doc: Document) => {
+    setEditingDoc(doc);
+    setEditForm({ entity_type: doc.entity_type || '', tags: doc.tags || '' });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingDoc) return;
+    setEditSaving(true);
+    try {
+      await api.update('documents', editingDoc.id, {
+        entity_type: editForm.entity_type,
+        tags: editForm.tags,
+      });
+      setEditingDoc(null);
+      await loadDocuments();
+      setOpSuccess('Document updated'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      // VISIBILITY: surface update errors via banner instead of duplicate alert
+      console.error('Failed to update document:', err);
+      setOpError('Failed to update: ' + (err?.message || String(err))); setTimeout(() => setOpError(''), 5000);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDeleteDoc = async (id: string) => {
+    if (!window.confirm('Delete this document?')) return;
+    try {
+      await api.remove('documents', id);
+      await loadDocuments();
+      setOpSuccess('Document deleted'); setTimeout(() => setOpSuccess(''), 3000);
+    } catch (err: any) {
+      // VISIBILITY: surface delete errors via banner instead of duplicate alert
+      console.error('Failed to delete document:', err);
+      setOpError('Failed to delete: ' + (err?.message || String(err))); setTimeout(() => setOpError(''), 5000);
     }
   };
 
   const filtered = useMemo(() => {
-    return documents.filter((doc) => {
+    let list = documents.filter((doc) => {
       if (search) {
         const q = search.toLowerCase();
         const match =
@@ -114,7 +185,18 @@ const Documents: React.FC = () => {
       if (entityFilter && doc.entity_type !== entityFilter) return false;
       return true;
     });
-  }, [documents, search, entityFilter]);
+    list.sort((a, b) => {
+      const aVal = (a as any)[sortField] ?? '';
+      const bVal = (b as any)[sortField] ?? '';
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [documents, search, entityFilter, sortField, sortDir]);
 
   if (loading) {
     return (
@@ -126,12 +208,13 @@ const Documents: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load documents" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <FileText size={18} className="text-accent-blue" />
           </div>
@@ -147,6 +230,10 @@ const Documents: React.FC = () => {
           Upload
         </button>
       </div>
+
+      {/* Feedback */}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
 
       {/* Filters */}
       <div className="block-card p-3">
@@ -185,23 +272,32 @@ const Documents: React.FC = () => {
           <div className="empty-state-icon">
             <FileText size={24} className="text-text-muted" />
           </div>
-          <p className="text-sm text-text-secondary font-medium">No documents found</p>
-          <p className="text-xs text-text-muted mt-1">
-            Upload your first document or adjust the filters above.
+          <p className="text-sm text-text-secondary font-medium">
+            {documents.length === 0 ? 'No documents yet' : 'No documents match your filter'}
           </p>
+          <p className="text-xs text-text-muted mt-1">
+            {documents.length === 0
+              ? 'Upload your first document to get started.'
+              : 'Try clearing the search or filters above.'}
+          </p>
+          {documents.length === 0 && (
+            <button className="block-btn-primary mt-3 flex items-center gap-2" onClick={handleUpload}>
+              <Upload size={14} /> Upload Document
+            </button>
+          )}
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">
           <table className="block-table">
             <thead>
               <tr>
-                <th>Filename</th>
-                <th>Entity Type</th>
+                <th className="cursor-pointer select-none" onClick={() => handleDocSort('filename')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Filename {sortField === 'filename' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleDocSort('entity_type')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Entity Type {sortField === 'entity_type' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
                 <th>Entity</th>
                 <th>Tags</th>
-                <th className="text-right">Size</th>
-                <th>Uploaded</th>
-                <th className="text-center">Preview</th>
+                <th className="text-right cursor-pointer select-none" onClick={() => handleDocSort('file_size')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Size {sortField === 'file_size' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="cursor-pointer select-none" onClick={() => handleDocSort('uploaded_at')} role="button" tabIndex={0}><span className="inline-flex items-center gap-1">Uploaded {sortField === 'uploaded_at' && (sortDir === 'asc' ? '↑' : '↓')}</span></th>
+                <th className="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -212,7 +308,7 @@ const Documents: React.FC = () => {
                     <td>
                       <div className="flex items-center gap-2">
                         <FileIcon size={16} className="text-text-muted shrink-0" />
-                        <span className="text-text-primary font-medium">{doc.filename}</span>
+                        <span className="text-text-primary font-medium block truncate max-w-[200px]">{doc.filename}</span>
                       </div>
                     </td>
                     <td>
@@ -224,17 +320,20 @@ const Documents: React.FC = () => {
                         <span className="text-text-muted">-</span>
                       )}
                     </td>
-                    <td className="text-text-secondary">
+                    <td className="text-text-secondary truncate max-w-[160px]">
                       {doc.entity_name || doc.entity_id || '-'}
                     </td>
                     <td>
                       {doc.tags ? (
                         <div className="flex flex-wrap gap-1">
-                          {doc.tags.split(',').map((tag, i) => (
-                            <span key={i} className="block-badge block-badge-purple text-[10px]">
-                              {tag.trim()}
-                            </span>
-                          ))}
+                          {doc.tags.split(',').map((tag) => {
+                            const t = tag.trim();
+                            return (
+                              <span key={`${doc.id}:${t}`} className="block-badge block-badge-purple text-[10px]">
+                                {t}
+                              </span>
+                            );
+                          })}
                         </div>
                       ) : (
                         <span className="text-text-muted">-</span>
@@ -249,13 +348,29 @@ const Documents: React.FC = () => {
                         : '-'}
                     </td>
                     <td className="text-center">
-                      <button
-                        className="text-text-muted hover:text-accent-blue transition-colors"
-                        onClick={() => setPreviewDoc(doc)}
-                        title="Preview document"
-                      >
-                        <Eye size={16} />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          className="text-text-muted hover:text-accent-blue transition-colors p-1"
+                          onClick={() => setPreviewDoc(doc)}
+                          title="Preview document"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          className="text-text-muted hover:text-accent-blue transition-colors p-1"
+                          onClick={() => handleEditDoc(doc)}
+                          title="Edit metadata"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className="text-text-muted hover:text-accent-expense transition-colors p-1"
+                          onClick={() => handleDeleteDoc(doc.id)}
+                          title="Delete document"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -265,20 +380,64 @@ const Documents: React.FC = () => {
         </div>
       )}
 
+      {/* Edit Metadata Modal */}
+      {editingDoc && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 cursor-pointer" onClick={() => setEditingDoc(null)}>
+          <div className="block-card-elevated w-full max-w-md space-y-4 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-text-primary">Edit Document — {editingDoc.filename}</h3>
+              <button className="text-text-muted hover:text-text-primary transition-colors" onClick={() => setEditingDoc(null)}>
+                <X size={16} />
+              </button>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1">Entity Type</label>
+              <select
+                className="block-select"
+                value={editForm.entity_type}
+                onChange={(e) => setEditForm({ ...editForm, entity_type: e.target.value })}
+              >
+                <option value="">None</option>
+                <option value="client">Client</option>
+                <option value="invoice">Invoice</option>
+                <option value="expense">Expense</option>
+                <option value="project">Project</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1">Tags (comma-separated)</label>
+              <input
+                type="text"
+                className="block-input"
+                value={editForm.tags}
+                onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
+                placeholder="receipt, tax, Q1"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button className="block-btn" onClick={() => setEditingDoc(null)}>Cancel</button>
+              <button className="block-btn-primary" disabled={editSaving} onClick={handleSaveEdit}>
+                {editSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Preview Modal */}
       {previewDoc && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 cursor-pointer"
           onClick={() => setPreviewDoc(null)}
         >
           <div
-            className="block-card-elevated w-full max-w-lg space-y-4"
+            className="block-card-elevated w-full max-w-lg space-y-4 cursor-pointer"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-text-primary">Document Preview</h3>
               <button
-                className="text-text-muted hover:text-text-primary"
+                className="text-text-muted hover:text-text-primary transition-colors"
                 onClick={() => setPreviewDoc(null)}
               >
                 <Eye size={16} />

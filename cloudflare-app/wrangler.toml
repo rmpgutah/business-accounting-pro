@@ -1,0 +1,57 @@
+# Cloudflare Worker config for the Business Accounting Pro web companion.
+#
+# Domain plan (per the architecture decision):
+#   • accounting.rmpgutah.us → THIS Worker (the BAP cloud system)
+#   • rmpgutah.us            → separate site, untouched
+#
+# To activate the route, point accounting.rmpgutah.us at Cloudflare DNS
+# (proxy on) then `wrangler deploy` will bind the route below.
+
+name = "bap-cloud"
+main = "src/worker.ts"
+compatibility_date = "2026-06-01"
+# nodejs_compat unlocks Node-shape APIs (Buffer, crypto.timingSafeEqual fallback)
+# needed by our JWT/scrypt helpers — D1 + Hono itself don't require it, but the
+# auth module's password verification path does.
+compatibility_flags = ["nodejs_compat"]
+
+# Production route. The Worker handles every path on the subdomain so it can
+# serve both the HTML UI and the /api/* endpoints from one origin (no CORS).
+routes = [
+  { pattern = "accounting.rmpgutah.us/*", zone_name = "rmpgutah.us" },
+]
+
+# D1 binding. Replace `database_id` with the ID printed by:
+#   wrangler d1 create bap_db
+# That command only needs to be run ONCE per environment.
+[[d1_databases]]
+binding = "DB"
+database_name = "bap_db"
+database_id = "REPLACE_WITH_D1_ID_AFTER_wrangler_d1_create"
+
+# R2 bucket for receipt uploads and desktop backup payloads. Replace bucket name
+# if you prefer a different one; create with `wrangler r2 bucket create bap-files`.
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "bap-files"
+
+# KV namespace for short-lived state (sync cursors, session tokens). Create
+# with `wrangler kv:namespace create SESSIONS` and paste the ID.
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "REPLACE_WITH_KV_ID_AFTER_wrangler_kv_namespace_create"
+
+# Secrets — set via `wrangler secret put <NAME>`:
+#   JWT_SECRET         — signing key for auth tokens (32+ random bytes)
+#   DESKTOP_SYNC_TOKEN — shared secret the desktop sends on /api/sync/*
+#   STRIPE_SECRET_KEY  — for portal payment endpoints (optional)
+#   STRIPE_WEBHOOK_SECRET — for Stripe webhook validation (optional)
+[vars]
+# Non-secret config goes here.
+PORTAL_BRAND = "Business Accounting Pro"
+ENVIRONMENT = "production"
+
+# Local-dev overrides. `wrangler dev` will use these instead of [vars].
+[env.dev.vars]
+ENVIRONMENT = "development"
+PORTAL_BRAND = "Business Accounting Pro (dev)"

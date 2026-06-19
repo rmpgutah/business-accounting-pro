@@ -1,6 +1,7 @@
 {
   "name": "business-accounting-pro",
-  "version": "1.1.1",
+  "version": "1.4.0",
+  "productName": "Business Accounting Pro",
   "description": "Professional business accounting software for income, expenses, taxes, payroll, invoicing and more",
   "main": "dist/main/main/main.js",
   "scripts": {
@@ -8,11 +9,20 @@
     "build:renderer": "vite build --config vite.config.ts",
     "build:main": "tsc -p tsconfig.main.json && cp src/main/database/schema.sql dist/main/main/database/schema.sql",
     "build": "npm run build:renderer && npm run build:main",
+    "typecheck": "tsc --noEmit --project tsconfig.main.json && tsc --noEmit --project tsconfig.json",
+    "test:loan": "npm run build:main && node scripts/test-loan-calculator.cjs",
+    "test:search": "npm run build:main && node scripts/test-search-index.cjs",
+    "test:cockpit": "node scripts/test-cockpit-layout.cjs",
+    "test:classic": "node scripts/test-classic-styles.cjs",
+    "test:micr": "node scripts/test-micr.cjs",
+    "prepare": "git config core.hooksPath scripts/git-hooks || true",
     "postinstall": "electron-builder install-app-deps",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
-    "start": "electron ."
+    "start": "electron .",
+    "deploy": "bash scripts/deploy.sh",
+    "deploy:landing": "rsync -avz --delete -e 'ssh -i ~/.ssh/id_ed25519_deploy' landing-page/ root@194.113.64.90:/var/www/accounting.rmpgutah.us/"
   },
   "keywords": [
     "accounting",
@@ -24,12 +34,23 @@
   "author": "RMPG",
   "license": "ISC",
   "type": "commonjs",
+  "overrides": {
+    "js-yaml": ">=4.2.0"
+  },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.2",
+    "@types/archiver": "^7.0.0",
+    "@types/qrcode": "^1.5.6",
+    "archiver": "^7.0.1",
     "better-sqlite3": "^12.8.0",
     "date-fns": "^4.1.0",
     "dotenv": "^17.3.1",
     "electron-updater": "^6.8.3",
     "express": "^5.2.1",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "qrcode": "^1.5.4",
+    "tesseract.js": "^7.0.0",
     "uuid": "^13.0.0",
     "ws": "^8.20.0"
   },
@@ -44,7 +65,7 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.27",
-    "concurrently": "^9.2.1",
+    "concurrently": "^10.0.3",
     "electron": "^41.1.0",
     "electron-builder": "^26.8.1",
     "lucide-react": "^1.7.0",
@@ -54,8 +75,9 @@
     "react-router-dom": "^7.13.2",
     "recharts": "^3.8.1",
     "tailwindcss": "^4.2.2",
+    "terser": "^5.48.0",
     "typescript": "^6.0.2",
-    "vite": "^8.0.3",
+    "vite": "^8.0.5",
     "wait-on": "^9.0.4",
     "zustand": "^5.0.12"
   }

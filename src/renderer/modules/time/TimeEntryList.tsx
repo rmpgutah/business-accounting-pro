@@ -7,6 +7,10 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
+import { formatDate } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 interface TimeEntry {
@@ -65,33 +69,21 @@ function formatTime(isoString: string): string {
 }
 
 function formatDateHeader(dateStr: string): string {
-  try {
-    const d = new Date(dateStr + 'T12:00:00');
-    return d.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return dateStr;
-  }
+  return formatDate(dateStr);
 }
 
 function formatWeekRange(start: Date): string {
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
-
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  const startStr = start.toLocaleDateString('en-US', opts);
-  const endStr = end.toLocaleDateString('en-US', {
-    ...opts,
-    year: 'numeric',
-  });
+  const startStr = formatDate(start.toISOString());
+  const endStr = formatDate(end.toISOString());
   return `${startStr} - ${endStr}`;
 }
 
 function isToday(dateStr: string): boolean {
-  return dateStr === new Date().toISOString().slice(0, 10);
+  // DATE: Item #2 — local-time today; UTC slice would mark "today" as tomorrow
+  // for late-evening Mountain Time users.
+  return dateStr === todayLocal();
 }
 
 // ─── Grouped Entries ────────────────────────────────────
@@ -164,14 +156,14 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
           <button
             onClick={onPrevWeek}
             className="block-btn px-2 py-1"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <ChevronLeft size={16} />
           </button>
           <button
             onClick={onNextWeek}
             className="block-btn px-2 py-1"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <ChevronRight size={16} />
           </button>
@@ -180,15 +172,7 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
 
       {/* Day Groups */}
       {dayGroups.length === 0 && (
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <Clock size={24} className="text-text-muted" />
-          </div>
-          <p className="text-sm text-text-muted">No time entries this week</p>
-          <p className="text-xs text-text-muted mt-1">
-            Start the timer or add a manual entry
-          </p>
-        </div>
+        <EmptyState icon={Clock} message="No time entries this week" />
       )}
 
       {dayGroups.map((group) => (
@@ -197,9 +181,9 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
           <div
             className="flex items-center justify-between px-3 py-2 mb-1"
             style={{
-              backgroundColor: isToday(group.date) ? 'rgba(59,130,246,0.06)' : '#1e1e1e',
-              border: '1px solid #2e2e2e',
-              borderRadius: '2px',
+              backgroundColor: isToday(group.date) ? 'var(--color-accent-blue/10)' : 'var(--color-bg-tertiary)',
+              border: '1px solid var(--color-border-primary)',
+              borderRadius: '6px',
             }}
           >
             <span className="text-xs font-semibold text-text-primary">
@@ -216,7 +200,7 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
           {/* Entries */}
           <div
             className="bg-bg-secondary border border-border-primary overflow-hidden mb-3"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             {group.entries.map((entry, idx) => (
               <div
@@ -244,16 +228,15 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
                 </div>
 
                 {/* Client / Project */}
-                <div className="min-w-[140px]">
+                <div className="min-w-[140px] flex items-center gap-1">
                   {entry.client_id && (
-                    <span className="text-xs text-text-secondary">
-                      {clientMap.get(entry.client_id) ?? 'Unknown'}
-                    </span>
+                    <EntityChip type="client" id={entry.client_id} label={clientMap.get(entry.client_id) ?? 'Unknown'} variant="inline" />
                   )}
                   {entry.project_id && (
-                    <span className="text-xs text-text-muted ml-1">
-                      / {projectMap.get(entry.project_id) ?? 'Unknown'}
-                    </span>
+                    <>
+                      <span className="text-xs text-text-muted">/</span>
+                      <EntityChip type="project" id={entry.project_id} label={projectMap.get(entry.project_id) ?? 'Unknown'} variant="inline" />
+                    </>
                   )}
                   {!entry.client_id && !entry.project_id && (
                     <span className="text-xs text-text-muted">No client</span>
@@ -272,7 +255,7 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
                   {entry.is_billable ? (
                     <span
                       className="block-badge-income text-[10px] px-1.5 py-0.5"
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: '6px' }}
                     >
                       $
                     </span>
@@ -286,14 +269,14 @@ const TimeEntryList: React.FC<TimeEntryListProps> = ({
                   <button
                     onClick={() => onEdit(entry)}
                     className="p-1.5 hover:bg-bg-tertiary transition-colors text-text-muted hover:text-text-primary"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     <Pencil size={13} />
                   </button>
                   <button
                     onClick={() => onDelete(entry.id)}
                     className="p-1.5 hover:bg-bg-tertiary transition-colors text-text-muted hover:text-accent-expense"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   >
                     <Trash2 size={13} />
                   </button>

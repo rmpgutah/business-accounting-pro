@@ -26,7 +26,7 @@ function daysRemaining(statuteDate: string): number {
 }
 
 function urgencyColor(days: number): string {
-  if (days <= 0)  return 'text-gray-400';
+  if (days <= 0)  return 'text-text-muted';
   if (days < 90)  return 'text-red-400';
   if (days < 180) return 'text-orange-400';
   if (days < 365) return 'text-amber-400';
@@ -34,9 +34,9 @@ function urgencyColor(days: number): string {
 }
 
 function urgencyBg(days: number): string {
-  if (days <= 0)  return 'bg-gray-500';
-  if (days < 90)  return 'bg-red-500';
-  if (days < 180) return 'bg-orange-500';
+  if (days <= 0)  return 'bg-bg-secondary';
+  if (days < 90)  return 'bg-accent-expense-bg';
+  if (days < 180) return 'bg-accent-warning-bg';
   if (days < 365) return 'bg-amber-500';
   return 'bg-emerald-500';
 }
@@ -152,8 +152,8 @@ const StatuteTracker: React.FC<StatuteTrackerProps> = ({ companyId }) => {
               <div>
                 {isExpired ? (
                   <span
-                    className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase bg-red-500/20 text-red-400"
-                    style={{ borderRadius: '2px' }}
+                    className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase bg-accent-expense/20 text-red-400"
+                    style={{ borderRadius: '6px' }}
                   >
                     EXPIRED
                   </span>
@@ -168,11 +168,11 @@ const StatuteTracker: React.FC<StatuteTrackerProps> = ({ companyId }) => {
               <div>
                 <div
                   className="w-full h-2 bg-bg-tertiary overflow-hidden"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   <div
                     className={`h-full transition-all ${bgClass}`}
-                    style={{ width: `${pct}%`, borderRadius: '2px' }}
+                    style={{ width: `${pct}%`, borderRadius: '6px' }}
                   />
                 </div>
                 <p className="text-[10px] text-text-muted mt-0.5">
@@ -184,7 +184,7 @@ const StatuteTracker: React.FC<StatuteTrackerProps> = ({ companyId }) => {
             {/* Expired warning */}
             {isExpired && (
               <div
-                className="flex items-center gap-2 px-3 py-2 bg-red-500/10 text-red-400 text-xs font-bold"
+                className="flex items-center gap-2 px-3 py-2 bg-accent-expense/10 text-red-400 text-xs font-bold"
               >
                 <AlertTriangle size={14} />
                 EXPIRED -- Consult Legal Counsel

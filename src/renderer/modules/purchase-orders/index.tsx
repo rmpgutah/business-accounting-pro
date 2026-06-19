@@ -1,7 +1,16 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { ShoppingCart, Plus, ArrowLeft, Trash2, CheckCircle, FileText, Package } from 'lucide-react';
+import { ShoppingCart, Plus, ArrowLeft, Trash2, CheckCircle, FileText, Package, Eye, Printer, Download } from 'lucide-react';
+import { generatePurchaseOrderHTML, InvoiceSettings } from '../../lib/print-templates';
+import { EmptyState } from '../../components/EmptyState';
+import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
+import { formatCurrency, formatDate, formatStatus, roundCents } from '../../lib/format';
+import { todayLocal } from '../../lib/date-helpers';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -55,6 +64,31 @@ interface Account {
   type: string;
 }
 
+const PO_ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  asset: 'Assets',
+  equity: 'Equity',
+  expense: 'Expenses',
+  liability: 'Liabilities',
+  revenue: 'Revenue',
+};
+function groupPOAccountsByType(accounts: Account[]) {
+  const groups = new Map<string, Account[]>();
+  for (const a of accounts) {
+    const key = a.type ? (PO_ACCOUNT_TYPE_LABELS[a.type.toLowerCase()] ?? a.type) : 'Other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(a);
+  }
+  const sortedKeys = [...groups.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return sortedKeys.map((label) => ({
+    label,
+    items: groups.get(label)!.slice().sort((a, b) => {
+      const la = a.code ? `${a.code} · ${a.name}` : a.name;
+      const lb = b.code ? `${b.code} · ${b.name}` : b.name;
+      return la.localeCompare(lb, undefined, { sensitivity: 'base' });
+    }),
+  }));
+}
+
 interface POStats {
   total_open: number;
   open_value: number;
@@ -73,37 +107,11 @@ interface DraftLineItem {
 
 // ─── Helpers ─────────────────────────────────────────────
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n ?? 0);
-
-const fmtDate = (d: string) => {
-  if (!d) return '—';
-  const dt = new Date(d + 'T00:00:00');
-  return dt.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-};
-
-const today = () => new Date().toISOString().slice(0, 10);
+// DATE: Item #2 — local time today (UTC slice would shift day late evening MT).
+const today = () => todayLocal();
 
 let _tempId = 0;
 const newTempId = () => `tmp-${++_tempId}`;
-
-const STATUS_LABELS: Record<POStatus, string> = {
-  draft: 'Draft',
-  sent: 'Sent',
-  approved: 'Approved',
-  partially_received: 'Partially Received',
-  received: 'Received',
-  cancelled: 'Cancelled',
-};
-
-const STATUS_BADGE: Record<POStatus, string> = {
-  draft: 'block-badge block-badge-blue',
-  sent: 'block-badge block-badge-warning',
-  approved: 'block-badge block-badge-income',
-  partially_received: 'block-badge block-badge-purple',
-  received: 'block-badge block-badge-income',
-  cancelled: 'block-badge block-badge-expense',
-};
 
 // ─── POList ──────────────────────────────────────────────
 
@@ -125,10 +133,12 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'all' | POStatus>('all');
   const [search, setSearch] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   const load = useCallback(async () => {
     if (!activeCompany) return;
     setLoading(true);
+    setLoadError('');
     try {
       const [pos, vens] = await Promise.all([
         api.query('purchase_orders', { company_id: activeCompany.id }),
@@ -161,6 +171,10 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
         awaiting_approval: awaitingPos.length,
         received_this_month: receivedThisMonth.length,
       });
+    } catch (err: any) {
+      console.error('Failed to load purchase orders:', err);
+      setLoadError(err?.message || 'Failed to load purchase orders');
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -202,6 +216,7 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
 
   return (
     <div>
+      {loadError && <ErrorBanner message={loadError} title="Failed to load purchase orders" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <div>
@@ -226,7 +241,7 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
           <div className="stat-label">Open POs</div>
         </div>
         <div className="stat-card block-card">
-          <div className="stat-value font-mono text-accent-income">{fmt(stats.open_value)}</div>
+          <div className="stat-value font-mono text-accent-income">{formatCurrency(stats.open_value)}</div>
           <div className="stat-label">Open PO Value</div>
         </div>
         <div className="stat-card block-card">
@@ -259,9 +274,9 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
                 className={`px-3 py-1 text-[10px] font-semibold tracking-wide transition-colors ${
                   statusFilter === s
                     ? 'bg-accent-blue text-white'
-                    : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-border-primary'
+                    : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-border-primary transition-colors'
                 }`}
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {TAB_LABELS[s]}
               </button>
@@ -275,13 +290,14 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
         {loading ? (
           <div className="text-text-muted text-xs font-mono p-6 text-center">Loading...</div>
         ) : filtered.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <ShoppingCart size={32} />
-            </div>
-            <div className="text-text-secondary text-sm">No purchase orders found</div>
-            <div className="text-text-muted text-xs mt-1">Create your first PO to get started</div>
-          </div>
+          <EmptyState
+            icon={ShoppingCart}
+            message={
+              orders.length === 0
+                ? 'No purchase orders yet'
+                : 'No purchase orders match your search or filter'
+            }
+          />
         ) : (
           <table className="block-table w-full">
             <thead>
@@ -298,17 +314,21 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
             <tbody>
               {filtered.map((po) => (
                 <tr key={po.id} className="hover:bg-bg-secondary transition-colors cursor-pointer" onClick={() => onView(po.id)}>
-                  <td className="font-mono text-xs text-accent-blue">{po.po_number}</td>
-                  <td className="text-xs text-text-primary">{vendors[po.vendor_id]?.name ?? '—'}</td>
-                  <td className="font-mono text-xs text-text-secondary">{fmtDate(po.issue_date)}</td>
-                  <td className="font-mono text-xs text-text-secondary">{fmtDate(po.expected_date)}</td>
-                  <td className="font-mono text-xs text-right text-text-primary">{fmt(po.total)}</td>
+                  <td className="font-mono text-xs text-accent-blue" onClick={(e) => e.stopPropagation()}>
+                    <EntityChip type="purchase_order" id={po.id} label={po.po_number} variant="inline" />
+                  </td>
+                  <td className="text-xs text-text-primary truncate max-w-[180px]" onClick={(e) => e.stopPropagation()}>
+                    {po.vendor_id ? <EntityChip type="vendor" id={po.vendor_id} label={vendors[po.vendor_id]?.name ?? ''} variant="inline" /> : '—'}
+                  </td>
+                  <td className="font-mono text-xs text-text-secondary">{formatDate(po.issue_date)}</td>
+                  <td className="font-mono text-xs text-text-secondary">{formatDate(po.expected_date)}</td>
+                  <td className="font-mono text-xs text-right text-text-primary">{formatCurrency(po.total)}</td>
                   <td>
-                    <span className={STATUS_BADGE[po.status] || 'block-badge'}>
-                      {STATUS_LABELS[po.status] ?? po.status}
+                    <span className={formatStatus(po.status).className}>
+                      {formatStatus(po.status).label}
                     </span>
                   </td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="block-btn text-[10px] px-2 py-1"
                       onClick={() => onView(po.id)}
@@ -420,7 +440,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
         const updated = { ...l, [field]: value };
         const qty = parseFloat(updated.quantity) || 0;
         const price = parseFloat(updated.unit_price) || 0;
-        updated.amount = parseFloat((qty * price).toFixed(2));
+        updated.amount = roundCents(qty * price);
         return updated;
       })
     );
@@ -437,9 +457,9 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
     setLines((prev) => prev.filter((l) => l.tempId !== tempId));
   };
 
-  const subtotal = useMemo(() => lines.reduce((s, l) => s + l.amount, 0), [lines]);
-  const taxAmount = useMemo(() => parseFloat(((subtotal * parseFloat(taxPct || '0')) / 100).toFixed(2)), [subtotal, taxPct]);
-  const total = useMemo(() => parseFloat((subtotal + taxAmount).toFixed(2)), [subtotal, taxAmount]);
+  const subtotal = useMemo(() => roundCents(lines.reduce((s, l) => s + roundCents(l.amount), 0)), [lines]);
+  const taxAmount = useMemo(() => roundCents((subtotal * parseFloat(taxPct || '0')) / 100), [subtotal, taxPct]);
+  const total = useMemo(() => roundCents(subtotal + taxAmount), [subtotal, taxAmount]);
 
   const handleSave = async () => {
     setError('');
@@ -450,13 +470,13 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
 
     setSaving(true);
     try {
-      const poData = {
+      const poData: Record<string, unknown> = {
         company_id: activeCompany!.id,
         po_number: poNumber.trim(),
         vendor_id: vendorId,
         issue_date: orderDate,
         expected_date: expectedDate || null,
-        status: 'draft' as POStatus,
+        status: isEdit ? undefined : ('draft' as POStatus),
         subtotal,
         tax_amount: taxAmount,
         total,
@@ -468,9 +488,8 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
       if (isEdit && editId) {
         await api.update('purchase_orders', editId, poData);
         poId = editId;
-        // Remove old line items and re-create
-        const existing = await api.query('po_line_items', { po_id: editId });
-        await Promise.all((existing || []).map((item: POLineItem) => api.remove('po_line_items', item.id)));
+        // Perf: single DELETE replaces an N-call Promise.all loop that hammered IPC.
+        await api.rawQuery('DELETE FROM po_line_items WHERE po_id = ?', [editId]);
       } else {
         const created = await api.create('purchase_orders', poData);
         poId = created.id;
@@ -484,7 +503,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
             description: l.description,
             quantity: parseFloat(l.quantity) || 0,
             unit_price: parseFloat(l.unit_price) || 0,
-            amount: l.amount,
+            amount: roundCents(l.amount),
             account_id: l.account_id || null,
             quantity_received: 0,
           })
@@ -528,7 +547,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
       {error && (
         <div
           className="mb-4 p-3 bg-bg-tertiary border border-accent-expense text-accent-expense text-xs font-mono"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           {error}
         </div>
@@ -561,9 +580,11 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
               onChange={(e) => setVendorId(e.target.value)}
             >
               <option value="">Select vendor...</option>
-              {vendors.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
+              {[...vendors]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
             </select>
           </div>
           <div>
@@ -586,6 +607,8 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
               className="block-input font-mono text-xs w-full"
               value={expectedDate}
               onChange={(e) => setExpectedDate(e.target.value)}
+              // DATE: Item #3 — expected delivery cannot be before order date.
+              min={orderDate || undefined}
             />
           </div>
           <div className="col-span-2">
@@ -654,10 +677,14 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
                         onChange={(e) => updateLine(line.tempId, 'account_id', e.target.value)}
                       >
                         <option value="">— Account —</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.code ? `${a.code} · ` : ''}{a.name}
-                          </option>
+                        {groupPOAccountsByType(accounts).map((g) => (
+                          <optgroup key={g.label} label={g.label}>
+                            {g.items.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.code ? `${a.code} · ` : ''}{a.name}
+                              </option>
+                            ))}
+                          </optgroup>
                         ))}
                       </select>
                     </td>
@@ -668,7 +695,6 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
                         onChange={(e) => updateLine(line.tempId, 'quantity', e.target.value)}
                         placeholder="1"
                         type="number"
-                        min="0"
                         step="any"
                       />
                     </td>
@@ -679,12 +705,11 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
                         onChange={(e) => updateLine(line.tempId, 'unit_price', e.target.value)}
                         placeholder="0.00"
                         type="number"
-                        min="0"
                         step="any"
                       />
                     </td>
                     <td className="text-right font-mono text-xs text-text-primary px-2">
-                      {fmt(line.amount)}
+                      {formatCurrency(line.amount)}
                     </td>
                     <td className="text-center">
                       <button
@@ -707,7 +732,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
           <div className="w-64">
             <div className="flex justify-between text-xs py-1 border-b border-border-primary">
               <span className="text-text-muted">Subtotal</span>
-              <span className="font-mono text-text-primary">{fmt(subtotal)}</span>
+              <span className="font-mono text-text-primary">{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex items-center justify-between text-xs py-1 border-b border-border-primary gap-2">
               <span className="text-text-muted whitespace-nowrap">Tax %</span>
@@ -718,16 +743,15 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
                   value={taxPct}
                   onChange={(e) => setTaxPct(e.target.value)}
                   type="number"
-                  min="0"
                   max="100"
                   step="any"
                 />
               </div>
-              <span className="font-mono text-text-primary">{fmt(taxAmount)}</span>
+              <span className="font-mono text-text-primary">{formatCurrency(taxAmount)}</span>
             </div>
             <div className="flex justify-between text-xs py-1.5">
               <span className="font-semibold text-text-primary">Total</span>
-              <span className="font-mono font-semibold text-accent-income text-sm">{fmt(total)}</span>
+              <span className="font-mono font-semibold text-accent-income text-sm">{formatCurrency(total)}</span>
             </div>
           </div>
         </div>
@@ -769,6 +793,7 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
   const [actionLoading, setActionLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings | null>(null);
 
   const load = useCallback(async () => {
     if (!activeCompany) return;
@@ -793,7 +818,36 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
     }
   }, [activeCompany, poId]);
 
+  // Invoice settings drive the PO logo (logo_data) and accent color so the
+  // printed PO matches the rest of the company's customer-facing output.
+  useEffect(() => {
+    (api as any).getInvoiceSettings?.()
+      .then((r: any) => { if (r && !r.error) setInvoiceSettings(r); })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => { load(); }, [load]);
+
+  const buildPrintHTML = () => {
+    if (!po) return '';
+    const v = vendors[po.vendor_id] || null;
+    return generatePurchaseOrderHTML(po, activeCompany, v, lines, invoiceSettings || undefined);
+  };
+  const handlePreview = async () => {
+    const html = buildPrintHTML();
+    if (!html) return;
+    await api.printPreview(html, `Purchase Order ${po?.po_number || ''}`);
+  };
+  const handlePrint = async () => {
+    const html = buildPrintHTML();
+    if (!html) return;
+    await api.print(html);
+  };
+  const handleSavePDF = async () => {
+    const html = buildPrintHTML();
+    if (!html) return;
+    await api.saveToPDF(html, `PO-${po?.po_number || 'document'}`);
+  };
 
   const handleApprove = async () => {
     if (!po) return;
@@ -859,23 +913,57 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
           <div>
             <h1 className="module-title flex items-center gap-2">
               <span className="font-mono">{po.po_number}</span>
-              <span className={STATUS_BADGE[po.status] || 'block-badge'}>
-                {STATUS_LABELS[po.status] ?? po.status}
+              <span className={formatStatus(po.status).className}>
+                {formatStatus(po.status).label}
               </span>
             </h1>
             <p className="text-text-muted text-xs mt-0.5">Purchase Order Detail</p>
           </div>
         </div>
         <div className="module-actions">
-          {!isFinal && (
-            <button
-              className="block-btn flex items-center gap-1.5 text-xs"
-              onClick={() => onEdit(po.id)}
-            >
-              <FileText size={13} />
-              Edit
-            </button>
-          )}
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={handlePreview}
+          >
+            <Eye size={13} /> Preview
+          </button>
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={handlePrint}
+          >
+            <Printer size={13} /> Print
+          </button>
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={handleSavePDF}
+          >
+            <Download size={13} /> Save PDF
+          </button>
+          <button
+            className="block-btn flex items-center gap-1.5 text-xs"
+            onClick={() => onEdit(po.id)}
+          >
+            <FileText size={13} />
+            Edit
+          </button>
+          <button
+            className="block-btn text-accent-expense hover:bg-accent-expense/10 flex items-center gap-1.5 text-xs"
+            onClick={async () => {
+              if (!window.confirm('Delete this purchase order and all its line items? This cannot be undone.')) return;
+              try {
+                // Perf: single DELETE replaces an N+1 line-item delete loop.
+                await api.rawQuery('DELETE FROM po_line_items WHERE po_id = ?', [po.id]);
+                await api.remove('purchase_orders', po.id);
+                onBack();
+              } catch (err: any) {
+                alert('Failed to delete purchase order: ' + (err?.message || 'Unknown error'));
+              }
+            }}
+            title="Delete purchase order"
+          >
+            <Trash2 size={13} />
+            Delete
+          </button>
         </div>
       </div>
 
@@ -883,7 +971,7 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
       {successMsg && (
         <div
           className="mb-4 p-3 bg-bg-tertiary border border-accent-income text-accent-income text-xs font-mono flex items-start gap-2"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           <CheckCircle size={14} className="mt-0.5 flex-shrink-0" />
           <span>{successMsg}</span>
@@ -892,7 +980,7 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
       {errorMsg && (
         <div
           className="mb-4 p-3 bg-bg-tertiary border border-accent-expense text-accent-expense text-xs font-mono"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           {errorMsg}
         </div>
@@ -924,11 +1012,11 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
             )}
             <div className="flex justify-between">
               <span className="text-[10px] text-text-muted uppercase tracking-wide">Order Date</span>
-              <span className="text-xs font-mono text-text-secondary">{fmtDate(po.issue_date)}</span>
+              <span className="text-xs font-mono text-text-secondary">{formatDate(po.issue_date)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[10px] text-text-muted uppercase tracking-wide">Expected Date</span>
-              <span className="text-xs font-mono text-text-secondary">{fmtDate(po.expected_date)}</span>
+              <span className="text-xs font-mono text-text-secondary">{formatDate(po.expected_date)}</span>
             </div>
           </div>
         </div>
@@ -941,15 +1029,15 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
           <div className="space-y-2.5">
             <div className="flex justify-between">
               <span className="text-[10px] text-text-muted uppercase tracking-wide">Subtotal</span>
-              <span className="text-xs font-mono text-text-primary">{fmt(po.subtotal)}</span>
+              <span className="text-xs font-mono text-text-primary">{formatCurrency(po.subtotal)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[10px] text-text-muted uppercase tracking-wide">Tax</span>
-              <span className="text-xs font-mono text-text-primary">{fmt(po.tax_amount)}</span>
+              <span className="text-xs font-mono text-text-primary">{formatCurrency(po.tax_amount)}</span>
             </div>
             <div className="flex justify-between border-t border-border-primary pt-2 mt-1">
               <span className="text-[10px] font-semibold text-text-primary uppercase tracking-wide">Total</span>
-              <span className="text-sm font-mono font-semibold text-accent-income">{fmt(po.total)}</span>
+              <span className="text-sm font-mono font-semibold text-accent-income">{formatCurrency(po.total)}</span>
             </div>
           </div>
           {po.notes && (
@@ -991,8 +1079,8 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
                       {acct ? (acct.code ? `${acct.code} · ${acct.name}` : acct.name) : '—'}
                     </td>
                     <td className="text-xs font-mono text-right text-text-secondary">{line.quantity}</td>
-                    <td className="text-xs font-mono text-right text-text-secondary">{fmt(line.unit_price)}</td>
-                    <td className="text-xs font-mono text-right text-text-primary">{fmt(line.amount)}</td>
+                    <td className="text-xs font-mono text-right text-text-secondary">{formatCurrency(line.unit_price)}</td>
+                    <td className="text-xs font-mono text-right text-text-primary">{formatCurrency(line.amount)}</td>
                     <td className="text-xs font-mono text-right">
                       <span
                         className={
@@ -1050,15 +1138,20 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
         </div>
       )}
 
+      {/* Cross-integration panels */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="purchase_order" entityId={poId} hide={['lines']} />
+        <EntityTimeline entityType="purchase_orders" entityId={poId} />
+      </div>
+
       {isFinal && (
         <div className="block-card">
           <div className="flex items-center gap-2 text-xs text-text-muted">
             <Package size={14} />
             This purchase order is{' '}
-            <span className={STATUS_BADGE[po.status] || 'block-badge'}>
-              {STATUS_LABELS[po.status]}
-            </span>{' '}
-            and no further actions are available.
+            <span className={formatStatus(po.status).className}>
+              {formatStatus(po.status).label}
+            </span>.
           </div>
         </div>
       )}
@@ -1072,6 +1165,16 @@ const PurchaseOrdersModule: React.FC = () => {
   const [view, setView] = useState<View>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [listKey, setListKey] = useState(0);
+
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('purchase_order');
+    if (focus) {
+      setSelectedId(focus.id);
+      setView('detail');
+    }
+  }, [consumeFocusEntity]);
 
   const goList = useCallback(() => {
     setView('list');
@@ -1097,6 +1200,7 @@ const PurchaseOrdersModule: React.FC = () => {
   const handleSaved = useCallback((id: string) => {
     setSelectedId(id);
     setEditId(null);
+    setListKey(k => k + 1);
     setView('detail');
   }, []);
 
@@ -1122,6 +1226,7 @@ const PurchaseOrdersModule: React.FC = () => {
 
   return (
     <POList
+      key={listKey}
       onNew={goNew}
       onView={goDetail}
     />

@@ -1,0 +1,160 @@
+import { Router } from 'express';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+
+export const backupRouter = Router();
+
+const BACKUP_DIR_UNRESOLVED = path.resolve(__dirname, '..', '..', 'data', 'backups');
+if (!fs.existsSync(BACKUP_DIR_UNRESOLVED)) fs.mkdirSync(BACKUP_DIR_UNRESOLVED, { recursive: true });
+const BACKUP_DIR = fs.realpathSync(BACKUP_DIR_UNRESOLVED);
+
+/** Sanitize email into a safe filename component (no path traversal). */
+function sanitizeEmail(email: string): string {
+  if (!email || typeof email !== 'string') throw new Error('Invalid email');
+  const cleaned = email.replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
+  if (!cleaned) throw new Error('Invalid email');
+  return cleaned;
+}
+
+/**
+ * Resolve a filename inside BACKUP_DIR and guarantee the result cannot escape it.
+ * This is the authoritative path-traversal barrier — every fs path flows through here.
+ */
+function resolveInBackupDir(filename: string): string {
+  // Strip any directory component first. path.basename is a sanitizer that
+  // removes path separators and traversal segments, so only a flat filename is
+  // ever joined to BACKUP_DIR. All callers already pass flat names, so this is
+  // a no-op in practice — it's defense-in-depth ahead of the containment check.
+  const safe = path.basename(filename);
+  const full = path.resolve(BACKUP_DIR, safe);
+  if (full !== BACKUP_DIR && !full.startsWith(BACKUP_DIR + path.sep)) {
+    throw new Error('Path escapes backup directory');
+  }
+  return full;
+}
+
+/**
+ * Constant-time HMAC check. `message` is the signed payload: the raw body for
+ * uploads, or the (sanitized) email for download/status GETs which have no body.
+ * Returns false for a missing/short/mismatched signature — callers treat false
+ * as "reject". Every /api/backup route is authenticated solely by this HMAC, so
+ * the signature is mandatory, never optional.
+ */
+function verifySignature(message: Buffer | string, signature: string | undefined): boolean {
+  if (!signature) return false;
+  const secret = process.env.SYNC_SECRET!;
+  const expected = crypto.createHmac('sha256', secret).update(message).digest('hex');
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  } catch {
+    return false;
+  }
+}
+
+// ─── POST /api/backup/upload ────────────────────────────
+backupRouter.post('/upload', (req, res) => {
+  try {
+    const signature = req.headers['x-bap-signature'] as string;
+    const email = req.headers['x-bap-email'] as string;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Missing x-bap-email header' });
+    }
+
+    const safeEmail = sanitizeEmail(email);
+
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      const body = Buffer.concat(chunks);
+
+      if (!verifySignature(body, signature)) {
+        return res.status(403).json({ error: 'Invalid or missing signature' });
+      }
+
+      if (body.length < 100) {
+        return res.status(400).json({ error: 'Database file too small' });
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupFilename = `${safeEmail}_${timestamp}.db`;
+      const latestFilename = `${safeEmail}_latest.db`;
+
+      // Write files using only sanitized filenames resolved inside the fixed BACKUP_DIR
+      fs.writeFileSync(resolveInBackupDir(backupFilename), body);
+      fs.writeFileSync(resolveInBackupDir(latestFilename), body);
+
+      // Clean old backups (keep last 20)
+      const allBackups = fs.readdirSync(BACKUP_DIR)
+        .filter(f => f.startsWith(safeEmail) && f !== latestFilename)
+        .sort()
+        .reverse();
+      for (let i = 20; i < allBackups.length; i++) {
+        // Only delete files that match the safe prefix pattern
+        const fname = allBackups[i];
+        if (/^[A-Za-z0-9@._-]+\.db$/.test(fname)) {
+          fs.unlinkSync(resolveInBackupDir(fname));
+        }
+      }
+
+      console.log(`Backup uploaded for ${safeEmail}: ${body.length} bytes`);
+      return res.json({ ok: true, size: body.length, timestamp });
+    });
+  } catch (err: any) {
+    console.error('Backup upload error:', err);
+    return res.status(500).json({ error: 'Backup upload failed' });
+  }
+});
+
+// ─── GET /api/backup/download/:email ────────────────────
+backupRouter.get('/download/:email', (req, res) => {
+  try {
+    const safeEmail = sanitizeEmail(req.params.email);
+    // GETs have no body, so the HMAC is over the sanitized email. Without this
+    // any caller who knows a user's email could exfiltrate their database.
+    if (!verifySignature(safeEmail, req.headers['x-bap-signature'] as string | undefined)) {
+      return res.status(403).json({ error: 'Invalid or missing signature' });
+    }
+    const latestFilename = `${safeEmail}_latest.db`;
+    const fullPath = resolveInBackupDir(latestFilename);
+
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: 'No backup found for this user' });
+    }
+
+    const stats = fs.statSync(fullPath);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('X-Backup-Size', stats.size);
+    fs.createReadStream(fullPath).pipe(res);
+  } catch (err: any) {
+    console.error('Backup download error:', err);
+    return res.status(500).json({ error: 'Backup download failed' });
+  }
+});
+
+// ─── GET /api/backup/status/:email ──────────────────────
+backupRouter.get('/status/:email', (req, res) => {
+  try {
+    const safeEmail = sanitizeEmail(req.params.email);
+    if (!verifySignature(safeEmail, req.headers['x-bap-signature'] as string | undefined)) {
+      return res.status(403).json({ error: 'Invalid or missing signature' });
+    }
+    const latestFilename = `${safeEmail}_latest.db`;
+    const fullPath = resolveInBackupDir(latestFilename);
+
+    if (!fs.existsSync(fullPath)) {
+      return res.json({ exists: false });
+    }
+
+    const stats = fs.statSync(fullPath);
+    return res.json({
+      exists: true,
+      size: stats.size,
+      lastModified: stats.mtime.toISOString(),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Status check failed' });
+  }
+});

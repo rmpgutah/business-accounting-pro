@@ -1,12 +1,28 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings as SettingsIcon, Building2, Percent, Mail, CreditCard,
-  Database, Save, HardDrive,
+  Database, Save, HardDrive, Trash2, AlertTriangle, UserX, Cloud, CloudOff, Download, PenTool,
+  Calculator, Landmark, Keyboard, Plus,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../../lib/api';
+import { logger } from '../../lib/logger';
+import { formatCurrency } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAuthStore } from '../../stores/authStore';
 import ImportExport from './ImportExport';
+import SignaturePad from '../../components/SignaturePad';
+import PersonalizationSettings from './PersonalizationSettings';
+import IndustryPresetSettings from './IndustryPresetSettings';
+import WorkflowSettings from './WorkflowSettings';
+import NumberingSettings from './NumberingSettings';
+import EmailTemplatesSettings from './EmailTemplatesSettings';
+import StatusBuilderSettings from './StatusBuilderSettings';
+import PortalIntegrationSettings from './PortalIntegrationSettings';
+import TrashSettings from './TrashSettings';
+import IntegritySettings from './IntegritySettings';
+import PeriodCloseSettings from './PeriodCloseSettings';
+import MacroRecorder from '../../components/MacroRecorder';
 
 // ─── Types ──────────────────────────────────────────────
 interface SettingsMap {
@@ -24,7 +40,7 @@ const SectionCard: React.FC<{
     <div className="flex items-center gap-3">
       <div
         className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         <Icon size={16} className="text-accent-blue" />
       </div>
@@ -49,6 +65,254 @@ const Field: React.FC<{
     {hint && <p className="text-[11px] text-text-muted mt-1">{hint}</p>}
   </div>
 );
+
+// ─── VPS Cloud Backup ──────────────────────────────────
+const VpsBackup: React.FC = () => {
+  const [backing, setBacking] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [result, setResult] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  const handleBackup = async () => {
+    setBacking(true);
+    setResult(null);
+    try {
+      const res = await api.backupToVps();
+      if (res.success) {
+        const sizeMB = ((res.size || 0) / 1024 / 1024).toFixed(1);
+        setResult({ type: 'success', msg: `Backed up ${sizeMB} MB to VPS at ${res.timestamp}` });
+      } else {
+        setResult({ type: 'error', msg: res.error || 'Backup failed' });
+      }
+    } catch (err: any) {
+      setResult({ type: 'error', msg: err?.message || 'Backup failed' });
+    } finally {
+      setBacking(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!window.confirm('This will replace your local database with the latest VPS backup. A local backup will be saved first. Continue?')) return;
+    setRestoring(true);
+    setResult(null);
+    try {
+      const res = await api.restoreFromVps();
+      if (res.success) {
+        setResult({ type: 'success', msg: res.message || 'Restored. Restart the app.' });
+      } else {
+        setResult({ type: 'error', msg: res.error || 'Restore failed' });
+      }
+    } catch (err: any) {
+      setResult({ type: 'error', msg: err?.message || 'Restore failed' });
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  return (
+    <SectionCard icon={Cloud} title="Cloud Backup" description="Sync your database to your secure VPS">
+      {result && (
+        <div style={{
+          padding: '10px 14px', marginBottom: '12px', borderRadius: '6px',
+          background: result.type === 'success' ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)',
+          border: `1px solid ${result.type === 'success' ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)'}`,
+          color: result.type === 'success' ? '#34d399' : '#f87171',
+          fontSize: '13px',
+        }}>
+          {result.msg}
+        </div>
+      )}
+      <div className="flex items-center gap-3">
+        <button className="block-btn-primary flex items-center gap-1.5" onClick={handleBackup} disabled={backing || restoring}>
+          <Cloud size={14} />
+          {backing ? 'Uploading...' : 'Backup to VPS'}
+        </button>
+        <button className="block-btn flex items-center gap-1.5" onClick={handleRestore} disabled={backing || restoring}>
+          <Download size={14} />
+          {restoring ? 'Restoring...' : 'Restore from VPS'}
+        </button>
+      </div>
+      <p className="text-xs text-text-muted mt-3">
+        Backups are stored at accounting.rmpgutah.us/backups. Last 30 backups are kept.
+      </p>
+    </SectionCard>
+  );
+};
+
+// ─── Danger Zone ───────────────────────────────────────
+const DangerZone: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const companies = useCompanyStore((s) => s.companies);
+  const setCompanies = useCompanyStore((s) => s.setCompanies);
+  const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
+  const authUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
+  const [confirmDelete, setConfirmDelete] = useState<'company' | 'account' | null>(null);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteCompany = async () => {
+    if (!activeCompany || confirmText !== activeCompany.name) return;
+    setDeleting(true);
+    try {
+      // Delete all company data
+      // Every table with a company_id column — order matters for FK constraints
+      // (child tables first, parent tables last)
+      const tables = [
+        // Debt collection
+        'debts', 'debt_automation_rules', 'debt_templates',
+        // Rules & automations
+        'rules', 'approval_queue', 'automation_rules', 'automation_run_log', 'financial_anomalies',
+        // Quotes
+        'quotes',
+        // Core records
+        'invoices', 'expenses', 'clients', 'vendors', 'projects', 'employees',
+        'accounts', 'journal_entries', 'categories', 'budgets',
+        // Finance
+        'bank_accounts', 'bank_rules', 'bills', 'purchase_orders', 'fixed_assets', 'credit_notes',
+        'payments', 'bill_payments', 'tax_payments', 'tax_categories', 'tax_rates', 'payroll_runs',
+        // Platform
+        'documents', 'notifications', 'recurring_templates', 'time_entries', 'inventory_items',
+        'audit_log', 'email_log', 'sync_queue', 'invoice_tokens', 'stripe_transactions',
+        // Settings & metadata
+        'settings', 'custom_field_defs', 'dimensions', 'saved_views', 'report_templates',
+        'employee_deductions',
+      ];
+      for (const table of tables) {
+        await api.rawQuery(`DELETE FROM ${table} WHERE company_id = ?`, [activeCompany.id]).catch(e => logger.warn('CompanyDelete', e));
+      }
+      // Remove user-company link
+      await api.rawQuery('DELETE FROM user_companies WHERE company_id = ?', [activeCompany.id]).catch(e => logger.warn('CompanyDelete', e));
+      // Delete the company record
+      await api.remove('companies', activeCompany.id);
+      // Refresh companies list
+      const remaining = await api.listCompanies();
+      setCompanies(remaining ?? []);
+      if (remaining && remaining.length > 0) {
+        setActiveCompany(remaining[0]);
+        await api.switchCompany(remaining[0].id);
+      } else {
+        setActiveCompany(null);
+      }
+      setConfirmDelete(null);
+      setConfirmText('');
+    } catch (err) {
+      console.error('Failed to delete company:', err);
+      alert('Failed to delete company');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!authUser || confirmText !== authUser.email) return;
+    setDeleting(true);
+    try {
+      // SECURITY: routed through dedicated IPC handler — direct DELETE FROM users
+      // via raw-query is no longer permitted (credential-table guard in main process).
+      await api.deleteAccount(authUser.id);
+      // Logout
+      logout();
+      setCompanies([]);
+      setActiveCompany(null);
+    } catch (err) {
+      console.error('Failed to delete account:', err);
+      alert('Failed to delete account');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="block-card" style={{ borderColor: 'rgba(248,113,113,0.25)' }}>
+      <div className="flex items-center gap-3 mb-4">
+        <div
+          className="w-8 h-8 flex items-center justify-center shrink-0"
+          style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}
+        >
+          <AlertTriangle size={16} className="text-accent-expense" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-accent-expense">Danger Zone</h3>
+          <p className="text-xs text-text-muted mt-0.5">Irreversible actions</p>
+        </div>
+      </div>
+      <div className="border-t pt-4 space-y-4" style={{ borderColor: 'rgba(248,113,113,0.15)' }}>
+        {/* Delete Company */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-text-primary font-medium">Delete this company</p>
+            <p className="text-xs text-text-muted">Permanently remove {activeCompany?.name || 'this company'} and all its data</p>
+          </div>
+          {confirmDelete !== 'company' ? (
+            <button
+              className="block-btn-danger flex items-center gap-1.5 text-xs"
+              onClick={() => { setConfirmDelete('company'); setConfirmText(''); }}
+            >
+              <Trash2 size={13} /> Delete Company
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                className="block-input text-xs"
+                style={{ width: '180px' }}
+                placeholder={`Type "${activeCompany?.name}" to confirm`}
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                autoFocus
+              />
+              <button
+                className="block-btn-danger text-xs"
+                disabled={confirmText !== activeCompany?.name || deleting}
+                onClick={handleDeleteCompany}
+              >
+                {deleting ? 'Deleting...' : 'Confirm'}
+              </button>
+              <button className="block-btn text-xs" onClick={() => setConfirmDelete(null)}>Cancel</button>
+            </div>
+          )}
+        </div>
+
+        {/* Delete Account */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-text-primary font-medium">Delete your account</p>
+            <p className="text-xs text-text-muted">Permanently remove your user account ({authUser?.email})</p>
+          </div>
+          {confirmDelete !== 'account' ? (
+            <button
+              className="block-btn-danger flex items-center gap-1.5 text-xs"
+              onClick={() => { setConfirmDelete('account'); setConfirmText(''); }}
+            >
+              <UserX size={13} /> Delete Account
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                className="block-input text-xs"
+                style={{ width: '200px' }}
+                placeholder={`Type "${authUser?.email}" to confirm`}
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                autoFocus
+              />
+              <button
+                className="block-btn-danger text-xs"
+                disabled={confirmText !== authUser?.email || deleting}
+                onClick={handleDeleteAccount}
+              >
+                {deleting ? 'Deleting...' : 'Confirm'}
+              </button>
+              <button className="block-btn text-xs" onClick={() => setConfirmDelete(null)}>Cancel</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ─── Component ──────────────────────────────────────────
 export default function SettingsModule() {
@@ -91,6 +355,15 @@ export default function SettingsModule() {
     last_backup_date: '',
   });
   const [backupMsg, setBackupMsg] = useState('');
+
+  // ── Macros ──
+  const [macroOpen, setMacroOpen] = useState(false);
+  const [macros, setMacros] = useState<any[]>([]);
+
+  // ── Federal / Utah Tax Config ──
+  const [taxYear, setTaxYear] = useState(2026);
+  const [fedConstants, setFedConstants] = useState<any>(null);
+  const [utahConfig, setUtahConfig] = useState({ flat_rate: '4.55', personal_exemption_credit: '393', sui_rate: '1.20', sui_wage_base: '44800', wc_rate: '0.80', wc_class_code: '8810' });
 
   // ─── Load ─────────────────────────────────────────────
   useEffect(() => {
@@ -142,13 +415,73 @@ export default function SettingsModule() {
     if (activeCompany) setCompanyForm({ ...activeCompany });
   }, [activeCompany]);
 
+  // ── Load macros once on mount ──
+  useEffect(() => {
+    api.listMacros().then(setMacros).catch(() => setMacros([]));
+  }, []);
+
+  // ─── Load federal constants & Utah config when year changes ──
+  useEffect(() => {
+    window.electronAPI.invoke('tax:get-brackets', { year: taxYear }).then((data: any) => {
+      if (data?.constants) setFedConstants(data.constants);
+    }).catch(() => {});
+    api.taxGetUtahConfig(taxYear).then((data: any) => {
+      if (data) {
+        setUtahConfig({
+          flat_rate: String((data.flat_rate * 100).toFixed(2)),
+          personal_exemption_credit: String(data.personal_exemption_credit),
+          sui_rate: String((data.sui_rate * 100).toFixed(2)),
+          sui_wage_base: String(data.sui_wage_base),
+          wc_rate: String((data.wc_rate * 100).toFixed(2)),
+          wc_class_code: data.wc_class_code || '8810',
+        });
+      }
+    }).catch(() => {});
+  }, [taxYear]);
+
+  const handleSeedYear = async () => {
+    await window.electronAPI.invoke('tax:seed-year', { year: taxYear });
+    const data = await window.electronAPI.invoke('tax:get-brackets', { year: taxYear });
+    if (data?.constants) setFedConstants(data.constants);
+  };
+
+  const handleSaveUtahConfig = async () => {
+    // Validate before persisting. parseFloat('') is NaN, and saving NaN here
+    // corrupts every Utah payroll calculation (NaN propagates through net pay
+    // and tax withholding). Reject non-finite / out-of-range input instead —
+    // mirrors the validation in saveTaxRates above.
+    const pct = (label: string, raw: string): number => {
+      const n = parseFloat(raw);
+      if (!Number.isFinite(n) || n < 0 || n > 100) throw new Error(`${label} must be a number between 0 and 100.`);
+      return n / 100;
+    };
+    const amount = (label: string, raw: string): number => {
+      const n = parseFloat(raw);
+      if (!Number.isFinite(n) || n < 0) throw new Error(`${label} must be a non-negative number.`);
+      return n;
+    };
+    try {
+      await api.taxSaveUtahConfig(taxYear, {
+        flat_rate: pct('Flat rate', utahConfig.flat_rate),
+        personal_exemption_credit: amount('Personal exemption credit', utahConfig.personal_exemption_credit),
+        sui_rate: pct('SUI rate', utahConfig.sui_rate),
+        sui_wage_base: amount('SUI wage base', utahConfig.sui_wage_base),
+        wc_rate: pct('Workers-comp rate', utahConfig.wc_rate),
+        wc_class_code: utahConfig.wc_class_code,
+      });
+    } catch (err: any) {
+      alert(err?.message || 'Invalid Utah payroll configuration values.');
+    }
+  };
+
   // ─── Save helpers ─────────────────────────────────────
   const saveSetting = useCallback(async (key: string, value: string) => {
     try {
       // Bug fix #16b: use scoped setSetting instead of generic query/update/create.
       await api.setSetting(key, value);
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Failed to save setting ${key}:`, err);
+      alert('Failed to save setting: ' + (err?.message || 'Unknown error'));
     }
   }, []);
 
@@ -160,8 +493,9 @@ export default function SettingsModule() {
           Object.entries(entries).map(([key, value]) => saveSetting(key, value)),
         );
         setSettings((prev) => ({ ...prev, ...entries }));
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Failed to save ${section}:`, err);
+        alert(`Failed to save ${section}: ` + (err?.message || 'Unknown error'));
       } finally {
         setSavingSection('');
       }
@@ -202,13 +536,18 @@ export default function SettingsModule() {
   };
 
   // ─── Save Company ─────────────────────────────────────
+  const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
   const saveCompany = async () => {
     if (!activeCompany?.id) return;
     setSavingSection('company');
     try {
       await api.updateCompany(activeCompany.id, companyForm);
-    } catch (err) {
+      // Refresh the store so other modules see the updated company data
+      const updated = await api.getCompany(activeCompany.id);
+      if (updated) setActiveCompany(updated);
+    } catch (err: any) {
       console.error('Failed to save company:', err);
+      alert('Failed to save company: ' + (err?.message || 'Unknown error'));
     } finally {
       setSavingSection('');
     }
@@ -223,8 +562,9 @@ export default function SettingsModule() {
       setBackupConfig((prev) => ({ ...prev, last_backup_date: now }));
       setBackupMsg('Backup created successfully.');
       setTimeout(() => setBackupMsg(''), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Backup failed:', err);
+      alert('Backup failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setSavingSection('');
     }
@@ -245,7 +585,7 @@ export default function SettingsModule() {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <SettingsIcon size={18} className="text-accent-blue" />
           </div>
@@ -268,6 +608,8 @@ export default function SettingsModule() {
           <Field label="Company Name">
             <input
               className="block-input"
+              name="company_name"
+              autoComplete="organization"
               value={companyForm.name || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
               placeholder="Acme Corp"
@@ -276,6 +618,8 @@ export default function SettingsModule() {
           <Field label="Legal Name">
             <input
               className="block-input"
+              name="legal_name"
+              autoComplete="organization"
               value={companyForm.legal_name || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, legal_name: e.target.value })}
               placeholder="Acme Corporation LLC"
@@ -286,6 +630,9 @@ export default function SettingsModule() {
           <Field label="Email">
             <input
               className="block-input"
+              type="email"
+              name="email"
+              autoComplete="email"
               value={companyForm.email || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
               placeholder="info@company.com"
@@ -294,6 +641,9 @@ export default function SettingsModule() {
           <Field label="Phone">
             <input
               className="block-input"
+              type="tel"
+              name="phone"
+              autoComplete="tel"
               value={companyForm.phone || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
               placeholder="(555) 123-4567"
@@ -304,6 +654,8 @@ export default function SettingsModule() {
           <Field label="Address">
             <input
               className="block-input"
+              name="address_line1"
+              autoComplete="address-line1"
               value={companyForm.address_line1 || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, address_line1: e.target.value })}
               placeholder="123 Main St"
@@ -314,6 +666,8 @@ export default function SettingsModule() {
           <Field label="City">
             <input
               className="block-input"
+              name="city"
+              autoComplete="address-level2"
               value={companyForm.city || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
               placeholder="New York"
@@ -322,6 +676,8 @@ export default function SettingsModule() {
           <Field label="State">
             <input
               className="block-input"
+              name="state"
+              autoComplete="address-level1"
               value={companyForm.state || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, state: e.target.value })}
               placeholder="NY"
@@ -330,6 +686,8 @@ export default function SettingsModule() {
           <Field label="ZIP">
             <input
               className="block-input"
+              name="zip"
+              autoComplete="postal-code"
               value={companyForm.zip || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, zip: e.target.value })}
               placeholder="10001"
@@ -340,6 +698,8 @@ export default function SettingsModule() {
           <Field label="Tax ID (EIN)">
             <input
               className="block-input"
+              name="tax_id"
+              autoComplete="off"
               value={companyForm.tax_id || ''}
               onChange={(e) => setCompanyForm({ ...companyForm, tax_id: e.target.value })}
               placeholder="XX-XXXXXXX"
@@ -353,15 +713,88 @@ export default function SettingsModule() {
                 setCompanyForm({ ...companyForm, fiscal_year_start: parseInt(e.target.value) })
               }
             >
+              {/* Months sorted alphabetically per app-wide directive (semantic order is Jan–Dec). */}
               {[
                 'January', 'February', 'March', 'April', 'May', 'June',
                 'July', 'August', 'September', 'October', 'November', 'December',
-              ].map((m, i) => (
-                <option key={i + 1} value={i + 1}>{m}</option>
+              ]
+                .map((m, i) => ({ label: m, value: i + 1 }))
+                .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+                .map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
               ))}
             </select>
           </Field>
         </div>
+
+        {/* Bank Info for Check Printing */}
+        <div className="mt-4 pt-4 border-t border-border-primary">
+          <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider mb-3">Bank Information (Check Printing)</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Bank Name">
+              <input
+                className="block-input"
+                value={companyForm.bank_name || ''}
+                onChange={(e) => setCompanyForm({ ...companyForm, bank_name: e.target.value })}
+                placeholder="First National Bank"
+              />
+            </Field>
+            <Field label="Routing Number">
+              <input
+                className="block-input"
+                value={companyForm.bank_routing_number || ''}
+                onChange={(e) => setCompanyForm({ ...companyForm, bank_routing_number: e.target.value })}
+                placeholder="123456789"
+                maxLength={9}
+              />
+            </Field>
+            <Field label="Account Number">
+              <input
+                className="block-input"
+                value={companyForm.bank_account_number || ''}
+                onChange={(e) => setCompanyForm({ ...companyForm, bank_account_number: e.target.value })}
+                placeholder="0001234567"
+              />
+            </Field>
+            <Field label="Fraction Code (optional)">
+              <input
+                className="block-input"
+                value={companyForm.bank_fraction_code || ''}
+                onChange={(e) => setCompanyForm({ ...companyForm, bank_fraction_code: e.target.value })}
+                placeholder="12-345/6789"
+              />
+            </Field>
+          </div>
+        </div>
+
+        {/* Authorized Signature for Check Printing */}
+        <div className="mt-4 pt-4 border-t border-border-primary">
+          <div className="flex items-center gap-2 mb-3">
+            <PenTool size={14} className="text-text-muted" />
+            <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider">Authorized Signature (Check Printing)</h4>
+          </div>
+          <p className="text-xs text-text-muted mb-3">
+            Draw or upload the authorized signature that will appear on printed payroll checks.
+            This signature is stored securely and applied automatically when checks are generated.
+          </p>
+          {companyForm.signature_image && (
+            <div className="mb-3">
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Current Saved Signature</div>
+              <div style={{ border: '1px solid #333', borderRadius: '6px', background: '#fff', padding: '8px', display: 'inline-block' }}>
+                <img
+                  src={companyForm.signature_image}
+                  alt="Saved signature"
+                  style={{ height: '50px', objectFit: 'contain' }}
+                />
+              </div>
+            </div>
+          )}
+          <SignaturePad
+            value={companyForm.signature_image || ''}
+            onChange={(dataUrl) => setCompanyForm({ ...companyForm, signature_image: dataUrl })}
+          />
+        </div>
+
         <div className="flex justify-end mt-4">
           <button
             className="block-btn-primary flex items-center gap-1.5"
@@ -415,7 +848,7 @@ export default function SettingsModule() {
         {taxRatesError && (
           <div
             className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             {taxRatesError}
           </div>
@@ -498,7 +931,7 @@ export default function SettingsModule() {
         {emailError && (
           <div
             className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             {emailError}
           </div>
@@ -533,7 +966,7 @@ export default function SettingsModule() {
           </Field>
           <div className="flex items-center gap-3">
             <div
-              className={`w-10 h-5 flex items-center rounded-sm p-0.5 cursor-pointer transition-colors ${
+              className={`w-10 h-5 flex items-center rounded p-0.5 cursor-pointer transition-colors ${
                 stripeConfig.stripe_test_mode
                   ? 'bg-accent-warning'
                   : 'bg-bg-tertiary border border-border-primary'
@@ -543,10 +976,10 @@ export default function SettingsModule() {
               }
             >
               <div
-                className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
+                className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                   stripeConfig.stripe_test_mode ? 'translate-x-5' : 'translate-x-0'
                 }`}
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               />
             </div>
             <span className="text-sm text-text-secondary">
@@ -587,7 +1020,7 @@ export default function SettingsModule() {
           <div className="space-y-2">
             <div className="flex items-center gap-3">
               <div
-                className={`w-10 h-5 flex items-center rounded-sm p-0.5 cursor-pointer transition-colors ${
+                className={`w-10 h-5 flex items-center rounded p-0.5 cursor-pointer transition-colors ${
                   backupConfig.auto_backup
                     ? 'bg-accent-income'
                     : 'bg-bg-tertiary border border-border-primary'
@@ -599,10 +1032,10 @@ export default function SettingsModule() {
                 }}
               >
                 <div
-                  className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
+                  className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                     backupConfig.auto_backup ? 'translate-x-5' : 'translate-x-0'
                   }`}
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 />
               </div>
               <span className="text-sm text-text-secondary">
@@ -611,7 +1044,12 @@ export default function SettingsModule() {
             </div>
             {backupConfig.last_backup_date ? (
               <p className="text-xs text-text-muted">
-                Last backup: {format(new Date(backupConfig.last_backup_date), 'MMM d, yyyy h:mm a')}
+                Last backup: {(() => {
+                  // Defensive: a malformed date string makes format() throw on
+                  // Invalid Date, which would crash the Settings panel.
+                  const d = new Date(backupConfig.last_backup_date);
+                  return isNaN(d.getTime()) ? '—' : format(d, 'MMM d, yyyy h:mm a');
+                })()}
               </p>
             ) : (
               <p className="text-xs text-text-muted">No backups yet</p>
@@ -633,8 +1071,162 @@ export default function SettingsModule() {
         </div>
       </SectionCard>
 
+      {/* ── Personalization ─────────────────────────────── */}
+      <PersonalizationSettings />
+
+      {/* ── Industry Presets ────────────────────────────── */}
+      <IndustryPresetSettings />
+
+      {/* ── Status Builder (custom statuses + transitions) ── */}
+      <StatusBuilderSettings />
+
+      {/* ── Keyboard Shortcuts & Macros ─────────────────── */}
+      <SectionCard icon={Keyboard} title="Keyboard Shortcuts & Macros" description="Customize Cmd+K palette and record macros for repeated actions">
+        <div className="space-y-3">
+          <div className="text-xs text-text-secondary">
+            Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border-primary text-[10px] font-mono" style={{ borderRadius: '4px' }}>⌘K</kbd> anywhere in the app to open the command palette.
+          </div>
+          <div>
+            <button onClick={() => setMacroOpen(true)} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: '6px' }}>
+              <Plus size={12} /> Record New Macro
+            </button>
+          </div>
+          {macros.length > 0 && (
+            <div>
+              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-2">Saved Macros</label>
+              <div className="space-y-1.5">
+                {macros.map((m: any) => (
+                  <div key={m.id} className="flex items-center justify-between p-2 bg-bg-tertiary border border-border-primary text-xs" style={{ borderRadius: '6px' }}>
+                    <div>
+                      <div className="text-text-primary font-medium">{m.name}</div>
+                      {m.description && <div className="text-text-muted text-[10px]">{m.description}</div>}
+                    </div>
+                    <button onClick={async () => {
+                      if (confirm('Delete this macro?')) {
+                        await api.deleteMacro(m.id);
+                        api.listMacros().then(setMacros);
+                      }
+                    }} className="text-text-muted hover:text-accent-expense">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
+      {/* ── Workflow Automation ─────────────────────────── */}
+      <WorkflowSettings />
+
+      {/* ── Numbering ────────────────────────────────────── */}
+      <NumberingSettings />
+
+      {/* ── Email Templates ─────────────────────────────── */}
+      <EmailTemplatesSettings />
+
+      {/* ── Client Portal Integration (rmpgutahps.us) ──── */}
+      <PortalIntegrationSettings />
+
+      {/* ── Trash (soft-delete recovery) ─────────────────── */}
+      <TrashSettings />
+
+      {/* ── Database Integrity (P1.15/16/17) ─────────────── */}
+      <IntegritySettings />
+
+      {/* ── Period Close + Lockdown (D3) ─────────────────── */}
+      <PeriodCloseSettings />
+
+      {/* ── Cloud Backup (VPS) ──────────────────────────── */}
+      <VpsBackup />
+
       {/* ── Data Import / Export ────────────────────────── */}
       <ImportExport />
+
+      {/* ── Federal Tax Configuration ──────────────────── */}
+      <SectionCard icon={Calculator} title="Federal Tax Configuration" description="IRS rates, brackets, and FICA settings">
+        {/* Year Selector */}
+        <Field label="Tax Year">
+          <select value={taxYear} onChange={e => setTaxYear(Number(e.target.value))} className="block-select">
+            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </Field>
+
+        {/* Standard Deductions (read-only) */}
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <Field label="Single Std Deduction">
+            <div className="text-sm font-mono text-text-primary">{formatCurrency(fedConstants?.standard_deduction_single ?? 0)}</div>
+          </Field>
+          <Field label="MFJ Std Deduction">
+            <div className="text-sm font-mono text-text-primary">{formatCurrency(fedConstants?.standard_deduction_married ?? 0)}</div>
+          </Field>
+          <Field label="HoH Std Deduction">
+            <div className="text-sm font-mono text-text-primary">{formatCurrency(fedConstants?.standard_deduction_hoh ?? 0)}</div>
+          </Field>
+        </div>
+
+        {/* FICA Rates (read-only) */}
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <Field label="SS Rate">
+            <div className="text-sm font-mono text-text-primary">{((fedConstants?.ss_rate ?? 0.062) * 100).toFixed(2)}%</div>
+          </Field>
+          <Field label="SS Wage Base">
+            <div className="text-sm font-mono text-text-primary">{formatCurrency(fedConstants?.ss_wage_base ?? 0)}</div>
+          </Field>
+          <Field label="Medicare Rate">
+            <div className="text-sm font-mono text-text-primary">{((fedConstants?.medicare_rate ?? 0.0145) * 100).toFixed(2)}%</div>
+          </Field>
+        </div>
+
+        {/* Seed/Reset Button */}
+        <button onClick={handleSeedYear} className="block-btn-primary px-3 py-1.5 text-xs font-semibold mt-3" style={{ borderRadius: '6px' }}>
+          Reset {taxYear} to Defaults
+        </button>
+      </SectionCard>
+
+      {/* ── Utah State Tax ─────────────────────────────── */}
+      <SectionCard icon={Landmark} title="Utah State Tax" description="TC-40W withholding, SUI, and workers' comp">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Flat Withholding Rate (%)" hint="Utah TC-40W rate (default 4.55%)">
+            <input type="number" value={utahConfig.flat_rate} onChange={e => setUtahConfig(c => ({ ...c, flat_rate: e.target.value }))}
+              className="block-input" step="0.01" max="100" />
+          </Field>
+          <Field label="Personal Exemption Credit ($)">
+            <input type="number" value={utahConfig.personal_exemption_credit} onChange={e => setUtahConfig(c => ({ ...c, personal_exemption_credit: e.target.value }))}
+              className="block-input" step="1" />
+          </Field>
+          <Field label="SUI Rate (%)" hint="Employer-specific experience rate">
+            <input type="number" value={utahConfig.sui_rate} onChange={e => setUtahConfig(c => ({ ...c, sui_rate: e.target.value }))}
+              className="block-input" step="0.01" />
+          </Field>
+          <Field label="SUI Wage Base ($)">
+            <input type="number" value={utahConfig.sui_wage_base} onChange={e => setUtahConfig(c => ({ ...c, sui_wage_base: e.target.value }))}
+              className="block-input" step="100" />
+          </Field>
+          <Field label="Workers' Comp Rate (%)">
+            <input type="number" value={utahConfig.wc_rate} onChange={e => setUtahConfig(c => ({ ...c, wc_rate: e.target.value }))}
+              className="block-input" step="0.01" />
+          </Field>
+          <Field label="WC Class Code">
+            <input type="text" value={utahConfig.wc_class_code} onChange={e => setUtahConfig(c => ({ ...c, wc_class_code: e.target.value }))}
+              className="block-input" placeholder="8810" />
+          </Field>
+        </div>
+        <button onClick={handleSaveUtahConfig} className="block-btn-primary px-3 py-1.5 text-xs font-semibold mt-3" style={{ borderRadius: '6px' }}>
+          Save Utah Config
+        </button>
+      </SectionCard>
+
+      {/* ── Danger Zone ─────────────────────────────────── */}
+      <DangerZone />
+
+      {/* ── Macro Recorder Modal ────────────────────────── */}
+      <MacroRecorder
+        isOpen={macroOpen}
+        onClose={() => setMacroOpen(false)}
+        onSaved={() => api.listMacros().then(setMacros)}
+      />
     </div>
   );
 }

@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
 import api from '../../lib/api';
+import { toLocalDateString } from '../../lib/date-helpers';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
+import ErrorBanner from '../../components/ErrorBanner';
 import TimerWidget from './TimerWidget';
 import TimeEntryList from './TimeEntryList';
 import TimeEntryForm from './TimeEntryForm';
@@ -46,9 +49,10 @@ function getMonday(d: Date): Date {
 function weekDateRange(weekStart: Date): { start: string; end: string } {
   const end = new Date(weekStart);
   end.setDate(end.getDate() + 6);
+  // DATE: Item #2 — local-time date string. UTC slice would shift the day west of UTC.
   return {
-    start: weekStart.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
+    start: toLocalDateString(weekStart),
+    end: toLocalDateString(end),
   };
 }
 
@@ -60,20 +64,25 @@ const TimeTracking: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
 
-  // Load clients and projects once
+  // Load clients and projects once — use allSettled to avoid cascade failure
   useEffect(() => {
     const loadRefs = async () => {
       if (!activeCompany) return;
       try {
-        const [clientData, projectData] = await Promise.all([
+        const [clientRes, projectRes] = await Promise.allSettled([
           api.query('clients', { company_id: activeCompany.id }),
           api.query('projects', { company_id: activeCompany.id }),
         ]);
-        if (Array.isArray(clientData)) setClients(clientData);
-        if (Array.isArray(projectData)) setProjects(projectData);
+        if (clientRes.status === 'fulfilled' && Array.isArray(clientRes.value)) {
+          setClients(clientRes.value);
+        }
+        if (projectRes.status === 'fulfilled' && Array.isArray(projectRes.value)) {
+          setProjects(projectRes.value);
+        }
       } catch (err) {
         console.error('Failed to load clients/projects:', err);
       }
@@ -85,6 +94,7 @@ const TimeTracking: React.FC = () => {
   const loadEntries = useCallback(async () => {
     if (!activeCompany) return;
     setLoading(true);
+    setError('');
     const { start, end } = weekDateRange(weekStart);
     try {
       const data = await api.rawQuery(
@@ -94,8 +104,9 @@ const TimeTracking: React.FC = () => {
       if (Array.isArray(data)) {
         setEntries(data);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load time entries:', err);
+      setError(err?.message || 'Failed to load time entries');
     } finally {
       setLoading(false);
     }
@@ -104,6 +115,20 @@ const TimeTracking: React.FC = () => {
   useEffect(() => {
     loadEntries();
   }, [loadEntries]);
+
+  // Cross-module deep link: time_entry → open edit form
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('time_entry');
+    if (focus) {
+      api.get('time_entries', focus.id).then((entry) => {
+        if (entry) {
+          setEditingEntry(entry);
+          setShowForm(true);
+        }
+      }).catch(() => {});
+    }
+  }, [consumeFocusEntity]);
 
   const handlePrevWeek = () => {
     setWeekStart((prev) => {
@@ -128,10 +153,15 @@ const TimeTracking: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      await api.remove('time_entries', id);
+      const result = await api.remove('time_entries', id);
+      // IPC handler returns { error } on failure instead of throwing
+      if (result && typeof result === 'object' && 'error' in result) {
+        throw new Error(result.error);
+      }
       loadEntries();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete time entry:', err);
+      setError('Failed to delete entry: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -154,13 +184,22 @@ const TimeTracking: React.FC = () => {
           <button
             onClick={handleManualEntry}
             className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Plus size={14} />
             Manual Entry
           </button>
         </div>
       </div>
+
+      {/* Error Banner */}
+      {error && (
+        <ErrorBanner
+          message={error}
+          title="Time Tracking Error"
+          onDismiss={() => setError('')}
+        />
+      )}
 
       {/* Timer Widget */}
       <TimerWidget

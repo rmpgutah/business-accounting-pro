@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Clock } from 'lucide-react';
+import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface TimeEntry {
@@ -34,7 +35,8 @@ function getWeekDates(weekStart: Date): string[] {
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart);
     d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().slice(0, 10));
+    // DATE: Item #2 — local date string. UTC slice would shift days west of UTC.
+    dates.push(toLocalDateString(d));
   }
   return dates;
 }
@@ -84,7 +86,7 @@ const WeeklySummary: React.FC<WeeklySummaryProps> = ({
   return (
     <div
       className="block-card p-4 space-y-4"
-      style={{ borderRadius: '2px', minWidth: '260px' }}
+      style={{ borderRadius: '6px', minWidth: '260px' }}
     >
       {/* Header */}
       <div className="flex items-center gap-2">
@@ -130,7 +132,7 @@ const WeeklySummary: React.FC<WeeklySummaryProps> = ({
         </div>
         <div
           className="w-full h-2 bg-bg-tertiary overflow-hidden"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           <div className="flex h-full">
             <div
@@ -163,12 +165,10 @@ const WeeklySummary: React.FC<WeeklySummaryProps> = ({
               stats.maxDayMinutes > 0
                 ? (minutes / stats.maxDayMinutes) * 100
                 : 0;
-            const isToday =
-              new Date(
-                new Date(weekStart).setDate(weekStart.getDate() + i)
-              )
-                .toISOString()
-                .slice(0, 10) === new Date().toISOString().slice(0, 10);
+            // DATE: Item #2 — local-time today comparison.
+            const dayDate = new Date(weekStart);
+            dayDate.setDate(weekStart.getDate() + i);
+            const isToday = toLocalDateString(dayDate) === todayLocal();
 
             return (
               <div

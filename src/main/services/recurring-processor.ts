@@ -1,31 +1,39 @@
 import { v4 as uuid } from 'uuid';
+import { addDays, addMonths, addYears, format, parseISO } from 'date-fns';
 import * as db from '../database';
 
 // ─── Date Helpers ─────────────────────────────────────────
+// Use local-date format() instead of toISOString() to avoid UTC drift
+// near midnight (e.g. late-evening MT would advance to next UTC day).
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return format(new Date(), 'yyyy-MM-dd');
 }
 
+// Use date-fns addMonths/addYears which correctly clamp end-of-month
+// (Jan 31 + 1 month → Feb 28/29, not Mar 3 as the naive setMonth produces).
 function addFrequency(dateStr: string, frequency: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
+  const d = parseISO(dateStr);
+  let next: Date;
   switch (frequency) {
     case 'weekly':
-      d.setDate(d.getDate() + 7);
+      next = addDays(d, 7);
       break;
     case 'biweekly':
-      d.setDate(d.getDate() + 14);
+      next = addDays(d, 14);
       break;
     case 'monthly':
-      d.setMonth(d.getMonth() + 1);
+      next = addMonths(d, 1);
       break;
     case 'quarterly':
-      d.setMonth(d.getMonth() + 3);
+      next = addMonths(d, 3);
       break;
     case 'annually':
-      d.setFullYear(d.getFullYear() + 1);
+      next = addYears(d, 1);
       break;
+    default:
+      next = d;
   }
-  return d.toISOString().slice(0, 10);
+  return format(next, 'yyyy-MM-dd');
 }
 
 function getNextInvoiceNumber(companyId: string): string {
@@ -54,6 +62,9 @@ export interface ProcessingResult {
 }
 
 let lastProcessedAt: string | null = null;
+// Reentrancy guard — the hourly cron and manual IPC invocations could otherwise
+// overlap, generating duplicate invoices for the same recurring template.
+let processingRunning = false;
 
 export function getLastProcessedAt(): string | null {
   return lastProcessedAt;
@@ -67,9 +78,16 @@ export function processRecurringTemplates(companyId?: string): ProcessingResult 
     errors: [],
   };
 
+  if (processingRunning) {
+    result.errors.push('Recurring processor already running — skipped overlapping tick');
+    return result;
+  }
+  processingRunning = true;
+
   const today = todayStr();
   const dbInstance = db.getDb();
 
+  try {
   // Find all active templates that are due
   let sql = `SELECT * FROM recurring_templates WHERE is_active = 1 AND next_date <= ?`;
   const params: any[] = [today];
@@ -82,6 +100,10 @@ export function processRecurringTemplates(companyId?: string): ProcessingResult 
 
   for (const template of templates) {
     try {
+      // Wrap each template's writes in a single transaction so a partial failure
+      // (e.g., line-item insert throws) doesn't leave an orphan invoice header
+      // and a half-advanced next_date.
+      const runTemplate = dbInstance.transaction(() => {
       let templateData: any = {};
       try {
         templateData = typeof template.template_data === 'string'
@@ -99,7 +121,10 @@ export function processRecurringTemplates(companyId?: string): ProcessingResult 
         const clientId = templateData.client_id || null;
         if (!clientId) {
           result.errors.push(`Template "${template.name}" skipped — no client_id configured`);
-          continue;
+          // Inside transaction lambda — `continue` would cross the function
+          // boundary; return aborts this template's writes cleanly and the
+          // outer for-loop moves on to the next template.
+          return;
         }
         const paymentTerms = templateData.payment_terms || 30;
         const dueDate = new Date(today);
@@ -227,6 +252,8 @@ export function processRecurringTemplates(companyId?: string): ProcessingResult 
       }
 
       result.processed++;
+      });
+      runTemplate();
     } catch (err: any) {
       result.errors.push(`Template "${template.name}" (${template.id}): ${err.message || String(err)}`);
       console.error(`Recurring processing error for template ${template.id}:`, err);
@@ -235,6 +262,9 @@ export function processRecurringTemplates(companyId?: string): ProcessingResult 
 
   lastProcessedAt = new Date().toISOString();
   return result;
+  } finally {
+    processingRunning = false;
+  }
 }
 
 // ─── Get History of Auto-Generated Records ───────────────

@@ -2,7 +2,6 @@ import express, { Router } from 'express';
 import Stripe from 'stripe';
 import { db } from '../db';
 import { pushToDesktop } from '../ws';
-import { v4 as uuidv4 } from 'uuid';
 
 export const stripeRouter = Router();
 
@@ -54,7 +53,7 @@ stripeRouter.post(
         req.body, sig, process.env.STRIPE_WEBHOOK_SECRET!
       );
     } catch (err: any) {
-      return res.status(400).send(`Webhook error: ${err.message}`);
+      return res.status(400).json({ error: 'Webhook signature verification failed' });
     }
 
     if (event.type === 'checkout.session.completed') {
@@ -63,14 +62,29 @@ stripeRouter.post(
       const amount = (session.amount_total || 0) / 100;
       const stripePaymentId = session.payment_intent as string;
 
-      db.prepare(`UPDATE invoices SET status = 'paid' WHERE id = ?`).run(invoice_id);
-      db.prepare(`
+      // Idempotency: key the payment row on the Stripe payment_intent (unique
+      // per payment). Stripe re-delivers webhooks at-least-once; a random uuid
+      // id never collides, so the old code inserted a duplicate payment on
+      // every retry. With id = payment_intent, INSERT OR IGNORE suppresses
+      // redeliveries. The payments column is `date` (not `payment_date`).
+      const ins = db.prepare(`
         INSERT OR IGNORE INTO payments
-          (id, invoice_id, company_id, amount, payment_date, payment_method, reference, created_at)
-        VALUES (?, ?, ?, ?, strftime('%Y-%m-%d','now'), 'stripe', ?, strftime('%s','now'))
-      `).run(uuidv4(), invoice_id, company_id, amount, stripePaymentId);
+          (id, invoice_id, company_id, amount, date, payment_method, reference, created_at)
+        VALUES (?, ?, ?, ?, date('now'), 'stripe', ?, datetime('now'))
+      `).run(stripePaymentId, invoice_id, company_id, amount, stripePaymentId);
 
-      pushToDesktop({ type: 'invoice:paid', invoiceId: invoice_id, companyId: company_id, amount, stripePaymentId });
+      // Only mutate the invoice + notify the desktop when this is a NEW payment,
+      // so retries don't double-count amount_paid. Canonical balance is
+      // total − amount_paid, so update amount_paid (not just status).
+      if (ins.changes > 0) {
+        db.prepare(`
+          UPDATE invoices
+             SET amount_paid = MIN(total, COALESCE(amount_paid, 0) + ?),
+                 status = CASE WHEN COALESCE(amount_paid, 0) + ? >= total THEN 'paid' ELSE 'partial' END
+           WHERE id = ?
+        `).run(amount, amount, invoice_id);
+        pushToDesktop({ type: 'invoice:paid', invoiceId: invoice_id, companyId: company_id, amount, stripePaymentId });
+      }
     }
 
     res.json({ received: true });

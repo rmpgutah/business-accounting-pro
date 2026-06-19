@@ -4,6 +4,9 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
+import { humanizeLabel } from '../../lib/format';
+import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface AuditEntry {
@@ -60,6 +63,7 @@ const getTimestamp = (entry: AuditEntry): string => entry.timestamp || entry.cre
 
 // ─── Component ──────────────────────────────────────────
 const AuditTrail: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -67,23 +71,28 @@ const AuditTrail: React.FC = () => {
   const [entityTypeFilter, setEntityTypeFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   // ─── Load ─────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) return;
       try {
-        const rows = await api.query('audit_log', undefined, { field: 'timestamp', dir: 'desc' });
+        setLoadError('');
+        // Perf: cap at 1000 most-recent entries; long-running companies can have 100k+ rows
+        const rows = await api.query('audit_log', { company_id: activeCompany.id }, { field: 'timestamp', dir: 'desc' }, 1000);
         if (!cancelled) setEntries(Array.isArray(rows) ? rows : []);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load audit log:', err);
+        if (!cancelled) setLoadError(err?.message || 'Failed to load audit log');
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   // ─── Entity Types ─────────────────────────────────────
   const entityTypes = useMemo(() => {
@@ -134,12 +143,13 @@ const AuditTrail: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {loadError && <ErrorBanner message={loadError} title="Failed to load audit log" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Shield size={18} className="text-accent-blue" />
           </div>
@@ -174,7 +184,7 @@ const AuditTrail: React.FC = () => {
               onChange={(e) => setEntityTypeFilter(e.target.value)}
             >
               <option value="">All Entity Types</option>
-              {entityTypes.map((t) => (
+              {[...entityTypes].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
@@ -187,8 +197,8 @@ const AuditTrail: React.FC = () => {
           >
             <option value="">All Actions</option>
             <option value="create">Create</option>
-            <option value="update">Update</option>
             <option value="delete">Delete</option>
+            <option value="update">Update</option>
           </select>
           <input
             type="date"
@@ -215,9 +225,13 @@ const AuditTrail: React.FC = () => {
           <div className="empty-state-icon">
             <Shield size={24} className="text-text-muted" />
           </div>
-          <p className="text-sm text-text-secondary font-medium">No audit entries found</p>
+          <p className="text-sm text-text-secondary font-medium">
+            {entries.length === 0 ? 'No audit entries yet' : 'No audit entries match your filter'}
+          </p>
           <p className="text-xs text-text-muted mt-1">
-            Audit entries are created automatically when data changes.
+            {entries.length === 0
+              ? 'Audit entries are created automatically when data changes.'
+              : 'Try clearing search or filters.'}
           </p>
         </div>
       ) : (
@@ -245,7 +259,7 @@ const AuditTrail: React.FC = () => {
                       </div>
                     </td>
                     <td>
-                      <span className="block-badge block-badge-purple">{entry.entity_type}</span>
+                      <span className="block-badge block-badge-purple">{humanizeLabel(entry.entity_type)}</span>
                     </td>
                     <td className="font-mono text-text-muted text-xs">
                       {entry.entity_id

@@ -128,10 +128,28 @@ export function applySync(payload: {
 
 const createdTables = new Set<string>();
 
+// Allowlist of tables that can be auto-created via sync
+const ALLOWED_SYNC_TABLES = new Set([
+  'invoices', 'invoice_line_items', 'expenses', 'clients', 'vendors', 'accounts',
+  'journal_entries', 'journal_entry_lines', 'payments', 'categories', 'employees',
+  'payroll_runs', 'pay_stubs', 'projects', 'time_entries', 'bills', 'bill_payments',
+  'bill_line_items', 'purchase_orders', 'po_line_items', 'fixed_assets',
+  'bank_accounts', 'bank_transactions', 'budgets', 'budget_lines', 'debts',
+  'debt_communications', 'debt_contacts', 'quotes', 'quote_line_items',
+  'inventory_items', 'inventory_movements', 'tax_rates', 'companies',
+  'invoice_tokens', 'settings', 'automation_rules', 'recurring_templates',
+]);
+
 function ensureTable(table: string, sample: Record<string, unknown>) {
-  sanitizeIdentifier(table); // throws if invalid
-  if (createdTables.has(table)) return;
-  const cols = Object.keys(sample).map(c => `"${sanitizeIdentifier(c)}" TEXT`).join(', ');
-  db.exec(`CREATE TABLE IF NOT EXISTS "${table}" (${cols || '"id" TEXT PRIMARY KEY'})`);
-  createdTables.add(table);
+  const safeTable = sanitizeIdentifier(table);
+  if (!ALLOWED_SYNC_TABLES.has(safeTable)) {
+    throw new Error(`Table "${safeTable}" is not in the sync allowlist`);
+  }
+  if (createdTables.has(safeTable)) return;
+  const cols = Object.keys(sample).map(c => {
+    const safeCol = sanitizeIdentifier(c);
+    return `"${safeCol}" TEXT`;
+  }).join(', ');
+  db.exec(`CREATE TABLE IF NOT EXISTS "${safeTable}" (${cols || '"id" TEXT PRIMARY KEY'})`);
+  createdTables.add(safeTable);
 }

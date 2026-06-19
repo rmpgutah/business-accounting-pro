@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, Link, Copy, CheckCircle, ExternalLink, Users } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 export default function PortalModule() {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [clients, setClients] = useState<any[]>([]);
   const [portalEnabled, setPortalEnabled] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     loadClients();
-  }, []);
+  }, [activeCompany]);
 
   const loadClients = async () => {
+    if (!activeCompany) return;
     try {
-      const data = await api.query('clients', { status: 'active' });
+      const data = await api.query('clients', { company_id: activeCompany.id, status: 'active' });
       setClients(data);
     } catch { /* empty */ }
   };
@@ -50,7 +53,7 @@ export default function PortalModule() {
 
       <div className="block-card mb-6">
         <div className="flex items-start gap-4">
-          <div className="w-10 h-10 flex items-center justify-center bg-accent-blue-bg" style={{ borderRadius: '2px' }}>
+          <div className="w-10 h-10 flex items-center justify-center bg-accent-blue-bg" style={{ borderRadius: '6px' }}>
             <Globe size={20} className="text-accent-blue" />
           </div>
           <div>
@@ -91,8 +94,8 @@ export default function PortalModule() {
           <tbody>
             {clients.map((client) => (
               <tr key={client.id}>
-                <td className="text-text-primary font-medium">{client.name}</td>
-                <td className="text-text-secondary">{client.email}</td>
+                <td className="text-text-primary font-medium truncate max-w-[200px]">{client.name}</td>
+                <td className="text-text-secondary truncate max-w-[200px]">{client.email}</td>
                 <td>
                   {client.portal_token ? (
                     <span className="block-badge-income">Active</span>

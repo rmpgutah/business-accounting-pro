@@ -6,3 +6,7 @@ release/
 *.db-journal
 .env
 deploy/vps.env
+.claude/worktrees/
+
+# Superpowers brainstorm scratch
+.superpowers/

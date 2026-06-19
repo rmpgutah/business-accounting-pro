@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -6,10 +6,12 @@ import {
   Gavel,
   BarChart3,
   Settings,
+  LayoutDashboard,
 } from 'lucide-react';
 import DebtList from './DebtList';
 import DebtForm from './DebtForm';
 import DebtDetail from './DebtDetail';
+import DebtInvoiceFormatter from './DebtInvoiceFormatter';
 import PaymentForm from './PaymentForm';
 import CommunicationForm from './CommunicationForm';
 import EvidenceForm from './EvidenceForm';
@@ -18,11 +20,14 @@ import PipelineView from './PipelineView';
 import LegalToolkit from './LegalToolkit';
 import AnalyticsView from './AnalyticsView';
 import AutomationSettings from './AutomationSettings';
+import CollectorDashboard from './CollectorDashboard';
+import DebtMiniList from './DebtMiniList';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics';
-type DebtView = 'list' | 'detail' | 'form';
+type Tab = 'receivables' | 'payables' | 'pipeline' | 'legal' | 'analytics' | 'dashboard';
+type DebtView = 'list' | 'detail' | 'form' | 'invoice';
 type DebtFormType = 'receivable' | 'payable';
 
 interface ModalState {
@@ -44,9 +49,9 @@ const TabBtn: React.FC<{
     className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold transition-colors ${
       active
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
-        : 'text-text-muted hover:text-text-secondary'
+        : 'text-text-muted hover:text-text-secondary transition-colors'
     }`}
-    style={{ borderRadius: '2px 2px 0 0' }}
+    style={{ borderRadius: '6px 6px 0 0' }}
   >
     {icon}
     {label}
@@ -64,6 +69,16 @@ const DebtCollectionModule: React.FC = () => {
   const [debtFormType, setDebtFormType] = useState<DebtFormType>('receivable');
   const [listKey, setListKey] = useState(0);
 
+  // Cross-module deep link from RelatedPanel/EntityChip → open debt detail.
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('debt');
+    if (focus) {
+      setActiveDebtId(focus.id);
+      setView('detail');
+    }
+  }, [consumeFocusEntity]);
+
   // Settings modal
   const [showSettings, setShowSettings] = useState(false);
 
@@ -73,6 +88,11 @@ const DebtCollectionModule: React.FC = () => {
     payment: false,
     evidence: false,
     contact: false,
+  });
+  const [editIds, setEditIds] = useState<Record<string, string | null>>({
+    communication: null,
+    payment: null,
+    evidence: null,
   });
 
   // ── Debt handlers ──
@@ -97,6 +117,15 @@ const DebtCollectionModule: React.FC = () => {
     setActiveDebtId(null);
   }, []);
 
+  const handleInvoice = useCallback((id: string) => {
+    setActiveDebtId(id);
+    setView('invoice');
+  }, []);
+
+  const handleBackFromInvoice = useCallback(() => {
+    setView('detail');
+  }, []);
+
   const handleSaved = useCallback(() => {
     setView('list');
     setActiveDebtId(null);
@@ -111,18 +140,33 @@ const DebtCollectionModule: React.FC = () => {
   }, []);
 
   // ── Modal handlers ──
-  const openModal = useCallback((modal: keyof ModalState) => {
+  const openModal = useCallback((modal: keyof ModalState, editId?: string) => {
     setModalState((prev) => ({ ...prev, [modal]: true }));
+    if (editId) setEditIds((prev) => ({ ...prev, [modal]: editId }));
   }, []);
 
   const closeModal = useCallback((modal: keyof ModalState) => {
     setModalState((prev) => ({ ...prev, [modal]: false }));
+    setEditIds((prev) => ({ ...prev, [modal]: null }));
   }, []);
 
   return (
-    <div className="p-6 h-full overflow-y-auto">
+    <div className="h-full overflow-hidden flex">
+      {/* Left Panel — Persistent Debt List */}
+      <div className="w-[280px] flex-shrink-0 border-r border-border-primary bg-bg-secondary overflow-hidden">
+        <DebtMiniList
+          activeDebtId={activeDebtId}
+          onSelect={(id) => {
+            setActiveDebtId(id);
+            setView('detail');
+          }}
+        />
+      </div>
+
+      {/* Right Panel — Tab Content */}
+      <div className="flex-1 overflow-y-auto p-6">
       {/* Tabs */}
-      <div className="flex items-center border-b border-border-primary mb-6">
+      <div className="flex items-center border-b border-border-primary mb-6 cursor-pointer">
         <TabBtn
           active={tab === 'receivables'}
           icon={<ArrowDownCircle size={16} />}
@@ -153,17 +197,31 @@ const DebtCollectionModule: React.FC = () => {
           label="Analytics"
           onClick={() => switchTab('analytics')}
         />
+        <TabBtn
+          active={tab === 'dashboard'}
+          icon={<LayoutDashboard size={16} />}
+          label="Dashboard"
+          onClick={() => switchTab('dashboard')}
+        />
         <div className="ml-auto">
           <button
             onClick={() => setShowSettings(true)}
             className="flex items-center justify-center w-8 h-8 text-text-muted hover:text-text-primary transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Escalation Settings"
           >
             <Settings size={16} />
           </button>
         </div>
       </div>
+
+      {/* Content — Invoice Statement view */}
+      {view === 'invoice' && activeDebtId && (
+        <DebtInvoiceFormatter
+          debtId={activeDebtId}
+          onBack={handleBackFromInvoice}
+        />
+      )}
 
       {/* Content — Detail view (any tab) */}
       {view === 'detail' && activeDebtId && (
@@ -172,7 +230,8 @@ const DebtCollectionModule: React.FC = () => {
           onBack={handleBack}
           onEdit={() => handleEditDebt(activeDebtId)}
           onRefresh={() => setListKey((k) => k + 1)}
-          onOpenModal={openModal}
+          onOpenModal={(modal, editId) => openModal(modal, editId)}
+          onInvoice={() => handleInvoice(activeDebtId)}
         />
       )}
 
@@ -219,10 +278,15 @@ const DebtCollectionModule: React.FC = () => {
         <AnalyticsView companyId={activeCompany?.id || ''} />
       )}
 
+      {tab === 'dashboard' && view === 'list' && (
+        <CollectorDashboard onViewDebt={(id) => { setActiveDebtId(id); setView('detail'); }} />
+      )}
+
       {/* Modals — Communication */}
       {modalState.communication && activeDebtId && (
         <CommunicationForm
           debtId={activeDebtId}
+          editId={editIds.communication || undefined}
           onClose={() => closeModal('communication')}
           onSaved={() => {
             closeModal('communication');
@@ -235,6 +299,7 @@ const DebtCollectionModule: React.FC = () => {
       {modalState.payment && activeDebtId && (
         <PaymentForm
           debtId={activeDebtId}
+          editId={editIds.payment || undefined}
           onClose={() => closeModal('payment')}
           onSaved={() => {
             closeModal('payment');
@@ -247,6 +312,7 @@ const DebtCollectionModule: React.FC = () => {
       {modalState.evidence && activeDebtId && (
         <EvidenceForm
           debtId={activeDebtId}
+          evidenceId={editIds.evidence || undefined}
           onClose={() => closeModal('evidence')}
           onSaved={() => {
             closeModal('evidence');
@@ -271,6 +337,7 @@ const DebtCollectionModule: React.FC = () => {
       {showSettings && (
         <AutomationSettings onClose={() => setShowSettings(false)} />
       )}
+      </div>
     </div>
   );
 };

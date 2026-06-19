@@ -89,7 +89,7 @@ const BankAccountList: React.FC<BankAccountListProps> = ({ onAdd, onEdit }) => {
           <button
             onClick={load}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
             title="Refresh"
           >
             <RefreshCw size={14} />
@@ -97,7 +97,7 @@ const BankAccountList: React.FC<BankAccountListProps> = ({ onAdd, onEdit }) => {
           <button
             onClick={onAdd}
             className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Plus size={14} />
             Add Account
@@ -110,7 +110,7 @@ const BankAccountList: React.FC<BankAccountListProps> = ({ onAdd, onEdit }) => {
         <div className="flex flex-col items-center justify-center py-16">
           <div
             className="w-12 h-12 flex items-center justify-center bg-bg-tertiary border border-border-primary mb-3"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Landmark size={24} className="text-text-muted" />
           </div>
@@ -124,7 +124,7 @@ const BankAccountList: React.FC<BankAccountListProps> = ({ onAdd, onEdit }) => {
       ) : (
         <div
           className="block-card p-0 overflow-hidden"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
         >
           <table className="w-full text-sm">
             <thead>
@@ -156,10 +156,10 @@ const BankAccountList: React.FC<BankAccountListProps> = ({ onAdd, onEdit }) => {
                   className="border-b border-border-primary hover:bg-bg-hover transition-colors cursor-pointer"
                   onClick={() => onEdit(acct)}
                 >
-                  <td className="px-4 py-2.5 text-xs text-text-primary font-medium">
+                  <td className="px-4 py-2.5 text-xs text-text-primary font-medium truncate max-w-[180px]">
                     {acct.name}
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-text-secondary">
+                  <td className="px-4 py-2.5 text-xs text-text-secondary truncate max-w-[160px]">
                     {acct.institution || '--'}
                   </td>
                   <td className="px-4 py-2.5 text-xs font-mono text-text-muted">

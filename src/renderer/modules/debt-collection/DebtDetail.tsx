@@ -17,9 +17,26 @@ import {
   Play,
   Zap,
   Calendar,
+  Receipt,
+  Trash2,
+  Plus,
+  Share2,
 } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import PortalShareModal from '../../components/PortalShareModal';
+import EntityChip from '../../components/EntityChip';
+import PaymentPlanCard from './PaymentPlanCard';
+import SettlementCard from './SettlementCard';
+import ComplianceLog from './ComplianceLog';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
+import { applyDebtPaymentDelta } from '../../../shared/payment-math';
+import { todayLocal } from '../../lib/date-helpers';
+import { useCompanyStore } from '../../stores/companyStore';
+import { useNavigation } from '../../lib/navigation';
+import { calcRiskScore, getRiskBadge, collectionScore, getCollectionBadge } from './riskScore';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
+import CollectionCostsPanel from './CollectionCostsPanel';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtDetailProps {
@@ -27,7 +44,8 @@ interface DebtDetailProps {
   onBack: () => void;
   onEdit: () => void;
   onRefresh: () => void;
-  onOpenModal: (modal: 'communication' | 'payment' | 'evidence' | 'contact') => void;
+  onOpenModal: (modal: 'communication' | 'payment' | 'evidence' | 'contact', editId?: string) => void;
+  onInvoice: () => void;
 }
 
 interface Debt {
@@ -58,12 +76,43 @@ interface Debt {
   priority: string;
   current_stage: string;
   assigned_to: string;
+  assigned_collector_id: string | null;
+  auto_advance_enabled: number;
   hold: number;
   hold_reason: string;
   write_off_reason: string;
+  preferred_contact_method: string;
+  do_not_call: number;
+  cease_desist_active: number;
   notes: string;
   created_at: string;
   updated_at: string;
+  // Feature 2: Financial Profile
+  debtor_ssn_last4: string;
+  debtor_dob: string;
+  debtor_employer: string;
+  debtor_income_monthly: number;
+  debtor_assets_description: string;
+  debtor_bank_name: string;
+  // Feature 6: Credit Score
+  credit_score: number;
+  credit_score_date: string;
+  credit_score_source: string;
+  // Feature 10: Multi-Currency
+  currency: string;
+  exchange_rate: number;
+  // Feature 16: Interest Freeze
+  interest_frozen: number;
+  interest_frozen_date: string;
+  interest_frozen_reason: string;
+  // Feature 18: Collection Costs
+  collection_costs: number;
+  agency_commission_rate: number;
+  agency_commission_paid: number;
+  // Employment
+  employer_name: string;
+  employment_status: string;
+  monthly_income_estimate: number;
 }
 
 interface Payment {
@@ -128,10 +177,10 @@ interface InterestCalc {
 
 // ─── Priority Colors ────────────────────────────────────
 const priorityDot: Record<string, string> = {
-  low: 'bg-green-500',
+  low: 'bg-accent-income-bg',
   medium: 'bg-blue-500',
-  high: 'bg-orange-500',
-  critical: 'bg-red-500',
+  high: 'bg-accent-warning-bg',
+  critical: 'bg-accent-expense-bg',
 };
 
 // ─── Communication Icon Map ─────────────────────────────
@@ -149,12 +198,22 @@ const commIcon: Record<string, React.ReactNode> = {
 const stageColor: Record<string, string> = {
   reminder: 'bg-blue-500',
   warning: 'bg-yellow-500',
-  final_notice: 'bg-orange-500',
-  demand_letter: 'bg-red-500',
+  final_notice: 'bg-accent-warning-bg',
+  demand_letter: 'bg-accent-expense-bg',
   collections_agency: 'bg-purple-500',
   legal_action: 'bg-red-600',
-  judgment: 'bg-green-500',
+  judgment: 'bg-accent-income-bg',
   garnishment: 'bg-yellow-600',
+};
+
+// ─── Aging Badge ────────────────────────────────────────
+const getAgingBadge = (delinquencyDate: string): { label: string; color: string; bg: string } => {
+  if (!delinquencyDate) return { label: '—', color: 'var(--color-text-muted)', bg: 'transparent' };
+  const days = Math.floor((Date.now() - new Date(delinquencyDate).getTime()) / 86400000);
+  if (days <= 30)  return { label: `${days}d`, color: '#16a34a', bg: '#16a34a22' };
+  if (days <= 90)  return { label: `${days}d`, color: '#d97706', bg: '#d9770622' };
+  if (days <= 180) return { label: `${days}d`, color: '#ea580c', bg: '#ea580c22' };
+  return { label: `${days}d`, color: '#dc2626', bg: '#dc262622' };
 };
 
 // ─── Helpers ────────────────────────────────────────────
@@ -217,7 +276,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   onEdit,
   onRefresh,
   onOpenModal,
+  onInvoice,
 }) => {
+  // ── Store ──
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const nav = useNavigation();
+
   // ── State ──
   const [debt, setDebt] = useState<Debt | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -239,8 +303,67 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   const [showHoldInput, setShowHoldInput] = useState(false);
   const [holdSaving, setHoldSaving] = useState(false);
 
+  // Users for collector assignment
+  const [users, setUsers] = useState<any[]>([]);
+
   // Advance stage
   const [advancingSaving, setAdvancingSaving] = useState(false);
+
+  // Invoice link
+  const [invoiceLink, setInvoiceLink] = useState<any>(null);
+
+  // Activity timeline + quick note
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [quickNote, setQuickNote] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+
+  // PORTAL: share modal + base URL.
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [portalCopied, setPortalCopied] = useState(false);
+  const [portalBaseUrl, setPortalBaseUrl] = useState<string>('https://accounting.rmpgutah.us');
+  useEffect(() => {
+    api.portalBaseUrl().then(r => { if (r?.baseUrl) setPortalBaseUrl(r.baseUrl); }).catch(() => {});
+  }, []);
+
+  // Promise-to-Pay state
+  const [promises, setPromises] = useState<any[]>([]);
+  const [showPromiseForm, setShowPromiseForm] = useState(false);
+  const [promiseForm, setPromiseForm] = useState({ promised_date: '', promised_amount: 0, notes: '' });
+
+  // Add Fee state
+  const [showFeeForm, setShowFeeForm] = useState(false);
+  const [feeForm, setFeeForm] = useState({ amount: '', feeType: 'late_fee', description: '' });
+  const [feeSaving, setFeeSaving] = useState(false);
+
+  // Disputes state
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [disputeForm, setDisputeForm] = useState({ reason: 'other', description: '', status: 'open' });
+  const [editingDisputeId, setEditingDisputeId] = useState<string | null>(null);
+  const [disputeSaving, setDisputeSaving] = useState(false);
+
+  // Letter dropdown
+  const [showLetterMenu, setShowLetterMenu] = useState(false);
+
+  // Installment calendar
+  const [installments, setInstallments] = useState<any[]>([]);
+
+  // Document attachments
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [auditLog, setAuditLog] = useState<any[]>([]);
+
+  // Feature 1: Skip Traces
+  const [skipTraces, setSkipTraces] = useState<any[]>([]);
+  const [showSkipTraceForm, setShowSkipTraceForm] = useState(false);
+  const [skipTraceForm, setSkipTraceForm] = useState({ source: '', address_tried: '', phone_tried: '', email_tried: '', employer_found: '', result: 'pending', notes: '' });
+  const [skipTraceSaving, setSkipTraceSaving] = useState(false);
+
+  // Feature 4: Schedule Communication
+  const [showScheduleComm, setShowScheduleComm] = useState(false);
+  const [schedCommForm, setSchedCommForm] = useState({ type: 'email', scheduledDate: '', subject: '', body: '' });
+
+  // Feature 22: Cease & Desist blocking modal
+  const [showCeaseDesistBlock, setShowCeaseDesistBlock] = useState(false);
 
   // ── Load All Data ──
   useEffect(() => {
@@ -255,6 +378,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           legalData,
           stageData,
           interestData,
+          promisesData,
+          invoiceLinkData,
+          timelineData,
+          disputesData,
         ] = await Promise.all([
           api.get('debts', debtId),
           api.query('debt_payments', { debt_id: debtId }, { field: 'received_date', dir: 'desc' }),
@@ -269,7 +396,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             [debtId]
           ),
           api.debtCalculateInterest(debtId).catch(() => null),
+          api.listDebtPromises(debtId).catch(() => []),
+          api.getDebtInvoiceLink(debtId).catch(() => null),
+          api.getActivityTimeline(debtId).catch(() => []),
+          api.query('debt_disputes', { debt_id: debtId }).catch(() => []),
         ]);
+        api.listUsers().then(setUsers).catch(() => {});
         if (cancelled) return;
         setDebt(debtData ?? null);
         setPayments(Array.isArray(paymentData) ? paymentData : []);
@@ -278,6 +410,16 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         setLegalActions(Array.isArray(legalData) ? legalData : []);
         setPipelineStages(Array.isArray(stageData) ? stageData : []);
         setInterestCalc(interestData);
+        setPromises(Array.isArray(promisesData) ? promisesData : []);
+        setDisputes(Array.isArray(disputesData) ? disputesData : []);
+        setInvoiceLink(invoiceLinkData ?? null);
+        setTimeline(Array.isArray(timelineData) ? timelineData : []);
+        // Load installments + documents + skip traces in parallel (non-blocking)
+        api.upcomingInstallments(debtId).then(r => setInstallments(Array.isArray(r) ? r : [])).catch(() => {});
+        api.rawQuery('SELECT * FROM documents WHERE entity_type = ? AND entity_id = ? ORDER BY uploaded_at DESC', ['debt', debtId]).then(r => setDocuments(Array.isArray(r) ? r : [])).catch(() => {});
+        api.debtAuditLog(debtId, 100).then(r => setAuditLog(Array.isArray(r) ? r : [])).catch(() => {});
+        // Feature 1: Skip Traces
+        api.query('debt_skip_traces', { debt_id: debtId }, { field: 'created_at', dir: 'desc' }).then(r => setSkipTraces(Array.isArray(r) ? r : [])).catch(() => {});
       } catch (err) {
         console.error('Failed to load debt detail:', err);
       } finally {
@@ -296,13 +438,189 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     onRefresh();
   }, [onRefresh]);
 
+  const handleDeleteComm = async (id: string) => {
+    if (!window.confirm('Delete this communication?')) return;
+    try {
+      await api.remove('debt_communications', id);
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Failed to delete communication:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  const handleDeleteEvidence = async (id: string) => {
+    if (!window.confirm('Delete this evidence item?')) return;
+    try {
+      await api.remove('debt_evidence', id);
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Failed to delete evidence:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  const handleDeleteLegalAction = async (id: string) => {
+    if (!window.confirm('Delete this legal action?')) return;
+    try {
+      await api.remove('debt_legal_actions', id);
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Failed to delete legal action:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  const handleDeletePayment = async (id: string) => {
+    if (!window.confirm('Delete this payment record?')) return;
+    try {
+      // Grab the amount BEFORE removing so we can give it back to the debt.
+      const pay = await api.get('debt_payments', id);
+      await api.remove('debt_payments', id);
+      // Deleting a payment used to leave balance_due/payments_made wrong (and a
+      // settled debt stuck settled with money still owed). Reverse it as a
+      // negative delta, preserving any accrued interest/fees in balance_due.
+      if (pay && debt) {
+        const next = applyDebtPaymentDelta(
+          { balance_due: debt.balance_due, payments_made: debt.payments_made, status: debt.status },
+          -(Number(pay.amount) || 0),
+        );
+        await api.update('debts', debtId, {
+          balance_due: next.balance_due,
+          payments_made: next.payments_made,
+          status: next.status,
+        });
+      }
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Failed to delete payment:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  const handleDeletePromise = async (id: string) => {
+    if (!window.confirm('Delete this promise-to-pay?')) return;
+    try {
+      await api.remove('debt_promises', id);
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Failed to delete promise:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  // ── Add Fee ──
+  const handleSaveFee = async () => {
+    const amt = parseFloat(feeForm.amount);
+    if (!amt || amt <= 0) return;
+    setFeeSaving(true);
+    try {
+      await api.addDebtFee(debtId, amt, feeForm.feeType, feeForm.description);
+      setShowFeeForm(false);
+      setFeeForm({ amount: '', feeType: 'late_fee', description: '' });
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Failed to add fee:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setFeeSaving(false);
+    }
+  };
+
+  // ── Disputes ──
+  const handleSaveDispute = async () => {
+    if (disputeSaving) return;
+    setDisputeSaving(true);
+    try {
+      const payload = {
+        debt_id: debtId,
+        reason: disputeForm.reason,
+        description: disputeForm.description,
+        status: disputeForm.status,
+      };
+      if (editingDisputeId) {
+        await api.update('debt_disputes', editingDisputeId, payload);
+      } else {
+        await api.create('debt_disputes', payload);
+        // Auto-set debt status to disputed
+        await api.update('debts', debtId, { status: 'disputed' });
+      }
+      setShowDisputeForm(false);
+      setEditingDisputeId(null);
+      setDisputeForm({ reason: 'other', description: '', status: 'open' });
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Failed to save dispute:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setDisputeSaving(false);
+    }
+  };
+
+  const handleEditDispute = (d: any) => {
+    setEditingDisputeId(d.id);
+    setDisputeForm({ reason: d.reason, description: d.description || '', status: d.status });
+    setShowDisputeForm(true);
+  };
+
+  const handleDeleteDispute = async (id: string) => {
+    if (!window.confirm('Delete this dispute?')) return;
+    try {
+      await api.remove('debt_disputes', id);
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Failed to delete dispute:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  // ── Document Upload ──
+  const handleUploadDocument = async () => {
+    try {
+      const result = await api.openFileDialog();
+      if (result && result.path) {
+        await api.uploadDebtDocument(debtId, result.path, result.name, result.size || 0);
+        triggerRefresh();
+      }
+    } catch (err: any) {
+      console.error('Failed to upload document:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  const handleDeleteDocument = async (id: string) => {
+    if (!window.confirm('Delete this document?')) return;
+    try {
+      await api.remove('documents', id);
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Failed to delete document:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  // ── Letter Generation ──
+  const handleGenerateLetter = async (type: string) => {
+    setShowLetterMenu(false);
+    if (!debt) return;
+    try {
+      const { generateCollectionLetterHTML } = await import('../../lib/print-templates');
+      const html = generateCollectionLetterHTML(debt, payments, activeCompany, type);
+      await api.printPreview(html, `${type.replace(/_/g, ' ')} — ${debt.debtor_name}`);
+    } catch (err: any) {
+      console.error('Failed to generate letter:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
   // ── Recalculate Interest ──
   const handleRecalcInterest = useCallback(async () => {
     try {
       const result = await api.debtCalculateInterest(debtId);
       setInterestCalc(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to recalculate interest:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     }
   }, [debtId]);
 
@@ -312,8 +630,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
     try {
       await api.debtAdvanceStage(debtId);
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to advance stage:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setAdvancingSaving(false);
     }
@@ -328,8 +647,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       try {
         await api.debtHoldToggle(debtId, false);
         triggerRefresh();
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to release hold:', err);
+        alert('Operation failed: ' + (err?.message || 'Unknown error'));
       } finally {
         setHoldSaving(false);
       }
@@ -346,8 +666,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       setShowHoldInput(false);
       setHoldReason('');
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to put on hold:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setHoldSaving(false);
     }
@@ -362,15 +683,43 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         status: 'written_off',
         write_off_reason: writeOffReason.trim(),
       });
+      // Debt Wave: a written-off debt's recoverable collection costs are by
+      // definition unrecoverable — flip every still-pending linked cost so
+      // expense reports stop counting them as future recoveries.
+      await api.debtMarkCostsUnrecoverable(debtId).catch(() => {});
       setShowWriteOff(false);
       setWriteOffReason('');
       triggerRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to write off debt:', err);
+      alert('Operation failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setWriteOffSaving(false);
     }
   }, [debtId, writeOffReason, triggerRefresh]);
+
+  // ── Save Promise ──
+  const savePromise = async () => {
+    if (!promiseForm.promised_date || !promiseForm.promised_amount) return;
+    await api.saveDebtPromise({
+      debt_id: debtId,
+      promised_date: promiseForm.promised_date,
+      promised_amount: promiseForm.promised_amount,
+      kept: false,
+      notes: promiseForm.notes,
+    });
+    setPromiseForm({ promised_date: '', promised_amount: 0, notes: '' });
+    setShowPromiseForm(false);
+    const updated = await api.listDebtPromises(debtId);
+    setPromises(updated || []);
+  };
+
+  // ── Toggle Promise Kept ──
+  const togglePromiseKept = async (id: string, currentKept: boolean) => {
+    await api.updateDebtPromise(id, !currentKept);
+    const updated = await api.listDebtPromises(debtId);
+    setPromises(updated || []);
+  };
 
   // ── Computed ──
   const delinquentDays = useMemo(
@@ -429,17 +778,118 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             </button>
             <h2 className="text-xl font-bold text-text-primary">{debt.debtor_name}</h2>
             <div
-              className={`w-2.5 h-2.5 ${priorityDot[debt.priority] || 'bg-gray-500'}`}
-              style={{ borderRadius: '2px' }}
-              title={`Priority: ${debt.priority}`}
+              className={`w-2.5 h-2.5 ${priorityDot[debt.priority] || 'bg-bg-secondary'}`}
+              style={{ borderRadius: '6px' }}
+              title={`Priority: ${debt.priority ? debt.priority.charAt(0).toUpperCase() + debt.priority.slice(1) : ''}`}
             />
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xl font-bold text-text-primary font-mono">
               {formatCurrency(debt.balance_due)}
             </span>
+            {(() => {
+              const badge = getAgingBadge(debt.delinquent_date);
+              return (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                  background: badge.bg, color: badge.color,
+                  letterSpacing: '0.5px', textTransform: 'uppercase'
+                }}>
+                  {badge.label}
+                </span>
+              );
+            })()}
+            {(() => {
+              const brokenCount = promises.filter(
+                p => p.kept === 0 && p.promised_date < todayLocal()
+              ).length;
+              const score = calcRiskScore(debt, brokenCount);
+              const risk = getRiskBadge(score);
+              // Feature 3: Collection Score
+              const cScore = collectionScore(debt, {
+                brokenPromises: brokenCount,
+                hasLegalAction: legalActions.length > 0,
+                hasPaymentPlan: installments.length > 0,
+                hasEmployment: !!(debt.employer_name || debt.debtor_employer),
+                contactAttempts: communications.length,
+              });
+              const cBadge = getCollectionBadge(cScore);
+              return (
+                <>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                    background: risk.color + '20', color: risk.color,
+                  }}>
+                    Risk: {risk.label} ({score})
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                    background: cBadge.color + '20', color: cBadge.color,
+                  }}>
+                    Collectability: {cBadge.label} ({cScore})
+                  </span>
+                </>
+              );
+            })()}
+            {/* Feature 6: Credit Score */}
+            {debt.credit_score > 0 && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                background: debt.credit_score >= 670 ? '#22c55e22' : debt.credit_score >= 580 ? '#d9770622' : '#ef444422',
+                color: debt.credit_score >= 670 ? '#22c55e' : debt.credit_score >= 580 ? '#d97706' : '#ef4444',
+              }}>
+                Credit: {debt.credit_score}
+              </span>
+            )}
+            {/* Feature 10: Currency */}
+            {debt.currency && debt.currency !== 'USD' && (
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#6366f122', color: '#a78bfa' }}>
+                {debt.currency}
+              </span>
+            )}
             <span className={stageBadge.className}>{stageBadge.label}</span>
             <span className={statusBadge.className}>{statusBadge.label}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="text-text-muted" style={{ fontSize: 12 }}>Collector:</span>
+              <select
+                className="block-select"
+                style={{ fontSize: 12, padding: '2px 8px', minWidth: 140 }}
+                value={debt.assigned_collector_id || ''}
+                onChange={async (e) => {
+                  try {
+                    await api.assignCollector(debt.id, e.target.value || null);
+                    onRefresh();
+                  } catch (err: any) {
+                    console.error('Failed to assign collector:', err);
+                    alert('Operation failed: ' + (err?.message || 'Unknown error'));
+                  }
+                }}
+              >
+                <option value="">Unassigned</option>
+                {[...users]
+                  .sort((a, b) => (a.display_name || a.email || '').localeCompare(b.display_name || b.email || '', undefined, { sensitivity: 'base' }))
+                  .map(u => (
+                  <option key={u.id} value={u.id}>{u.display_name || u.email}</option>
+                ))}
+              </select>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!debt.auto_advance_enabled}
+                onChange={async e => {
+                  try {
+                    await api.update('debts', debt.id, { auto_advance_enabled: e.target.checked ? 1 : 0 });
+                    triggerRefresh();
+                  } catch (err: any) {
+                    console.error('Failed to update auto-advance:', err);
+                    alert('Operation failed: ' + (err?.message || 'Unknown error'));
+                  }
+                }}
+                style={{ width: 14, height: 14 }}
+              />
+              Auto-advance stage
+            </label>
           </div>
         </div>
 
@@ -447,7 +897,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {debt.hold ? (
           <div
             className="flex items-center justify-between mt-3 px-4 py-2 border border-yellow-600"
-            style={{ borderRadius: '2px', background: 'rgba(234, 179, 8, 0.1)' }}
+            style={{ borderRadius: '6px', background: 'rgba(234, 179, 8, 0.1)' }}
           >
             <div className="flex items-center gap-2 text-yellow-500 text-sm">
               <Pause size={14} />
@@ -470,7 +920,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         ) : showHoldInput ? (
           <div
             className="flex items-center gap-3 mt-3 px-4 py-2 border border-border-primary"
-            style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
+            style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
           >
             <span className="text-xs text-text-secondary font-semibold whitespace-nowrap">Hold reason:</span>
             <input
@@ -497,7 +947,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         <div className="flex items-center gap-2 mt-3 flex-wrap">
           <button
             className="block-btn flex items-center gap-2 text-xs"
-            onClick={() => onOpenModal('communication')}
+            onClick={() => {
+              if (debt.cease_desist_active) {
+                setShowCeaseDesistBlock(true);
+              } else {
+                onOpenModal('communication');
+              }
+            }}
           >
             <MessageSquare size={14} />
             Log Communication
@@ -516,6 +972,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           >
             <ChevronRight size={14} />
             {advancingSaving ? 'Advancing...' : 'Advance Stage'}
+          </button>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={() => setShowFeeForm(v => !v)}
+          >
+            <DollarSign size={14} />
+            Add Fee
           </button>
           <button
             className="block-btn flex items-center gap-2 text-xs"
@@ -541,6 +1004,147 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             Edit
           </button>
           <button
+            className="block-btn flex items-center gap-2 text-xs text-accent-expense hover:bg-accent-expense/10 transition-colors"
+            onClick={async () => {
+              if (!window.confirm(`Delete this debt for "${debt?.debtor_name}"? All related records will be removed.`)) return;
+              try {
+                await api.remove('debts', debtId);
+                onBack();
+              } catch (err: any) {
+                console.error('Failed to delete debt:', err);
+                alert('Operation failed: ' + (err?.message || 'Unknown error'));
+              }
+            }}
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={onInvoice}
+            title="Generate Statement of Account"
+          >
+            <Receipt size={14} />
+            Statement
+          </button>
+          <div className="relative">
+            <button
+              className="block-btn flex items-center gap-1.5 text-xs"
+              onClick={() => setShowLetterMenu(v => !v)}
+            >
+              <FileText size={13} />
+              Generate Letter
+              <ChevronRight size={10} className={`transition-transform ${showLetterMenu ? 'rotate-90' : ''}`} />
+            </button>
+            {showLetterMenu && (
+              <div className="absolute top-full left-0 mt-1 z-30 block-card-elevated p-1 min-w-[180px] space-y-0.5" style={{ borderRadius: '6px' }}>
+                {[
+                  { key: 'reminder', label: 'Reminder Letter' },
+                  { key: 'warning', label: 'Warning Notice' },
+                  { key: 'final_notice', label: 'Final Notice' },
+                  { key: 'demand', label: 'Demand Letter' },
+                  { key: 'settlement_offer', label: 'Settlement Offer' },
+                  { key: 'payment_confirmation', label: 'Payment Confirmation' },
+                ].map(lt => (
+                  <button
+                    key={lt.key}
+                    className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
+                    style={{ borderRadius: '6px' }}
+                    onClick={() => handleGenerateLetter(lt.key)}
+                  >
+                    {lt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={async () => {
+              const data = await api.generateCourtPacket(debtId);
+              if (data?.error) { console.error(data.error); return; }
+              const { generateCourtPacketHTML } = await import('../../lib/print-templates');
+              const html = generateCourtPacketHTML(data);
+              await api.printPreview(html, `Court Packet — ${debt?.debtor_name}`);
+            }}
+          >
+            <Scale size={14} />
+            Court Packet
+          </button>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={async () => {
+              const { generateVerificationAffidavitHTML } = await import('../../lib/print-templates');
+              // Signatory is the human custodian who will sign + notarize. Leave blank
+              // so the affidavit prints "[Signatory Name]" placeholder for hand-fill,
+              // rather than mis-attributing the company name as the affiant.
+              const html = generateVerificationAffidavitHTML(debt, activeCompany, '');
+              await api.printPreview(html, `Verification Affidavit — ${debt?.debtor_name}`);
+            }}
+          >
+            <FileText size={14} />
+            Affidavit
+          </button>
+          {/* Feature 4: Schedule Communication */}
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={() => setShowScheduleComm(v => !v)}
+          >
+            <Calendar size={14} />
+            Schedule Comm
+          </button>
+          {/* Feature 9: Copy Payment Link */}
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            title="Copy a shareable payment portal link"
+            onClick={async () => {
+              try {
+                const result = await api.generateDebtPortalToken(debtId);
+                if (result?.error) throw new Error(result.error);
+                // PORTAL: prefer building from configured SYNC_SERVER (matches share modal).
+                const url = result?.token
+                  ? `${portalBaseUrl}/portal/debt/${result.token}`
+                  : (result?.portalUrl ?? '');
+                if (!url) throw new Error('No portal URL returned');
+                await navigator.clipboard.writeText(url);
+                setPortalCopied(true);
+                setTimeout(() => setPortalCopied(false), 2000);
+              } catch (err: any) {
+                alert('Failed to generate link: ' + (err?.message || 'Unknown error'));
+              }
+            }}
+          >
+            <FileText size={14} />
+            {portalCopied ? 'Copied!' : 'Copy Payment Link'}
+          </button>
+          {/* A11Y: announce copy success to screen readers without stealing focus. */}
+          <span aria-live="polite" className="sr-only">{portalCopied ? 'Payment link copied to clipboard' : ''}</span>
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={() => setShowShareModal(true)}
+            title="Open share options (regenerate, disable, preview)"
+          >
+            <Share2 size={14} />
+            Share
+          </button>
+          {/* Feature 16: Interest Freeze/Resume */}
+          <button
+            className={`block-btn flex items-center gap-2 text-xs ${debt.interest_frozen ? 'text-yellow-400' : ''}`}
+            onClick={async () => {
+              try {
+                const freeze = !debt.interest_frozen;
+                const reason = freeze ? prompt('Reason for freezing interest:') || '' : '';
+                await api.freezeInterest(debtId, freeze, reason);
+                triggerRefresh();
+              } catch (err: any) {
+                alert('Failed: ' + (err?.message || 'Unknown error'));
+              }
+            }}
+          >
+            {debt.interest_frozen ? <Play size={14} /> : <Pause size={14} />}
+            {debt.interest_frozen ? 'Resume Interest' : 'Freeze Interest'}
+          </button>
+          <button
             className="block-btn flex items-center gap-2 text-xs text-red-400"
             onClick={() => setShowWriteOff(true)}
           >
@@ -549,11 +1153,144 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           </button>
         </div>
 
+        {/* Cease & Desist / DNC Banner */}
+        {(!!debt.cease_desist_active || !!debt.do_not_call) && (
+          <div className="mt-3 flex items-center gap-3 px-4 py-2.5 border border-red-700/50" style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}>
+            {!!debt.cease_desist_active && (
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#dc262622', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Cease & Desist Active
+              </span>
+            )}
+            {!!debt.do_not_call && (
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#d9770622', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Do Not Call
+              </span>
+            )}
+            {debt.preferred_contact_method && (
+              <span className="text-xs text-text-secondary">
+                Preferred: <strong className="capitalize">{debt.preferred_contact_method}</strong>
+              </span>
+            )}
+            <span className="text-xs text-red-400 ml-auto">Outbound contact restricted</span>
+          </div>
+        )}
+
+        {/* Contact Preference Badges (non-restricted) */}
+        {!debt.cease_desist_active && !debt.do_not_call && debt.preferred_contact_method && (
+          <div className="mt-2 flex items-center gap-2">
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {debt.preferred_contact_method} preferred
+            </span>
+          </div>
+        )}
+
+        {/* Feature 22: Cease & Desist Blocking Modal */}
+        {showCeaseDesistBlock && (
+          <div className="mt-3 p-4 border border-red-700" style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}>
+            <p className="text-sm text-red-400 font-bold mb-2">CEASE & DESIST ACTIVE</p>
+            <p className="text-xs text-text-secondary mb-3">Outbound communications are blocked. This debtor has sent a cease and desist notice. Proceeding may violate FDCPA regulations.</p>
+            <div className="flex gap-2">
+              <button className="block-btn text-xs" onClick={() => setShowCeaseDesistBlock(false)}>Cancel</button>
+              <button className="block-btn text-xs text-yellow-400" onClick={() => { setShowCeaseDesistBlock(false); onOpenModal('communication'); }}>
+                Manager Override — Proceed
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Feature 4: Schedule Communication Form */}
+        {showScheduleComm && (
+          <div className="mt-3 p-4 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+            <p className="text-sm font-semibold text-text-primary mb-3">Schedule Communication</p>
+            <div className="grid grid-cols-4 gap-3 items-end">
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Type</label>
+                <select className="block-select" value={schedCommForm.type} onChange={(e) => setSchedCommForm(f => ({ ...f, type: e.target.value }))}>
+                  <optgroup label="Digital">
+                    <option value="email">Email</option>
+                    <option value="text">Text</option>
+                  </optgroup>
+                  <optgroup label="Physical">
+                    <option value="letter">Letter</option>
+                    <option value="phone">Phone</option>
+                  </optgroup>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Date</label>
+                <input type="date" className="block-input" value={schedCommForm.scheduledDate} onChange={(e) => setSchedCommForm(f => ({ ...f, scheduledDate: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Subject</label>
+                <input className="block-input" placeholder="Subject" value={schedCommForm.subject} onChange={(e) => setSchedCommForm(f => ({ ...f, subject: e.target.value }))} />
+              </div>
+              <div className="flex gap-2">
+                <button className="block-btn-primary text-xs py-2 px-4" onClick={async () => {
+                  if (!schedCommForm.scheduledDate) return;
+                  try {
+                    await api.scheduleCommunication(debtId, schedCommForm.type, schedCommForm.scheduledDate, schedCommForm.subject, schedCommForm.body);
+                    setShowScheduleComm(false);
+                    setSchedCommForm({ type: 'email', scheduledDate: '', subject: '', body: '' });
+                    triggerRefresh();
+                  } catch (err: any) {
+                    alert('Failed: ' + (err?.message || 'Unknown error'));
+                  }
+                }}>Schedule</button>
+                <button className="block-btn text-xs py-2 px-3" onClick={() => setShowScheduleComm(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Feature 16: Interest Frozen Banner */}
+        {!!debt.interest_frozen && (
+          <div className="mt-3 flex items-center gap-3 px-4 py-2 border border-blue-700/50" style={{ borderRadius: '6px', background: 'rgba(59,130,246,0.08)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#3b82f622', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Interest Frozen
+            </span>
+            {debt.interest_frozen_date && <span className="text-xs text-text-muted">since {debt.interest_frozen_date}</span>}
+            {debt.interest_frozen_reason && <span className="text-xs text-text-secondary">{debt.interest_frozen_reason}</span>}
+          </div>
+        )}
+
+        {/* Add Fee Form */}
+        {showFeeForm && (
+          <div className="mt-3 p-4 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+            <p className="text-sm font-semibold text-text-primary mb-3">Add Fee</p>
+            <div className="grid grid-cols-4 gap-3 items-end">
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Amount</label>
+                <input type="number" step="0.01" className="block-input" placeholder="0.00" value={feeForm.amount} onChange={(e) => setFeeForm(f => ({ ...f, amount: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Fee Type</label>
+                <select className="block-select" value={feeForm.feeType} onChange={(e) => setFeeForm(f => ({ ...f, feeType: e.target.value }))}>
+                  <option value="admin_fee">Admin Fee</option>
+                  <option value="collection_fee">Collection Fee</option>
+                  <option value="court_cost">Court Cost</option>
+                  <option value="late_fee">Late Fee</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-text-muted mb-1">Description</label>
+                <input className="block-input" placeholder="Optional description" value={feeForm.description} onChange={(e) => setFeeForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div className="flex gap-2">
+                <button className="block-btn-primary text-xs py-2 px-4" onClick={handleSaveFee} disabled={feeSaving}>
+                  {feeSaving ? 'Adding...' : 'Add Fee'}
+                </button>
+                <button className="block-btn text-xs py-2 px-3" onClick={() => setShowFeeForm(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Write Off Confirmation */}
         {showWriteOff && (
           <div
             className="mt-3 p-4 border border-red-700"
-            style={{ borderRadius: '2px', background: '#2a1215' }}
+            style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}
           >
             <p className="text-sm text-red-400 font-semibold mb-2">Write Off Debt</p>
             <textarea
@@ -594,15 +1331,24 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           <div className="block-card p-6">
             <SectionLabel>Debt Information</SectionLabel>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <InfoRow label="Type">{debt.type}</InfoRow>
+              <InfoRow label="Type"><span className="capitalize">{humanizeLabel(debt.type)}</span></InfoRow>
               <InfoRow label="Status">
                 <span className={statusBadge.className}>{statusBadge.label}</span>
               </InfoRow>
               <InfoRow label="Source">
-                {debt.source_type !== 'manual' ? (
+                {debt.source_type === 'invoice' && debt.source_id ? (
+                  <EntityChip type="invoice" id={debt.source_id} label={sourceLabel} variant="inline" />
+                ) : debt.source_type === 'bill' && debt.source_id ? (
+                  <EntityChip type="bill" id={debt.source_id} label={sourceLabel} variant="inline" />
+                ) : debt.source_type !== 'manual' ? (
                   <span className="text-accent-blue">{sourceLabel}</span>
                 ) : (
                   sourceLabel
+                )}
+                {invoiceLink && (
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                    Linked invoice
+                  </div>
                 )}
               </InfoRow>
               <InfoRow label="Debtor Type">{debt.debtor_type}</InfoRow>
@@ -635,9 +1381,20 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               </InfoRow>
               <InfoRow label="Jurisdiction">{debt.jurisdiction || '--'}</InfoRow>
               <InfoRow label="Statute of Limitations">
-                {debt.statute_of_limitations_date
-                  ? formatDate(debt.statute_of_limitations_date)
-                  : '--'}
+                {debt.statute_of_limitations_date ? (
+                  (() => {
+                    const dLeft = Math.ceil((new Date(debt.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
+                    const color = dLeft < 30 ? '#ef4444' : dLeft < 90 ? '#f97316' : dLeft < 180 ? '#d97706' : '#22c55e';
+                    return (
+                      <span className="flex items-center gap-2">
+                        <span>{formatDate(debt.statute_of_limitations_date)}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: color + '22', color }}>
+                          {dLeft > 0 ? `${dLeft}d left` : 'EXPIRED'}
+                        </span>
+                      </span>
+                    );
+                  })()
+                ) : '--'}
               </InfoRow>
               <InfoRow label="Assigned To">{debt.assigned_to || '--'}</InfoRow>
             </div>
@@ -700,6 +1457,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     <th>Reference</th>
                     <th>Allocation</th>
                     <th>Notes</th>
+                    <th style={{ width: 60 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -709,7 +1467,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       <td className="text-right font-mono font-bold text-green-400">
                         {formatCurrency(p.amount)}
                       </td>
-                      <td className="text-xs">{p.method}</td>
+                      <td className="text-xs capitalize">{p.method || '--'}</td>
                       <td className="text-xs font-mono text-text-muted">
                         {p.reference_number || '--'}
                       </td>
@@ -719,12 +1477,148 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         {formatCurrency(p.applied_to_fees)} fees
                       </td>
                       <td className="text-xs text-text-muted">{truncate(p.notes || '', 40)}</td>
+                      <td>
+                        <div className="flex items-center gap-1">
+                          <button
+                            className="text-text-muted hover:text-accent-blue transition-colors p-0.5"
+                            onClick={() => onOpenModal('payment', p.id)}
+                            title="Edit payment"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <button
+                            className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                            onClick={() => handleDeletePayment(p.id)}
+                            title="Delete payment"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
           </div>
+
+          {/* Feature 7: Garnishment Calculator */}
+          {debt.current_stage === 'garnishment' && (
+            <div className="block-card p-6">
+              <SectionLabel>Garnishment Calculator</SectionLabel>
+              {(() => {
+                const monthly = debt.debtor_income_monthly || debt.monthly_income_estimate || 0;
+                const weekly = monthly / 4.33;
+                const pct25 = weekly * 0.25;
+                const minWageExcess = Math.max(0, weekly - 30 * 7.25);
+                const maxGarnish = Math.min(pct25, minWageExcess);
+                return (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-text-muted">Monthly Income</span><span className="font-mono">{formatCurrency(monthly)}</span></div>
+                    <div className="flex justify-between"><span className="text-text-muted">Weekly Disposable</span><span className="font-mono">{formatCurrency(weekly)}</span></div>
+                    <div className="flex justify-between"><span className="text-text-muted">25% of Disposable</span><span className="font-mono">{formatCurrency(pct25)}</span></div>
+                    <div className="flex justify-between"><span className="text-text-muted">30x Min Wage Excess</span><span className="font-mono">{formatCurrency(minWageExcess)}</span></div>
+                    <div className="flex justify-between border-t border-border-primary pt-2 font-bold">
+                      <span>Max Garnishment/Week</span>
+                      <span className="font-mono text-accent-expense">{formatCurrency(maxGarnish)}</span>
+                    </div>
+                    {monthly === 0 && (
+                      <p className="text-xs text-yellow-400 italic mt-2">Add debtor income in Financial Profile to calculate garnishment amounts.</p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Feature 17: Contact Scoring */}
+          {communications.length > 0 && (
+            <div className="block-card p-6">
+              <SectionLabel>Contact Scoring</SectionLabel>
+              {(() => {
+                const total = communications.length;
+                const successful = communications.filter((c: any) => c.outcome && c.outcome !== 'no_answer' && c.outcome !== 'voicemail' && c.outcome !== 'scheduled').length;
+                const rate = total > 0 ? Math.round((successful / total) * 100) : 0;
+                return (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center">
+                      <div className="text-lg font-mono font-bold text-text-primary">{total}</div>
+                      <div className="text-[10px] text-text-muted uppercase">Attempts</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-mono font-bold text-accent-income">{successful}</div>
+                      <div className="text-[10px] text-text-muted uppercase">Reached</div>
+                    </div>
+                    <div className="text-center">
+                      <div className={`text-lg font-mono font-bold ${rate >= 50 ? 'text-accent-income' : rate >= 25 ? 'text-yellow-500' : 'text-accent-expense'}`}>{rate}%</div>
+                      <div className="text-[10px] text-text-muted uppercase">Contact Rate</div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Feature 18: Collection ROI */}
+          {(debt.collection_costs > 0 || debt.payments_made > 0) && (
+            <div className="block-card p-6">
+              <SectionLabel>Collection ROI</SectionLabel>
+              {(() => {
+                const costs = debt.collection_costs || 0;
+                const collected = debt.payments_made || 0;
+                const roi = costs > 0 ? Math.round(((collected - costs) / costs) * 100) : 0;
+                return (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-text-muted">Total Collected</span><span className="font-mono text-accent-income">{formatCurrency(collected)}</span></div>
+                    <div className="flex justify-between"><span className="text-text-muted">Collection Costs</span><span className="font-mono text-accent-expense">{formatCurrency(costs)}</span></div>
+                    {debt.agency_commission_paid > 0 && (
+                      <div className="flex justify-between"><span className="text-text-muted">Agency Commission</span><span className="font-mono text-text-secondary">{formatCurrency(debt.agency_commission_paid)}</span></div>
+                    )}
+                    <div className="flex justify-between border-t border-border-primary pt-2 font-bold">
+                      <span>Net Recovery</span>
+                      <span className={`font-mono ${collected - costs >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>{formatCurrency(collected - costs)}</span>
+                    </div>
+                    {costs > 0 && (
+                      <div className="flex justify-between font-bold">
+                        <span>ROI</span>
+                        <span className={`font-mono ${roi >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>{roi}%</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Feature 21: Payment Waterfall Allocation */}
+          {payments.length > 0 && (
+            <div className="block-card p-6">
+              <SectionLabel>Payment Allocation Waterfall</SectionLabel>
+              {(() => {
+                const totalPrincipal = payments.reduce((s, p) => s + (p.applied_to_principal || 0), 0);
+                const totalInterest = payments.reduce((s, p) => s + (p.applied_to_interest || 0), 0);
+                const totalFees = payments.reduce((s, p) => s + (p.applied_to_fees || 0), 0);
+                const totalAll = totalPrincipal + totalInterest + totalFees || 1;
+                const pctPrincipal = Math.round((totalPrincipal / totalAll) * 100);
+                const pctInterest = Math.round((totalInterest / totalAll) * 100);
+                const pctFees = Math.round((totalFees / totalAll) * 100);
+                return (
+                  <div className="space-y-3">
+                    <div className="flex h-4 w-full overflow-hidden" style={{ borderRadius: 6 }}>
+                      {pctFees > 0 && <div style={{ width: `${pctFees}%`, background: '#ef4444' }} title={`Fees: ${pctFees}%`} />}
+                      {pctInterest > 0 && <div style={{ width: `${pctInterest}%`, background: '#f97316' }} title={`Interest: ${pctInterest}%`} />}
+                      {pctPrincipal > 0 && <div style={{ width: `${pctPrincipal}%`, background: '#22c55e' }} title={`Principal: ${pctPrincipal}%`} />}
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: '#ef4444', borderRadius: 3 }} /> Fees {formatCurrency(totalFees)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: '#f97316', borderRadius: 3 }} /> Interest {formatCurrency(totalInterest)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: '#22c55e', borderRadius: 3 }} /> Principal {formatCurrency(totalPrincipal)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         {/* ── Right Column (2/5 = 40%) ── */}
@@ -751,7 +1645,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   <div
                     key={c.id}
                     className="flex gap-3 p-3 border border-border-primary"
-                    style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
+                    style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
                   >
                     <div className="flex-shrink-0 text-text-muted mt-0.5">
                       {commIcon[c.type] || <MessageSquare size={14} />}
@@ -772,6 +1666,20 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         <span className="text-[10px] text-text-muted font-mono">
                           {formatDate(c.logged_at, { style: 'short' })}
                         </span>
+                        <button
+                          className="ml-auto text-text-muted hover:text-accent-blue transition-colors p-0.5"
+                          onClick={() => onOpenModal('communication', c.id)}
+                          title="Edit communication"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                        <button
+                          className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                          onClick={() => handleDeleteComm(c.id)}
+                          title="Delete communication"
+                        >
+                          <Trash2 size={11} />
+                        </button>
                       </div>
                       {c.subject && (
                         <p className="text-xs font-semibold text-text-primary mb-0.5">
@@ -789,6 +1697,267 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Card 4b — Promise-to-Pay Timeline */}
+          <div className="block-card p-6">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">Promise-to-Pay</div>
+              <button className="block-btn text-xs py-1 px-3" onClick={() => setShowPromiseForm(v => !v)}>
+                + Add Promise
+              </button>
+            </div>
+
+            {showPromiseForm && (
+              <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr 1fr auto', gap: 8, marginBottom: 16, alignItems: 'end' }}>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Promise Date</label>
+                  <input type="date" className="block-input" value={promiseForm.promised_date} onChange={(e) => setPromiseForm(p => ({...p, promised_date: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Amount</label>
+                  <input type="number" step="0.01" className="block-input" value={promiseForm.promised_amount} onChange={(e) => setPromiseForm(p => ({...p, promised_amount: parseFloat(e.target.value) || 0}))} placeholder="0.00" />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Notes</label>
+                  <input className="block-input" value={promiseForm.notes} onChange={(e) => setPromiseForm(p => ({...p, notes: e.target.value}))} placeholder="Optional notes" />
+                </div>
+                <button className="block-btn text-xs py-1 px-3" onClick={savePromise}>Save</button>
+              </div>
+            )}
+
+            {promises.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
+                No promises recorded.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {promises.map((p: any) => {
+                  const isPast = p.promised_date < todayLocal();
+                  const badgeColor = p.kept ? '#16a34a' : isPast ? '#ef4444' : '#d97706';
+                  const badgeLabel = p.kept ? 'Kept' : isPast ? 'Broken' : 'Pending';
+                  return (
+                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--color-bg-secondary)', borderRadius: 6 }}>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', minWidth: 90 }}>{p.promised_date}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{formatCurrency(Number(p.promised_amount))}</div>
+                      {p.notes && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', flex: 1 }}>{p.notes}</div>}
+                      <div style={{ flex: 1 }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: badgeColor + '22', color: badgeColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                        {badgeLabel}
+                      </span>
+                      <button
+                        onClick={() => togglePromiseKept(p.id, Boolean(p.kept))}
+                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
+                      >
+                        {p.kept ? 'Mark Broken' : 'Mark Kept'}
+                      </button>
+                      <button
+                        onClick={() => handleDeletePromise(p.id)}
+                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
+                        title="Delete promise"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Card 4c — Payment Plan */}
+          <PaymentPlanCard debtId={debtId} balanceDue={debt.balance_due} onRefresh={triggerRefresh} />
+
+          {/* Card 4d — Settlement Offers */}
+          <SettlementCard debtId={debtId} balanceDue={debt.balance_due} onRefresh={onRefresh} />
+
+          {/* Card 4e — FDCPA Compliance Log */}
+          <ComplianceLog debtId={debtId} onRefresh={triggerRefresh} />
+
+          {/* Card 4f — Disputes */}
+          <div className="block-card p-6">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-border-primary">
+              <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                Disputes
+              </h3>
+              <button
+                className="block-btn flex items-center gap-1 text-xs"
+                onClick={() => { setEditingDisputeId(null); setDisputeForm({ reason: 'other', description: '', status: 'open' }); setShowDisputeForm(v => !v); }}
+              >
+                <Plus size={12} />
+                File Dispute
+              </button>
+            </div>
+
+            {showDisputeForm && (
+              <div className="mb-4 p-3 border border-border-primary space-y-3" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Reason</label>
+                    <select className="block-select" value={disputeForm.reason} onChange={(e) => setDisputeForm(f => ({ ...f, reason: e.target.value }))}>
+                      <option value="already_paid">Already Paid</option>
+                      <option value="identity_theft">Identity Theft</option>
+                      <option value="not_my_debt">Not My Debt</option>
+                      <option value="other">Other</option>
+                      <option value="statute_expired">Statute Expired</option>
+                      <option value="wrong_amount">Wrong Amount</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Status</label>
+                    <select className="block-select" value={disputeForm.status} onChange={(e) => setDisputeForm(f => ({ ...f, status: e.target.value }))}>
+                      <option value="investigating">Investigating</option>
+                      <option value="open">Open</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="resolved">Resolved</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Description</label>
+                  <textarea className="block-input" rows={2} placeholder="Dispute details..." value={disputeForm.description} onChange={(e) => setDisputeForm(f => ({ ...f, description: e.target.value }))} style={{ resize: 'vertical' }} />
+                </div>
+                <div className="flex gap-2">
+                  <button className="block-btn-primary text-xs" onClick={handleSaveDispute} disabled={disputeSaving}>
+                    {disputeSaving ? 'Saving...' : editingDisputeId ? 'Update' : 'Save'}
+                  </button>
+                  <button className="block-btn text-xs" onClick={() => setShowDisputeForm(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {disputes.length === 0 && !showDisputeForm ? (
+              <p className="text-sm text-text-muted">No disputes filed</p>
+            ) : (
+              <div className="space-y-2">
+                {disputes.map((d: any) => {
+                  const statusColor: Record<string, string> = { open: 'var(--color-accent-warning)', investigating: 'var(--color-accent-blue)', resolved: 'var(--color-accent-income)', rejected: 'var(--color-accent-expense)' };
+                  const reasonLabels: Record<string, string> = { not_my_debt: 'Not My Debt', wrong_amount: 'Wrong Amount', already_paid: 'Already Paid', statute_expired: 'Statute Expired', identity_theft: 'Identity Theft', other: 'Other' };
+                  return (
+                    <div key={d.id} className="flex items-center justify-between p-2.5 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: `color-mix(in srgb, ${statusColor[d.status] || 'var(--color-text-muted)'} 14%, transparent)`, color: statusColor[d.status] || 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {formatStatus(d.status).label}
+                        </span>
+                        <span className="text-xs text-text-primary font-medium">{reasonLabels[d.reason] || d.reason}</span>
+                        {d.description && <span className="text-xs text-text-muted truncate ml-1">— {d.description.slice(0, 50)}</span>}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[10px] text-text-muted font-mono">{formatDate(d.dispute_date || d.created_at, { style: 'short' })}</span>
+                        <button className="text-text-muted hover:text-accent-blue transition-colors p-0.5" onClick={() => handleEditDispute(d)} title="Edit"><Pencil size={11} /></button>
+                        <button className="text-text-muted hover:text-accent-expense transition-colors p-0.5" onClick={() => handleDeleteDispute(d.id)} title="Delete"><Trash2 size={11} /></button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Feature 1: Skip Traces Card */}
+          <div className="block-card p-6">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-border-primary">
+              <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                Skip Traces
+              </h3>
+              <button className="block-btn flex items-center gap-1 text-xs" onClick={() => setShowSkipTraceForm(v => !v)}>
+                <Plus size={12} />
+                Add Trace
+              </button>
+            </div>
+
+            {showSkipTraceForm && (
+              <div className="mb-4 p-3 border border-border-primary space-y-3" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Source</label>
+                    <input className="block-input" placeholder="e.g. LexisNexis" value={skipTraceForm.source} onChange={(e) => setSkipTraceForm(f => ({ ...f, source: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Result</label>
+                    <select className="block-select" value={skipTraceForm.result} onChange={(e) => setSkipTraceForm(f => ({ ...f, result: e.target.value }))}>
+                      <option value="invalid">Invalid</option>
+                      <option value="no_contact">No Contact</option>
+                      <option value="pending">Pending</option>
+                      <option value="verified">Verified</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Address Tried</label>
+                    <input className="block-input" placeholder="Address" value={skipTraceForm.address_tried} onChange={(e) => setSkipTraceForm(f => ({ ...f, address_tried: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Phone Tried</label>
+                    <input className="block-input" placeholder="Phone" value={skipTraceForm.phone_tried} onChange={(e) => setSkipTraceForm(f => ({ ...f, phone_tried: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Email Tried</label>
+                    <input className="block-input" placeholder="Email" value={skipTraceForm.email_tried} onChange={(e) => setSkipTraceForm(f => ({ ...f, email_tried: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-muted mb-1">Employer Found</label>
+                    <input className="block-input" placeholder="Employer" value={skipTraceForm.employer_found} onChange={(e) => setSkipTraceForm(f => ({ ...f, employer_found: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Notes</label>
+                  <textarea className="block-input" rows={2} placeholder="Notes..." value={skipTraceForm.notes} onChange={(e) => setSkipTraceForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: 'vertical' }} />
+                </div>
+                <div className="flex gap-2">
+                  <button className="block-btn-primary text-xs" disabled={skipTraceSaving} onClick={async () => {
+                    setSkipTraceSaving(true);
+                    try {
+                      await api.create('debt_skip_traces', { debt_id: debtId, ...skipTraceForm });
+                      setShowSkipTraceForm(false);
+                      setSkipTraceForm({ source: '', address_tried: '', phone_tried: '', email_tried: '', employer_found: '', result: 'pending', notes: '' });
+                      triggerRefresh();
+                    } catch (err: any) {
+                      alert('Failed: ' + (err?.message || 'Unknown error'));
+                    } finally {
+                      setSkipTraceSaving(false);
+                    }
+                  }}>{skipTraceSaving ? 'Saving...' : 'Save'}</button>
+                  <button className="block-btn text-xs" onClick={() => setShowSkipTraceForm(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {skipTraces.length === 0 && !showSkipTraceForm ? (
+              <p className="text-sm text-text-muted">No skip traces recorded</p>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {skipTraces.map((st: any) => {
+                  const resultColor: Record<string, string> = { pending: '#d97706', verified: '#22c55e', invalid: '#ef4444', no_contact: '#6b7280' };
+                  return (
+                    <div key={st.id} className="p-2.5 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: (resultColor[st.result] || '#777') + '22', color: resultColor[st.result] || '#777', textTransform: 'uppercase' }}>
+                            {st.result}
+                          </span>
+                          {st.source && <span className="text-xs text-text-primary font-medium">{st.source}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-text-muted font-mono">{formatDate(st.trace_date || st.created_at, { style: 'short' })}</span>
+                          <button className="text-text-muted hover:text-accent-expense transition-colors p-0.5" onClick={async () => {
+                            if (!window.confirm('Delete this skip trace?')) return;
+                            await api.remove('debt_skip_traces', st.id);
+                            triggerRefresh();
+                          }} title="Delete"><Trash2 size={11} /></button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-[10px] text-text-muted">
+                        {st.address_tried && <span>Addr: {st.address_tried}</span>}
+                        {st.phone_tried && <span>Phone: {st.phone_tried}</span>}
+                        {st.email_tried && <span>Email: {st.email_tried}</span>}
+                        {st.employer_found && <span>Employer: {st.employer_found}</span>}
+                      </div>
+                      {st.notes && <p className="text-xs text-text-secondary mt-1">{st.notes}</p>}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -828,7 +1997,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     <div
                       key={e.id}
                       className="flex items-center justify-between p-2.5 border border-border-primary"
-                      style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
+                      style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="block-badge">{typeLabel}</span>
@@ -837,10 +2006,24 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         </span>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={relevanceClass}>{e.court_relevance}</span>
+                        <span className={`${relevanceClass} capitalize`}>{e.court_relevance}</span>
                         <span className="text-[10px] text-text-muted font-mono">
                           {formatDate(e.date_of_evidence || e.created_at, { style: 'short' })}
                         </span>
+                        <button
+                          className="text-text-muted hover:text-accent-blue transition-colors p-0.5"
+                          onClick={() => onOpenModal('evidence', e.id)}
+                          title="Edit evidence"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                        <button
+                          className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                          onClick={() => handleDeleteEvidence(e.id)}
+                          title="Delete evidence"
+                        >
+                          <Trash2 size={11} />
+                        </button>
                       </div>
                     </div>
                   );
@@ -871,7 +2054,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     <div
                       key={la.id}
                       className="p-3 border border-border-primary"
-                      style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
+                      style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
                     >
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className="block-badge">{actionTypeLabel}</span>
@@ -881,6 +2064,14 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                             #{la.case_number}
                           </span>
                         )}
+                        <span className="flex-1" />
+                        <button
+                          className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                          onClick={() => handleDeleteLegalAction(la.id)}
+                          title="Delete legal action"
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       </div>
                       {la.hearing_date && (
                         <div className="flex items-center gap-2 text-xs text-text-secondary mb-2">
@@ -908,13 +2099,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                           </div>
                           <div
                             className="w-full h-1.5 bg-bg-tertiary"
-                            style={{ borderRadius: '2px' }}
+                            style={{ borderRadius: '6px' }}
                           >
                             <div
                               className="h-full bg-accent-blue"
                               style={{
                                 width: `${checklistPct}%`,
-                                borderRadius: '2px',
+                                borderRadius: '6px',
                                 transition: 'width 0.3s ease',
                               }}
                             />
@@ -928,7 +2119,223 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             )}
           </div>
 
-          {/* Card 7 — Pipeline History */}
+          {/* Card 6b — Installment Calendar */}
+          {installments.length > 0 && (
+            <div className="block-card p-6">
+              <SectionLabel>Payment Installments</SectionLabel>
+              {(() => {
+                const today = todayLocal();
+                const paid = installments.filter((i: any) => i.paid);
+                const overdue = installments.filter((i: any) => !i.paid && i.due_date < today);
+                const upcoming = installments.filter((i: any) => !i.paid && i.due_date >= today);
+                return (
+                  <>
+                    <div className="flex gap-3 mb-3 text-xs">
+                      <span className="text-accent-income font-bold">{paid.length} Paid</span>
+                      <span className="text-text-muted">·</span>
+                      <span className="text-accent-blue font-bold">{upcoming.length} Upcoming</span>
+                      <span className="text-text-muted">·</span>
+                      <span className="text-accent-expense font-bold">{overdue.length} Overdue</span>
+                    </div>
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                      {installments.map((inst: any, idx: number) => {
+                        const isPaid = !!inst.paid;
+                        const isOverdue = !isPaid && inst.due_date < today;
+                        const color = isPaid ? 'var(--color-accent-income)' : isOverdue ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)';
+                        const label = isPaid ? 'Paid' : isOverdue ? 'Overdue' : 'Due';
+                        return (
+                          <div key={inst.id || idx} className="flex items-center justify-between px-2.5 py-1.5 border border-border-primary" style={{ borderRadius: '6px', borderLeftWidth: 3, borderLeftColor: color }}>
+                            <span className="text-xs font-mono text-text-secondary">{formatDate(inst.due_date)}</span>
+                            <span className="text-xs font-mono font-bold text-text-primary">{formatCurrency(inst.amount || 0)}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>{label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Card 6c — Documents & Attachments */}
+          <div className="block-card p-6">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-border-primary">
+              <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                Documents
+              </h3>
+              <button className="block-btn flex items-center gap-1 text-xs" onClick={handleUploadDocument}>
+                <Plus size={12} />
+                Upload
+              </button>
+            </div>
+            {documents.length === 0 ? (
+              <p className="text-sm text-text-muted">No documents attached</p>
+            ) : (
+              <div className="space-y-1.5">
+                {documents.map((doc: any) => (
+                  <div key={doc.id} className="flex items-center justify-between p-2 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={14} className="text-accent-blue flex-shrink-0" />
+                      <span className="text-xs text-text-primary font-medium truncate">{doc.filename}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[10px] text-text-muted font-mono">{formatDate(doc.uploaded_at, { style: 'short' })}</span>
+                      <button className="text-text-muted hover:text-accent-expense transition-colors p-0.5" onClick={() => handleDeleteDocument(doc.id)} title="Delete"><Trash2 size={11} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Card — Chain of Custody Audit Log */}
+          <div className="block-card p-6">
+            <SectionLabel>Chain of Custody</SectionLabel>
+            {auditLog.length === 0 ? (
+              <p className="text-sm text-text-muted">No audit entries yet.</p>
+            ) : (
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {auditLog.map((entry: any) => {
+                  const actionLabels: Record<string, string> = {
+                    stage_advance: 'Stage Advanced',
+                    hold_toggle: 'Hold Toggled',
+                    assignment_change: 'Collector Assigned',
+                    fee_added: 'Fee Added',
+                    settlement_accepted: 'Settlement Accepted',
+                    settlement_offered: 'Settlement Offered',
+                    compliance_event: 'Compliance Event',
+                    plan_created: 'Payment Plan Created',
+                    promise_recorded: 'Promise Recorded',
+                    promise_updated: 'Promise Updated',
+                    note_added: 'Note Added',
+                    field_edit: 'Field Updated',
+                    payment_recorded: 'Payment Recorded',
+                    communication_logged: 'Communication Logged',
+                    dispute_filed: 'Dispute Filed',
+                    record_deleted: 'Record Deleted',
+                    interest_recalculated: 'Interest Recalculated',
+                  };
+                  const label = actionLabels[entry.action] || entry.action;
+                  return (
+                    <div key={entry.id} className="flex items-start gap-2 px-2 py-1.5 border-l-2 border-border-primary text-xs">
+                      <span className="text-text-muted font-mono whitespace-nowrap flex-shrink-0">
+                        {formatDate(entry.performed_at, { style: 'short' })}
+                      </span>
+                      <div className="min-w-0">
+                        <span className="text-text-primary font-semibold">{label}</span>
+                        {entry.field_name && (
+                          <span className="text-text-muted ml-1">({entry.field_name})</span>
+                        )}
+                        {entry.old_value && entry.new_value && (
+                          <span className="text-text-muted ml-1">
+                            {entry.old_value} &rarr; {entry.new_value}
+                          </span>
+                        )}
+                        {!entry.old_value && entry.new_value && (
+                          <span className="text-text-muted ml-1">: {entry.new_value}</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-text-muted ml-auto flex-shrink-0 capitalize">{entry.performed_by}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Card 7 — Activity Timeline + Quick Note */}
+          <div className="block-card p-6">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-border-primary">
+              <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                Activity Timeline
+              </h3>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{timeline.length} events</span>
+            </div>
+
+            {/* Quick Note */}
+            <div className="flex gap-2 mb-4">
+              <input
+                className="block-input flex-1"
+                placeholder="Add a quick note..."
+                value={quickNote}
+                onChange={e => setQuickNote(e.target.value)}
+                onKeyDown={async e => {
+                  if (e.key === 'Enter' && quickNote.trim()) {
+                    setSavingNote(true);
+                    try {
+                      await api.addQuickNote(debtId, quickNote.trim());
+                      setQuickNote('');
+                      triggerRefresh();
+                    } finally {
+                      setSavingNote(false);
+                    }
+                  }
+                }}
+              />
+              <button
+                className="block-btn-primary text-xs py-1 px-3"
+                disabled={savingNote || !quickNote.trim()}
+                onClick={async () => {
+                  if (!quickNote.trim()) return;
+                  setSavingNote(true);
+                  try {
+                    await api.addQuickNote(debtId, quickNote.trim());
+                    setQuickNote('');
+                    triggerRefresh();
+                  } finally {
+                    setSavingNote(false);
+                  }
+                }}
+              >
+                {savingNote ? '...' : 'Note'}
+              </button>
+            </div>
+
+            {timeline.length === 0 ? (
+              <p className="text-sm text-text-muted">No activity recorded yet.</p>
+            ) : (
+              <div className="relative pl-5" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border-primary" />
+                <div className="space-y-3">
+                  {timeline.map((ev) => {
+                    const kindColors: Record<string, string> = {
+                      comm: '#60a5fa',
+                      stage: '#a78bfa',
+                      payment: '#22c55e',
+                      promise: '#f59e0b',
+                      compliance: '#f97316',
+                      settlement: '#06b6d4',
+                      note: '#94a3b8',
+                    };
+                    const dotColor = kindColors[ev.kind] || '#94a3b8';
+                    const ts = ev.ts ? ev.ts.slice(0, 10) : '';
+                    return (
+                      <div key={ev.id} className="relative flex gap-3 items-start">
+                        <div
+                          className="absolute -left-5 top-1.5 w-2.5 h-2.5 flex-shrink-0"
+                          style={{ background: dotColor, borderRadius: 6 }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span style={{ fontSize: 11, fontWeight: 700, color: dotColor }}>{ev.label}</span>
+                            <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>{ts}</span>
+                          </div>
+                          {ev.detail && (
+                            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 1 }}>
+                              {ev.detail}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 8 — Pipeline History */}
           <div className="block-card p-6">
             <SectionLabel>Pipeline History</SectionLabel>
             {pipelineStages.length === 0 ? (
@@ -943,14 +2350,14 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   {pipelineStages.map((ps, idx) => {
                     const isCurrent = !ps.exited_at;
                     const stgBadge = formatStatus(ps.stage);
-                    const dotColor = stageColor[ps.stage] || 'bg-gray-500';
+                    const dotColor = stageColor[ps.stage] || 'bg-bg-secondary';
                     return (
                       <div key={ps.id} className="relative flex gap-3 items-start">
                         {/* Dot */}
                         <div
                           className={`absolute -left-5 top-1 w-3 h-3 ${dotColor} flex-shrink-0`}
                           style={{
-                            borderRadius: '2px',
+                            borderRadius: '6px',
                             animation: isCurrent ? 'pulse 2s infinite' : undefined,
                           }}
                         />
@@ -994,6 +2401,19 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         </div>
       </div>
 
+      {/* ── Collection Costs (Debt-Collection Expense Wave) ───────
+          Expenses linked to this debt via related_debt_id, with
+          recoverability roll-ups, ROI, and apply-to-balance. */}
+      <div className="mt-6">
+        <CollectionCostsPanel debtId={debtId} onBalanceChanged={triggerRefresh} />
+      </div>
+
+      {/* ── Cross-entity integration ────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="debt" entityId={debtId} hide={['comms', 'evidence', 'contacts', 'payments']} />
+        <EntityTimeline entityType="debts" entityId={debtId} />
+      </div>
+
       {/* Pulse animation */}
       <style>{`
         @keyframes pulse {
@@ -1001,8 +2421,42 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
           50% { opacity: 0.4; }
         }
       `}</style>
+
+      {/* PORTAL: share modal — same UX as InvoiceDetail. */}
+      {showShareModal && debt && (
+        <PortalShareModal
+          title={`Share debt ${debt.debtor_name ?? ''}`.trim()}
+          buildUrl={(token) => `${portalBaseUrl}/portal/debt/${token}`}
+          fetchInfo={() => api.debtPortalTokenInfo(debtId)}
+          generateToken={async () => {
+            const r = await api.generateDebtPortalToken(debtId);
+            return { token: r?.token, error: r?.error };
+          }}
+          regenerate={() => api.debtRegeneratePortalToken(debtId)}
+          disable={() => api.debtDisablePortalToken(debtId)}
+          previewNode={getDebtPortalPreview(debt)}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   );
 };
+
+// PORTAL: privacy preview for debt — only the public-portal fields.
+// Hidden: collector_id, internal compliance notes, risk_score, etc.
+function getDebtPortalPreview(debt: any): React.ReactNode {
+  return (
+    <div className="space-y-1">
+      <div><span className="text-text-muted">Debtor:</span> {debt?.debtor_name ?? '—'}</div>
+      <div><span className="text-text-muted">Account:</span> <span className="font-mono">{debt?.account_number ?? debt?.id?.slice(0, 8) ?? '—'}</span></div>
+      <div><span className="text-text-muted">Original amount:</span> ${Number(debt?.original_amount ?? 0).toFixed(2)}</div>
+      <div><span className="text-text-muted">Current balance:</span> ${Number(debt?.current_balance ?? debt?.balance ?? 0).toFixed(2)}</div>
+      {debt?.due_date && <div><span className="text-text-muted">Due:</span> {debt.due_date}</div>}
+      <div className="text-text-muted italic pt-1 border-t border-border-primary mt-2">
+        Hidden from recipient: assigned collector, internal notes, risk score, compliance log.
+      </div>
+    </div>
+  );
+}
 
 export default DebtDetail;

@@ -121,6 +121,8 @@ export interface Invoice {
   updated_at: string;
 }
 
+export type LineRowType = 'item' | 'section' | 'note' | 'subtotal' | 'image' | 'spacer';
+
 export interface InvoiceLineItem {
   id: string;
   invoice_id: string;
@@ -132,6 +134,23 @@ export interface InvoiceLineItem {
   account_id: string;
   project_id: string | null;
   time_entry_ids: string[];
+  sort_order: number;
+  row_type: LineRowType;
+  unit_label: string;
+  item_code: string;
+  line_discount: number;
+  line_discount_type: 'percent' | 'flat';
+  created_at: string;
+}
+
+export interface InvoicePaymentMilestone {
+  id: string;
+  invoice_id: string;
+  milestone_label: string;
+  due_date: string;
+  amount: number;
+  paid: boolean;
+  sort_order: number;
   created_at: string;
 }
 
@@ -151,6 +170,8 @@ export interface Expense {
   reference: string;
   is_billable: boolean;
   is_reimbursable: boolean;
+  reimbursed: boolean;
+  reimbursed_date: string;
   project_id: string | null;
   client_id: string | null;
   receipt_path: string | null;
@@ -160,8 +181,23 @@ export interface Expense {
   recurring_template_id: string | null;
   tags: string[];
   custom_fields: Record<string, any>;
+  // Location / markup (DB columns that the form reads & writes).
+  merchant_location?: string;
+  geo_location_name?: string;
+  markup_pct?: number;
+  // Shipping & Handling. shipping_amount/shipping_tax_amount are added on top
+  // of amount+tax_amount for the grand total (see expenseGrandTotal).
+  shipping_amount?: number;
+  shipping_tax_amount?: number;
+  shipping_speed?: string;
+  shipping_taxable?: number;
+  shipping_scope?: 'order' | 'item';
+  shipping_line_ref?: string | null;
   created_at: string;
   updated_at: string;
+  // JOIN-populated fields (rawQuery only — not returned by db:query)
+  category_name?: string;
+  vendor_name?: string;
 }
 
 export interface Vendor {
@@ -234,6 +270,64 @@ export interface PayStub {
   ytd_gross: number;
   ytd_taxes: number;
   ytd_net: number;
+  created_at: string;
+}
+
+export interface EmployeeEquipment {
+  id: string;
+  employee_id: string;
+  item_name: string;
+  description: string;
+  serial_number: string;
+  model: string;
+  condition: 'new' | 'excellent' | 'good' | 'fair' | 'poor';
+  assigned_date: string;
+  return_date: string | null;
+  notes: string;
+  created_at: string;
+}
+
+// ─── E-Sign ──────────────────────────────────────────────
+export interface EsignDocument {
+  id: string;
+  company_id: string;
+  title: string;
+  description: string;
+  content: string;
+  content_hash: string;
+  status: 'draft' | 'pending' | 'signed' | 'revoked';
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EsignSignature {
+  id: string;
+  document_id: string;
+  signer_type: 'admin' | 'employee' | 'user';
+  signer_id: string;
+  signer_name: string;
+  typed_name: string;
+  signature_hash: string;
+  signed_at: string;
+}
+
+export interface EsignPermission {
+  id: string;
+  document_id: string;
+  user_id: string;
+  permission_level: 'view' | 'edit' | 'sign' | 'admin';
+  created_at: string;
+}
+
+export interface EsignAuditLog {
+  id: string;
+  document_id: string;
+  action: string;
+  performed_by: string;
+  previous_hash: string;
+  new_hash: string;
+  details: string;
   created_at: string;
 }
 

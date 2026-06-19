@@ -22,12 +22,12 @@ interface ContactListProps {
 
 // ─── Role badge colors ──────────────────────────────────
 const ROLE_STYLES: Record<string, string> = {
-  debtor:            'bg-red-500/20 text-red-400',
+  debtor:            'bg-accent-expense/20 text-red-400',
   guarantor:         'bg-amber-500/20 text-amber-400',
   attorney:          'bg-accent-blue/20 text-accent-blue',
   witness:           'bg-purple-500/20 text-purple-400',
   collections_agent: 'bg-amber-500/20 text-amber-400',
-  judge:             'bg-red-500/20 text-red-400',
+  judge:             'bg-accent-expense/20 text-red-400',
   mediator:          'bg-emerald-500/20 text-emerald-400',
 };
 
@@ -104,18 +104,18 @@ const ContactList: React.FC<ContactListProps> = ({ debtId, onAdd, onEdit }) => {
       {contacts.length > 0 && (
         <div className="space-y-0">
           {contacts.map((c) => {
-            const badgeStyle = ROLE_STYLES[c.role] || 'bg-gray-500/20 text-gray-400';
+            const badgeStyle = ROLE_STYLES[c.role] || 'bg-bg-secondary/20 text-text-muted';
 
             return (
               <div
                 key={c.id}
                 className="flex items-center gap-3 px-3 py-2.5 border-b border-border-primary last:border-b-0 hover:bg-bg-tertiary transition-colors"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {/* Role badge */}
                 <span
                   className={`text-[10px] font-semibold px-1.5 py-0.5 flex-shrink-0 ${badgeStyle}`}
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   {roleLabel(c.role)}
                 </span>
@@ -150,7 +150,7 @@ const ContactList: React.FC<ContactListProps> = ({ debtId, onAdd, onEdit }) => {
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button
                     className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                     onClick={() => onEdit(c.id)}
                     title="Edit contact"
                   >
@@ -158,7 +158,7 @@ const ContactList: React.FC<ContactListProps> = ({ debtId, onAdd, onEdit }) => {
                   </button>
                   <button
                     className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-accent-expense transition-colors"
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                     onClick={() => handleDelete(c.id, c.name)}
                     title="Delete contact"
                   >

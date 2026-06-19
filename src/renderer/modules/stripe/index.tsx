@@ -8,16 +8,15 @@ import {
   ArrowDownUp,
   DollarSign,
   AlertCircle,
+  Globe,
+  Trash2,
 } from 'lucide-react';
 import api from '../../lib/api';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
+import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
+import StripeExplorer from './StripeExplorer';
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Types ──────────────────────────────────────────────
 interface StripeTransaction {
@@ -48,22 +47,49 @@ function typeBadgeClass(type: string): string {
   }
 }
 
-function statusBadgeClass(status: string): string {
-  switch (status?.toLowerCase()) {
-    case 'succeeded':
-    case 'paid':
-      return 'block-badge block-badge-income';
-    case 'pending':
-      return 'block-badge block-badge-warning';
-    case 'failed':
-      return 'block-badge block-badge-expense';
-    default:
-      return 'block-badge block-badge-blue';
-  }
-}
+// ─── Stripe Module (tab-based) ──────────────────────────────
+// Two views:
+//   - "sync"     — original summary dashboard (transactions, totals, API key)
+//   - "explorer" — full resource browser that works offline via local cache
+const StripeModule: React.FC = () => {
+  const [tab, setTab] = useState<'sync' | 'explorer'>('sync');
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex items-center border-b border-border-primary bg-bg-secondary px-6 pt-3">
+        <div className="flex items-center gap-2 mr-6">
+          <CreditCard size={20} className="text-accent-purple" />
+          <h1 className="text-base font-bold text-text-primary">Stripe</h1>
+        </div>
+        <button
+          onClick={() => setTab('sync')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+            tab === 'sync' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-text-secondary hover:text-text-primary transition-colors'
+          }`}
+        >
+          <RefreshCw size={14} />
+          Overview
+        </button>
+        <button
+          onClick={() => setTab('explorer')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+            tab === 'explorer' ? 'border-accent-blue text-accent-blue' : 'border-transparent text-text-secondary hover:text-text-primary transition-colors'
+          }`}
+        >
+          <Globe size={14} />
+          Explorer
+          <span className="text-[9px] uppercase tracking-wider px-1 py-0.5 bg-accent-blue/15 text-accent-blue ml-1">All APIs</span>
+        </button>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        {tab === 'sync' ? <StripeSyncModule /> : <StripeExplorer />}
+      </div>
+    </div>
+  );
+};
 
 // ─── Stripe Sync Component ──────────────────────────────
 const StripeSyncModule: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [apiKey, setApiKey] = useState('');
   const [savedApiKey, setSavedApiKey] = useState('');
   const [isConnected, setIsConnected] = useState(false);
@@ -72,6 +98,7 @@ const StripeSyncModule: React.FC = () => {
   const [savingKey, setSavingKey] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
+  const [error, setError] = useState('');
 
   // Summary stats
   const [totalPayments, setTotalPayments] = useState(0);
@@ -79,6 +106,8 @@ const StripeSyncModule: React.FC = () => {
   const [netRevenue, setNetRevenue] = useState(0);
 
   const loadData = useCallback(async () => {
+    if (!activeCompany) return;
+    setError('');
     try {
       // Check for API key in settings
       const settingsResult = await api.query('settings', { key: 'stripe_api_key' });
@@ -90,11 +119,13 @@ const StripeSyncModule: React.FC = () => {
       setSavedApiKey(storedKey);
       setIsConnected(!!storedKey);
 
-      // Load transactions
-      const txns: StripeTransaction[] = await api.query('stripe_transactions', undefined, {
+      // Load transactions scoped to the active company
+      // Perf: cap stripe transactions list at 1000 most recent. Stripe accounts
+      // can accumulate tens of thousands; older are still queryable in detail UI.
+      const txns: StripeTransaction[] = await api.query('stripe_transactions', { company_id: activeCompany.id }, {
         field: 'synced_at',
         dir: 'desc',
-      });
+      }, 1000);
       setTransactions(txns ?? []);
 
       // Calculate summary stats
@@ -108,12 +139,13 @@ const StripeSyncModule: React.FC = () => {
       setTotalPayments(payments);
       setTotalFees(fees);
       setNetRevenue(net);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Stripe data load failed:', err);
+      setError(err?.message || 'Failed to load Stripe data');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeCompany]);
 
   useEffect(() => {
     loadData();
@@ -137,8 +169,12 @@ const StripeSyncModule: React.FC = () => {
       setSavedApiKey(apiKey);
       setIsConnected(!!apiKey);
       setApiKey('');
-    } catch (err) {
+      setSyncMessage('API key saved successfully.');
+      setTimeout(() => setSyncMessage(''), 3000);
+    } catch (err: any) {
       console.error('Failed to save API key:', err);
+      setSyncMessage('Failed to save API key: ' + (err?.message || 'Unknown error'));
+      setTimeout(() => setSyncMessage(''), 6000);
     } finally {
       setSavingKey(false);
     }
@@ -165,6 +201,7 @@ const StripeSyncModule: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load Stripe data" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-2">
@@ -268,7 +305,7 @@ const StripeSyncModule: React.FC = () => {
             <DollarSign size={14} className="text-accent-income" />
             <span className="stat-label">Total Synced Payments</span>
           </div>
-          <p className="stat-value text-accent-income">{fmt.format(totalPayments)}</p>
+          <p className="stat-value text-accent-income">{formatCurrency(totalPayments)}</p>
         </div>
 
         <div className="stat-card border-l-2 border-l-accent-warning">
@@ -276,7 +313,7 @@ const StripeSyncModule: React.FC = () => {
             <ArrowDownUp size={14} className="text-accent-warning" />
             <span className="stat-label">Total Fees</span>
           </div>
-          <p className="stat-value text-accent-warning">{fmt.format(totalFees)}</p>
+          <p className="stat-value text-accent-warning">{formatCurrency(totalFees)}</p>
         </div>
 
         <div className="stat-card border-l-2 border-l-accent-blue">
@@ -284,7 +321,7 @@ const StripeSyncModule: React.FC = () => {
             <DollarSign size={14} className="text-accent-blue" />
             <span className="stat-label">Net Revenue</span>
           </div>
-          <p className="stat-value text-accent-blue">{fmt.format(netRevenue)}</p>
+          <p className="stat-value text-accent-blue">{formatCurrency(netRevenue)}</p>
         </div>
       </div>
 
@@ -318,6 +355,7 @@ const StripeSyncModule: React.FC = () => {
                   <th>Description</th>
                   <th>Status</th>
                   <th>Synced Date</th>
+                  <th style={{ width: 40 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -327,29 +365,42 @@ const StripeSyncModule: React.FC = () => {
                       {txn.stripe_id}
                     </td>
                     <td>
-                      <span className={typeBadgeClass(txn.type)}>
-                        {txn.type}
+                      <span className={`${typeBadgeClass(txn.type)} capitalize`}>
+                        {humanizeLabel(txn.type)}
                       </span>
                     </td>
                     <td className="font-mono text-right">
-                      {fmt.format(txn.amount ?? 0)}
+                      {formatCurrency(txn.amount ?? 0)}
                     </td>
                     <td className="font-mono text-right text-accent-warning">
-                      {fmt.format(txn.fee ?? 0)}
+                      {formatCurrency(txn.fee ?? 0)}
                     </td>
                     <td className="font-mono text-right text-accent-income">
-                      {fmt.format(txn.net ?? 0)}
+                      {formatCurrency(txn.net ?? 0)}
                     </td>
                     <td className="text-text-secondary">{txn.description || '--'}</td>
                     <td>
-                      <span className={statusBadgeClass(txn.status)}>
-                        {txn.status}
+                      <span className={formatStatus(txn.status).className}>
+                        {formatStatus(txn.status).label}
                       </span>
                     </td>
                     <td className="text-xs text-text-muted">
                       {txn.synced_at
-                        ? new Date(txn.synced_at).toLocaleDateString()
+                        ? formatDate(txn.synced_at)
                         : '--'}
+                    </td>
+                    <td>
+                      <button
+                        className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                        onClick={async () => {
+                          if (!window.confirm('Delete this synced transaction?')) return;
+                          await api.remove('stripe_transactions', txn.id);
+                          loadData();
+                        }}
+                        title="Delete"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -362,4 +413,4 @@ const StripeSyncModule: React.FC = () => {
   );
 };
 
-export default StripeSyncModule;
+export default StripeModule;

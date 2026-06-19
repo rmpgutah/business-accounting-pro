@@ -1,20 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { X, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
-
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+import { todayLocal } from '../../lib/date-helpers';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
+import { computeInvoicePaidStatus } from '../../../shared/payment-math';
 
 // ─── Payment Methods ────────────────────────────────────
 const PAYMENT_METHODS = [
+  { value: 'transfer', label: 'Bank Transfer' },
   { value: 'cash', label: 'Cash' },
   { value: 'check', label: 'Check' },
-  { value: 'transfer', label: 'Bank Transfer' },
   { value: 'card', label: 'Credit / Debit Card' },
   { value: 'other', label: 'Other' },
 ];
@@ -24,6 +19,8 @@ interface PaymentRecorderProps {
   invoiceId: string;
   invoiceTotal: number;
   amountPaid: number;
+  currency?: string;
+  editPaymentId?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -32,19 +29,68 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
   invoiceId,
   invoiceTotal,
   amountPaid,
+  currency = 'USD',
+  editPaymentId,
   onClose,
   onSaved,
 }) => {
-  const balanceDue = useMemo(() => invoiceTotal - amountPaid, [invoiceTotal, amountPaid]);
+  const isEditing = !!editPaymentId;
+  const fmt = useMemo(() => new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }), [currency]);
 
-  const [amount, setAmount] = useState<string>(String(balanceDue));
-  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [amount, setAmount] = useState<string>('');
+  const [date, setDate] = useState<string>(todayLocal());
   const [method, setMethod] = useState<string>('transfer');
   const [reference, setReference] = useState<string>('');
+  // Invoice payment upload — optional proof/remittance file attached to the payment.
+  const [attachmentPath, setAttachmentPath] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>('');
+  // Track the original payment amount when editing (to add back to balance)
+  const [originalAmount, setOriginalAmount] = useState<number>(0);
+
+  // Compute balance: for edits, add back the original payment since it's being replaced
+  const balanceDue = useMemo(
+    () => (invoiceTotal - amountPaid) + (isEditing ? originalAmount : 0),
+    [invoiceTotal, amountPaid, isEditing, originalAmount]
+  );
+
+  // Set default amount for new payments
+  React.useEffect(() => {
+    if (!isEditing) {
+      const newBalance = invoiceTotal - amountPaid;
+      setAmount(String(newBalance > 0 ? newBalance : ''));
+    }
+  }, [isEditing, invoiceTotal, amountPaid]);
+
+  // Load existing payment for editing
+  React.useEffect(() => {
+    if (!editPaymentId) return;
+    const load = async () => {
+      try {
+        const p = await api.get('payments', editPaymentId);
+        if (p) {
+          const paymentAmt = Number(p.amount) || 0;
+          setAmount(String(paymentAmt || ''));
+          setOriginalAmount(paymentAmt);
+          setDate(p.date || todayLocal());
+          setMethod(p.payment_method || 'transfer');
+          setReference(p.reference || '');
+          setAttachmentPath(p.attachment_path || '');
+        }
+      } catch (err) {
+        console.error('Failed to load payment:', err);
+      }
+    };
+    load();
+  }, [editPaymentId]);
 
   const handleSave = async () => {
+    if (saving) return;
     setError('');
 
     const parsedAmount = parseFloat(amount);
@@ -60,56 +106,83 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
       setError('Please select a payment date.');
       return;
     }
+    const today = todayLocal();
+    if (date > today) {
+      setError('Payment date cannot be in the future.');
+      return;
+    }
+    if (!method) {
+      setError('Please select a payment method.');
+      return;
+    }
 
     setSaving(true);
     try {
-      // Record the payment
-      await api.create('payments', {
-        invoice_id: invoiceId,
-        amount: parsedAmount,
-        date,
-        payment_method: method,
-        reference,
-      });
-
-      // Update the invoice
-      const newAmountPaid = amountPaid + parsedAmount;
-      const newStatus = newAmountPaid >= invoiceTotal ? 'paid' : 'partial';
-
-      await api.update('invoices', invoiceId, {
-        amount_paid: newAmountPaid,
-        status: newStatus,
-      });
-
+      if (isEditing && editPaymentId) {
+        await api.update('payments', editPaymentId, {
+          amount: parsedAmount,
+          date,
+          payment_method: method || 'transfer',
+          reference: reference || '',
+          attachment_path: attachmentPath || '',
+        });
+        // Editing a payment used to leave the invoice header (amount_paid,
+        // status, balance due) showing the OLD figure — the create path
+        // recomputes but the edit path never did. Re-derive from the full
+        // payment set so the invoice agrees with its rows.
+        const allPayments = await api.query('payments', { invoice_id: invoiceId });
+        const { amountPaid, status } = computeInvoicePaidStatus(
+          invoiceTotal,
+          (allPayments || []).map((p: any) => p.amount),
+        );
+        await api.update('invoices', invoiceId, { amount_paid: amountPaid, status });
+      } else {
+        const res = await api.recordInvoicePayment(invoiceId, parsedAmount, date, method, reference);
+        // Persist the uploaded proof onto the just-created payment row.
+        if (attachmentPath && res?.paymentId) {
+          await api.update('payments', res.paymentId, { attachment_path: attachmentPath });
+        }
+      }
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface record-payment errors instead of swallowing
       console.error('Failed to record payment:', err);
-      setError('Failed to record payment. Please try again.');
+      setError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
   };
 
+  // A11Y: ESC close, body scroll lock, focus trap, restore focus, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+      role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="block-card-elevated w-full max-w-md"
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-recorder-title"
+        tabIndex={-1}
+        onKeyDown={trapFocusOnKeyDown(containerRef)}
+        className="block-card-elevated w-full max-w-md cursor-pointer"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <DollarSign size={18} className="text-accent-income" />
-            <h2 className="text-base font-bold text-text-primary">Record Payment</h2>
+            <h2 id="payment-recorder-title" className="text-base font-bold text-text-primary">{isEditing ? 'Edit Payment' : 'Record Payment'}</h2>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close payment recorder"
             className="text-text-muted hover:text-text-primary transition-colors p-1"
           >
             <X size={18} />
@@ -122,7 +195,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
           style={{
             backgroundColor: 'var(--color-bg-tertiary)',
             border: '1px solid var(--color-border-primary)',
-            borderRadius: '2px',
+            borderRadius: '6px',
           }}
         >
           <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -140,7 +213,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
             style={{
               backgroundColor: 'var(--color-accent-expense-bg)',
               border: '1px solid var(--color-accent-expense)',
-              borderRadius: '2px',
+              borderRadius: '6px',
             }}
           >
             {error}
@@ -156,7 +229,6 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
             </label>
             <input
               type="number"
-              min={0}
               step="0.01"
               max={balanceDue}
               className="block-input font-mono"
@@ -211,13 +283,48 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
           </div>
         </div>
 
+        {/* Payment proof upload — attach a receipt / remittance / bank slip */}
+        <div className="mt-4">
+          <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
+            Payment Proof <span className="text-text-muted text-[10px]">(optional)</span>
+          </label>
+          {attachmentPath ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="truncate flex-1 text-text-secondary" title={attachmentPath}>
+                📎 {attachmentPath.split(/[/\\]/).pop()}
+              </span>
+              <a href={`file://${attachmentPath}`} target="_blank" rel="noreferrer" className="block-btn text-xs">View</a>
+              <button type="button" className="block-btn text-xs text-accent-expense" onClick={() => setAttachmentPath('')}>
+                Remove
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="block-btn text-xs"
+              onClick={async () => {
+                try {
+                  const r: any = await api.openFileDialog({
+                    filters: [{ name: 'Receipts & Documents', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'] }],
+                  });
+                  if (r?.path) setAttachmentPath(r.path);
+                } catch (e) {
+                  console.error('Attach payment proof failed:', e);
+                }
+              }}
+            >
+              Upload payment proof…
+            </button>
+          )}
+        </div>
+
         {/* Actions */}
         <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: '1px solid var(--color-border-primary)' }}>
           <button className="block-btn" onClick={onClose} disabled={saving}>
             Cancel
           </button>
           <button className="block-btn-success" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : 'Record Payment'}
+            {saving ? 'Saving...' : isEditing ? 'Update Payment' : 'Record Payment'}
           </button>
         </div>
       </div>

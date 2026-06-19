@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Clock } from 'lucide-react';
 import api from '../../lib/api';
+import { todayLocal } from '../../lib/date-helpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -51,13 +52,18 @@ function toDateStr(iso: string): string {
   try {
     return iso.slice(0, 10);
   } catch {
-    return new Date().toISOString().slice(0, 10);
+    return todayLocal();
   }
 }
 
 function calcDurationFromRange(date: string, start: string, end: string): number {
   const s = new Date(`${date}T${start}:00`);
-  const e = new Date(`${date}T${end}:00`);
+  let e = new Date(`${date}T${end}:00`);
+  // Overnight shift: a 22:00→02:00 entry should record 4 hours, not 0.
+  // If end is at-or-before start, roll end to the following day.
+  if (e.getTime() <= s.getTime()) {
+    e = new Date(e.getTime() + 24 * 60 * 60 * 1000);
+  }
   const diff = (e.getTime() - s.getTime()) / 60000;
   return diff > 0 ? Math.round(diff) : 0;
 }
@@ -74,7 +80,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
 
   const [inputMode, setInputMode] = useState<InputMode>('range');
   const [date, setDate] = useState(
-    entry ? toDateStr(entry.date) : new Date().toISOString().slice(0, 10)
+    entry ? toDateStr(entry.date) : todayLocal()
   );
   const [startTime, setStartTime] = useState(
     entry ? toTimeStr(entry.start_time) : '09:00'
@@ -130,8 +136,15 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     let finalDuration: number;
 
     if (inputMode === 'range') {
-      finalStartTime = new Date(`${date}T${startTime}:00`).toISOString();
-      finalEndTime = new Date(`${date}T${endTime}:00`).toISOString();
+      const sDate = new Date(`${date}T${startTime}:00`);
+      let eDate = new Date(`${date}T${endTime}:00`);
+      // Match the overnight-rollover applied in calcDurationFromRange so
+      // the persisted end_time matches the duration that was displayed.
+      if (eDate.getTime() <= sDate.getTime()) {
+        eDate = new Date(eDate.getTime() + 24 * 60 * 60 * 1000);
+      }
+      finalStartTime = sDate.toISOString();
+      finalEndTime = eDate.toISOString();
       finalDuration = calcDurationFromRange(date, startTime, endTime);
     } else {
       // Duration mode: set start to 9am, calc end
@@ -162,15 +175,28 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     };
 
     try {
+      let result;
       if (isEditing && entry) {
-        await api.update('time_entries', entry.id, data);
+        result = await api.update('time_entries', entry.id, data);
       } else {
-        await api.create('time_entries', data);
+        result = await api.create('time_entries', data);
       }
+
+      // IPC handler returns { error: '...' } on failure instead of throwing
+      if (result && typeof result === 'object' && 'error' in result) {
+        throw new Error(result.error);
+      }
+
+      if (!result || !result.id) {
+        throw new Error('Entry was not saved — no record returned');
+      }
+
       onSaved();
       onClose();
-    } catch (err) {
-      console.error('Failed to save time entry:', err);
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to save time entry. Please try again.';
+      console.error('Failed to save time entry:', msg, err);
+      setFormError(msg);
     } finally {
       setSaving(false);
     }
@@ -183,7 +209,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     >
       <div
         className="block-card-elevated w-full max-w-lg"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
@@ -196,7 +222,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
           <button
             onClick={onClose}
             className="p-1 hover:bg-bg-hover transition-colors text-text-muted hover:text-text-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <X size={16} />
           </button>
@@ -227,9 +253,9 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
                   inputMode === 'range'
                     ? 'bg-accent-blue text-white'
-                    : 'bg-bg-tertiary text-text-muted hover:text-text-primary'
+                    : 'bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors'
                 }`}
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 Time Range
               </button>
@@ -238,9 +264,9 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
                   inputMode === 'duration'
                     ? 'bg-accent-blue text-white'
-                    : 'bg-bg-tertiary text-text-muted hover:text-text-primary'
+                    : 'bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors'
                 }`}
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 Duration
               </button>
@@ -318,11 +344,14 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
               className="block-select"
             >
               <option value="">No client</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              {/* Alphabetical A→Z */}
+              {[...clients]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -337,11 +366,14 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
               className="block-select"
             >
               <option value="">No project</option>
-              {filteredProjects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              {/* Alphabetical A→Z */}
+              {[...filteredProjects]
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -371,7 +403,6 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                 onChange={(e) => setHourlyRate(e.target.value)}
                 className="block-input"
                 placeholder="0.00"
-                min={0}
                 step="0.01"
               />
             </div>
@@ -393,7 +424,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
         {formError && (
           <div
             className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-4"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             {formError}
           </div>
@@ -404,7 +435,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
           <button
             onClick={onClose}
             className="block-btn px-4 py-2 text-xs font-semibold"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             Cancel
           </button>
@@ -412,7 +443,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
             onClick={handleSave}
             disabled={saving}
             className="block-btn-primary px-4 py-2 text-xs font-semibold"
-            style={{ borderRadius: '2px', opacity: saving ? 0.6 : 1 }}
+            style={{ borderRadius: '6px', opacity: saving ? 0.6 : 1 }}
           >
             {saving ? 'Saving...' : isEditing ? 'Update Entry' : 'Create Entry'}
           </button>

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { debtDb } from './dbHelpers';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
 
 // ─── Types ──────────────────────────────────────────────
 interface ContactFormData {
@@ -38,6 +40,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
   const [form, setForm] = useState<ContactFormData>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!contactId);
+  const [saveError, setSaveError] = useState('');
 
   // ── Load existing record for edit ──
   useEffect(() => {
@@ -79,6 +82,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
     e.preventDefault();
     if (saving || !form.name.trim()) return;
     setSaving(true);
+    setSaveError('');
 
     const payload: Record<string, any> = {
       debt_id: debtId,
@@ -106,37 +110,49 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
         await debtDb.createContact(payload);
       }
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-contact errors instead of swallowing
       console.error('Failed to save contact:', err);
+      setSaveError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
   };
 
+  // A11Y: ESC close, body scroll lock, focus trap, restore focus, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
     <>
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black/60 z-40"
         onClick={onClose}
+        role="presentation"
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="block-card-elevated w-full max-w-[600px] max-h-[90vh] overflow-y-auto"
+          ref={containerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contact-form-title"
+          tabIndex={-1}
+          onKeyDown={trapFocusOnKeyDown(containerRef)}
+          className="block-card-elevated w-full max-w-[600px] max-h-[90vh] overflow-y-auto cursor-pointer"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-5 pb-4 border-b border-border-primary">
-            <h3 className="text-base font-bold text-text-primary">
+            <h3 id="contact-form-title" className="text-base font-bold text-text-primary">
               {contactId ? 'Edit Contact' : 'Add Contact'}
             </h3>
             <button
               type="button"
+              aria-label="Close"
               onClick={onClose}
               className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <X size={16} />
             </button>
@@ -148,6 +164,13 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {saveError && (
+                <ErrorBanner
+                  message={saveError}
+                  title="Failed to save contact"
+                  onDismiss={() => setSaveError('')}
+                />
+              )}
               {/* Role & Company — 2-column */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -160,13 +183,13 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
                     value={form.role}
                     onChange={handleChange}
                   >
+                    <option value="attorney">Attorney</option>
+                    <option value="collections_agent">Collections Agent</option>
                     <option value="debtor">Debtor</option>
                     <option value="guarantor">Guarantor</option>
-                    <option value="attorney">Attorney</option>
-                    <option value="witness">Witness</option>
-                    <option value="collections_agent">Collections Agent</option>
                     <option value="judge">Judge</option>
                     <option value="mediator">Mediator</option>
+                    <option value="witness">Witness</option>
                   </select>
                 </div>
                 <div>
@@ -176,6 +199,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
                   <input
                     type="text"
                     name="company"
+                    autoComplete="organization"
                     className="block-input"
                     placeholder="Company / Firm"
                     value={form.company}
@@ -192,6 +216,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
                 <input
                   type="text"
                   name="name"
+                  autoComplete="name"
                   className="block-input"
                   placeholder="Full name"
                   value={form.name}
@@ -207,8 +232,9 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
                     Email
                   </label>
                   <input
-                    type="text"
+                    type="email"
                     name="email"
+                    autoComplete="email"
                     className="block-input"
                     placeholder="email@example.com"
                     value={form.email}
@@ -220,8 +246,9 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
                     Phone
                   </label>
                   <input
-                    type="text"
+                    type="tel"
                     name="phone"
+                    autoComplete="tel"
                     className="block-input"
                     placeholder="(555) 555-5555"
                     value={form.phone}

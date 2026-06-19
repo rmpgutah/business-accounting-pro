@@ -6,6 +6,7 @@ import {
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface Notification {
@@ -86,14 +87,17 @@ const Notifications: React.FC = () => {
   const [showPreferences, setShowPreferences] = useState(false);
   const [preferences, setPreferences] = useState<Record<string, boolean>>({});
   const [prefsLoading, setPrefsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   // ─── Load ─────────────────────────────────────────────
   const loadNotifications = useCallback(async () => {
+    setError('');
     try {
       const rows = await api.listNotifications(filter === 'unread' ? true : undefined);
       setNotifications(Array.isArray(rows) ? rows : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load notifications:', err);
+      setError(err?.message || 'Failed to load notifications');
     } finally {
       setLoading(false);
     }
@@ -104,8 +108,9 @@ const Notifications: React.FC = () => {
     try {
       const prefs = await api.getNotificationPreferences();
       setPreferences(prefs || {});
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load preferences:', err);
+      setError(err?.message || 'Failed to load preferences');
     } finally {
       setPrefsLoading(false);
     }
@@ -153,18 +158,21 @@ const Notifications: React.FC = () => {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to mark notification read:', err);
+      alert('Failed to mark as read: ' + (err?.message || 'Unknown error'));
     }
   };
 
   const markAllRead = async () => {
     try {
-      const unread = notifications.filter((n) => !n.is_read);
-      await Promise.all(unread.map((n) => api.markNotificationRead(n.id)));
+      // Perf: single bulk IPC + SQL UPDATE replaces an N-call loop that locked
+      // the renderer when there were many unread notifications.
+      await api.markAllNotificationsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to mark all read:', err);
+      alert('Failed to mark all read: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -174,8 +182,9 @@ const Notifications: React.FC = () => {
     try {
       await api.dismissNotification(id);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to dismiss notification:', err);
+      alert('Failed to dismiss: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -183,8 +192,9 @@ const Notifications: React.FC = () => {
     try {
       await api.clearAllNotifications();
       setNotifications((prev) => prev.filter((n) => !n.is_read));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to clear notifications:', err);
+      alert('Failed to clear: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -202,8 +212,9 @@ const Notifications: React.FC = () => {
     setPreferences(updated);
     try {
       await api.updateNotificationPreferences(updated);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update preferences:', err);
+      alert('Failed to update preferences: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -217,18 +228,19 @@ const Notifications: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load notifications" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary relative"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Bell size={18} className="text-accent-blue" />
             {unreadCount > 0 && (
               <span
                 className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center text-[10px] font-bold text-white bg-accent-expense"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
@@ -243,12 +255,12 @@ const Notifications: React.FC = () => {
         </div>
         <div className="module-actions">
           {/* Filter tabs */}
-          <div className="flex items-center border border-border-primary" style={{ borderRadius: '2px' }}>
+          <div className="flex items-center border border-border-primary" style={{ borderRadius: '6px' }}>
             <button
               className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                 filter === 'all'
                   ? 'bg-bg-elevated text-text-primary'
-                  : 'text-text-muted hover:text-text-secondary'
+                  : 'text-text-muted hover:text-text-secondary transition-colors'
               }`}
               onClick={() => setFilter('all')}
             >
@@ -258,7 +270,7 @@ const Notifications: React.FC = () => {
               className={`px-3 py-1.5 text-xs font-medium transition-colors border-l border-border-primary ${
                 filter === 'unread'
                   ? 'bg-bg-elevated text-text-primary'
-                  : 'text-text-muted hover:text-text-secondary'
+                  : 'text-text-muted hover:text-text-secondary transition-colors'
               }`}
               onClick={() => setFilter('unread')}
             >
@@ -301,7 +313,7 @@ const Notifications: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary">Notification Preferences</h3>
             <button
-              className="text-text-muted hover:text-text-primary"
+              className="text-text-muted hover:text-text-primary transition-colors"
               onClick={() => setShowPreferences(false)}
             >
               <X size={16} />
@@ -315,19 +327,19 @@ const Notifications: React.FC = () => {
                 <label
                   key={key}
                   className="flex items-center gap-3 p-2 border border-border-primary cursor-pointer hover:bg-bg-hover transition-colors"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   <div
-                    className={`w-10 h-5 flex items-center rounded-sm p-0.5 cursor-pointer transition-colors ${
+                    className={`w-10 h-5 flex items-center rounded p-0.5 cursor-pointer transition-colors ${
                       preferences[key] !== false ? 'bg-accent-income' : 'bg-bg-tertiary border border-border-primary'
                     }`}
                     onClick={(e) => { e.preventDefault(); togglePreference(key); }}
                   >
                     <div
-                      className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
+                      className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                         preferences[key] !== false ? 'translate-x-5' : 'translate-x-0'
                       }`}
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: '6px' }}
                     />
                   </div>
                   <div className="flex items-center gap-2 flex-1">
@@ -347,9 +359,9 @@ const Notifications: React.FC = () => {
           className={`px-3 py-1 text-xs font-medium border transition-colors ${
             categoryFilter === ''
               ? 'bg-bg-elevated text-text-primary border-border-primary'
-              : 'text-text-muted border-transparent hover:text-text-secondary'
+              : 'text-text-muted border-transparent hover:text-text-secondary transition-colors'
           }`}
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: '6px' }}
           onClick={() => setCategoryFilter('')}
         >
           All Types
@@ -363,9 +375,9 @@ const Notifications: React.FC = () => {
               className={`px-3 py-1 text-xs font-medium border transition-colors flex items-center gap-1.5 ${
                 categoryFilter === key
                   ? 'bg-bg-elevated text-text-primary border-border-primary'
-                  : 'text-text-muted border-transparent hover:text-text-secondary'
+                  : 'text-text-muted border-transparent hover:text-text-secondary transition-colors'
               }`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
               onClick={() => setCategoryFilter(categoryFilter === key ? '' : key as CategoryFilter)}
             >
               <config.icon size={12} className={config.color} />
@@ -411,7 +423,7 @@ const Notifications: React.FC = () => {
                 {/* Icon */}
                 <div
                   className="w-8 h-8 shrink-0 flex items-center justify-center bg-bg-tertiary border border-border-primary mt-0.5"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   <IconComponent size={16} className={iconColor} />
                 </div>
@@ -430,7 +442,7 @@ const Notifications: React.FC = () => {
                     {!n.is_read && (
                       <span
                         className="w-2 h-2 bg-accent-blue shrink-0"
-                        style={{ borderRadius: '2px' }}
+                        style={{ borderRadius: '6px' }}
                       />
                     )}
                   </div>

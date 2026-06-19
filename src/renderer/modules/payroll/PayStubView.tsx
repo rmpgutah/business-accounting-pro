@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, FileText, Printer, Download } from 'lucide-react';
+import { ArrowLeft, FileText, Printer, Download, Ban, CreditCard } from 'lucide-react';
 import api from '../../lib/api';
 import { generatePayStubHTML } from '../../lib/print-templates';
 import { useCompanyStore } from '../../stores/companyStore';
+import { formatCurrency, formatDate } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
+import RelatedPanel from '../../components/RelatedPanel';
+import EntityTimeline from '../../components/EntityTimeline';
 
 // ─── Types ──────────────────────────────────────────────
 interface PayStub {
@@ -20,6 +24,13 @@ interface PayStub {
   social_security: number;
   medicare: number;
   net_pay: number;
+  pretax_deductions?: number;
+  posttax_deductions?: number;
+  deduction_detail?: string;
+  ytd_federal_tax?: number;
+  ytd_state_tax?: number;
+  ytd_social_security?: number;
+  ytd_medicare?: number;
 }
 
 interface YtdTotals {
@@ -36,13 +47,6 @@ interface PayStubViewProps {
   onBack: () => void;
 }
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // ─── Component ──────────────────────────────────────────
 const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
@@ -57,28 +61,53 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
     net_pay: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Feature 7: Direct deposit detection (must be before early returns)
+  const [employee, setEmployee] = useState<any>(null);
+  // Employer contributions (informational only, not deducted from pay)
+  // Pulled from employee_deductions where employer_match > 0.
+  const [employerContribs, setEmployerContribs] = useState<{ match: number; health: number }>({ match: 0, health: 0 });
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       setLoading(true);
+      setError('');
       try {
-        const data = await api.get('pay_stubs', payStubId);
+        // JOIN payroll_runs for period/pay_date and employees for employee_name
+        // pay_stubs only has: hours_regular, hours_overtime (no `hours`, `period_start`, etc.)
+        const rows = await api.rawQuery(
+          `SELECT ps.*,
+                  (ps.hours_regular + ps.hours_overtime) AS hours,
+                  ps.hours_regular, ps.hours_overtime,
+                  pr.pay_period_start AS period_start,
+                  pr.pay_period_end AS period_end,
+                  pr.pay_date,
+                  COALESCE(e.name, e.email, 'Unknown') AS employee_name
+           FROM pay_stubs ps
+           LEFT JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+           LEFT JOIN employees e ON ps.employee_id = e.id
+           WHERE ps.id = ?`,
+          [payStubId]
+        );
+        const data = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
         if (cancelled || !data) return;
         setStub(data);
 
         // Fetch YTD: all pay stubs for this employee in the same year
+        // Must JOIN payroll_runs to access pay_date (pay_stubs doesn't have it)
         const year = data.pay_date?.slice(0, 4);
         if (data.employee_id && year) {
           try {
-            const allStubs = await api.query('pay_stubs', {
-              employee_id: data.employee_id,
-            });
-            if (!cancelled && Array.isArray(allStubs)) {
-              const yearStubs = allStubs.filter(
-                (s: PayStub) => s.pay_date?.startsWith(year)
-              );
+            const yearStubs = await api.rawQuery(
+              `SELECT ps.* FROM pay_stubs ps
+               JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
+               WHERE ps.employee_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ?`,
+              [data.employee_id, `${year}-01-01`, `${year}-12-31`]
+            );
+            if (!cancelled && Array.isArray(yearStubs)) {
               const totals: YtdTotals = {
                 gross_pay: 0,
                 federal_tax: 0,
@@ -101,8 +130,9 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             // YTD is non-critical, proceed with zeros
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load pay stub:', err);
+        if (!cancelled) setError(err?.message || 'Failed to load pay stub');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -112,9 +142,96 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
     return () => { cancelled = true; };
   }, [payStubId]);
 
+  // Feature 7: Load employee data for direct deposit detection / check printing
+  useEffect(() => {
+    if (stub?.employee_id) {
+      api.get('employees', stub.employee_id).then(e => setEmployee(e)).catch(() => {});
+      // Load employer-side contributions linked to this employee's deductions.
+      // Sum employer_match across all active deduction lines; categorize health
+      // contributions by name match so the stub can show them separately.
+      api.rawQuery(
+        `SELECT name, amount, employer_match, employer_match_type
+         FROM employee_deductions
+         WHERE employee_id = ?`,
+        [stub.employee_id]
+      ).then((rows: any[]) => {
+        const gross = stub.gross_pay || 0;
+        let match = 0;
+        let health = 0;
+        for (const r of rows ?? []) {
+          const em = Number(r.employer_match) || 0;
+          if (em <= 0) continue;
+          // Percent-of-gross vs flat amount per period
+          const value = (r.employer_match_type === 'percent') ? gross * (em / 100) : em;
+          if (/health|medical|hsa|dental|vision/i.test(r.name || '')) health += value;
+          else match += value;
+        }
+        setEmployerContribs({ match, health });
+      }).catch(() => {});
+    }
+  }, [stub?.employee_id, stub?.gross_pay]);
+
   const buildStubHTML = () => {
     if (!stub) return '';
-    return generatePayStubHTML(stub, ytd, activeCompany);
+    // ── Privacy: only pass last-4 SSN and last-4 bank account to the PDF.
+    // Full SSN and full account number are never sent to the print template.
+    const ssnLast4 = (employee?.ssn_last4 || '').toString().replace(/\D/g, '').slice(-4)
+      || (employee?.ssn || '').toString().replace(/\D/g, '').slice(-4);
+    const acctLast4 = (employee?.account_number || '').toString().replace(/\D/g, '').slice(-4);
+    const addressParts = [
+      employee?.address_line1,
+      employee?.address_line2,
+      employee?.city,
+      employee?.state,
+      employee?.zip,
+    ].filter(Boolean);
+
+    // Format ISO dates to human-readable strings before handing off to PDF template
+    // (the template auto-detects ISO vs display-formatted for any internal
+    // date math, so this is safe).
+    // Compute pay period number (which period of the year this is)
+    const payScheduleMap: Record<string, number> = { weekly: 52, biweekly: 26, semimonthly: 24, monthly: 12 };
+    const periodsPerYear = payScheduleMap[employee?.pay_schedule || 'biweekly'] || 26;
+
+    const stubForPrint = {
+      ...stub,
+      period_start: formatDate(stub.period_start),
+      period_end:   formatDate(stub.period_end),
+      pay_date:     formatDate(stub.pay_date),
+      // Privacy-enforced employee fields
+      employee_id_short: employee?.employee_id || employee?.id_short || undefined,
+      employee_address: addressParts.length ? addressParts.join(', ') : undefined,
+      ssn_last4: ssnLast4 || undefined,
+      // No `bank_name` column exists on employees — fall back to a generic
+      // bank label only when the employee actually has direct deposit set up
+      // (i.e. an account number is present); template guards on either field.
+      bank_name: acctLast4 ? (employee?.bank_name || 'Bank Account') : undefined,
+      bank_account_last4: acctLast4 || undefined,
+      // ── Employer contributions (informational, NOT deducted from pay) ──
+      employer_social_security: stub.social_security || 0,
+      employer_medicare:        stub.medicare || 0,
+      employer_retirement_match: (employerContribs?.match || 0),
+      employer_health_contribution: (employerContribs?.health || 0),
+      // ── Extended employee / payroll metadata ──
+      department: employee?.department || undefined,
+      job_title: employee?.job_title || undefined,
+      pay_type: employee?.pay_type || undefined,
+      pay_rate: employee?.pay_rate ? Number(employee.pay_rate) : undefined,
+      pay_schedule: employee?.pay_schedule || undefined,
+      filing_status: employee?.w4_filing_status || employee?.filing_status || undefined,
+      federal_allowances: employee?.federal_allowances ? Number(employee.federal_allowances) : undefined,
+      state_name: employee?.state || 'Utah',
+      state_allowances: employee?.state_allowances ? Number(employee.state_allowances) : undefined,
+      hire_date: employee?.start_date ? formatDate(employee.start_date) : undefined,
+      employment_type: employee?.employment_type || undefined,
+      run_type: (stub as any).run_type || undefined,
+      pay_periods_per_year: periodsPerYear,
+      employer_ein: activeCompany?.tax_id || undefined,
+      w4_step2: employee?.w4_step2_checkbox ? true : undefined,
+      w4_step3_credit: employee?.w4_step3_dependent_credit ? Number(employee.w4_step3_dependent_credit) : undefined,
+      w4_step4c_extra: employee?.w4_step4c_extra_withholding ? Number(employee.w4_step4c_extra_withholding) : undefined,
+    };
+    return generatePayStubHTML(stubForPrint, ytd, activeCompany);
   };
 
   const handlePrintStub = async () => {
@@ -140,7 +257,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
   if (!stub) {
     return (
       <div className="p-6">
-        <button className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary" onClick={onBack}>
+        <button className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors" onClick={onBack}>
           <ArrowLeft size={16} /> Back
         </button>
         <div className="text-center py-16 text-text-muted text-sm">Pay stub not found.</div>
@@ -148,17 +265,38 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
     );
   }
 
-  const totalDeductions = stub.federal_tax + stub.state_tax + stub.social_security + stub.medicare;
-  const ytdTotalDeductions = ytd.federal_tax + ytd.state_tax + ytd.social_security + ytd.medicare;
+  const totalDeductions = (stub.federal_tax ?? 0) + (stub.state_tax ?? 0) + (stub.social_security ?? 0) + (stub.medicare ?? 0);
+  const ytdTotalDeductions = (ytd.federal_tax ?? 0) + (ytd.state_tax ?? 0) + (ytd.social_security ?? 0) + (ytd.medicare ?? 0);
+  const isDirectDeposit = !!(employee?.routing_number);
+
+  // Feature 2: Print check handler — merge per-tax YTD into stub data
+  const handlePrintCheck = async (isVoid = false) => {
+    const { generatePaycheckHTML } = await import('../../lib/payroll-check-template');
+    const emp = employee || await api.get('employees', stub.employee_id);
+    const run = await api.get('payroll_runs', stub.payroll_run_id);
+
+    // If per-tax YTD isn't stored on the stub, compute it from the view's ytd state
+    const stubWithYTD = {
+      ...stub,
+      ytd_federal_tax: stub.ytd_federal_tax || ytd.federal_tax || 0,
+      ytd_state_tax: stub.ytd_state_tax || ytd.state_tax || 0,
+      ytd_social_security: stub.ytd_social_security || ytd.social_security || 0,
+      ytd_medicare: stub.ytd_medicare || ytd.medicare || 0,
+    };
+
+    const html = generatePaycheckHTML(stubWithYTD, emp, activeCompany, run, { isVoid });
+    await api.printPreview(html, `${isVoid ? 'VOID ' : ''}Paycheck — ${emp?.name || 'Employee'}`);
+  };
 
   // ─── Render ─────────────────────────────────────────
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Failed to load pay stub" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
-            className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary"
+            className="block-btn inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors"
             onClick={onBack}
           >
             <ArrowLeft size={16} />
@@ -167,6 +305,10 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             <FileText size={20} className="text-text-muted" />
             <h1 className="text-lg font-bold text-text-primary">Pay Stub</h1>
           </div>
+          {/* Feature 7: Direct deposit / check indicator */}
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 ${isDirectDeposit ? 'text-accent-blue bg-accent-blue/10' : 'text-text-muted bg-bg-tertiary'}`} style={{ borderRadius: '6px' }}>
+            {isDirectDeposit ? 'Direct Deposit' : 'Check'}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -174,7 +316,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             onClick={handlePrintStub}
           >
             <Printer size={14} />
-            Print
+            Print Stub
           </button>
           <button
             className="block-btn flex items-center gap-2"
@@ -183,11 +325,27 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             <Download size={14} />
             Save PDF
           </button>
+          {/* Feature 2: Print Check */}
+          <button
+            className="block-btn flex items-center gap-2 text-xs"
+            onClick={() => handlePrintCheck(false)}
+          >
+            <CreditCard size={14} />
+            Print Check
+          </button>
+          {/* Feature 19: Void Check */}
+          <button
+            className="block-btn flex items-center gap-2 text-xs text-accent-expense"
+            onClick={() => handlePrintCheck(true)}
+          >
+            <Ban size={14} />
+            Void Check
+          </button>
         </div>
       </div>
 
       {/* Pay Stub Document */}
-      <div className="block-card p-0 overflow-hidden max-w-2xl mx-auto" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-0 overflow-hidden max-w-2xl mx-auto" style={{ borderRadius: '6px' }}>
         {/* Document Header */}
         <div className="bg-bg-tertiary px-6 py-4 border-b border-border-primary">
           <div className="flex justify-between items-start">
@@ -197,7 +355,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             </div>
             <div className="text-right">
               <div className="text-[10px] text-text-muted uppercase">Pay Date</div>
-              <div className="text-sm font-mono text-text-primary">{stub.pay_date}</div>
+              <div className="text-sm font-mono text-text-primary">{formatDate(stub.pay_date)}</div>
             </div>
           </div>
         </div>
@@ -207,15 +365,15 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
           <div className="grid grid-cols-3 gap-4 text-xs">
             <div>
               <span className="text-text-muted">Period Start:</span>{' '}
-              <span className="font-mono text-text-primary">{stub.period_start}</span>
+              <span className="font-mono text-text-primary">{formatDate(stub.period_start)}</span>
             </div>
             <div>
               <span className="text-text-muted">Period End:</span>{' '}
-              <span className="font-mono text-text-primary">{stub.period_end}</span>
+              <span className="font-mono text-text-primary">{formatDate(stub.period_end)}</span>
             </div>
             <div>
               <span className="text-text-muted">Pay Date:</span>{' '}
-              <span className="font-mono text-text-primary">{stub.pay_date}</span>
+              <span className="font-mono text-text-primary">{formatDate(stub.pay_date)}</span>
             </div>
           </div>
         </div>
@@ -233,6 +391,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
               </tr>
             </thead>
             <tbody>
+              {/* Feature 5: Show regular and overtime hours separately */}
               <tr>
                 <td className="py-1.5 text-text-primary">
                   {stub.hours > 0 ? 'Regular Hours' : 'Salary'}
@@ -240,14 +399,30 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
                 <td className="py-1.5 text-right font-mono text-text-secondary">
                   {stub.hours > 0 ? stub.hours.toFixed(2) : '--'}
                 </td>
-                <td className="py-1.5 text-right font-mono text-text-primary">{fmt.format(stub.gross_pay)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.gross_pay)}</td>
+                <td className="py-1.5 text-right font-mono text-text-primary">
+                  {stub.hours > 0 && (stub as any).hours_overtime > 0
+                    ? formatCurrency(stub.gross_pay - ((stub as any).hours_overtime * ((stub.gross_pay / (stub.hours + (stub as any).hours_overtime * 0.5)) * 1.5)))
+                    : formatCurrency(stub.gross_pay)}
+                </td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.gross_pay)}</td>
               </tr>
+              {(stub as any).hours_overtime > 0 && (
+                <tr>
+                  <td className="py-1.5 text-text-primary">Overtime (1.5x)</td>
+                  <td className="py-1.5 text-right font-mono text-text-secondary">
+                    {((stub as any).hours_overtime || 0).toFixed(2)}
+                  </td>
+                  <td className="py-1.5 text-right font-mono text-text-primary">
+                    {formatCurrency((stub as any).hours_overtime * ((stub.gross_pay / (stub.hours + (stub as any).hours_overtime * 0.5)) * 1.5))}
+                  </td>
+                  <td className="py-1.5 text-right font-mono text-text-secondary">--</td>
+                </tr>
+              )}
               <tr className="border-t border-border-primary font-semibold">
                 <td className="py-1.5 text-text-primary">Gross Pay</td>
                 <td />
-                <td className="py-1.5 text-right font-mono text-text-primary">{fmt.format(stub.gross_pay)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.gross_pay)}</td>
+                <td className="py-1.5 text-right font-mono text-text-primary">{formatCurrency(stub.gross_pay)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.gross_pay)}</td>
               </tr>
             </tbody>
           </table>
@@ -267,31 +442,74 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             <tbody>
               <tr>
                 <td className="py-1.5 text-text-primary">Federal Income Tax</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{fmt.format(stub.federal_tax)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.federal_tax)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.federal_tax)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.federal_tax)}</td>
               </tr>
               <tr>
                 <td className="py-1.5 text-text-primary">State Income Tax</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{fmt.format(stub.state_tax)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.state_tax)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.state_tax)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.state_tax)}</td>
               </tr>
               <tr>
                 <td className="py-1.5 text-text-primary">Social Security (6.2%)</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{fmt.format(stub.social_security)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.social_security)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.social_security)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.social_security)}</td>
               </tr>
               <tr>
                 <td className="py-1.5 text-text-primary">Medicare (1.45%)</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{fmt.format(stub.medicare)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytd.medicare)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.medicare)}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytd.medicare)}</td>
               </tr>
+              {/* Pre-tax / Post-tax deduction breakdown */}
+              {((stub.pretax_deductions ?? 0) > 0 || (stub.posttax_deductions ?? 0) > 0) && (
+                <>
+                  {(stub.pretax_deductions ?? 0) > 0 && (
+                    <tr>
+                      <td className="py-1.5 text-text-primary">Pre-Tax Deductions</td>
+                      <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.pretax_deductions!)}</td>
+                      <td className="py-1.5 text-right font-mono text-text-secondary">--</td>
+                    </tr>
+                  )}
+                  {(stub.posttax_deductions ?? 0) > 0 && (
+                    <tr>
+                      <td className="py-1.5 text-text-primary">Post-Tax Deductions</td>
+                      <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(stub.posttax_deductions!)}</td>
+                      <td className="py-1.5 text-right font-mono text-text-secondary">--</td>
+                    </tr>
+                  )}
+                </>
+              )}
               <tr className="border-t border-border-primary font-semibold">
                 <td className="py-1.5 text-text-primary">Total Deductions</td>
-                <td className="py-1.5 text-right font-mono text-accent-expense">{fmt.format(totalDeductions)}</td>
-                <td className="py-1.5 text-right font-mono text-text-secondary">{fmt.format(ytdTotalDeductions)}</td>
+                <td className="py-1.5 text-right font-mono text-accent-expense">{formatCurrency(totalDeductions + (stub.pretax_deductions ?? 0) + (stub.posttax_deductions ?? 0))}</td>
+                <td className="py-1.5 text-right font-mono text-text-secondary">{formatCurrency(ytdTotalDeductions)}</td>
               </tr>
             </tbody>
           </table>
+
+          {/* Itemized deduction detail */}
+          {stub.deduction_detail && stub.deduction_detail !== '{}' && (() => {
+            try {
+              const detail = JSON.parse(stub.deduction_detail);
+              const entries = Object.entries(detail);
+              if (entries.length === 0) return null;
+              return (
+                <div className="mt-3 pt-3 border-t border-border-primary">
+                  <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Deduction Detail</div>
+                  <div className="space-y-1">
+                    {entries.map(([name, amount]) => (
+                      <div key={name} className="flex justify-between text-xs">
+                        <span className="text-text-muted">{name}</span>
+                        <span className="font-mono text-text-primary">{formatCurrency(Number(amount))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            } catch {
+              return null;
+            }
+          })()}
         </div>
 
         {/* Net Pay */}
@@ -300,17 +518,23 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             <div>
               <div className="text-[10px] text-text-muted uppercase tracking-wider">Net Pay</div>
               <div className="text-xl font-bold font-mono text-accent-income mt-1">
-                {fmt.format(stub.net_pay)}
+                {formatCurrency(stub.net_pay)}
               </div>
             </div>
             <div className="text-right">
               <div className="text-[10px] text-text-muted uppercase tracking-wider">YTD Net Pay</div>
               <div className="text-sm font-mono text-text-secondary mt-1">
-                {fmt.format(ytd.net_pay)}
+                {formatCurrency(ytd.net_pay)}
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Cross-integration panels */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="pay_stub" entityId={payStubId} />
+        <EntityTimeline entityType="pay_stubs" entityId={payStubId} />
       </div>
     </div>
   );

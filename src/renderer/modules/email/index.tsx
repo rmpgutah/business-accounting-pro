@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Send, Clock, AlertCircle, Plus, Settings, Search } from 'lucide-react';
+import { Mail, Send, Clock, AlertCircle, Plus, Settings, Search, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
+import { formatStatus, humanizeLabel } from '../../lib/format';
+import { useCompanyStore } from '../../stores/companyStore';
 
 interface EmailLogEntry {
   id: string;
@@ -43,6 +45,7 @@ const DEFAULT_TEMPLATES: EmailTemplate[] = [
 ];
 
 export default function EmailModule() {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [tab, setTab] = useState<'log' | 'templates' | 'settings'>('log');
   const [emailLog, setEmailLog] = useState<EmailLogEntry[]>([]);
   const [templates, setTemplates] = useState<EmailTemplate[]>(DEFAULT_TEMPLATES);
@@ -62,7 +65,7 @@ export default function EmailModule() {
     loadEmailLog();
     loadSmtpConfig();
     loadTemplates();
-  }, []);
+  }, [activeCompany]);
 
   const loadTemplates = async () => {
     try {
@@ -80,14 +83,16 @@ export default function EmailModule() {
   const saveTemplates = async (updated: EmailTemplate[]) => {
     try {
       await api.setSetting('email_templates', JSON.stringify(updated));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save email templates:', err);
+      alert('Failed to save email templates: ' + (err?.message || 'Unknown error'));
     }
   };
 
   const loadEmailLog = async () => {
+    if (!activeCompany) return;
     try {
-      const logs = await api.query('email_log', {}, { field: 'sent_at', dir: 'desc' }, 100);
+      const logs = await api.query('email_log', { company_id: activeCompany.id }, { field: 'sent_at', dir: 'desc' }, 100);
       setEmailLog(logs);
     } catch { /* empty */ }
   };
@@ -142,9 +147,9 @@ export default function EmailModule() {
               className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
                 tab === t.id
                   ? 'bg-accent-blue text-white'
-                  : 'bg-bg-elevated text-text-secondary hover:bg-bg-hover border border-border-primary'
+                  : 'bg-bg-elevated text-text-secondary hover:bg-bg-hover border border-border-primary transition-colors'
               }`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <Icon size={14} />
               {t.label}
@@ -172,8 +177,14 @@ export default function EmailModule() {
               <div className="empty-state-icon">
                 <Mail size={24} className="text-text-muted" />
               </div>
-              <p className="text-text-secondary text-sm">No emails sent yet</p>
-              <p className="text-text-muted text-xs mt-1">Emails will appear here when you send invoices or reminders</p>
+              <p className="text-text-secondary text-sm">
+                {emailLog.length === 0 ? 'No emails sent yet' : 'No emails match your search'}
+              </p>
+              <p className="text-text-muted text-xs mt-1">
+                {emailLog.length === 0
+                  ? 'Emails will appear here when you send invoices or reminders'
+                  : 'Try a different search term.'}
+              </p>
             </div>
           ) : (
             <table className="block-table">
@@ -184,22 +195,36 @@ export default function EmailModule() {
                   <th>Type</th>
                   <th>Status</th>
                   <th>Sent</th>
+                  <th style={{ width: 40 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLog.map((entry) => (
                   <tr key={entry.id}>
-                    <td className="text-text-primary">{entry.recipient}</td>
-                    <td className="text-text-secondary">{entry.subject}</td>
+                    <td className="text-text-primary truncate max-w-[200px]">{entry.recipient}</td>
+                    <td className="text-text-secondary truncate max-w-[220px]">{entry.subject}</td>
                     <td>
-                      <span className="block-badge-blue">{entry.entity_type}</span>
+                      <span className="block-badge-blue">{humanizeLabel(entry.entity_type)}</span>
                     </td>
                     <td>
-                      <span className={entry.status === 'sent' ? 'block-badge-income' : 'block-badge-expense'}>
-                        {entry.status}
+                      <span className={`${entry.status === 'sent' ? 'block-badge-income' : 'block-badge-expense'} capitalize`}>
+                        {formatStatus(entry.status).label}
                       </span>
                     </td>
                     <td className="text-text-muted text-xs">{entry.sent_at}</td>
+                    <td>
+                      <button
+                        className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                        onClick={async () => {
+                          if (!window.confirm('Delete this email log entry?')) return;
+                          await api.remove('email_log', entry.id);
+                          loadEmailLog();
+                        }}
+                        title="Delete"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import logoUrl from '../../assets/rmpg-seal.png';
 import {
+  LayoutGrid as LayoutGridIcon,
+  SlidersHorizontal as SlidersIcon,
   LayoutDashboard,
   BookOpen,
   FileText,
@@ -12,6 +15,7 @@ import {
   Calculator,
   PiggyBank,
   Landmark,
+  Banknote,
   CreditCard,
   BarChart3,
   Gauge,
@@ -22,6 +26,7 @@ import {
   Mail,
   Bell,
   Shield,
+  Zap,
   Building2,
   Plug,
   Globe,
@@ -33,9 +38,15 @@ import {
   ClipboardList,
   Boxes,
   Scale,
+  FileCheck,
+  PenTool,
+  Car,
+  Bot,
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
+import { usePersonalizationStore } from '../../stores/personalizationStore';
+import { Star, Pin, MoreHorizontal } from 'lucide-react';
 
 interface NavItem {
   id: string;
@@ -57,33 +68,41 @@ const sections: NavSection[] = [
       { id: 'invoicing', label: 'Invoicing', icon: FileText },
       { id: 'expenses', label: 'Expenses', icon: Receipt },
       { id: 'clients', label: 'Clients', icon: UserCircle },
+      { id: 'quotes', label: 'Quotes', icon: FileCheck },
     ],
   },
   {
     title: 'OPERATIONS',
     items: [
-      { id: 'payroll', label: 'Payroll', icon: Users },
+      { id: 'payroll', label: 'Employee', icon: Users },
       { id: 'time-tracking', label: 'Time Tracking', icon: Clock },
       { id: 'projects', label: 'Projects', icon: FolderKanban },
       { id: 'inventory', label: 'Inventory', icon: Package },
       { id: 'fixed-assets', label: 'Fixed Assets', icon: Boxes },
+      { id: 'mileage', label: 'Mileage', icon: Car },
     ],
   },
   {
     title: 'FINANCE',
     items: [
-      { id: 'taxes', label: 'Taxes', icon: Calculator },
-      { id: 'budgets', label: 'Budgets', icon: PiggyBank },
-      { id: 'bank-recon', label: 'Bank Recon', icon: Landmark },
-      { id: 'stripe-sync', label: 'Stripe Sync', icon: CreditCard },
+      // Loans promoted to top of FINANCE — was buried between Bills and POs,
+      // users reported "I don't see anything for LOAN on the side." High-value
+      // module deserves prominence.
+      { id: 'loans', label: 'Loans', icon: Banknote },
+      { id: 'vendors-ap', label: 'Vendors & AP', icon: Building2 },
       { id: 'bills', label: 'Bills (AP)', icon: FileInput },
       { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
+      { id: 'bank-recon', label: 'Bank Recon', icon: Landmark },
+      { id: 'stripe-sync', label: 'Stripe Sync', icon: CreditCard },
+      { id: 'budgets', label: 'Budgets', icon: PiggyBank },
+      { id: 'taxes', label: 'Taxes', icon: Calculator },
       { id: 'debt-collection', label: 'Debt Collection', icon: Scale },
     ],
   },
   {
     title: 'ANALYTICS',
     items: [
+      { id: 'cockpit', label: 'Intelligence Cockpit', icon: LayoutGridIcon },
       { id: 'reports', label: 'Reports', icon: BarChart3 },
       { id: 'kpi-dashboard', label: 'KPI Dashboard', icon: Gauge },
       { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
@@ -93,12 +112,16 @@ const sections: NavSection[] = [
   {
     title: 'PLATFORM',
     items: [
+      { id: 'esign', label: 'E-Sign', icon: PenTool },
       { id: 'documents', label: 'Documents', icon: Paperclip },
       { id: 'recurring', label: 'Recurring', icon: Repeat },
       { id: 'email', label: 'Email', icon: Mail },
       { id: 'notifications', label: 'Notifications', icon: Bell },
       { id: 'audit-trail', label: 'Audit Trail', icon: Shield },
       { id: 'rules', label: 'Rules', icon: Shield },
+      { id: 'automations', label: 'Automations', icon: Zap },
+      { id: 'component-library', label: 'Component Library', icon: LayoutGridIcon },
+      { id: 'customization', label: 'Customization', icon: SlidersIcon },
     ],
   },
   {
@@ -113,82 +136,189 @@ const sections: NavSection[] = [
   },
 ];
 
+// Build a flat lookup from sections so we can render in user's custom order.
+const ALL_ITEMS: Record<string, NavItem> = sections.reduce((acc, sec) => {
+  for (const item of sec.items) acc[item.id] = item;
+  return acc;
+}, {} as Record<string, NavItem>);
+
 const Sidebar: React.FC = () => {
   const currentModule = useAppStore((s) => s.currentModule);
   const setModule = useAppStore((s) => s.setModule);
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const copilotOpen = useAppStore((s) => s.copilotOpen);
+  const toggleCopilot = useAppStore((s) => s.toggleCopilot);
+  const sidebarOrder = usePersonalizationStore((s) => s.sidebarOrder);
+  const hiddenModules = usePersonalizationStore((s) => s.hiddenModules);
+  const pinnedModules = usePersonalizationStore((s) => s.pinnedModules);
+  const favoriteModules = usePersonalizationStore((s) => s.favoriteModules);
+  const [showHidden, setShowHidden] = useState(false);
+
+  // ALWAYS-VISIBLE modules — these IGNORE every filter (hiddenModules,
+  // pinnedModules, sidebarOrder, cloud-loaded personalization, etc.) and
+  // are rendered unconditionally at the top of the nav. Loans was getting
+  // filtered out by some combination of stale persisted state, so we just
+  // stopped relying on personalization for it entirely.
+  const ALWAYS_VISIBLE = ['loans'];
+
+  // Resolve order: pinned first, then user-ordered visible, then hidden under "More"
+  // AUTO-ADD NEW MODULES: when a module is added to ALL_ITEMS (e.g. Loans)
+  // after a user already has a persisted sidebarOrder, the user's saved order
+  // doesn't know about the new item and it stays invisible forever. Fix: append
+  // any ALL_ITEMS that aren't in sidebarOrder / hiddenModules / pinnedModules.
+  // This is a runtime safety net — DEFAULT_SIDEBAR_ORDER should also list the
+  // new module for fresh installs, but this catches existing users too.
+  const knownIds = new Set([...sidebarOrder, ...hiddenModules, ...pinnedModules]);
+  const missingFromOrder = Object.keys(ALL_ITEMS).filter((id) => !knownIds.has(id));
+  const effectiveOrder = [...sidebarOrder, ...missingFromOrder];
+
+  // Drop ALWAYS_VISIBLE from every other bucket so we render each item once.
+  const isAlways = (id: string) => ALWAYS_VISIBLE.includes(id);
+  const visibleOrder = effectiveOrder.filter(
+    (id) => ALL_ITEMS[id] && !hiddenModules.includes(id) && !pinnedModules.includes(id) && !isAlways(id)
+  );
+  const pinned = pinnedModules.filter((id) => ALL_ITEMS[id] && !isAlways(id));
+  const hidden = hiddenModules.filter((id) => ALL_ITEMS[id] && !isAlways(id));
+  const alwaysVisible = ALWAYS_VISIBLE.filter((id) => ALL_ITEMS[id]);
+
+  const renderItem = (id: string) => {
+    const item = ALL_ITEMS[id];
+    if (!item) return null;
+    const Icon = item.icon;
+    const isActive = currentModule === id;
+    const isFav = favoriteModules.includes(id);
+    return (
+      <button
+        key={id}
+        onClick={() => setModule(id)}
+        className={`flex items-center gap-2.5 w-full text-left transition-all duration-200 ${
+          sidebarCollapsed ? 'justify-center px-0 py-2 mx-auto' : 'px-3 py-2'
+        } ${
+          isActive ? '' : 'text-text-secondary hover:text-text-primary'
+        }`}
+        style={isActive ? {
+          color: 'var(--accent-primary)',
+          background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-primary) 10%, transparent))',
+          boxShadow: 'inset -2px 0 0 var(--accent-primary)',
+        } : undefined}
+        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = ''; }}
+        title={sidebarCollapsed ? item.label : undefined}
+      >
+        <Icon size={16} className="shrink-0" />
+        {!sidebarCollapsed && (
+          <>
+            <span className="text-[13px] truncate flex-1">{item.label}</span>
+            {isFav && <Star size={10} className="text-accent-warning shrink-0" />}
+          </>
+        )}
+      </button>
+    );
+  };
 
   return (
     <aside
-      className={`flex flex-col h-full bg-bg-secondary border-r border-border-primary transition-all duration-200 ${
+      className={`flex flex-col h-full border-r transition-all duration-200 ${
         sidebarCollapsed ? 'w-16' : 'w-56'
       }`}
-      style={{ borderRadius: '0px' }}
+      style={{
+        background: 'var(--color-bg-secondary)',
+        backdropFilter: 'blur(20px) saturate(1.5)',
+        WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
+        borderColor: 'var(--structure)',
+      }}
     >
-      {/* App Header */}
-      <div className="flex items-center gap-2 px-3 h-12 border-b border-border-primary shrink-0">
-        <div
-          className="flex items-center justify-center w-8 h-8 bg-accent-blue text-white font-bold text-sm shrink-0"
-          style={{ borderRadius: '2px' }}
-        >
-          B
-        </div>
+      {/* App Header — pt-10 leaves room for macOS traffic lights on hiddenInset title bar */}
+      <div
+        className="flex items-center gap-2.5 px-3 pt-10 pb-2 shrink-0"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+      >
+        <img
+          src={logoUrl}
+          alt="RMPG"
+          className="w-8 h-8 shrink-0"
+          style={{ objectFit: 'contain' }}
+        />
         {!sidebarCollapsed && (
-          <div className="flex flex-col leading-none overflow-hidden">
-            <span className="text-[10px] font-semibold text-text-muted tracking-wider">BAP</span>
-            <span className="text-[11px] text-text-secondary truncate">Business Accounting Pro</span>
+          <div className="flex flex-col leading-tight overflow-hidden">
+            <span className="text-[11px] font-semibold text-text-primary tracking-tight">RMPG</span>
+            <span className="text-[10px] text-text-muted truncate">Accounting Manager Pro</span>
           </div>
         )}
       </div>
 
-      {/* Navigation */}
+      {/* Navigation — user-customized order with Pinned + More overflow */}
       <nav className="flex-1 overflow-y-auto py-2 scrollbar-thin">
-        {sections.map((section) => (
-          <div key={section.title} className="mb-1">
+        {/* ALWAYS-VISIBLE: rendered above everything, ignores all personalization */}
+        {alwaysVisible.length > 0 && (
+          <div>
             {!sidebarCollapsed && (
-              <div className="px-4 pt-3 pb-1">
-                <span className="text-[10px] font-semibold text-text-muted tracking-wider">
-                  {section.title}
+              <div className="px-4 pt-2.5 pb-1 flex items-center gap-1">
+                <Banknote size={9} className="text-accent-warning" />
+                <span className="text-[10px] font-semibold text-text-muted" style={{ letterSpacing: '0.04em' }}>
+                  FINANCE
                 </span>
               </div>
             )}
-            {sidebarCollapsed && <div className="pt-2" />}
-            {section.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentModule === item.id;
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setModule(item.id)}
-                  className={`flex items-center gap-2.5 w-full text-left transition-colors duration-100 ${
-                    sidebarCollapsed ? 'justify-center px-0 py-2 mx-auto' : 'px-3 py-1.5'
-                  } ${
-                    isActive
-                      ? 'bg-accent-blue/10 text-accent-blue border-r-2 border-accent-blue'
-                      : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary border-r-2 border-transparent'
-                  }`}
-                  title={sidebarCollapsed ? item.label : undefined}
-                  style={{ borderRadius: '0px' }}
-                >
-                  <Icon size={16} className="shrink-0" />
-                  {!sidebarCollapsed && (
-                    <span className="text-[13px] truncate">{item.label}</span>
-                  )}
-                </button>
-              );
-            })}
+            {alwaysVisible.map(renderItem)}
+            {!sidebarCollapsed && (
+              <div className="mx-3 my-1.5" style={{ height: '1px', background: 'rgba(255,255,255,0.05)' }} />
+            )}
           </div>
-        ))}
+        )}
+        {pinned.length > 0 && (
+          <div>
+            {!sidebarCollapsed && (
+              <div className="px-4 pt-2.5 pb-1 flex items-center gap-1">
+                <Pin size={9} className="text-accent-blue" />
+                <span className="text-[10px] font-semibold text-text-muted" style={{ letterSpacing: '0.04em' }}>
+                  PINNED
+                </span>
+              </div>
+            )}
+            {pinned.map(renderItem)}
+            {!sidebarCollapsed && (
+              <div className="mx-3 my-1.5" style={{ height: '1px', background: 'rgba(255,255,255,0.05)' }} />
+            )}
+          </div>
+        )}
+        {visibleOrder.map(renderItem)}
+        {hidden.length > 0 && !sidebarCollapsed && (
+          <div className="mt-2 border-t border-border-primary pt-2">
+            <button
+              onClick={() => setShowHidden((v) => !v)}
+              className="flex items-center gap-2 px-3 py-2 w-full text-text-muted hover:text-text-primary text-left"
+            >
+              <MoreHorizontal size={14} />
+              <span className="text-[12px]">More ({hidden.length})</span>
+            </button>
+            {showHidden && hidden.map(renderItem)}
+          </div>
+        )}
       </nav>
 
-      {/* Collapse Toggle */}
-      <div className="border-t border-border-primary px-2 py-2 shrink-0">
+      {/* AI Copilot + Collapse */}
+      <div className="border-t border-border-primary px-2 py-2 shrink-0 flex flex-col gap-1">
+        <button
+          onClick={toggleCopilot}
+          className="flex items-center gap-2 w-full py-1.5 px-2 transition-all duration-150"
+          style={{
+            borderRadius: 'var(--app-radius)',
+            color: copilotOpen ? 'var(--accent-primary)' : 'var(--text-muted)',
+            background: copilotOpen ? 'color-mix(in srgb, var(--accent-primary) 10%, transparent)' : undefined,
+          }}
+          onMouseEnter={(e) => { if (!copilotOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+          onMouseLeave={(e) => { if (!copilotOpen) e.currentTarget.style.background = ''; }}
+          title={sidebarCollapsed ? 'AI Copilot (⌘\\)' : undefined}
+        >
+          <Bot size={15} className="shrink-0" />
+          {!sidebarCollapsed && <span className="text-[12px] font-medium">AI Copilot</span>}
+        </button>
         <button
           onClick={toggleSidebar}
-          className="flex items-center justify-center w-full py-1.5 text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-colors"
-          style={{ borderRadius: '2px' }}
+          className="flex items-center justify-center w-full py-1.5 text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all duration-150"
+          style={{ borderRadius: '6px' }}
         >
           {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
         </button>

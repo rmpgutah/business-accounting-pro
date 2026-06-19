@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  RefreshCw, Plus, Search, Filter, X, Play, Pause,
+  RefreshCw, Plus, Search, Filter, X, Play, Pause, Pencil,
   Zap, Clock, History, FileText, Receipt,
 } from 'lucide-react';
 import { format, parseISO, isToday, isBefore, startOfDay } from 'date-fns';
 import api from '../../lib/api';
+import { formatStatus, humanizeLabel } from '../../lib/format';
 import { useNavigation } from '../../lib/navigation';
 import { useCompanyStore } from '../../stores/companyStore';
+import ErrorBanner from '../../components/ErrorBanner';
 
 // ─── Types ──────────────────────────────────────────────
 interface RecurringTemplate {
@@ -97,22 +99,27 @@ const RecurringTransactions: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [processFeedback, setProcessFeedback] = useState('');
   const [processing, setProcessing] = useState(false);
   const [lastProcessed, setLastProcessed] = useState<string | null>(null);
   const [tab, setTab] = useState<TabView>('templates');
   const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [error, setError] = useState('');
 
   // ─── Load ─────────────────────────────────────────────
   const loadTemplates = async () => {
     if (!activeCompany) return;
+    setError('');
     try {
       // Bug fix #14: was fetching all companies' templates — scoped to active company.
-      const rows = await api.query('recurring_templates', { company_id: activeCompany.id });
+      const rows = await api.query('recurring_templates', { company_id: activeCompany.id }, { field: 'created_at', dir: 'desc' });
       setTemplates(Array.isArray(rows) ? rows : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load recurring templates:', err);
+      setError(err?.message || 'Failed to load recurring templates');
     } finally {
       setLoading(false);
     }
@@ -132,8 +139,9 @@ const RecurringTransactions: React.FC = () => {
     try {
       const rows = await api.getRecurringHistory();
       setHistory(Array.isArray(rows) ? rows : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load history:', err);
+      setError(err?.message || 'Failed to load history');
     } finally {
       setHistoryLoading(false);
     }
@@ -170,17 +178,25 @@ const RecurringTransactions: React.FC = () => {
     if (!formData.name.trim() || !formData.next_date) return;
     setSaving(true);
     try {
-      await api.create('recurring_templates', {
+      const payload = {
         ...formData,
         is_active: formData.is_active ? 1 : 0,
         end_date: formData.end_date || null,
-      });
+      };
+      if (editingId) {
+        await api.update('recurring_templates', editingId, payload);
+      } else {
+        await api.create('recurring_templates', payload);
+      }
       setFormData(emptyForm);
+      setEditingId(null);
       setShowForm(false);
       setLoading(true);
       await loadTemplates();
-    } catch (err) {
-      console.error('Failed to create template:', err);
+    } catch (err: any) {
+      // VISIBILITY: surface save-template errors instead of swallowing
+      console.error('Failed to save template:', err);
+      setError(`Failed to save template: ${err?.message ?? String(err)}`);
     } finally {
       setSaving(false);
     }
@@ -197,8 +213,10 @@ const RecurringTransactions: React.FC = () => {
           t.id === template.id ? { ...t, is_active: !t.is_active } : t,
         ),
       );
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface toggle-template errors instead of swallowing
       console.error('Failed to toggle template:', err);
+      setError(`Failed to toggle template: ${err?.message ?? String(err)}`);
     }
   };
 
@@ -211,10 +229,15 @@ const RecurringTransactions: React.FC = () => {
       await loadLastProcessed();
       if (tab === 'history') await loadHistory();
       if (result.processed > 0) {
-        console.log(`Processed ${result.processed} templates: ${result.invoicesCreated} invoices, ${result.expensesCreated} expenses`);
+        setProcessFeedback(`Processed ${result.processed} template(s): ${result.invoicesCreated || 0} invoice(s), ${result.expensesCreated || 0} expense(s) created`);
+      } else {
+        setProcessFeedback('No templates were due for processing');
       }
-    } catch (err) {
+      setTimeout(() => setProcessFeedback(''), 5000);
+    } catch (err: any) {
+      // VISIBILITY: surface process-recurring errors instead of swallowing
       console.error('Failed to process recurring:', err);
+      setError(`Failed to process recurring: ${err?.message ?? String(err)}`);
     } finally {
       setProcessing(false);
     }
@@ -230,12 +253,13 @@ const RecurringTransactions: React.FC = () => {
 
   return (
     <div className="p-6 space-y-4 overflow-y-auto h-full">
+      {error && <ErrorBanner message={error} title="Recurring templates error" onDismiss={() => setError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <RefreshCw size={18} className="text-accent-blue" />
           </div>
@@ -274,13 +298,20 @@ const RecurringTransactions: React.FC = () => {
         </div>
       </div>
 
+      {/* Process feedback */}
+      {processFeedback && (
+        <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>
+          {processFeedback}
+        </div>
+      )}
+
       {/* Tabs */}
-      <div className="flex items-center border border-border-primary" style={{ borderRadius: '2px', width: 'fit-content' }}>
+      <div className="flex items-center border border-border-primary" style={{ borderRadius: '6px', width: 'fit-content' }}>
         <button
           className={`px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${
             tab === 'templates'
               ? 'bg-bg-elevated text-text-primary'
-              : 'text-text-muted hover:text-text-secondary'
+              : 'text-text-muted hover:text-text-secondary transition-colors'
           }`}
           onClick={() => setTab('templates')}
         >
@@ -291,7 +322,7 @@ const RecurringTransactions: React.FC = () => {
           className={`px-4 py-1.5 text-xs font-medium transition-colors border-l border-border-primary flex items-center gap-1.5 ${
             tab === 'history'
               ? 'bg-bg-elevated text-text-primary'
-              : 'text-text-muted hover:text-text-secondary'
+              : 'text-text-muted hover:text-text-secondary transition-colors'
           }`}
           onClick={() => setTab('history')}
         >
@@ -306,7 +337,7 @@ const RecurringTransactions: React.FC = () => {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary">New Recurring Template</h3>
             <button
-              className="text-text-muted hover:text-text-primary"
+              className="text-text-muted hover:text-text-primary transition-colors"
               onClick={() => { setShowForm(false); setFormData(emptyForm); }}
             >
               <X size={16} />
@@ -333,8 +364,8 @@ const RecurringTransactions: React.FC = () => {
                     setFormData({ ...formData, type: e.target.value as 'invoice' | 'expense' })
                   }
                 >
-                  <option value="invoice">Invoice</option>
                   <option value="expense">Expense</option>
+                  <option value="invoice">Invoice</option>
                 </select>
               </div>
             </div>
@@ -351,11 +382,11 @@ const RecurringTransactions: React.FC = () => {
                     })
                   }
                 >
-                  <option value="weekly">Weekly</option>
+                  <option value="annually">Annually</option>
                   <option value="biweekly">Bi-weekly</option>
                   <option value="monthly">Monthly</option>
                   <option value="quarterly">Quarterly</option>
-                  <option value="annually">Annually</option>
+                  <option value="weekly">Weekly</option>
                 </select>
               </div>
               <div>
@@ -381,16 +412,16 @@ const RecurringTransactions: React.FC = () => {
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <div
-                  className={`w-10 h-5 flex items-center rounded-sm p-0.5 cursor-pointer transition-colors ${
+                  className={`w-10 h-5 flex items-center rounded p-0.5 cursor-pointer transition-colors ${
                     formData.is_active ? 'bg-accent-income' : 'bg-bg-tertiary border border-border-primary'
                   }`}
                   onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
                 >
                   <div
-                    className={`w-4 h-4 bg-white rounded-sm transform transition-transform ${
+                    className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                       formData.is_active ? 'translate-x-5' : 'translate-x-0'
                     }`}
-                    style={{ borderRadius: '2px' }}
+                    style={{ borderRadius: '6px' }}
                   />
                 </div>
                 <span className="text-sm text-text-secondary">
@@ -439,8 +470,8 @@ const RecurringTransactions: React.FC = () => {
                   onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
                 >
                   <option value="">All Types</option>
-                  <option value="invoice">Invoice</option>
                   <option value="expense">Expense</option>
+                  <option value="invoice">Invoice</option>
                 </select>
               </div>
               <select
@@ -462,10 +493,19 @@ const RecurringTransactions: React.FC = () => {
               <div className="empty-state-icon">
                 <RefreshCw size={24} className="text-text-muted" />
               </div>
-              <p className="text-sm text-text-secondary font-medium">No recurring templates found</p>
-              <p className="text-xs text-text-muted mt-1">
-                Create a template to automate recurring invoices or expenses.
+              <p className="text-sm text-text-secondary font-medium">
+                {templates.length === 0 ? 'No recurring templates yet' : 'No templates match your filter'}
               </p>
+              <p className="text-xs text-text-muted mt-1">
+                {templates.length === 0
+                  ? 'Create a template to automate recurring invoices or expenses.'
+                  : 'Try clearing the search or status filter.'}
+              </p>
+              {templates.length === 0 && (
+                <button className="block-btn-primary mt-3 flex items-center gap-2" onClick={() => setShowForm(true)}>
+                  <Plus size={14} /> Create Template
+                </button>
+              )}
             </div>
           ) : (
             <div className="block-card p-0 overflow-hidden">
@@ -485,9 +525,9 @@ const RecurringTransactions: React.FC = () => {
                 <tbody>
                   {filtered.map((t) => (
                     <tr key={t.id}>
-                      <td className="text-text-primary font-medium">{t.name}</td>
+                      <td className="text-text-primary font-medium truncate max-w-[200px]">{t.name}</td>
                       <td>
-                        <span className={typeBadge[t.type] || 'block-badge'}>{t.type}</span>
+                        <span className={typeBadge[t.type] || 'block-badge capitalize'}>{humanizeLabel(t.type)}</span>
                       </td>
                       <td className="text-text-secondary">
                         {frequencyLabel[t.frequency] || t.frequency}
@@ -495,7 +535,7 @@ const RecurringTransactions: React.FC = () => {
                       <td>
                         <span
                           className={`font-mono text-xs px-2 py-0.5 ${nextDueColor(t.next_date)} ${nextDueBg(t.next_date)}`}
-                          style={{ borderRadius: '2px' }}
+                          style={{ borderRadius: '6px' }}
                         >
                           {t.next_date ? format(parseISO(t.next_date), 'MMM d, yyyy') : '-'}
                         </span>
@@ -515,15 +555,33 @@ const RecurringTransactions: React.FC = () => {
                       </td>
                       <td className="text-center">
                         <button
-                          className={`p-1 rounded-sm transition-colors ${
+                          className={`p-1 rounded transition-colors ${
                             t.is_active
-                              ? 'text-accent-warning hover:bg-accent-warning-bg'
-                              : 'text-accent-income hover:bg-accent-income-bg'
+                              ? 'text-accent-warning hover:bg-accent-warning-bg transition-colors'
+                              : 'text-accent-income hover:bg-accent-income-bg transition-colors'
                           }`}
                           onClick={() => toggleActive(t)}
                           title={t.is_active ? 'Pause' : 'Resume'}
                         >
                           {t.is_active ? <Pause size={16} /> : <Play size={16} />}
+                        </button>
+                        <button
+                          className="p-1 rounded text-text-muted hover:text-accent-blue transition-colors"
+                          onClick={() => {
+                            setEditingId(t.id);
+                            setFormData({
+                              name: t.name || '',
+                              type: t.type as any || 'invoice',
+                              frequency: t.frequency as any || 'monthly',
+                              next_date: t.next_date || '',
+                              end_date: t.end_date || '',
+                              is_active: !!t.is_active,
+                            });
+                            setShowForm(true);
+                          }}
+                          title="Edit template"
+                        >
+                          <Pencil size={14} />
                         </button>
                       </td>
                     </tr>
@@ -607,7 +665,7 @@ const RecurringTransactions: React.FC = () => {
                           h.status === 'overdue' ? 'block-badge-expense' :
                           'block-badge-warning'
                         }`}>
-                          {h.status}
+                          <span className="capitalize">{formatStatus(h.status).label}</span>
                         </span>
                       </td>
                       <td className="text-text-secondary text-xs">{h.client_name || '-'}</td>
