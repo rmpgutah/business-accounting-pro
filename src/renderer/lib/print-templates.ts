@@ -3432,10 +3432,10 @@ export function generateExpenseReceiptHTML(
     ['Recurring', expense.is_recurring ? 'Yes' : 'No'],
     ['Submitted', expense.created_at ? fmtDateMaybe(expense.created_at) : '—'],
   ];
-  const detailsHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px 14px;">
+  const detailsHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px 10px;">
     ${detailRows.map(([k, v]) => `<div>
       <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#555;font-weight:600;">${esc(k)}</div>
-      <div style="font-size:11px;color:#000;font-weight:600;margin-top:1px;">${esc(v)}</div>
+      <div style="font-size:11px;color:#000;font-weight:600;">${esc(v)}</div>
     </div>`).join('')}
   </div>`;
 
@@ -3488,16 +3488,15 @@ export function generateExpenseReceiptHTML(
   if (shipping > 0 && expense.shipping_speed) metaCells.push({ label: 'Shipping Speed', value: expense.shipping_speed });
   const meta = metaStrip(metaCells);
 
-  // ── Party box ──
-  const parties = boxRow([{ label: 'Vendor', html: vendorHtml }]);
+  // ── Vendor + Description: side-by-side to close whitespace ──
+  const vendorDescBoxes: { label: string; html: string }[] = [{ label: 'Vendor', html: vendorHtml }];
+  if (expense.description) {
+    vendorDescBoxes.push({ label: 'Description', html: `<div style="white-space:pre-line;">${cesc(expense.description)}</div>` });
+  }
+  const vendorDescRow = boxRow(vendorDescBoxes);
 
   // ── Details & Classification ──
   const detailsTable = boxRow([{ label: 'Details & Classification', html: detailsHTML }]);
-
-  // ── Description ──
-  const descHTML = expense.description
-    ? boxRow([{ label: 'Description', html: `<div style="white-space:pre-line;">${cesc(expense.description)}</div>` }])
-    : '';
 
   // ── Totals ──
   const totalRows: { label: string; value: string; grand?: boolean }[] = [
@@ -3508,12 +3507,18 @@ export function generateExpenseReceiptHTML(
   totalRows.push({ label: `Total Expense`, value: fmt(total), grand: true });
   const totals = totalsBox(totalRows);
 
-  // ── Reimbursement status ──
+  // ── Reimbursement + Totals: side-by-side to close whitespace ──
   const reimbLabel = String(reimbStatus).toUpperCase().replace('_', ' ');
-  const reimbHTML = boxRow([{
-    label: 'Reimbursement',
-    html: `<span style="font-weight:700;">${cesc(reimbLabel)}</span>`,
-  }]);
+  const reimbTotalsRow =
+    `<div class="box-row">` +
+      `<div class="box">` +
+        `<div class="sec-label">Reimbursement</div>` +
+        `<div style="margin-top:4px;font-size:13px;font-weight:700;">${cesc(reimbLabel)}</div>` +
+      `</div>` +
+      `<div class="box" style="display:flex;justify-content:flex-end;align-items:flex-end;padding:6px 12px;">` +
+        totals +
+      `</div>` +
+    `</div>`;
 
   // ── Receipt image section ──
   const receiptSection = receiptImgHTML
@@ -3527,12 +3532,10 @@ export function generateExpenseReceiptHTML(
   const inner =
     header +
     meta +
-    parties +
+    vendorDescRow +
     detailsTable +
-    descHTML +
     linesHTML +
-    `<div style="display:flex;justify-content:flex-end;padding:6px 12px;">${totals}</div>` +
-    reimbHTML +
+    reimbTotalsRow +
     receiptSection +
     footerBar(footerLine);
 
