@@ -52,7 +52,7 @@ export const SpendingTimeline: React.FC<{ expenses: VizExpense[] }> = ({ expense
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
         {[0.25, 0.5, 0.75, 1].map((f) => {
           const y = padT + chartH - chartH * f;
-          return <line key={f} x1={padX} y1={y} x2={W - padX} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth={1} />;
+          return <line key={f} x1={padX} y1={y} x2={W - padX} y2={y} stroke="var(--color-border-primary)" strokeWidth={1} strokeOpacity={0.4} />;
         })}
         {months.map(([m, v], i) => {
           const x = cx(i) - barW / 2;
@@ -60,16 +60,16 @@ export const SpendingTimeline: React.FC<{ expenses: VizExpense[] }> = ({ expense
           const h = Math.max(padT + chartH - y, 0);
           return (
             <g key={m}>
-              <rect x={x} y={y} width={barW} height={h} fill="#64748b" />
-              <text x={cx(i)} y={y - 5} textAnchor="middle" fontSize={9} fontWeight={600} fill="#cbd5e1" fontFamily="'SF Mono',Menlo,monospace">{compact(v)}</text>
-              <text x={cx(i)} y={H - 12} textAnchor="middle" fontSize={9} fontWeight={600} fill="#94a3b8">{monthLabel(m)}</text>
+              <rect x={x} y={y} width={barW} height={h} fill="var(--accent-primary)" opacity={0.85} />
+              <text x={cx(i)} y={y - 5} textAnchor="middle" fontSize={9} fontWeight={600} fill="var(--color-text-secondary)" fontFamily="'SF Mono',Menlo,monospace">{compact(v)}</text>
+              <text x={cx(i)} y={H - 12} textAnchor="middle" fontSize={9} fontWeight={600} fill="var(--color-text-muted)">{monthLabel(m)}</text>
             </g>
           );
         })}
         {n > 1 && (
           <>
-            <line x1={padX} y1={meanY} x2={W - padX} y2={meanY} stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 3" />
-            <text x={W - padX} y={meanY - 4} textAnchor="end" fontSize={8} fontWeight={600} fill="#94a3b8" letterSpacing="0.5">{`AVG ${compact(mean)}`}</text>
+            <line x1={padX} y1={meanY} x2={W - padX} y2={meanY} stroke="var(--color-text-muted)" strokeWidth={1} strokeDasharray="4 3" strokeOpacity={0.7} />
+            <text x={W - padX} y={meanY - 4} textAnchor="end" fontSize={8} fontWeight={600} fill="var(--color-text-muted)" letterSpacing="0.5">{`AVG ${compact(mean)}`}</text>
           </>
         )}
       </svg>
@@ -104,8 +104,8 @@ export const SpendingHeatmap: React.FC<{ expenses: VizExpense[] }> = ({ expenses
   const end = new Date(data.max + 'T12:00:00');
   const maxVal = Math.max(...Array.from(data.byDay.values()), 1);
 
-  // Flat monochrome ramp (index 0 = no spend) — brighter = more spend
-  const ramp = ['rgba(255,255,255,0.06)', '#334155', '#475569', '#64748b', '#94a3b8', '#cbd5e1'];
+  // Opacity ramp: 0 = no spend, 5 = peak spend — uses accent-primary via SVG opacity
+  const opacityRamp = [0, 0.12, 0.28, 0.48, 0.70, 1.0];
   const bucket = (v: number) => {
     if (v <= 0) return 0;
     const r = v / maxVal;
@@ -134,10 +134,17 @@ export const SpendingHeatmap: React.FC<{ expenses: VizExpense[] }> = ({ expenses
     if (v > peakVal) { peakVal = v; peakDay = key; }
     const x = padL + week * step;
     const y = padT + dow * step;
-    cells.push(<rect key={key} x={x} y={y} width={cell} height={cell} rx={1} fill={ramp[bucket(v)]}><title>{`${key}: ${formatCurrency(v)}`}</title></rect>);
+    const b = bucket(v);
+    cells.push(
+      <rect key={key} x={x} y={y} width={cell} height={cell} rx={1}
+        fill={b === 0 ? 'var(--color-border-primary)' : 'var(--accent-primary)'}
+        opacity={b === 0 ? 0.2 : opacityRamp[b]}>
+        <title>{`${key}: ${formatCurrency(v)}`}</title>
+      </rect>
+    );
     if (cur.getMonth() !== lastMonth) {
       lastMonth = cur.getMonth();
-      monthMarks.push(<text key={`m${key}`} x={x} y={padT - 5} fontSize={9} fontWeight={600} fill="#94a3b8">{cur.toLocaleDateString('en-US', { month: 'short' })}</text>);
+      monthMarks.push(<text key={`m${key}`} x={x} y={padT - 5} fontSize={9} fontWeight={600} fill="var(--color-text-muted)">{cur.toLocaleDateString('en-US', { month: 'short' })}</text>);
     }
     cur.setDate(cur.getDate() + 1);
   }
@@ -153,8 +160,12 @@ export const SpendingHeatmap: React.FC<{ expenses: VizExpense[] }> = ({ expenses
         <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Daily Spending Heatmap</h3>
         <span className="flex items-center gap-1.5 text-[9px] text-text-muted">
           Less
-          <svg width={ramp.length * (cell + 2)} height={cell}>
-            {ramp.map((c, i) => <rect key={i} x={i * (cell + 2)} y={0} width={cell} height={cell} rx={1} fill={c} />)}
+          <svg width={opacityRamp.length * (cell + 2)} height={cell}>
+            {opacityRamp.map((op, i) => (
+              <rect key={i} x={i * (cell + 2)} y={0} width={cell} height={cell} rx={1}
+                fill={i === 0 ? 'var(--color-border-primary)' : 'var(--accent-primary)'}
+                opacity={i === 0 ? 0.2 : op} />
+            ))}
           </svg>
           More
         </span>
@@ -162,7 +173,7 @@ export const SpendingHeatmap: React.FC<{ expenses: VizExpense[] }> = ({ expenses
       <div className="overflow-x-auto">
         <svg viewBox={`0 0 ${W} ${H}`} width={W} style={{ display: 'block', maxWidth: '100%' }}>
           {[['Mon', 1], ['Wed', 3], ['Fri', 5]].map(([lbl, d]) => (
-            <text key={lbl as string} x={0} y={padT + (d as number) * step + cell - 2} fontSize={8} fill="#64748b">{lbl}</text>
+            <text key={lbl as string} x={0} y={padT + (d as number) * step + cell - 2} fontSize={8} fill="var(--color-text-muted)">{lbl}</text>
           ))}
           {monthMarks}
           {cells}
