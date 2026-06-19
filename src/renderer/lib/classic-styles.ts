@@ -25,37 +25,37 @@ export function classicStyles(): string {
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .doc-frame { border: 2px solid #000; position: relative; }
   .doc-header { display: flex; border-bottom: 2px solid #000; }
-  .doc-header .co { flex: 1; padding: 14px 16px; border-right: 2px solid #000; }
+  .doc-header .co { flex: 1; padding: 10px 14px; border-right: 2px solid #000; }
   .doc-header .co-name { font-size: 17px; font-weight: bold; letter-spacing: 0.5px; }
-  .doc-logo { max-height: 48px; max-width: 220px; width: auto; height: auto;
-    object-fit: contain; display: block; margin-bottom: 6px; filter: grayscale(1); }
-  .doc-header .co-detail { font-size: 11px; margin-top: 5px; line-height: 1.5; }
-  .doc-header .doc-meta { width: 230px; padding: 14px 16px; text-align: right; }
+  .doc-logo { max-height: 44px; max-width: 200px; width: auto; height: auto;
+    object-fit: contain; display: block; margin-bottom: 5px; filter: grayscale(1); }
+  .doc-header .co-detail { font-size: 11px; margin-top: 4px; line-height: 1.4; }
+  .doc-header .doc-meta { width: 220px; padding: 10px 14px; text-align: right; }
   .doc-title { font-size: 27px; font-weight: bold; letter-spacing: 3px; text-transform: uppercase; }
-  .doc-number { font-size: 12px; margin-top: 6px; }
+  .doc-number { font-size: 12px; margin-top: 5px; }
   .meta-strip { width: 100%; border-collapse: collapse; border-bottom: 2px solid #000;
     font-size: 11px; text-align: center; }
-  .meta-strip td { border-right: 1px solid #000; padding: 7px 6px; }
+  .meta-strip td { border-right: 1px solid #000; padding: 5px 6px; }
   .meta-strip td:last-child { border-right: none; }
   .meta-strip .ml { font-weight: bold; letter-spacing: 1px; font-size: 10px; text-transform: uppercase; }
-  .meta-strip .mv { margin-top: 3px; }
+  .meta-strip .mv { margin-top: 2px; }
   .box-row { display: flex; border-bottom: 2px solid #000; }
-  .box-row .box { flex: 1; padding: 10px 16px; border-right: 1px solid #000; }
+  .box-row .box { flex: 1; padding: 7px 12px; border-right: 1px solid #000; }
   .box-row .box:last-child { border-right: none; }
   .sec-label { font-size: 10px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
   table.ruled { width: 100%; border-collapse: collapse; font-size: 11px; }
-  table.ruled th { background: #000; color: #fff; border: 1px solid #000; padding: 7px 8px;
+  table.ruled th { background: #000; color: #fff; border: 1px solid #000; padding: 5px 8px;
     text-align: left; letter-spacing: 0.5px; text-transform: uppercase; font-size: 10px; }
-  table.ruled td { border: 1px solid #000; padding: 7px 8px; }
+  table.ruled td { border: 1px solid #000; padding: 5px 8px; }
   table.ruled td.num { text-align: right; font-variant-numeric: tabular-nums; }
   table.ruled td.ctr { text-align: center; }
   .totals { border-collapse: collapse; font-size: 12px; width: 262px; }
-  .totals td { padding: 6px 12px; text-align: right; border-bottom: 1px solid #000; }
+  .totals td { padding: 4px 10px; text-align: right; border-bottom: 1px solid #000; }
   .totals td.val { border-left: 1px solid #000; font-variant-numeric: tabular-nums; width: 96px; }
   .totals tr.grand td { background: #000; color: #fff; font-weight: bold; letter-spacing: 1px;
-    padding: 9px 12px; border-bottom: none; }
+    padding: 6px 10px; border-bottom: none; }
   .totals tr.grand td.val { border-left: 1px solid #fff; }
-  .footer-bar { border-top: 2px solid #000; padding: 8px 16px; font-size: 10px;
+  .footer-bar { border-top: 2px solid #000; padding: 5px 14px; font-size: 10px;
     text-align: center; letter-spacing: 0.3px; }
   .draft-wm { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-30deg);
     font-size: 90px; font-weight: bold; color: rgba(0,0,0,0.07); letter-spacing: 12px;

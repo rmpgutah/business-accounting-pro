@@ -3446,16 +3446,12 @@ export function generateExpenseReceiptHTML(
     ['Recurring', expense.is_recurring ? 'Yes' : 'No'],
     ['Submitted', expense.created_at ? fmtDateMaybe(expense.created_at) : '—'],
   ];
-  const detailsHTML = `
-<div style="margin-top:14px;">
-  <div class="section-label">Details &amp; Classification</div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px 18px;margin-top:8px;">
+  const detailsHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px 14px;">
     ${detailRows.map(([k, v]) => `<div>
       <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
-      <div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:2px;">${esc(v)}</div>
+      <div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:1px;">${esc(v)}</div>
     </div>`).join('')}
-  </div>
-</div>`;
+  </div>`;
 
   // ── Resolved vars (were undefined in merged code) ──
   const shipping  = Number(expense.shipping_amount || 0);
@@ -3497,13 +3493,13 @@ export function generateExpenseReceiptHTML(
   // ── Meta strip ──
   const metaCells: { label: string; value: string }[] = [
     { label: 'Date',     value: fmtDateMaybe(expense.date || expense.expense_date) || '—' },
-    { label: 'Category', value: cesc(expense.category || expense.category_name || '—') },
-    { label: 'Reference', value: cesc(expense.reference || '—') },
+    { label: 'Category', value: expense.category || expense.category_name || '—' },
+    { label: 'Reference', value: expense.reference || '—' },
   ];
-  if (expense.payment_method) metaCells.push({ label: 'Payment Method', value: cesc(formatPaymentMethod(expense.payment_method)) });
-  if (expense.merchant_location) metaCells.push({ label: 'Merchant Location', value: cesc(expense.merchant_location) });
-  if (expense.geo_location_name) metaCells.push({ label: 'GPS / Location', value: cesc(expense.geo_location_name) });
-  if (shipping > 0 && expense.shipping_speed) metaCells.push({ label: 'Shipping Speed', value: cesc(expense.shipping_speed) });
+  if (expense.payment_method) metaCells.push({ label: 'Payment Method', value: formatPaymentMethod(expense.payment_method) });
+  if (expense.merchant_location) metaCells.push({ label: 'Merchant Location', value: expense.merchant_location });
+  if (expense.geo_location_name) metaCells.push({ label: 'GPS / Location', value: expense.geo_location_name });
+  if (shipping > 0 && expense.shipping_speed) metaCells.push({ label: 'Shipping Speed', value: expense.shipping_speed });
   const meta = metaStrip(metaCells);
 
   // ── Party box ──
@@ -3549,7 +3545,7 @@ export function generateExpenseReceiptHTML(
     detailsTable +
     descHTML +
     linesHTML +
-    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;">${totals}</div>` +
+    `<div style="display:flex;justify-content:flex-end;padding:6px 12px;">${totals}</div>` +
     reimbHTML +
     receiptSection +
     footerBar(footerLine);
