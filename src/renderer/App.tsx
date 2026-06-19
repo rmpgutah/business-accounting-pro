@@ -179,6 +179,14 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // In web mode a 401 from /api/rpc fires this event instead of redirecting.
+  useEffect(() => {
+    const logout = useAuthStore.getState().logout;
+    const handle = () => logout();
+    window.addEventListener('bap:session-expired', handle);
+    return () => window.removeEventListener('bap:session-expired', handle);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const init = async () => {

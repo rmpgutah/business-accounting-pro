@@ -20,8 +20,10 @@ const webInvoke = async <T = any>(channel: string, ...args: unknown[]): Promise<
     body: JSON.stringify({ channel, args }),
   });
   if (res.status === 401) {
-    window.location.href = '/auth/login';
-    return undefined as any;
+    // Notify the app to transition back to AuthScreen without a page reload.
+    // A full redirect would trigger another bootstrap cycle and loop.
+    window.dispatchEvent(new CustomEvent('bap:session-expired'));
+    throw new Error('Session expired. Please log in again.');
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

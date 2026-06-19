@@ -126,8 +126,9 @@ app.post('/auth/login', async (c) => {
 
 // ─── /api/* — JSON endpoints used by the SPA bits ───────────
 app.use('/api/*', async (c, next) => {
-  // Sync endpoints carry their own token; everything else needs a user session.
-  if (c.req.path.startsWith('/api/sync/')) return next();
+  // Exempt: sync (own token), rpc/public (pre-auth bootstrap), stripe webhook (own sig)
+  const p = c.req.path;
+  if (p.startsWith('/api/sync/') || p === '/api/rpc/public' || p === '/api/stripe/webhook') return next();
   return requireUserAPI(c, next);
 });
 
