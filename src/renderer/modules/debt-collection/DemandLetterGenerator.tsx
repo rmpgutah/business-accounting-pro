@@ -1,11 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { FileText, Check, AlertTriangle, Eye, Printer, Mail, ClipboardCheck } from 'lucide-react';
+import { FileText, Check, AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
-import PdfPreview from '../../components/PdfPreview';
-import ErrorBanner from '../../components/ErrorBanner';
+import { debtDb } from './dbHelpers';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
-import { todayLocal } from '../../lib/date-helpers';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface DemandLetterGeneratorProps {
@@ -15,6 +13,7 @@ interface DemandLetterGeneratorProps {
 interface Template {
   id: string;
   name: string;
+  type: string;
   severity: string;
   subject: string;
   body: string;
@@ -34,66 +33,48 @@ interface Debt {
   jurisdiction: string;
 }
 
-interface CompanyInfo {
-  name: string;
-  address?: string;
-  phone?: string;
-  email?: string;
-}
-
 // ─── Merge field replacement ────────────────────────────
 function mergeFields(
   text: string,
   debt: Debt,
-  companyInfo: CompanyInfo
+  companyName: string
 ): string {
-  const companyName = companyInfo.name || '';
-  const totalDue = (debt.balance_due || 0) + (debt.interest_accrued || 0) + (debt.fees_accrued || 0);
-  const delinquent = debt.delinquent_date ? new Date(debt.delinquent_date) : null;
-  const daysOverdue = delinquent && !isNaN(delinquent.getTime())
-    ? Math.max(0, Math.floor((Date.now() - delinquent.getTime()) / 86400000))
+  const total =
+    (debt.original_amount || 0) +
+    (debt.interest_accrued || 0) +
+    (debt.fees_accrued || 0) -
+    ((debt as any).payments_made || 0);
+  const daysOverdue = debt.delinquent_date
+    ? Math.max(0, Math.floor((Date.now() - new Date(debt.delinquent_date).getTime()) / 86400000))
     : 0;
-  const demandDeadline = new Date(Date.now() + 14 * 86400000);
-  const demandDeadlineIso = demandDeadline.toISOString().slice(0, 10);
+  const demandDeadline = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
   return text
     .replace(/\{\{debtor_name\}\}/g, debt.debtor_name || '')
     .replace(/\{\{debtor_email\}\}/g, debt.debtor_email || '')
     .replace(/\{\{debtor_address\}\}/g, debt.debtor_address || '')
     .replace(/\{\{original_amount\}\}/g, formatCurrency(debt.original_amount))
     .replace(/\{\{balance_due\}\}/g, formatCurrency(debt.balance_due))
+    .replace(/\{\{total_due\}\}/g, formatCurrency(total))
     .replace(/\{\{interest_accrued\}\}/g, formatCurrency(debt.interest_accrued))
     .replace(/\{\{fees_accrued\}\}/g, formatCurrency(debt.fees_accrued))
-    .replace(/\{\{total_due\}\}/g, formatCurrency(totalDue))
     .replace(/\{\{due_date\}\}/g, formatDate(debt.due_date))
     .replace(/\{\{delinquent_date\}\}/g, formatDate(debt.delinquent_date))
     .replace(/\{\{days_overdue\}\}/g, String(daysOverdue))
-    .replace(/\{\{demand_deadline\}\}/g, formatDate(demandDeadlineIso))
+    .replace(/\{\{demand_deadline\}\}/g, formatDate(demandDeadline))
     .replace(/\{\{jurisdiction\}\}/g, debt.jurisdiction || '')
     .replace(/\{\{company_name\}\}/g, companyName)
-    .replace(/\{\{company_address\}\}/g, companyInfo.address || '')
-    .replace(/\{\{company_phone\}\}/g, companyInfo.phone || '')
-    .replace(/\{\{company_email\}\}/g, companyInfo.email || '')
+    .replace(/\{\{company_address\}\}/g, '')
+    .replace(/\{\{company_phone\}\}/g, '')
+    .replace(/\{\{company_email\}\}/g, '')
     .replace(/\{\{current_date\}\}/g, formatDate(new Date().toISOString()));
 }
 
 // ─── Severity badge color ───────────────────────────────
-// Mirrors the tone accents used in the PDF letterhead bar — keeps the
-// UI and the resulting PDF visually consistent so the user always knows
-// which severity they're about to send.
-const SEVERITY_STYLES: Record<string, { badge: string; accent: string; icon: string }> = {
-  low:      { badge: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',     accent: '#3b82f6', icon: 'ℹ' },
-  medium:   { badge: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',  accent: '#f59e0b', icon: '⚠' },
-  high:     { badge: 'bg-red-500/15 text-red-400 border border-red-500/30',        accent: '#dc2626', icon: '⚠' },
-  critical: { badge: 'bg-red-700/20 text-red-300 border border-red-700/40',         accent: '#991b1b', icon: '⛔' },
-};
-
-const TEMPLATE_TYPE_HINT: Record<string, string> = {
-  reminder: 'Friendly first-touch reminder. Use within 1-30 days past due.',
-  warning: 'Formal second notice. Use within 31-60 days past due.',
-  final_notice: 'Last warning before legal action. Use 61-90 days past due.',
-  demand: 'Formal legal demand for payment with 10-day deadline. Use 90+ days.',
-  settlement_offer: 'Offer 70% balance settlement to close the account.',
-  payment_confirmation: 'Confirm receipt of a payment and update the account.',
+const SEVERITY_STYLES: Record<string, string> = {
+  low:      'bg-accent-blue/20 text-accent-blue',
+  medium:   'bg-amber-500/20 text-amber-400',
+  high:     'bg-red-500/20 text-red-400',
+  critical: 'bg-red-700/20 text-red-300',
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -101,14 +82,13 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [debt, setDebt] = useState<Debt | null>(null);
-  const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({ name: '' });
+  const [companyName, setCompanyName] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [savingPdf, setSavingPdf] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState<string>('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
 
   // ── Load templates + debt ──
   useEffect(() => {
@@ -124,27 +104,18 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
           api.query('debt_templates', { company_id: activeCompany.id }),
           api.get('debts', debtId),
           api.rawQuery(
-            'SELECT name, address_line1, address_line2, city, state, zip, phone, email FROM companies WHERE id = ?',
+            'SELECT name FROM companies WHERE id = ?',
             [activeCompany.id]
           ),
         ]);
         if (cancelled) return;
         setTemplates(Array.isArray(tplData) ? tplData : []);
         setDebt(debtData || null);
-        if (Array.isArray(companyRows) && companyRows.length > 0) {
-          const c = companyRows[0];
-          const addr = [c.address_line1, c.address_line2, c.city, c.state, c.zip]
-            .filter(Boolean)
-            .join(', ');
-          setCompanyInfo({
-            name: c.name || '',
-            address: addr,
-            phone: c.phone || '',
-            email: c.email || '',
-          });
-        } else {
-          setCompanyInfo({ name: '' });
-        }
+        setCompanyName(
+          Array.isArray(companyRows) && companyRows.length > 0
+            ? companyRows[0].name
+            : ''
+        );
       } catch (err) {
         console.error('Failed to load demand letter data:', err);
       } finally {
@@ -163,13 +134,13 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
   // ── Preview text ──
   const previewSubject = useMemo(() => {
     if (!selectedTemplate || !debt) return '';
-    return mergeFields(selectedTemplate.subject || '', debt, companyInfo);
-  }, [selectedTemplate, debt, companyInfo]);
+    return mergeFields(selectedTemplate.subject || '', debt, companyName);
+  }, [selectedTemplate, debt, companyName]);
 
   const previewBody = useMemo(() => {
     if (!selectedTemplate || !debt) return '';
-    return mergeFields(selectedTemplate.body || '', debt, companyInfo);
-  }, [selectedTemplate, debt, companyInfo]);
+    return mergeFields(selectedTemplate.body || '', debt, companyName);
+  }, [selectedTemplate, debt, companyName]);
 
   // ── Generate & Log ──
   const handleGenerate = useCallback(async () => {
@@ -181,8 +152,8 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
       const html = result?.html || '';
       setGeneratedHtml(html);
 
-      // Auto-create communication record
-      await api.create('debt_communications', {
+      // Auto-create communication record (no company_id column on this table).
+      await debtDb.createCommunication({
         debt_id: debtId,
         type: 'letter',
         direction: 'outbound',
@@ -191,21 +162,19 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
         template_used: selectedTemplate.name,
       });
 
-      // Auto-create evidence record
-      await api.create('debt_evidence', {
+      // Auto-create evidence record (no company_id column on this table).
+      await debtDb.createEvidence({
         debt_id: debtId,
         type: 'communication',
         title: 'Demand Letter - ' + selectedTemplate.name,
         description: 'Auto-generated demand letter',
         court_relevance: 'high',
-        date_of_evidence: todayLocal(),
+        date_of_evidence: new Date().toISOString().slice(0, 10),
       });
 
       setSuccessMsg('Demand letter generated and logged successfully.');
-    } catch (err: any) {
-      // VISIBILITY: surface generate-demand-letter errors instead of swallowing
+    } catch (err) {
       console.error('Failed to generate demand letter:', err);
-      setErrorMsg(`Failed to generate demand letter: ${err?.message ?? String(err)}`);
     } finally {
       setGenerating(false);
     }
@@ -216,48 +185,13 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
     if (!generatedHtml || savingPdf) return;
     setSavingPdf(true);
     try {
-      const filename = `${selectedTemplate?.name?.toLowerCase().replace(/\s+/g, '-') || 'demand'} — ${debt?.debtor_name || 'debt'}.pdf`;
-      await api.saveToPDF(generatedHtml, filename);
-    } catch (err: any) {
+      await api.saveToPDF(generatedHtml, 'Demand Letter');
+    } catch (err) {
       console.error('Failed to save PDF:', err);
-      setErrorMsg(`Failed to save PDF: ${err?.message ?? String(err)}`);
     } finally {
       setSavingPdf(false);
     }
-  }, [generatedHtml, savingPdf, selectedTemplate, debt]);
-
-  // ── Print via Electron system print dialog ──
-  const handlePrint = useCallback(async () => {
-    if (!generatedHtml) return;
-    try {
-      await api.print(generatedHtml);
-    } catch (err: any) {
-      console.error('Failed to print:', err);
-      setErrorMsg(`Failed to print: ${err?.message ?? String(err)}`);
-    }
-  }, [generatedHtml]);
-
-  // ── Copy plain-text body to clipboard (for pasting into email) ──
-  const handleCopyText = useCallback(async () => {
-    if (!previewBody) return;
-    try {
-      await navigator.clipboard.writeText(`Subject: ${previewSubject}\n\n${previewBody}`);
-      setSuccessMsg('Letter copied to clipboard — paste into your email client.');
-    } catch (err: any) {
-      setErrorMsg('Could not copy to clipboard: ' + (err?.message || String(err)));
-    }
-  }, [previewBody, previewSubject]);
-
-  // ── Email the debtor (opens default mail client with prefilled body) ──
-  const handleEmail = useCallback(() => {
-    if (!debt?.debtor_email) {
-      setErrorMsg('Debtor has no email on file. Add one to send via email.');
-      return;
-    }
-    const subject = encodeURIComponent(previewSubject);
-    const body = encodeURIComponent(previewBody);
-    window.location.href = `mailto:${debt.debtor_email}?subject=${subject}&body=${body}`;
-  }, [debt, previewSubject, previewBody]);
+  }, [generatedHtml, savingPdf]);
 
   if (loading) {
     return (
@@ -281,23 +215,15 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
 
   return (
     <div className="space-y-4">
-      {errorMsg && (
-        <ErrorBanner
-          message={errorMsg}
-          title="Demand letter error"
-          onDismiss={() => setErrorMsg('')}
-        />
-      )}
-      {/* Template Cards — severity color-coded edge + hint text */}
+      {/* Template Cards */}
       <div>
         <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
           Select Template
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {templates.map((tpl) => {
             const isActive = tpl.id === selectedTemplateId;
-            const sev = SEVERITY_STYLES[tpl.severity] || SEVERITY_STYLES.medium;
-            const hint = TEMPLATE_TYPE_HINT[tpl.id] || TEMPLATE_TYPE_HINT[tpl.name?.toLowerCase().replace(/\s+/g, '_')] || '';
+            const sevStyle = SEVERITY_STYLES[tpl.severity] || SEVERITY_STYLES.medium;
             return (
               <button
                 key={tpl.id}
@@ -306,38 +232,29 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
                   setGeneratedHtml('');
                   setSuccessMsg('');
                 }}
-                className={`block-card text-left p-4 transition-all cursor-pointer relative overflow-hidden ${
+                className={`block-card text-left p-4 transition-colors cursor-pointer ${
                   isActive
                     ? 'ring-2 ring-accent-blue bg-bg-tertiary'
-                    : 'hover:bg-bg-hover hover:-translate-y-0.5'
+                    : 'hover:bg-bg-hover'
                 }`}
-                style={{ borderRadius: '8px' }}
+                style={{ borderRadius: '2px' }}
               >
-                {/* Severity stripe — runs down the left edge */}
-                <span
-                  aria-hidden
-                  style={{
-                    position: 'absolute', left: 0, top: 0, bottom: 0,
-                    width: 3, background: sev.accent,
-                  }}
-                />
-                <div className="flex items-start justify-between gap-2 mb-2 ml-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <FileText size={14} className="text-text-muted shrink-0" />
-                    <span className="text-sm font-bold text-text-primary truncate">
-                      {tpl.name}
-                    </span>
-                  </div>
-                  <span
-                    className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 font-bold uppercase tracking-wider shrink-0 ${sev.badge}`}
-                    style={{ borderRadius: '4px' }}
-                  >
-                    <span aria-hidden>{sev.icon}</span>
-                    {humanizeLabel(tpl.severity)}
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText size={14} className="text-text-muted" />
+                  <span className="text-sm font-bold text-text-primary truncate">
+                    {tpl.name}
                   </span>
                 </div>
-                {hint && (
-                  <p className="text-[11px] text-text-muted leading-snug ml-2 mt-1">{hint}</p>
+                <span
+                  className={`inline-block text-[10px] px-1.5 py-0.5 font-semibold uppercase ${sevStyle}`}
+                  style={{ borderRadius: '2px' }}
+                >
+                  {tpl.severity}
+                </span>
+                {tpl.subject && (
+                  <p className="text-xs text-text-muted mt-2 line-clamp-2">
+                    {tpl.subject}
+                  </p>
                 )}
               </button>
             );
@@ -345,90 +262,43 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
         </div>
       </div>
 
-      {/* Preview Pane — live iframe preview matches the PDF output exactly */}
+      {/* Preview Pane */}
       {selectedTemplate && debt && (
         <div className="block-card">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-2">
-              <Eye size={12} />
-              {generatedHtml ? 'Live Preview' : 'Text Preview'}
-            </h4>
-            {generatedHtml && (
-              <span className="text-[10px] text-text-muted uppercase tracking-wider">
-                What the recipient will see
-              </span>
-            )}
+          <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
+            Preview
+          </h4>
+          <div
+            className="block-card bg-bg-primary p-4 font-mono text-sm text-text-secondary space-y-3"
+            style={{ borderRadius: '2px' }}
+          >
+            <div>
+              <span className="text-text-muted text-xs uppercase">Subject:</span>
+              <p className="text-text-primary font-semibold">{previewSubject}</p>
+            </div>
+            <div className="border-t border-border-primary pt-3 whitespace-pre-wrap">
+              {previewBody}
+            </div>
           </div>
 
-          {/* When generated, show the actual rendered HTML (matches PDF) */}
-          {generatedHtml ? (
-            <PdfPreview
-              html={generatedHtml}
-              title={`${selectedTemplate?.name || 'Demand Letter'} — ${debt?.debtor_name || ''}`}
-              style={{ flex: 1, minHeight: 620, width: '100%' }}
-            />
-          ) : (
-            <div
-              className="block-card bg-bg-primary p-4 text-sm text-text-secondary space-y-3"
-              style={{ borderRadius: '6px', maxHeight: 400, overflowY: 'auto' }}
-            >
-              <div>
-                <span className="text-text-muted text-xs uppercase tracking-wider">Subject</span>
-                <p className="text-text-primary font-semibold mt-1">{previewSubject}</p>
-              </div>
-              <div className="border-t border-border-primary pt-3 whitespace-pre-wrap font-serif leading-relaxed">
-                {previewBody}
-              </div>
-              <div className="border-t border-border-primary pt-3 text-[11px] text-text-muted italic">
-                Click "Generate &amp; Log" to render the full HTML letter with letterhead, accent bar, and remittance slip.
-              </div>
-            </div>
-          )}
-
-          {/* Action bar — primary + secondary actions grouped */}
-          <div className="flex items-center gap-3 mt-4 flex-wrap">
+          {/* Actions */}
+          <div className="flex items-center gap-3 mt-4">
             <button
               className="block-btn-primary flex items-center gap-2"
               onClick={handleGenerate}
               disabled={generating}
             >
               <FileText size={14} />
-              {generating ? 'Generating…' : (generatedHtml ? 'Regenerate' : 'Generate & Log')}
+              {generating ? 'Generating...' : 'Generate & Log'}
             </button>
             {generatedHtml && (
-              <>
-                <button
-                  className="block-btn flex items-center gap-2"
-                  onClick={handlePrint}
-                  title="Open in a new window and print"
-                >
-                  <Printer size={14} /> Print
-                </button>
-                <button
-                  className="block-btn flex items-center gap-2"
-                  onClick={handleSavePdf}
-                  disabled={savingPdf}
-                  title="Save the letter as a PDF file"
-                >
-                  <FileText size={14} />
-                  {savingPdf ? 'Saving…' : 'Save PDF'}
-                </button>
-                <button
-                  className="block-btn flex items-center gap-2"
-                  onClick={handleEmail}
-                  title={debt?.debtor_email ? `Email to ${debt.debtor_email}` : 'No debtor email on file'}
-                  disabled={!debt?.debtor_email}
-                >
-                  <Mail size={14} /> Email
-                </button>
-                <button
-                  className="block-btn flex items-center gap-2"
-                  onClick={handleCopyText}
-                  title="Copy subject + body to clipboard"
-                >
-                  <ClipboardCheck size={14} /> Copy Text
-                </button>
-              </>
+              <button
+                className="block-btn flex items-center gap-2"
+                onClick={handleSavePdf}
+                disabled={savingPdf}
+              >
+                {savingPdf ? 'Saving...' : 'Save as PDF'}
+              </button>
             )}
           </div>
 
@@ -436,7 +306,7 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
           {successMsg && (
             <div
               className="flex items-center gap-2 mt-3 px-3 py-2 bg-emerald-500/10 text-emerald-400 text-xs font-semibold"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: '2px' }}
             >
               <Check size={14} />
               {successMsg}

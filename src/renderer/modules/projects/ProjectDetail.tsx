@@ -13,11 +13,6 @@ import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { Plus } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
-import ProjectProfitability from './ProjectProfitability';
-import RelatedPanel from '../../components/RelatedPanel';
-import EntityTimeline from '../../components/EntityTimeline';
-import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -43,11 +38,10 @@ interface TimeEntry {
   id: string;
   project_id: string;
   description: string;
-  duration_minutes: number;
-  hours: number;         // computed: duration_minutes / 60
+  hours: number;
   date: string;
   user_name?: string;
-  is_billable: number;   // SQLite integer (0 or 1)
+  billable?: boolean;
   hourly_rate?: number;
 }
 
@@ -59,8 +53,6 @@ interface Expense {
   date: string;
   category?: string;
   vendor?: string;
-  category_name?: string;
-  vendor_name?: string;
 }
 
 interface Invoice {
@@ -69,7 +61,7 @@ interface Invoice {
   client_id: string;
   total: number;
   status: string;
-  issue_date: string;
+  date: string;
   due_date: string;
 }
 
@@ -91,20 +83,51 @@ interface ProjectDetailProps {
   onEdit: (id: string) => void;
 }
 
+// ─── Status Config ──────────────────────────────────────
+const STATUS_BADGE: Record<string, string> = {
+  active: 'block-badge block-badge-income',
+  completed: 'block-badge block-badge-blue',
+  on_hold: 'block-badge block-badge-warning',
+  archived: 'block-badge block-badge-expense',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  active: 'Active',
+  completed: 'Completed',
+  on_hold: 'On Hold',
+  archived: 'Archived',
+};
+
+// ─── Formatters ─────────────────────────────────────────
+const fmtCurrency = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const fmtDate = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return '--';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+};
+
 // ─── Stat Card ──────────────────────────────────────────
 interface StatCardProps {
   icon: React.ReactNode;
   label: string;
   value: string;
   accentClass: string;
-  subtitle?: string;
-  subtitleColor?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ icon, label, value, accentClass, subtitle, subtitleColor }) => (
+const StatCard: React.FC<StatCardProps> = ({ icon, label, value, accentClass }) => (
   <div
     className={`block-card p-4 border-l-2 ${accentClass}`}
-    style={{ borderRadius: '6px' }}
+    style={{ borderRadius: '2px' }}
   >
     <div className="flex items-center gap-2 mb-1">
       <span className="text-text-muted">{icon}</span>
@@ -113,11 +136,6 @@ const StatCard: React.FC<StatCardProps> = ({ icon, label, value, accentClass, su
       </span>
     </div>
     <p className="text-xl font-mono text-text-primary font-bold">{value}</p>
-    {subtitle && (
-      <p className="text-[11px] font-mono mt-0.5" style={{ color: subtitleColor || 'var(--color-text-muted)' }}>
-        {subtitle}
-      </p>
-    )}
   </div>
 );
 
@@ -146,31 +164,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         const cid = activeCompany.id;
         const [proj, allTimeEntries, allExpenses, allInvoices, allLineItems] = await Promise.all([
           api.get('projects', projectId),
-          // JOIN employees for user_name and compute hours from duration_minutes
-          api.rawQuery(
-            `SELECT te.*,
-                    (te.duration_minutes / 60.0) AS hours,
-                    COALESCE(e.name, e.email, 'Unknown') AS user_name
-             FROM time_entries te
-             LEFT JOIN employees e ON te.employee_id = e.id
-             WHERE te.company_id = ? AND te.project_id = ?
-             ORDER BY te.date DESC`,
-            [cid, projectId]
-          ),
-          // CLAUDE.md: db:query returns flat rows — use rawQuery + JOINs so the
-          // expenses tab shows Category and Vendor names instead of "--".
-          // Keep the soft-delete filter so voided expenses don't appear.
-          api.rawQuery(
-            `SELECT e.*, c.name as category_name, v.name as vendor_name
-             FROM expenses e
-             LEFT JOIN categories c ON c.id = e.category_id
-             LEFT JOIN vendors v ON v.id = e.vendor_id
-             WHERE e.company_id = ? AND e.project_id = ? AND COALESCE(e.deleted_at, '') = ''
-             ORDER BY e.date DESC`,
-            [cid, projectId]
-          ),
+          api.query('time_entries', { company_id: cid, project_id: projectId }),
+          api.query('expenses', { company_id: cid, project_id: projectId }),
           api.query('invoices', { company_id: cid }),
-          api.query('invoice_line_items', { project_id: projectId }),
+          api.query('invoice_line_items'),
         ]);
         if (cancelled) return;
 
@@ -186,11 +183,16 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           }
         }
 
-        // Time entries already filtered by project in the SQL query
-        setTimeEntries(Array.isArray(allTimeEntries) ? allTimeEntries : []);
+        // Filter related records
+        const projectTime = Array.isArray(allTimeEntries)
+          ? allTimeEntries.filter((t: any) => t.project_id === projectId)
+          : [];
+        setTimeEntries(projectTime);
 
-        // Already scoped to this project by the SQL WHERE clause.
-        setExpenses(Array.isArray(allExpenses) ? allExpenses : []);
+        const projectExpenses = Array.isArray(allExpenses)
+          ? allExpenses.filter((e: any) => e.project_id === projectId)
+          : [];
+        setExpenses(projectExpenses);
 
         // Filter line items by project, then find matching invoices
         const projectLineItems = Array.isArray(allLineItems)
@@ -219,14 +221,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
     const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount ?? 0), 0);
     const totalHours = timeEntries.reduce((sum, t) => sum + (t.hours ?? 0), 0);
     const profitLoss = totalRevenue - totalExpenses;
-    const profitMargin = totalRevenue > 0
-      ? ((profitLoss / totalRevenue) * 100).toFixed(1)
-      : '0.0';
-    const budgetUsed = project?.budget && project.budget > 0
-      ? ((totalExpenses / project.budget) * 100).toFixed(1)
-      : null;
-    return { totalRevenue, totalExpenses, totalHours, profitLoss, profitMargin, budgetUsed };
-  }, [lineItems, expenses, timeEntries, project]);
+    return { totalRevenue, totalExpenses, totalHours, profitLoss };
+  }, [lineItems, expenses, timeEntries]);
 
   // ─── Create Invoice from Time ─────────────────────────
   const handleCreateInvoice = async () => {
@@ -244,32 +240,6 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
       nav.goTo('invoicing');
     } catch (err: any) {
       setInvoiceError(err?.message ?? 'Failed to create invoice from time entries.');
-    } finally {
-      setCreatingInvoice(false);
-    }
-  };
-
-  // ─── Create Invoice from Billable Expenses ─────────────
-  // Pulls header-billable expenses AND per-line billable items for this
-  // project into an invoice prefill, applying each source's markup_pct.
-  const handleCreateInvoiceFromExpenses = async () => {
-    if (!project?.id || !activeCompany) return;
-    setInvoiceError(null);
-    setCreatingInvoice(true);
-    try {
-      const result = await api.invoiceFromBillableExpenses({
-        project_id: project.id,
-        company_id: activeCompany.id,
-      });
-      if (result?.error) {
-        setInvoiceError(result.error);
-        return;
-      }
-      localStorage.setItem('invoiceFormPrefill', JSON.stringify(result));
-      sessionStorage.setItem('nav:invoiceNew', '1');
-      nav.goTo('invoicing');
-    } catch (err: any) {
-      setInvoiceError(err?.message ?? 'Failed to create invoice from billable expenses.');
     } finally {
       setCreatingInvoice(false);
     }
@@ -322,13 +292,13 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-bold text-text-primary">{project.name}</h1>
-            <span className={formatStatus(project.status).className}>
-              {formatStatus(project.status).label}
+            <span className={STATUS_BADGE[project.status] ?? 'block-badge'}>
+              {STATUS_LABEL[project.status] ?? project.status}
             </span>
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-text-muted">
-            {client && <EntityChip type="client" id={client.id} label={client.name} variant="inline" />}
-            <span>{formatDate(project.start_date)}{project.end_date ? ` - ${formatDate(project.end_date)}` : ''}</span>
+            {client && <span>{client.name}</span>}
+            <span>{fmtDate(project.start_date)}{project.end_date ? ` - ${fmtDate(project.end_date)}` : ''}</span>
           </div>
           {project.description && (
             <p className="text-xs text-text-secondary mt-2 max-w-xl">{project.description}</p>
@@ -338,20 +308,11 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           <button
             onClick={handleCreateInvoice}
             disabled={creatingInvoice}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-accent-blue text-white text-xs font-bold uppercase hover:opacity-90 disabled:opacity-50"
-            style={{ borderRadius: '6px' }}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-xs font-bold uppercase hover:bg-indigo-700 disabled:opacity-50"
+            style={{ borderRadius: '2px' }}
           >
             <FilePlus size={13} />
             {creatingInvoice ? 'Building...' : 'Create Invoice from Time'}
-          </button>
-          <button
-            onClick={handleCreateInvoiceFromExpenses}
-            disabled={creatingInvoice}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-accent-income text-white text-xs font-bold uppercase hover:opacity-90 disabled:opacity-50"
-            style={{ borderRadius: '6px' }}
-            title="Bundle billable expense items into a new invoice for this project's client">
-            <FilePlus size={13} />
-            {creatingInvoice ? 'Building...' : 'Create Invoice from Expenses'}
           </button>
           <button
             onClick={() => onEdit(project.id)}
@@ -368,10 +329,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         <div
           className="text-xs px-3 py-2 font-mono"
           style={{
-            background: 'rgba(248,113,113,0.08)',
-            border: '1px solid #ef4444',
-            borderRadius: '6px',
-            color: '#ef4444',
+            background: '#2a1215',
+            border: '1px solid var(--color-accent-expense)',
+            borderRadius: '2px',
+            color: 'var(--color-accent-expense)',
           }}
         >
           {invoiceError}
@@ -379,17 +340,17 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
       )}
 
       {/* Stats Row */}
-      <div className={`grid gap-4 ${stats.budgetUsed !== null ? 'grid-cols-5' : 'grid-cols-4'}`}>
+      <div className="grid grid-cols-4 gap-4">
         <StatCard
           icon={<DollarSign size={14} />}
           label="Total Revenue"
-          value={formatCurrency(stats.totalRevenue)}
+          value={fmtCurrency.format(stats.totalRevenue)}
           accentClass="border-l-accent-income"
         />
         <StatCard
           icon={<Receipt size={14} />}
           label="Total Expenses"
-          value={formatCurrency(stats.totalExpenses)}
+          value={fmtCurrency.format(stats.totalExpenses)}
           accentClass="border-l-accent-expense"
         />
         <StatCard
@@ -401,24 +362,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         <StatCard
           icon={<TrendingUp size={14} />}
           label="Profit / Loss"
-          value={formatCurrency(stats.profitLoss)}
+          value={fmtCurrency.format(stats.profitLoss)}
           accentClass={stats.profitLoss >= 0 ? 'border-l-accent-income' : 'border-l-accent-expense'}
-          subtitle={`${stats.profitMargin}% margin`}
-          subtitleColor={stats.profitLoss >= 0 ? '#34d399' : '#f87171'}
         />
-        {stats.budgetUsed !== null && (
-          <StatCard
-            icon={<DollarSign size={14} />}
-            label="Budget Used"
-            value={`${stats.budgetUsed}%`}
-            accentClass={parseFloat(stats.budgetUsed!) > 90 ? 'border-l-accent-expense' : parseFloat(stats.budgetUsed!) > 70 ? 'border-l-[#fbbf24]' : 'border-l-accent-income'}
-            subtitle={`${formatCurrency(stats.totalExpenses)} / ${formatCurrency(project?.budget ?? 0)}`}
-          />
-        )}
       </div>
-
-      {/* Project Profitability */}
-      <ProjectProfitability projectId={projectId} />
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-border-primary pb-0">
@@ -429,7 +376,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
             className={`px-3 py-2 text-xs font-semibold transition-colors border-b-2 -mb-px ${
               activeTab === tab.key
                 ? 'border-accent-blue text-text-primary'
-                : 'border-transparent text-text-muted hover:text-text-secondary transition-colors'
+                : 'border-transparent text-text-muted hover:text-text-secondary'
             }`}
           >
             {tab.label}
@@ -457,18 +404,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
                 Record Expense
               </button>
             </div>
-            <ExpensesTab expenses={expenses} onNavigate={(id) => nav.goToExpense(id)} />
+            <ExpensesTab expenses={expenses} />
           </div>
         )}
         {activeTab === 'invoices' && (
-          <InvoicesTab invoices={invoices} onNavigate={(id) => nav.goToInvoice(id)} />
+          <InvoicesTab invoices={invoices} />
         )}
-      </div>
-
-      {/* Cross-entity integration panels */}
-      <div className="grid grid-cols-2 gap-4 mt-6">
-        <RelatedPanel entityType="project" entityId={projectId} hide={['time', 'expenses', 'invoices']} />
-        <EntityTimeline entityType="projects" entityId={projectId} />
       </div>
     </div>
   );
@@ -486,7 +427,7 @@ const TimeEntriesTab: React.FC<{ entries: TimeEntry[] }> = ({ entries }) => {
   }
 
   return (
-    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
       <table className="block-table">
         <thead>
           <tr>
@@ -501,7 +442,7 @@ const TimeEntriesTab: React.FC<{ entries: TimeEntry[] }> = ({ entries }) => {
           {entries.map((entry) => (
             <tr key={entry.id}>
               <td className="text-text-secondary font-mono text-xs">
-                {formatDate(entry.date)}
+                {fmtDate(entry.date)}
               </td>
               <td className="text-text-primary text-xs">
                 {entry.description || '--'}
@@ -515,10 +456,10 @@ const TimeEntriesTab: React.FC<{ entries: TimeEntry[] }> = ({ entries }) => {
               <td className="text-center">
                 <span
                   className={`block-badge text-[10px] ${
-                    entry.is_billable ? 'block-badge-income' : 'block-badge-expense'
+                    entry.billable !== false ? 'block-badge-income' : 'block-badge-expense'
                   }`}
                 >
-                  {entry.is_billable ? 'Yes' : 'No'}
+                  {entry.billable !== false ? 'Yes' : 'No'}
                 </span>
               </td>
             </tr>
@@ -530,7 +471,7 @@ const TimeEntriesTab: React.FC<{ entries: TimeEntry[] }> = ({ entries }) => {
 };
 
 // ─── Expenses Tab ───────────────────────────────────────
-const ExpensesTab: React.FC<{ expenses: Expense[]; onNavigate?: (id: string) => void }> = ({ expenses, onNavigate }) => {
+const ExpensesTab: React.FC<{ expenses: Expense[] }> = ({ expenses }) => {
   if (expenses.length === 0) {
     return (
       <div className="text-center py-8">
@@ -541,7 +482,7 @@ const ExpensesTab: React.FC<{ expenses: Expense[]; onNavigate?: (id: string) => 
   }
 
   return (
-    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
       <table className="block-table">
         <thead>
           <tr>
@@ -554,25 +495,21 @@ const ExpensesTab: React.FC<{ expenses: Expense[]; onNavigate?: (id: string) => 
         </thead>
         <tbody>
           {expenses.map((exp) => (
-            <tr
-              key={exp.id}
-              className={onNavigate ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''}
-              onClick={() => onNavigate?.(exp.id)}
-            >
+            <tr key={exp.id}>
               <td className="text-text-secondary font-mono text-xs">
-                {formatDate(exp.date)}
+                {fmtDate(exp.date)}
               </td>
               <td className="text-text-primary text-xs">
                 {exp.description || '--'}
               </td>
               <td className="text-text-secondary text-xs">
-                {exp.category_name || exp.category || '--'}
+                {exp.category || '--'}
               </td>
               <td className="text-text-secondary text-xs">
-                {exp.vendor_name || exp.vendor || '--'}
+                {exp.vendor || '--'}
               </td>
               <td className="text-right font-mono text-xs text-accent-expense">
-                {formatCurrency(exp.amount ?? 0)}
+                {fmtCurrency.format(exp.amount ?? 0)}
               </td>
             </tr>
           ))}
@@ -583,7 +520,7 @@ const ExpensesTab: React.FC<{ expenses: Expense[]; onNavigate?: (id: string) => 
 };
 
 // ─── Invoices Tab ───────────────────────────────────────
-const InvoicesTab: React.FC<{ invoices: Invoice[]; onNavigate?: (id: string) => void }> = ({ invoices, onNavigate }) => {
+const InvoicesTab: React.FC<{ invoices: Invoice[] }> = ({ invoices }) => {
   if (invoices.length === 0) {
     return (
       <div className="text-center py-8">
@@ -601,7 +538,7 @@ const InvoicesTab: React.FC<{ invoices: Invoice[]; onNavigate?: (id: string) => 
   };
 
   return (
-    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '2px' }}>
       <table className="block-table">
         <thead>
           <tr>
@@ -614,27 +551,23 @@ const InvoicesTab: React.FC<{ invoices: Invoice[]; onNavigate?: (id: string) => 
         </thead>
         <tbody>
           {invoices.map((inv) => (
-            <tr
-              key={inv.id}
-              className={onNavigate ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''}
-              onClick={() => onNavigate?.(inv.id)}
-            >
-              <td className="text-text-primary text-xs font-mono font-medium" onClick={(e) => e.stopPropagation()}>
-                <EntityChip type="invoice" id={inv.id} label={inv.invoice_number || '--'} variant="inline" />
+            <tr key={inv.id}>
+              <td className="text-text-primary text-xs font-mono font-medium">
+                {inv.invoice_number || '--'}
               </td>
               <td className="text-text-secondary font-mono text-xs">
-                {formatDate(inv.issue_date)}
+                {fmtDate(inv.date)}
               </td>
               <td className="text-text-secondary font-mono text-xs">
-                {formatDate(inv.due_date)}
+                {fmtDate(inv.due_date)}
               </td>
               <td>
-                <span className={`${invoiceBadge[inv.status] ?? 'block-badge'} capitalize`}>
+                <span className={invoiceBadge[inv.status] ?? 'block-badge'}>
                   {inv.status}
                 </span>
               </td>
               <td className="text-right font-mono text-xs text-text-primary">
-                {formatCurrency(inv.total ?? 0)}
+                {fmtCurrency.format(inv.total ?? 0)}
               </td>
             </tr>
           ))}

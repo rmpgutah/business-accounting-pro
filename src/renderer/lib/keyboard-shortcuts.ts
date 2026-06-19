@@ -27,27 +27,31 @@ export function registerKeyboardShortcuts(actions: ShortcutActions): () => void 
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
 
-    const target = e.target as HTMLElement;
-    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-    // Never hijack shortcuts while the user is typing in a form field
-    if (isInput) return;
+    // Ignore when typing in inputs (unless it's a shortcut we specifically want)
+    const target = e.target as HTMLElement | null;
+    const isInput = !!target && (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable
+    );
 
-    // Cmd/Ctrl + N — New item
-    if (e.key === 'n' && !e.shiftKey) {
+    // Cmd/Ctrl + N — New item (skip when typing)
+    if (e.key === 'n' && !e.shiftKey && !isInput) {
       e.preventDefault();
       actions.newItem();
       return;
     }
 
-    // Cmd/Ctrl + E — Export current view
-    if (e.key === 'e' && !e.shiftKey) {
+    // Cmd/Ctrl + E — Export current view (skip when typing)
+    if (e.key === 'e' && !e.shiftKey && !isInput) {
       e.preventDefault();
       actions.exportView();
       return;
     }
 
-    // Cmd/Ctrl + F — Focus search
-    if (e.key === 'f' && !e.shiftKey) {
+    // Cmd/Ctrl + F — Focus global search (but don't block browser find-in-field in inputs)
+    if (e.key === 'f' && !e.shiftKey && !isInput) {
       e.preventDefault();
       actions.focusSearch();
       return;
@@ -60,32 +64,19 @@ export function registerKeyboardShortcuts(actions: ShortcutActions): () => void 
       return;
     }
 
-    // Cmd/Ctrl + 1-9 — Switch module by position
-    const num = parseInt(e.key, 10);
-    if (num >= 1 && num <= 9) {
-      e.preventDefault();
-      actions.switchModule(num - 1);
-      return;
+    // Cmd/Ctrl + 1-9 — Switch module (skip when typing into a field)
+    if (!isInput) {
+      const num = parseInt(e.key, 10);
+      if (!Number.isNaN(num) && num >= 1 && num <= 9) {
+        e.preventDefault();
+        actions.switchModule(num - 1);
+        return;
+      }
     }
   };
 
   window.addEventListener('keydown', handler);
   return () => window.removeEventListener('keydown', handler);
-}
-
-// UX: Cmd+S in any form should NEVER trigger the browser "Save HTML" handler.
-// We dispatch a CustomEvent that interested forms can listen for, and prevent
-// the default browser behavior. Forms wire useFormSave(handleSave) to react.
-export function registerCmdSGuard(): () => void {
-  const handler = (e: KeyboardEvent) => {
-    const mod = e.metaKey || e.ctrlKey;
-    if (!mod || e.key.toLowerCase() !== 's') return;
-    e.preventDefault();
-    e.stopPropagation();
-    window.dispatchEvent(new CustomEvent('app:cmd-save'));
-  };
-  window.addEventListener('keydown', handler, true);
-  return () => window.removeEventListener('keydown', handler, true);
 }
 
 export { MODULE_ORDER };

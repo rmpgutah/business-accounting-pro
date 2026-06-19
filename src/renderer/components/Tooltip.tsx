@@ -24,11 +24,15 @@ export const Tooltip: React.FC<Props> = ({ content, children, placement = 'top' 
           role="tooltip"
           className={`
             absolute z-50 left-1/2 -translate-x-1/2 w-max max-w-xs
-            bg-bg-tertiary text-text-primary border border-border-primary text-xs px-2.5 py-1.5 pointer-events-none
+            text-text-primary text-xs px-2.5 py-1.5 pointer-events-none
             whitespace-pre-wrap leading-relaxed
             ${placement === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}
           `}
-          style={{ borderRadius: '6px' }}
+          style={{
+            background: 'var(--color-bg-elevated)',
+            border: '1px solid var(--color-border-primary)',
+            borderRadius: '2px',
+          }}
         >
           {content}
         </span>

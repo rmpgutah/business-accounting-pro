@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, lazy, Suspense } from 'react';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { useAppStore } from './stores/appStore';
 import { useCompanyStore } from './stores/companyStore';
 import { useAuthStore } from './stores/authStore';
@@ -7,15 +7,8 @@ import AppShell from './components/layout/AppShell';
 import CompanySetup from './components/onboarding/CompanySetup';
 import AuthScreen from './components/auth/AuthScreen';
 import ErrorBoundary from './components/ErrorBoundary';
-import { registerKeyboardShortcuts, registerCmdSGuard, MODULE_ORDER } from './lib/keyboard-shortcuts';
+import { registerKeyboardShortcuts, MODULE_ORDER } from './lib/keyboard-shortcuts';
 import { QuickCreate } from './components/QuickCreate';
-import CommandPalette from './components/CommandPalette';
-import { usePersonalizationStore, applyPersonalization, applyModuleAccent } from './stores/personalizationStore';
-import { subscribeCustomizationGlobals } from './customization/applyGlobals';
-import PersonalizationWizard from './components/onboarding/PersonalizationWizard';
-import OnboardingWizard from './components/OnboardingWizard';
-import { useOnboarding } from './modules/companies/useOnboarding';
-import CopilotPanel from './modules/copilot/CopilotPanel';
 
 // ─── Lazy-loaded Modules ─────────────────────────────────
 const Dashboard = lazy(() => import('./modules/dashboard/Dashboard'));
@@ -46,22 +39,11 @@ const PortalModule = lazy(() => import('./modules/portal'));
 const MobileModule = lazy(() => import('./modules/mobile'));
 const SettingsModule = lazy(() => import('./modules/settings'));
 const BillsModule = lazy(() => import('./modules/bills'));
-const MileageModule = lazy(() => import('./modules/mileage'));
-const LoansModule = lazy(() => import('./modules/loans'));
 const PurchaseOrdersModule = lazy(() => import('./modules/purchase-orders'));
-const VendorsApModule = lazy(() => import('./modules/vendors-ap'));
 const FixedAssetsModule = lazy(() => import('./modules/fixed-assets'));
 const AutomationsModule = lazy(() => import('./modules/automations'));
 const RulesModule = lazy(() => import('./modules/rules'));
 const DebtCollectionModule = lazy(() => import('./modules/debt-collection'));
-const QuotesModule = lazy(() => import('./modules/quotes'));
-const EsignModule = lazy(() => import('./modules/esign'));
-const ComponentLibraryModule = lazy(() => import('./modules/component-library/ComponentLibrary'));
-const CustomizationModule = lazy(() => import('./modules/customization/CustomizationCenter'));
-const CockpitModule = lazy(() => import('./modules/cockpit/Cockpit'));
-
-// One-time FTS search-index backfill guard (once per company per session).
-const backfilledCompanies = new Set<string>();
 
 // ─── Module Name Map ────────────────────────────────────
 const MODULE_NAMES: Record<string, string> = {
@@ -70,7 +52,7 @@ const MODULE_NAMES: Record<string, string> = {
   invoicing: 'Invoicing',
   expenses: 'Expenses',
   clients: 'Clients',
-  payroll: 'Employee',
+  payroll: 'Payroll',
   'time-tracking': 'Time Tracking',
   projects: 'Projects',
   inventory: 'Inventory',
@@ -92,20 +74,10 @@ const MODULE_NAMES: Record<string, string> = {
   'client-portal': 'Client Portal',
   mobile: 'Mobile',
   settings: 'Settings',
-  'component-library': 'Component Library',
-  customization: 'Customization',
-  mileage: 'Mileage Log',
-  loans: 'Loans & Debt',
   bills: 'Bills & Accounts Payable',
   'purchase-orders': 'Purchase Orders',
-  'vendors-ap': 'Vendor & AP Command Center',
   'fixed-assets': 'Fixed Assets',
   'debt-collection': 'Debt Collection',
-  quotes: 'Quotes & Estimates',
-  automations: 'Automations',
-  rules: 'Approval Rules',
-  esign: 'E-Sign',
-  cockpit: 'Intelligence Cockpit',
 };
 
 // ─── Loading Fallback ────────────────────────────────────
@@ -149,23 +121,15 @@ const ModuleView: React.FC = () => {
       case 'mobile': return <MobileModule />;
       case 'settings': return <SettingsModule />;
       case 'bills': return <BillsModule />;
-      case 'mileage': return <MileageModule />;
-      case 'loans': return <LoansModule />;
       case 'purchase-orders': return <PurchaseOrdersModule />;
-      case 'vendors-ap': return <VendorsApModule />;
       case 'fixed-assets': return <FixedAssetsModule />;
       case 'automations': return <AutomationsModule />;
       case 'rules': return <RulesModule />;
       case 'debt-collection': return <DebtCollectionModule />;
-      case 'quotes': return <QuotesModule />;
-      case 'esign': return <EsignModule />;
-      case 'component-library': return <ComponentLibraryModule />;
-      case 'customization': return <CustomizationModule />;
-      case 'cockpit': return <CockpitModule />;
       default:
         return (
           <div className="flex items-center justify-center h-full p-6">
-            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: '2px' }}>
               <h2 className="text-lg font-bold text-text-primary mb-1">
                 {MODULE_NAMES[currentModule] ?? currentModule}
               </h2>
@@ -196,137 +160,54 @@ const App: React.FC = () => {
   const setCompanies = useCompanyStore((s) => s.setCompanies);
   const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const authUser = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const copilotOpen = useAppStore((s) => s.copilotOpen);
-  const setCopilotOpen = useAppStore((s) => s.setCopilotOpen);
-  const toggleCopilot = useAppStore((s) => s.toggleCopilot);
 
-  // ─── Onboarding wizard (industry preset + setup) ─────────
-  const activeCompany = useCompanyStore((s) => s.activeCompany);
-  const onboarding = useOnboarding(activeCompany?.id || null);
-
-  // ─── Customization: push global-impact options onto :root CSS vars and
-  // keep them live as the Customization Center changes them. ──
-  useEffect(() => {
-    subscribeCustomizationGlobals();
-  }, []);
-
-  // ─── Personalization: apply CSS vars whenever prefs change ──
-  const personalization = usePersonalizationStore();
-  useEffect(() => {
-    applyPersonalization(personalization);
-  }, [
-    personalization.themeMode,
-    personalization.accents,
-    personalization.density,
-    personalization.fontScale,
-    personalization.fontFamily,
-    personalization.radius,
-    personalization.glassIntensity,
-  ]);
-  // Auto-mode: react to OS color-scheme changes
-  useEffect(() => {
-    if (personalization.themeMode !== 'auto') return;
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = () => applyPersonalization(usePersonalizationStore.getState());
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, [personalization.themeMode]);
-  // Per-module accent override on module switch
-  useEffect(() => {
-    applyModuleAccent(currentModule);
-  }, [currentModule, personalization.moduleAccents, personalization.accents]);
-  // Load cloud settings on login
-  useEffect(() => {
-    if (authUser?.id) {
-      usePersonalizationStore.getState().loadFromCloud(authUser.id);
-    }
-  }, [authUser?.id]);
-
-  // One-time FTS search-index backfill, once per company per session (non-blocking).
-  useEffect(() => {
-    const companyId = activeCompany?.id;
-    if (!authUser?.id || !companyId || backfilledCompanies.has(companyId)) return;
-    backfilledCompanies.add(companyId);
-    api.searchBackfill().catch(() => backfilledCompanies.delete(companyId));
-  }, [authUser?.id, activeCompany?.id]);
-
-  // Stable handlers so QuickCreate doesn't re-render on every parent render.
-  const handleQuickCreateNavigate = useCallback(
-    (view: string) => setModule(view as any),
-    [setModule]
-  );
-  const handleQuickCreateClose = useCallback(() => setQuickCreateOpen(false), []);
-
+  // Cmd/Ctrl + Shift + K opens the Quick Create palette.
+  // Plain Cmd+K is reserved for global search (handled in TopBar).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setQuickCreateOpen(prev => !prev);
       }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
-
-  // Cmd+K (Ctrl+K on Win/Linux) — toggle command palette.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        setPaletteOpen(o => !o);
+      if (e.key === 'Escape') {
+        setQuickCreateOpen(false);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Cmd+\ (Ctrl+\ on Win/Linux) — toggle AI Copilot panel.
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === '\\' || e.key === '|')) {
-        e.preventDefault();
-        toggleCopilot();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [toggleCopilot]);
-
-  useEffect(() => {
+    let cancelled = false;
     const init = async () => {
       try {
-        // If not authenticated, just finish loading — AuthScreen will show
         if (!isAuthenticated) {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
           return;
         }
-
-        // Load companies from DB (never trust persisted store)
+        // Always re-fetch from DB on auth change — never trust stale state
         const list = await api.listCompanies();
+        if (cancelled) return;
         const validList = Array.isArray(list) ? list : [];
         setCompanies(validList);
         if (validList.length > 0) {
           setActiveCompany(validList[0]);
-          api.switchCompany(validList[0].id).catch(() => {});
-          // Seed defaults only for active company on boot. Other companies
-          // get seeded lazily when they become active. This avoids an N-call
-          // burst on launch for users with many companies.
-          api.categoriesSeedDefaults(validList[0].id).catch(() => {});
+          for (const company of validList) {
+            api.categoriesSeedDefaults(company.id).catch(() => {});
+          }
         }
       } catch (err) {
-        console.error('Failed to initialize:', err);
-        setCompanies([]);
+        console.error('Failed to load companies:', err);
+        if (!cancelled) setCompanies([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     init();
-  }, [isAuthenticated]);
+    return () => { cancelled = true; };
+  }, [isAuthenticated, setCompanies, setActiveCompany, setLoading]);
 
   // ─── Global Keyboard Shortcuts ──────────────────────────
   useEffect(() => {
@@ -362,10 +243,7 @@ const App: React.FC = () => {
       },
     });
 
-    // UX: Cmd+S — prevent browser save & broadcast app:cmd-save for forms.
-    const cleanupCmdS = registerCmdSGuard();
-
-    return () => { cleanup(); cleanupCmdS(); };
+    return cleanup;
   }, [currentModule, setModule, setSearchOpen]);
 
   if (loading) {
@@ -387,35 +265,15 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
-      <div className="flex-1 min-w-0">
-        <AppShell>
-          <ModuleView />
-          {quickCreateOpen && (
-            <QuickCreate
-              onNavigate={handleQuickCreateNavigate}
-              onClose={handleQuickCreateClose}
-            />
-          )}
-          {!personalization.onboardingComplete && (
-            <PersonalizationWizard
-              onClose={() => usePersonalizationStore.getState().set({ onboardingComplete: true })}
-            />
-          )}
-          {activeCompany && onboarding.open && personalization.onboardingComplete && (
-            <OnboardingWizard
-              companyId={activeCompany.id}
-              onClose={onboarding.dismiss}
-              onComplete={onboarding.dismiss}
-            />
-          )}
-          <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
-        </AppShell>
-      </div>
-      {copilotOpen && (
-        <CopilotPanel onClose={() => setCopilotOpen(false)} />
+    <AppShell>
+      <ModuleView />
+      {quickCreateOpen && (
+        <QuickCreate
+          onNavigate={view => setModule(view as any)}
+          onClose={() => setQuickCreateOpen(false)}
+        />
       )}
-    </div>
+    </AppShell>
   );
 };
 
