@@ -24,7 +24,7 @@ async function rawInsert(table: string, data: Record<string, any>): Promise<{ id
   const payload = { ...data, id };
   const keys = Object.keys(payload);
   const sql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`;
-  await api.rawQuery(sql, keys.map((k) => payload[k]));
+  await api.rawQuery(sql, keys.map((k) => (payload as Record<string, any>)[k]));
   return { id };
 }
 

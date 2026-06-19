@@ -13,9 +13,7 @@ const StatusBar: React.FC = () => {
       setUpdateVersion(version || '');
     };
     const onProgress = (_e: any, percent: number) => {
-      const n = Number(percent);
-      if (!Number.isFinite(n)) return;
-      setDownloadPercent(Math.max(0, Math.min(100, Math.round(n))));
+      setDownloadPercent(percent);
     };
     const onReady = (_e: any, version: string) => {
       setUpdateStatus('ready');
@@ -33,20 +31,23 @@ const StatusBar: React.FC = () => {
     }
 
     return () => {
-      cleanups.forEach((fn) => {
-        try { if (typeof fn === 'function') fn(); } catch { /* ignore */ }
-      });
+      cleanups.forEach((fn) => typeof fn === 'function' && fn());
     };
   }, []);
 
-  const fiscalYear = activeCompany?.fiscal_year_end
-    ? `FY ${activeCompany.fiscal_year_end}`
-    : 'FY 2025';
+  const fiscalYear = (activeCompany as any)?.fiscal_year_end
+    ? `FY ${(activeCompany as any).fiscal_year_end}`
+    : `FY ${new Date().getFullYear()}`;
 
   return (
     <footer
-      className="flex items-center justify-between h-6 px-3 bg-bg-tertiary border-t border-border-primary text-[11px] text-text-muted shrink-0 select-none"
-      style={{ borderRadius: '0px' }}
+      className="flex items-center justify-between h-6 px-3 text-[11px] text-text-muted shrink-0 select-none font-mono tabular-nums"
+      style={{
+        background: 'var(--color-bg-secondary)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderTop: '1px solid var(--structure)',
+      }}
     >
       <div className="flex items-center gap-3">
         <span>{fiscalYear}</span>
@@ -74,7 +75,7 @@ const StatusBar: React.FC = () => {
             v{updateVersion} ready — restart to apply
           </span>
         )}
-        <span>Business Accounting Pro v1.1.1</span>
+        <span>Business Accounting Pro v{__APP_VERSION__}</span>
       </div>
     </footer>
   );

@@ -14,7 +14,12 @@ import {
   CalendarCheck,
   Timer,
   Crown,
+  Printer,
 } from 'lucide-react';
+import PrintReportHeader from '../../components/PrintReportHeader';
+import PrintReportFooter from '../../components/PrintReportFooter';
+import KpiTile from '../../components/KpiTile';
+import DataBar from '../../components/DataBar';
 import {
   AreaChart,
   Area,
@@ -37,10 +42,33 @@ import {
   startOfYear,
   endOfMonth,
   formatDistanceToNow,
+  parseISO,
+  differenceInCalendarDays,
+  startOfDay,
+  addMonths,
 } from 'date-fns';
 import api from '../../lib/api';
+import { logger } from '../../lib/logger';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAuthStore } from '../../stores/authStore';
+import { usePersonalizationStore } from '../../stores/personalizationStore';
+import { formatCurrency, formatDate, percentChange } from '../../lib/format';
+import { MetricHero } from '../../components/library';
+import { fiscalYearStart } from '../../lib/date-helpers';
+import EntityChip from '../../components/EntityChip';
+import InsightsPanel from '../../components/InsightsPanel';
+import {
+  CHART_INCOME, CHART_EXPENSE, CHART_SERIES,
+  CHART_AXIS, CHART_TOOLTIP_BG, CHART_TOOLTIP_BORDER,
+} from '../../lib/chart-palette';
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 // ─── Types ──────────────────────────────────────────────
 interface Stats {
@@ -72,6 +100,7 @@ interface AuditEntry {
 interface UpcomingInvoice {
   id: string;
   invoice_number: string;
+  client_id?: string;
   client_name: string;
   total: number;
   amount_paid: number;
@@ -80,6 +109,7 @@ interface UpcomingInvoice {
 }
 
 interface TopClient {
+  id?: string;
   name: string;
   total_paid: number;
 }
@@ -105,27 +135,19 @@ interface CashForecastPoint {
 interface QuickMetrics {
   invoicesSentThisMonth: number;
   avgDaysToPayment: number;
-  revenueGrowthPct: number;
+  // null when prior month had zero revenue — UI renders "—" instead of a
+  // misleading 0% (which masks a "from nothing" gain) or NaN/Infinity.
+  revenueGrowthPct: number | null;
   topClientName: string;
   topClientRevenue: number;
 }
 
 type Period = 'MTD' | 'QTD' | 'YTD';
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-const fmtCurrency = (value: number) => fmt.format(value);
-
 const fmtCompact = (value: number) => {
   if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
-  return fmt.format(value);
+  return formatCurrency(value);
 };
 
 // ─── Period Helpers ─────────────────────────────────────
@@ -153,33 +175,35 @@ function dateRange(period: Period): { start: string; end: string } {
 function actionBadgeStyle(action: string): { bg: string; text: string } {
   switch (action) {
     case 'create':
-      return { bg: '#16a34a20', text: 'var(--color-accent-income)' };
+      return { bg: 'var(--color-accent-income-bg)', text: 'var(--color-accent-income)' };
     case 'update':
-      return { bg: '#2563eb20', text: 'var(--color-accent-blue)' };
+      return { bg: 'var(--color-accent-blue-bg)', text: 'var(--color-accent-blue)' };
     case 'delete':
-      return { bg: '#dc262620', text: 'var(--color-accent-expense)' };
+      return { bg: 'var(--color-accent-expense-bg)', text: 'var(--color-accent-expense)' };
     default:
-      return { bg: '#6b6b6b20', text: '#6b6b6b' };
+      return { bg: 'rgba(255,255,255,0.06)', text: 'var(--color-text-muted)' };
   }
 }
 
 // ─── Urgency Color ──────────────────────────────────────
+// Use parseISO + calendar-day diff so a 'YYYY-MM-DD' due date isn't
+// shifted by the local timezone (new Date('2026-04-23') parses as UTC
+// midnight, which becomes the previous day in the Americas).
 function urgencyColor(dueDate: string): string {
-  const now = new Date();
-  const due = new Date(dueDate);
-  const daysLeft = Math.ceil(
-    (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  if (!dueDate) return 'var(--color-accent-income)';
+  const today = startOfDay(new Date());
+  const due = startOfDay(parseISO(dueDate));
+  const daysLeft = differenceInCalendarDays(due, today);
   if (daysLeft <= 1) return 'var(--color-accent-expense)';
   if (daysLeft <= 3) return 'var(--color-accent-warning)';
   return 'var(--color-accent-income)';
 }
 
 // ─── Chart Colors ───────────────────────────────────────
-const PIE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ef4444', '#6b7280'];
+const PIE_COLORS = CHART_SERIES;
 const TREEMAP_COLORS = [
-  '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ef4444',
-  '#06b6d4', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316',
+  ...CHART_SERIES,
+  '#ec4899', '#8b5cf6', '#14b8a6', '#f97316',
 ];
 
 // ─── Custom Tooltips ────────────────────────────────────
@@ -189,15 +213,15 @@ const AreaTooltip: React.FC<any> = ({ active, payload, label }) => {
     <div
       className="text-xs px-3 py-2"
       style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #2e2e2e',
-        borderRadius: '2px',
+        backgroundColor: CHART_TOOLTIP_BG,
+        border: `1px solid ${CHART_TOOLTIP_BORDER}`,
+        borderRadius: '6px',
       }}
     >
       <p className="text-text-muted mb-1">{label}</p>
       {payload.map((p: any) => (
         <p key={p.dataKey} style={{ color: p.color }} className="font-mono">
-          {p.dataKey === 'income' ? 'Revenue' : 'Expenses'}: {fmtCurrency(p.value)}
+          {p.dataKey === 'income' ? 'Revenue' : 'Expenses'}: {formatCurrency(p.value)}
         </p>
       ))}
     </div>
@@ -211,13 +235,13 @@ const PieTooltip: React.FC<any> = ({ active, payload }) => {
     <div
       className="text-xs px-3 py-2"
       style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #2e2e2e',
-        borderRadius: '2px',
+        backgroundColor: CHART_TOOLTIP_BG,
+        border: `1px solid ${CHART_TOOLTIP_BORDER}`,
+        borderRadius: '6px',
       }}
     >
       <p className="text-text-primary font-semibold">{name}</p>
-      <p className="font-mono text-accent-income">{fmtCurrency(value)}</p>
+      <p className="font-mono text-accent-income">{formatCurrency(value)}</p>
     </div>
   );
 };
@@ -228,9 +252,9 @@ const ForecastTooltip: React.FC<any> = ({ active, payload, label }) => {
     <div
       className="text-xs px-3 py-2"
       style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #2e2e2e',
-        borderRadius: '2px',
+        backgroundColor: CHART_TOOLTIP_BG,
+        border: `1px solid ${CHART_TOOLTIP_BORDER}`,
+        borderRadius: '6px',
       }}
     >
       <p className="text-text-muted mb-1">{label}</p>
@@ -238,7 +262,7 @@ const ForecastTooltip: React.FC<any> = ({ active, payload, label }) => {
         .filter((p: any) => p.dataKey === 'projected')
         .map((p: any) => (
           <p key={p.dataKey} className="font-mono text-accent-blue">
-            Projected: {fmtCurrency(p.value)}
+            Projected: {formatCurrency(p.value)}
           </p>
         ))}
     </div>
@@ -257,7 +281,7 @@ const TreemapContent: React.FC<any> = (props: any) => {
         width={width}
         height={height}
         style={{
-          fill: fill || '#3b82f6',
+          fill: fill || CHART_INCOME,
           stroke: '#0a0a0a',
           strokeWidth: 2,
         }}
@@ -308,25 +332,25 @@ const StatCard: React.FC<StatCardProps & { onClick?: () => void }> = ({
   const isPositive = change >= 0;
   return (
     <div
-      className={`block-card p-4 border-l-2 ${accentClass} ${
-        onClick ? 'cursor-pointer hover:bg-bg-hover transition-colors' : ''
+      className={`block-card py-6 px-5 border-l-4 ${accentClass} ${
+        onClick ? 'cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200' : ''
       }`}
-      style={{ borderRadius: '2px' }}
+      style={{ borderRadius: '6px' }}
       onClick={onClick}
     >
-      <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+      <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
         {label}
       </span>
-      <p className="text-2xl font-mono text-text-primary mt-1">
-        {fmtCurrency(value)}
+      <p className="text-3xl font-mono text-text-primary mt-2">
+        {formatCurrency(value)}
       </p>
       <span
-        className={`text-xs font-mono ${
+        className={`text-xs font-mono mt-1 inline-block ${
           isPositive ? 'text-accent-income' : 'text-accent-expense'
         }`}
       >
         {isPositive ? '+' : ''}
-        {change.toFixed(1)}%
+        {change.toFixed(1)}% vs prior period
       </span>
     </div>
   );
@@ -371,14 +395,24 @@ interface QuickActionProps {
   onClick: () => void;
 }
 
-const QuickAction: React.FC<QuickActionProps> = ({ icon, label, onClick }) => (
+interface QuickActionExtendedProps extends QuickActionProps {
+  description?: string;
+  accentClass?: string;
+}
+
+const QuickAction: React.FC<QuickActionExtendedProps> = ({ icon, label, description, accentClass, onClick }) => (
   <button
     onClick={onClick}
-    className="block-card flex flex-col items-center justify-center gap-2 p-4 hover:bg-bg-hover transition-colors cursor-pointer"
-    style={{ borderRadius: '2px' }}
+    className={`block-card flex flex-col items-start gap-3 p-5 hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200 cursor-pointer text-left ${accentClass ? `border-l-4 ${accentClass}` : ''}`}
+    style={{ borderRadius: '6px' }}
   >
     <span className="text-text-secondary">{icon}</span>
-    <span className="text-xs font-semibold text-text-secondary">{label}</span>
+    <div>
+      <span className="text-sm font-semibold text-text-primary block">{label}</span>
+      {description && (
+        <span className="text-[11px] text-text-muted mt-0.5 block">{description}</span>
+      )}
+    </div>
   </button>
 );
 
@@ -386,6 +420,19 @@ const QuickAction: React.FC<QuickActionProps> = ({ icon, label, onClick }) => (
 const Dashboard: React.FC = () => {
   const setModule = useAppStore((s) => s.setModule);
   const activeCompany = useCompanyStore((s) => s.activeCompany);
+  const authUser = useAuthStore((s) => s.user);
+  // Personalization: dashboard tabs / widget visibility / order
+  const dashboardTabs = usePersonalizationStore((s) => s.dashboardTabs);
+  const activeTabId = usePersonalizationStore((s) => s.activeTabId);
+  const setActiveTab = usePersonalizationStore((s) => s.setActiveTab);
+  const resetDashboard = usePersonalizationStore((s) => s.resetDashboard);
+  const activeTab = dashboardTabs.find((t) => t.id === activeTabId) ?? dashboardTabs[0];
+  const widgetMap = new Map(activeTab.widgets.map((w) => [w.id, w]));
+  const isOn = (id: string) => {
+    const w = widgetMap.get(id);
+    return !w || w.visible;
+  };
+  const isMini = (id: string) => widgetMap.get(id)?.mini === true;
   const [period, setPeriod] = useState<Period>('MTD');
   const [stats, setStats] = useState<Stats>({
     revenue: 0,
@@ -408,13 +455,16 @@ const Dashboard: React.FC = () => {
   const [quickMetrics, setQuickMetrics] = useState<QuickMetrics>({
     invoicesSentThisMonth: 0,
     avgDaysToPayment: 0,
-    revenueGrowthPct: 0,
+    revenueGrowthPct: null,
     topClientName: '--',
     topClientRevenue: 0,
   });
   const [anomalies, setAnomalies] = useState<any[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [rulesActivity, setRulesActivity] = useState<{ pricing_today: number; approvals_pending: number; alerts_week: number } | null>(null);
+  const [debtStats, setDebtStats] = useState<{ count: number; total: number } | null>(null);
+  const [billsStats, setBillsStats] = useState<{ unpaid_total: number; overdue_count: number } | null>(null);
+  const [payrollStats, setPayrollStats] = useState<{ active_count: number; last_payroll_date?: string; ytd_payroll?: number } | null>(null);
 
   const { start, end } = useMemo(() => dateRange(period), [period]);
 
@@ -424,139 +474,12 @@ const Dashboard: React.FC = () => {
     const load = async () => {
       if (!activeCompany) return;
       const cid = activeCompany.id;
-      try {
-        const [
-          statsData,
-          cashflowData,
-          activityData,
-          dueData,
-          clientsData,
-          revenueByClientData,
-          expenseByCategoryData,
-          last12MonthsRevenue,
-          last12MonthsExpenses,
-          invoicesSentData,
-          avgPaymentDaysData,
-          thisMonthRevData,
-          lastMonthRevData,
-          topClientMonthData,
-        ] = await Promise.all([
-          api.dashboardStats(start, end),
-          api.dashboardCashflow(start, end),
-          api.dashboardActivity('all', 15),
-          api.rawQuery(
-            `SELECT i.*, c.name as client_name FROM invoices i
-             LEFT JOIN clients c ON i.client_id = c.id
-             WHERE i.company_id = ? AND i.status IN ('sent','partial') AND i.due_date <= date('now', '+7 days') AND i.due_date >= date('now')
-             ORDER BY i.due_date ASC LIMIT 5`,
-            [cid]
-          ),
-          api.rawQuery(
-            `SELECT c.name, COALESCE(SUM(i.amount_paid), 0) as total_paid
-             FROM clients c
-             LEFT JOIN invoices i ON i.client_id = c.id AND i.issue_date >= date('now', '-90 days')
-             WHERE c.company_id = ?
-             GROUP BY c.id
-             HAVING total_paid > 0
-             ORDER BY total_paid DESC
-             LIMIT 5`,
-            [cid]
-          ),
-          // Revenue by client (top 5 + Other) for PieChart
-          api.rawQuery(
-            `SELECT c.name, COALESCE(SUM(i.total), 0) as value
-             FROM invoices i
-             JOIN clients c ON i.client_id = c.id
-             WHERE i.company_id = ? AND i.status IN ('paid', 'sent', 'partial')
-               AND i.issue_date >= date('now', '-12 months')
-             GROUP BY c.id
-             ORDER BY value DESC`,
-            [cid]
-          ),
-          // Expenses by category for Treemap
-          api.rawQuery(
-            `SELECT
-               CASE WHEN cat.name IS NOT NULL AND cat.name != '' THEN cat.name
-                    WHEN e.category_id != '' THEN e.category_id
-                    ELSE 'Uncategorized' END as name,
-               COALESCE(SUM(e.amount), 0) as size
-             FROM expenses e
-             LEFT JOIN categories cat ON e.category_id = cat.id
-             WHERE e.company_id = ? AND e.date >= date('now', '-12 months')
-             GROUP BY name
-             HAVING size > 0
-             ORDER BY size DESC`,
-            [cid]
-          ),
-          // Last 12 months revenue for AreaChart
-          api.rawQuery(
-            `SELECT strftime('%Y-%m', issue_date) as month,
-                    COALESCE(SUM(total), 0) as total
-             FROM invoices
-             WHERE company_id = ? AND status IN ('paid', 'sent', 'partial')
-               AND issue_date >= date('now', '-12 months')
-             GROUP BY month
-             ORDER BY month ASC`,
-            [cid]
-          ),
-          // Last 12 months expenses for AreaChart
-          api.rawQuery(
-            `SELECT strftime('%Y-%m', date) as month,
-                    COALESCE(SUM(amount), 0) as total
-             FROM expenses
-             WHERE company_id = ? AND date >= date('now', '-12 months')
-             GROUP BY month
-             ORDER BY month ASC`,
-            [cid]
-          ),
-          // Invoices sent this month
-          api.rawQuery(
-            `SELECT COUNT(*) as cnt FROM invoices
-             WHERE company_id = ? AND status IN ('sent','paid','partial','overdue')
-               AND issue_date >= date('now', 'start of month')`,
-            [cid]
-          ),
-          // Avg days to payment
-          api.rawQuery(
-            `SELECT AVG(julianday(
-               CASE WHEN amount_paid >= total THEN updated_at ELSE date('now') END
-             ) - julianday(issue_date)) as avg_days
-             FROM invoices
-             WHERE company_id = ? AND status = 'paid' AND issue_date >= date('now', '-6 months')`,
-            [cid]
-          ),
-          // This month revenue
-          api.rawQuery(
-            `SELECT COALESCE(SUM(total), 0) as rev FROM invoices
-             WHERE company_id = ? AND status IN ('paid','sent','partial')
-               AND issue_date >= date('now', 'start of month')`,
-            [cid]
-          ),
-          // Last month revenue
-          api.rawQuery(
-            `SELECT COALESCE(SUM(total), 0) as rev FROM invoices
-             WHERE company_id = ? AND status IN ('paid','sent','partial')
-               AND issue_date >= date('now', 'start of month', '-1 month')
-               AND issue_date < date('now', 'start of month')`,
-            [cid]
-          ),
-          // Top client this month
-          api.rawQuery(
-            `SELECT c.name, COALESCE(SUM(i.total), 0) as total
-             FROM invoices i
-             JOIN clients c ON i.client_id = c.id
-             WHERE i.company_id = ? AND i.status IN ('paid','sent','partial')
-               AND i.issue_date >= date('now', 'start of month')
-             GROUP BY c.id
-             ORDER BY total DESC
-             LIMIT 1`,
-            [cid]
-          ),
-        ]);
 
+      // Dashboard is ALL optional data — each query loads independently
+      // so a single failure doesn't blank the entire dashboard.
+
+      api.dashboardStats(start, end).then(statsData => {
         if (cancelled) return;
-
-        // Stats
         if (statsData) {
           setStats({
             revenue: statsData.revenue ?? 0,
@@ -569,40 +492,114 @@ const Dashboard: React.FC = () => {
             outstandingChange: statsData.outstandingChange ?? 0,
           });
         }
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
-        if (cashflowData && Array.isArray(cashflowData)) setCashflow(cashflowData);
-        if (activityData && Array.isArray(activityData)) setRecentActivity(activityData);
-        if (dueData && Array.isArray(dueData)) setUpcomingDue(dueData);
-        if (clientsData && Array.isArray(clientsData)) setTopClients(clientsData);
+      api.dashboardCashflow(start, end).then(r => {
+        if (!cancelled && Array.isArray(r)) setCashflow(r);
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
-        // Pie chart: top 5 + Other
-        if (revenueByClientData && Array.isArray(revenueByClientData)) {
-          const top5 = revenueByClientData.slice(0, 5);
-          const otherTotal = revenueByClientData
-            .slice(5)
-            .reduce((sum: number, r: any) => sum + (r.value || 0), 0);
-          const pieData: ClientRevenue[] = top5.map((r: any) => ({
-            name: r.name || 'Unknown',
-            value: r.value || 0,
-          }));
-          if (otherTotal > 0) pieData.push({ name: 'Other', value: otherTotal });
-          setClientRevenue(pieData);
-        }
+      api.dashboardActivity('all', 15).then(r => {
+        if (!cancelled && Array.isArray(r)) setRecentActivity(r);
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
-        // Treemap: expense categories
-        if (expenseByCategoryData && Array.isArray(expenseByCategoryData)) {
-          const treemapData: ExpenseCategory[] = expenseByCategoryData.map(
-            (r: any, i: number) => ({
-              name: r.name || 'Uncategorized',
-              size: r.size || 0,
-              fill: TREEMAP_COLORS[i % TREEMAP_COLORS.length],
-            })
-          );
-          setExpenseCategories(treemapData);
-        }
+      api.rawQuery(
+        `SELECT i.*, c.name as client_name FROM invoices i
+         LEFT JOIN clients c ON i.client_id = c.id
+         WHERE i.company_id = ? AND i.status IN ('sent','partial') AND i.due_date <= date('now', '+7 days') AND i.due_date >= date('now')
+         ORDER BY i.due_date ASC LIMIT 5`,
+        [cid]
+      ).then(r => {
+        if (!cancelled && Array.isArray(r)) setUpcomingDue(r);
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
-        // Build Revenue vs Expenses area chart from last 12 months
-        // (stored in cashflow state for the area chart)
+      api.rawQuery(
+        `SELECT c.id, c.name, COALESCE(SUM(i.amount_paid), 0) as total_paid
+         FROM clients c
+         LEFT JOIN invoices i ON i.client_id = c.id AND i.issue_date >= date('now', '-90 days')
+         WHERE c.company_id = ?
+         GROUP BY c.id
+         HAVING total_paid > 0
+         ORDER BY total_paid DESC
+         LIMIT 5`,
+        [cid]
+      ).then(r => {
+        if (!cancelled && Array.isArray(r)) setTopClients(r);
+      }).catch((_err) => logger.warn('Dashboard', _err));
+
+      // Revenue by client (top 5 + Other) for PieChart
+      api.rawQuery(
+        `SELECT c.name, COALESCE(SUM(i.total), 0) as value
+         FROM invoices i
+         JOIN clients c ON i.client_id = c.id
+         WHERE i.company_id = ? AND i.status IN ('paid', 'sent', 'partial')
+           AND i.issue_date >= date('now', '-12 months')
+         GROUP BY c.id
+         ORDER BY value DESC`,
+        [cid]
+      ).then(revenueByClientData => {
+        if (cancelled || !Array.isArray(revenueByClientData)) return;
+        const top5 = revenueByClientData.slice(0, 5);
+        const otherTotal = revenueByClientData
+          .slice(5)
+          .reduce((sum: number, r: any) => sum + (r.value || 0), 0);
+        const pieData: ClientRevenue[] = top5.map((r: any) => ({
+          name: r.name || 'Unknown',
+          value: r.value || 0,
+        }));
+        if (otherTotal > 0) pieData.push({ name: 'Other', value: otherTotal });
+        setClientRevenue(pieData);
+      }).catch((_err) => logger.warn('Dashboard', _err));
+
+      // Expenses by category for Treemap
+      api.rawQuery(
+        `SELECT
+           CASE WHEN cat.name IS NOT NULL AND cat.name != '' THEN cat.name
+                WHEN e.category_id != '' THEN e.category_id
+                ELSE 'Uncategorized' END as name,
+           COALESCE(SUM(e.amount), 0) as size
+         FROM expenses e
+         LEFT JOIN categories cat ON e.category_id = cat.id
+         WHERE e.company_id = ? AND e.date >= date('now', '-12 months')
+         GROUP BY name
+         HAVING size > 0
+         ORDER BY size DESC`,
+        [cid]
+      ).then(expenseByCategoryData => {
+        if (cancelled || !Array.isArray(expenseByCategoryData)) return;
+        const treemapData: ExpenseCategory[] = expenseByCategoryData.map(
+          (r: any, i: number) => ({
+            name: r.name || 'Uncategorized',
+            size: r.size || 0,
+            fill: TREEMAP_COLORS[i % TREEMAP_COLORS.length],
+          })
+        );
+        setExpenseCategories(treemapData);
+      }).catch((_err) => logger.warn('Dashboard', _err));
+
+      // Last 12 months revenue + expenses for AreaChart and forecast
+      Promise.all([
+        api.rawQuery(
+          `SELECT strftime('%Y-%m', issue_date) as month,
+                  COALESCE(SUM(total), 0) as total
+           FROM invoices
+           WHERE company_id = ? AND status IN ('paid', 'sent', 'partial')
+             AND issue_date >= date('now', '-12 months')
+           GROUP BY month
+           ORDER BY month ASC`,
+          [cid]
+        ),
+        api.rawQuery(
+          `SELECT strftime('%Y-%m', date) as month,
+                  COALESCE(SUM(amount), 0) as total
+           FROM expenses
+           WHERE company_id = ? AND date >= date('now', '-12 months')
+           GROUP BY month
+           ORDER BY month ASC`,
+          [cid]
+        ),
+      ]).then(([last12MonthsRevenue, last12MonthsExpenses]) => {
+        if (cancelled) return;
+
         if (last12MonthsRevenue && last12MonthsExpenses) {
           const revMap = new Map<string, number>();
           const expMap = new Map<string, number>();
@@ -616,15 +613,12 @@ const Dashboard: React.FC = () => {
             expenses: expMap.get(m) || 0,
           }));
           setCashflow(areaData);
-        }
 
-        // Cash flow forecast: use last months to project next 3
-        if (last12MonthsRevenue && last12MonthsExpenses) {
+          // Cash flow forecast: use last months to project next 3
           const revArr = (last12MonthsRevenue as any[]).map((r) => r.total || 0);
           const expArr = (last12MonthsExpenses as any[]).map((r) => r.total || 0);
           const netArr = revArr.map((r, i) => r - (expArr[i] || 0));
 
-          // Simple linear regression on net cash
           const n = netArr.length;
           if (n >= 2) {
             let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
@@ -635,21 +629,20 @@ const Dashboard: React.FC = () => {
             const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
             const intercept = (sumY - slope * sumX) / n;
 
-            // Variance for confidence band
             const residuals = netArr.map((v, i) => v - (slope * i + intercept));
             const stdDev = Math.sqrt(
               residuals.reduce((s, r) => s + r * r, 0) / Math.max(n - 2, 1)
             );
 
-            // Running cash from current balance
             const currentCash = netArr.reduce((a, b) => a + b, 0);
             const forecast: CashForecastPoint[] = [];
             let runningCash = currentCash;
 
             for (let i = 1; i <= 3; i++) {
-              const d = new Date();
-              d.setMonth(d.getMonth() + i);
-              const label = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+              // addMonths handles end-of-month clamping (Jan 31 + 1mo → Feb 28),
+              // unlike setMonth which can roll into the wrong month.
+              const d = addMonths(new Date(), i);
+              const label = formatDate(d.toISOString());
               const projected = slope * (n + i - 1) + intercept;
               runningCash += projected;
               forecast.push({
@@ -662,46 +655,136 @@ const Dashboard: React.FC = () => {
             setCashForecast(forecast);
           }
         }
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
-        // Quick metrics
-        const invoicesSent = Array.isArray(invoicesSentData) ? invoicesSentData[0]?.cnt : invoicesSentData?.cnt;
-        const avgDays = Array.isArray(avgPaymentDaysData) ? avgPaymentDaysData[0]?.avg_days : avgPaymentDaysData?.avg_days;
-        const thisRev = Array.isArray(thisMonthRevData) ? thisMonthRevData[0]?.rev : thisMonthRevData?.rev;
-        const lastRev = Array.isArray(lastMonthRevData) ? lastMonthRevData[0]?.rev : lastMonthRevData?.rev;
+      // Quick metrics
+      Promise.all([
+        api.rawQuery(
+          `SELECT COUNT(*) as cnt FROM invoices
+           WHERE company_id = ? AND status IN ('sent','paid','partial','overdue')
+             AND issue_date >= date('now', 'start of month')`,
+          [cid]
+        ),
+        api.rawQuery(
+          `SELECT AVG(julianday(
+             CASE WHEN amount_paid >= total THEN updated_at ELSE date('now') END
+           ) - julianday(issue_date)) as avg_days
+           FROM invoices
+           WHERE company_id = ? AND status = 'paid' AND issue_date >= date('now', '-6 months')`,
+          [cid]
+        ),
+        api.rawQuery(
+          `SELECT COALESCE(SUM(total), 0) as rev FROM invoices
+           WHERE company_id = ? AND status IN ('paid','sent','partial')
+             AND issue_date >= date('now', 'start of month')`,
+          [cid]
+        ),
+        api.rawQuery(
+          `SELECT COALESCE(SUM(total), 0) as rev FROM invoices
+           WHERE company_id = ? AND status IN ('paid','sent','partial')
+             AND issue_date >= date('now', 'start of month', '-1 month')
+             AND issue_date < date('now', 'start of month')`,
+          [cid]
+        ),
+        api.rawQuery(
+          `SELECT c.name, COALESCE(SUM(i.total), 0) as total
+           FROM invoices i
+           JOIN clients c ON i.client_id = c.id
+           WHERE i.company_id = ? AND i.status IN ('paid','sent','partial')
+             AND i.issue_date >= date('now', 'start of month')
+           GROUP BY c.id
+           ORDER BY total DESC
+           LIMIT 1`,
+          [cid]
+        ),
+      ]).then(([invoicesSentData, avgPaymentDaysData, thisMonthRevData, lastMonthRevData, topClientMonthData]) => {
+        if (cancelled) return;
+        const invoicesSent = Array.isArray(invoicesSentData) ? invoicesSentData[0]?.cnt : (invoicesSentData as any)?.cnt;
+        const avgDays = Array.isArray(avgPaymentDaysData) ? avgPaymentDaysData[0]?.avg_days : (avgPaymentDaysData as any)?.avg_days;
+        const thisRev = Array.isArray(thisMonthRevData) ? thisMonthRevData[0]?.rev : (thisMonthRevData as any)?.rev;
+        const lastRev = Array.isArray(lastMonthRevData) ? lastMonthRevData[0]?.rev : (lastMonthRevData as any)?.rev;
         const topClient = Array.isArray(topClientMonthData) ? topClientMonthData[0] : topClientMonthData;
 
-        const lastRevNum = Number(lastRev) || 0;
-        const thisRevNum = Number(thisRev) || 0;
-        const growthPct =
-          lastRevNum > 0 ? ((thisRevNum - lastRevNum) / lastRevNum) * 100 : 0;
+        // Use percentChange helper so zero-prior returns null → UI renders "—"
+        // instead of misleading 0% (which would mask a "from nothing" gain).
+        const thisN = Number(thisRev) || 0;
+        const lastN = Number(lastRev) || 0;
+        const growthPct = percentChange(thisN, lastN);
 
         setQuickMetrics({
           invoicesSentThisMonth: invoicesSent || 0,
           avgDaysToPayment: Math.round(avgDays || 0),
           revenueGrowthPct: growthPct,
-          topClientName: topClient?.name || '--',
-          topClientRevenue: topClient?.total || 0,
+          topClientName: (topClient as any)?.name || '--',
+          topClientRevenue: (topClient as any)?.total || 0,
         });
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
-        const anomalyData = await api.listAnomalies();
-        setAnomalies(anomalyData || []);
+      // Anomalies
+      api.listAnomalies().then(r => {
+        if (!cancelled) setAnomalies(r || []);
+      }).catch((_err) => logger.warn('Dashboard', _err));
 
-        const [approvalCount, activityRow] = await Promise.all([
-          api.pendingApprovalCount(activeCompany.id),
-          api.rawQuery(
-            `SELECT
-              (SELECT COUNT(*) FROM rules WHERE company_id = ? AND category='pricing' AND date(last_run_at)=date('now')) as pricing_today,
-              (SELECT COUNT(*) FROM approval_queue WHERE company_id = ? AND status='pending') as approvals_pending,
-              (SELECT COUNT(*) FROM rules WHERE company_id = ? AND category='alert' AND date(last_run_at)>=date('now','-7 days')) as alerts_week`,
-            [activeCompany.id, activeCompany.id, activeCompany.id]
-          ),
-        ]);
+      // Debt collection summary
+      api.rawQuery(
+        "SELECT COUNT(*) as count, COALESCE(SUM(balance_due),0) as total FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off')",
+        [cid]
+      ).then(r => {
+        if (!cancelled) {
+          const row = Array.isArray(r) ? r[0] : r;
+          setDebtStats(row ? { count: row.count ?? 0, total: row.total ?? 0 } : null);
+        }
+      }).catch((_err) => logger.warn('Dashboard', _err));
+
+      // Bills / AP summary
+      api.rawQuery(
+        `SELECT
+          COALESCE(SUM(CASE WHEN status NOT IN ('paid') THEN total - amount_paid ELSE 0 END), 0) as unpaid_total,
+          COUNT(CASE WHEN status = 'overdue' OR (status NOT IN ('paid','draft') AND due_date < date('now')) THEN 1 END) as overdue_count
+         FROM bills WHERE company_id = ?`,
+        [cid]
+      ).then(r => {
+        if (!cancelled) {
+          const row = Array.isArray(r) ? r[0] : r;
+          setBillsStats(row ? { unpaid_total: row.unpaid_total ?? 0, overdue_count: row.overdue_count ?? 0 } : null);
+        }
+      }).catch((_err) => logger.warn('Dashboard', _err));
+
+      // Payroll summary
+      api.rawQuery(
+        `SELECT COUNT(*) as active_count,
+          (SELECT MAX(pr.pay_date) FROM payroll_runs pr WHERE pr.company_id = ?) as last_payroll_date,
+          (SELECT COALESCE(SUM(pr.total_gross), 0) FROM payroll_runs pr WHERE pr.company_id = ? AND pr.pay_date >= ?) as ytd_payroll
+         FROM employees WHERE company_id = ? AND status = 'active'`,
+        // DATE: Item #9 — YTD payroll respects company fiscal_year_start instead of hardcoded Jan 1.
+        [cid, cid, fiscalYearStart(new Date(), activeCompany.fiscal_year_start || 1), cid]
+      ).then(r => {
+        if (!cancelled) {
+          const row = Array.isArray(r) ? r[0] : r;
+          setPayrollStats(row ? {
+            active_count: row.active_count ?? 0,
+            last_payroll_date: row.last_payroll_date ?? undefined,
+            ytd_payroll: row.ytd_payroll ?? 0,
+          } : null);
+        }
+      }).catch((_err) => logger.warn('Dashboard', _err));
+
+      // Rules activity & approvals
+      Promise.all([
+        api.pendingApprovalCount(activeCompany.id),
+        api.rawQuery(
+          `SELECT
+            (SELECT COUNT(*) FROM rules WHERE company_id = ? AND category='pricing' AND date(last_run_at)=date('now')) as pricing_today,
+            (SELECT COUNT(*) FROM approval_queue WHERE company_id = ? AND status='pending') as approvals_pending,
+            (SELECT COUNT(*) FROM rules WHERE company_id = ? AND category='alert' AND date(last_run_at)>=date('now','-7 days')) as alerts_week`,
+          [activeCompany.id, activeCompany.id, activeCompany.id]
+        ),
+      ]).then(([approvalCount, activityRow]) => {
+        if (cancelled) return;
         setPendingApprovals(approvalCount ?? 0);
         const rowData = Array.isArray(activityRow) ? activityRow[0] : activityRow;
         setRulesActivity(rowData ?? null);
-      } catch (err) {
-        console.error('Dashboard data load failed:', err);
-      }
+      }).catch((_err) => logger.warn('Dashboard', _err));
     };
 
     load();
@@ -713,41 +796,107 @@ const Dashboard: React.FC = () => {
   // ─── Reload activity when filter changes ──────────────
   useEffect(() => {
     if (activityFilter === 'all') return; // already loaded in main effect
+    let cancelled = false;
     const loadFiltered = async () => {
       try {
         const data = await api.dashboardActivity(activityFilter, 15);
-        if (Array.isArray(data)) setRecentActivity(data);
-      } catch (err) {
-        console.error('Failed to load filtered activity:', err);
+        if (!cancelled && Array.isArray(data)) setRecentActivity(data);
+      } catch {
+        // Silent — dashboard widgets are best-effort.
       }
     };
     loadFiltered();
+    return () => {
+      cancelled = true;
+    };
   }, [activityFilter]);
 
   const periodButtons: Period[] = ['MTD', 'QTD', 'YTD'];
 
-  // Top client max for bar scaling
-  const maxClientRevenue =
-    topClients.length > 0
-      ? Math.max(...topClients.map((c) => c.total_paid))
-      : 1;
+  // Top client max for bar scaling — memoized so we don't rescan + rebuild
+  // a Math.max array on every parent render.
+  const maxClientRevenue = useMemo(
+    () => (topClients.length > 0 ? Math.max(...topClients.map((c) => c.total_paid)) : 1),
+    [topClients]
+  );
+
+  // ─── Print handler — toggles landscape page class so wide charts fit ─
+  const handlePrint = () => {
+    document.body.classList.add('dashboard-print');
+    const cleanup = () => {
+      document.body.classList.remove('dashboard-print');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    // Fallback in case afterprint doesn't fire (some platforms)
+    setTimeout(cleanup, 60000);
+    window.print();
+  };
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
+    <div className="space-y-8 overflow-y-auto h-full" style={{ padding: 'calc(2rem * var(--cust-density-scale, 1))' }}>
+      {/* Print-only corporate header */}
+      <PrintReportHeader title="Dashboard" periodEnd={new Date()} />
+      <div className="max-w-[1400px] mx-auto space-y-8">
+
+      {/* Dashboard Tab Strip (custom tabs feature #16) */}
+      {dashboardTabs.length > 1 && (
+        <div className="flex items-center gap-2 no-print">
+          {dashboardTabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                activeTabId === t.id ? 'bg-accent-blue text-white' : 'bg-bg-secondary text-text-muted hover:text-text-primary'
+              }`}
+              style={{ borderRadius: 'var(--app-radius, 6px)' }}
+            >
+              {t.name}
+            </button>
+          ))}
+          <button
+            onClick={resetDashboard}
+            className="ml-auto text-[11px] text-text-muted hover:text-text-primary"
+            title="Reset to default layout"
+          >
+            Reset Layout
+          </button>
+        </div>
+      )}
+
       {/* Header & Period Selector */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-text-primary">Dashboard</h1>
-        <div className="flex gap-1" style={{ borderRadius: '2px' }}>
+      <div className="flex items-end justify-between py-4">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary">
+            {getGreeting()}{authUser?.display_name ? `, ${authUser.display_name.split(' ')[0]}` : ''}
+          </h1>
+          <p className="text-lg font-semibold text-text-secondary mt-1">
+            {activeCompany?.name || 'Dashboard'}
+          </p>
+          <p className="text-sm text-text-muted mt-0.5">
+            {format(new Date(), 'EEEE, MMMM d, yyyy')}
+          </p>
+        </div>
+        <div className="flex gap-2 items-center" style={{ borderRadius: '6px' }}>
+          <button
+            onClick={handlePrint}
+            className="no-print flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-bg-secondary text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+            style={{ borderRadius: '6px' }}
+            title="Print this dashboard"
+          >
+            <Printer size={13} />
+            Print
+          </button>
           {periodButtons.map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`px-3 py-1 text-xs font-semibold transition-colors ${
+              className={`px-4 py-1.5 text-xs font-semibold transition-colors ${
                 period === p
                   ? 'bg-accent-blue text-white'
-                  : 'bg-bg-secondary text-text-muted hover:text-text-primary'
+                  : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
               }`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               {p}
             </button>
@@ -755,14 +904,20 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* AI Insights Panel — IntelligenceService-driven cash forecast,
+          duplicate invoices, and anomaly alerts. */}
+      <div className="no-print">
+        <InsightsPanel />
+      </div>
+
       {/* Rules Activity Strip */}
       {rulesActivity && (rulesActivity.pricing_today > 0 || rulesActivity.approvals_pending > 0 || rulesActivity.alerts_week > 0) && (
-        <div className="border border-indigo-200 bg-indigo-50 px-4 py-2 flex gap-6 text-xs font-bold text-indigo-700 mb-4 flex-wrap">
+        <div className="glass-subtle px-4 py-2.5 flex gap-6 text-xs font-bold text-accent-blue flex-wrap" style={{ borderRadius: '8px' }}>
           {rulesActivity.pricing_today > 0 && (
             <span>{rulesActivity.pricing_today} pricing rule{rulesActivity.pricing_today !== 1 ? 's' : ''} applied today</span>
           )}
           {rulesActivity.approvals_pending > 0 && (
-            <span className="text-orange-700">{rulesActivity.approvals_pending} approval{rulesActivity.approvals_pending !== 1 ? 's' : ''} pending</span>
+            <span className="text-accent-warning">{rulesActivity.approvals_pending} approval{rulesActivity.approvals_pending !== 1 ? 's' : ''} pending</span>
           )}
           {rulesActivity.alerts_week > 0 && (
             <span>{rulesActivity.alerts_week} alert{rulesActivity.alerts_week !== 1 ? 's' : ''} fired this week</span>
@@ -770,139 +925,261 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard
+      {/* Headline metrics — library MetricHero bound to live stats.
+          Sparklines use the REAL monthly cashflow series (same data as the
+          cash-flow area chart below) instead of MetricHero's demo default,
+          so the trend line agrees with the delta badge. A/R has no monthly
+          series available — spark={[]} suppresses the graph rather than
+          showing a fabricated one. */}
+      {isOn('kpis') && (
+        <div className="grid grid-cols-2 xl:grid-cols-4 no-print" style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
+          <MetricHero label="Revenue" value={formatCurrency(stats.revenue)} deltaPct={stats.revenueChange} deltaLabel="vs prior period" accentColor="income" spark={cashflow.map((p) => p.income)} onClick={() => setModule('invoicing')} />
+          <MetricHero label="Expenses" value={formatCurrency(stats.expenses)} deltaPct={stats.expensesChange} deltaLabel="vs prior period" accentColor="expense" spark={cashflow.map((p) => p.expenses)} onClick={() => setModule('expenses')} />
+          <MetricHero label="Net Income" value={formatCurrency(stats.netIncome)} deltaPct={stats.netIncomeChange} deltaLabel="vs prior period" accentColor="blue" spark={cashflow.map((p) => p.income - p.expenses)} onClick={() => setModule('reports')} />
+          <MetricHero label="Outstanding A/R" value={formatCurrency(stats.outstanding)} deltaPct={stats.outstandingChange} deltaLabel="vs prior period" accentColor="warning" spark={[]} onClick={() => { sessionStorage.setItem('nav:invoiceFilter', 'overdue'); setModule('invoicing'); }} />
+        </div>
+      )}
+
+      {/* Print-only KPI summary. On screen the headline MetricHero strip above
+          carries these numbers (Revenue/Expenses/Net Income/Outstanding), so
+          this duplicate set is hidden on screen (.print-only) and only renders
+          in print/PDF, where .report-summary-tiles collapses it to an inline
+          summary line. */}
+      {isOn('kpis') && (
+      <div className={`grid ${isMini('kpis') ? 'grid-cols-8' : 'grid-cols-4'} report-summary-tiles print-only`} style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
+        <KpiTile
           label="Revenue"
           value={stats.revenue}
-          change={stats.revenueChange}
+          trendPct={stats.revenueChange}
           accentClass="border-l-accent-income"
+          subtext="vs prior period"
           onClick={() => setModule('invoicing')}
         />
-        <StatCard
+        <KpiTile
           label="Expenses"
           value={stats.expenses}
-          change={stats.expensesChange}
+          trendPct={stats.expensesChange}
           accentClass="border-l-accent-expense"
+          subtext="vs prior period"
           onClick={() => setModule('expenses')}
         />
-        <StatCard
+        <KpiTile
           label="Net Income"
           value={stats.netIncome}
-          change={stats.netIncomeChange}
+          trendPct={stats.netIncomeChange}
           accentClass="border-l-accent-blue"
+          subtext="vs prior period"
           onClick={() => setModule('reports')}
         />
-        <StatCard
+        <KpiTile
           label="Outstanding Invoices"
           value={stats.outstanding}
-          change={stats.outstandingChange}
+          trendPct={stats.outstandingChange}
           accentClass="border-l-accent-warning"
+          subtext="vs prior period"
           onClick={() => {
             sessionStorage.setItem('nav:invoiceFilter', 'overdue');
             setModule('invoicing');
           }}
         />
       </div>
+      )}
 
       {/* ─── Quick Metrics Row ─── */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="block-card p-4" style={{ borderRadius: '2px' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <CalendarCheck size={14} className="text-accent-blue" />
-            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+      {isOn('quick-metrics') && (
+      <div className="grid grid-cols-4 gap-5">
+        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarCheck size={16} className="text-accent-blue" />
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
               Invoices Sent
             </span>
           </div>
-          <p className="text-2xl font-mono text-text-primary">
+          <p className="text-3xl font-mono text-text-primary">
             <AnimatedCounter value={quickMetrics.invoicesSentThisMonth} />
           </p>
-          <span className="text-[10px] text-text-muted">This month</span>
+          <span className="text-[11px] text-text-muted mt-1 block">This month</span>
         </div>
 
-        <div className="block-card p-4" style={{ borderRadius: '2px' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Timer size={14} className="text-accent-warning" />
-            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Timer size={16} className="text-accent-warning" />
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
               Avg Days to Payment
             </span>
           </div>
-          <p className="text-2xl font-mono text-text-primary">
+          <p className="text-3xl font-mono text-text-primary">
             <AnimatedCounter value={quickMetrics.avgDaysToPayment} />
-            <span className="text-sm text-text-muted ml-1">days</span>
+            <span className="text-base text-text-muted ml-1">days</span>
           </p>
-          <span className="text-[10px] text-text-muted">Last 6 months</span>
+          <span className="text-[11px] text-text-muted mt-1 block">Last 6 months</span>
         </div>
 
-        <div className="block-card p-4" style={{ borderRadius: '2px' }}>
-          <div className="flex items-center gap-2 mb-2">
-            {quickMetrics.revenueGrowthPct >= 0 ? (
-              <TrendingUp size={14} className="text-accent-income" />
+        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-2 mb-3">
+            {quickMetrics.revenueGrowthPct == null ? (
+              <TrendingUp size={16} className="text-text-muted" />
+            ) : quickMetrics.revenueGrowthPct >= 0 ? (
+              <TrendingUp size={16} className="text-accent-income" />
             ) : (
-              <TrendingDown size={14} className="text-accent-expense" />
+              <TrendingDown size={16} className="text-accent-expense" />
             )}
-            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
               Revenue Growth
             </span>
           </div>
-          <p
-            className={`text-2xl font-mono ${
-              quickMetrics.revenueGrowthPct >= 0
-                ? 'text-accent-income'
-                : 'text-accent-expense'
-            }`}
-          >
-            <AnimatedCounter
-              value={quickMetrics.revenueGrowthPct}
-              format={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`}
-            />
-          </p>
-          <span className="text-[10px] text-text-muted">vs. last month</span>
+          {quickMetrics.revenueGrowthPct == null ? (
+            <p className="text-3xl font-mono text-text-muted">—</p>
+          ) : (
+            <p
+              className={`text-3xl font-mono ${
+                quickMetrics.revenueGrowthPct >= 0
+                  ? 'text-accent-income'
+                  : 'text-accent-expense'
+              }`}
+            >
+              <AnimatedCounter
+                value={quickMetrics.revenueGrowthPct}
+                format={(v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`}
+              />
+            </p>
+          )}
+          <span className="text-[11px] text-text-muted mt-1 block">
+            {quickMetrics.revenueGrowthPct == null ? 'no prior-month revenue' : 'vs. last month'}
+          </span>
         </div>
 
-        <div className="block-card p-4" style={{ borderRadius: '2px' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Crown size={14} className="text-accent-purple" />
-            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Crown size={16} className="text-accent-purple" />
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
               Top Client
             </span>
           </div>
           <p className="text-sm font-semibold text-text-primary truncate">
             {quickMetrics.topClientName}
           </p>
-          <p className="text-lg font-mono text-accent-purple">
-            {fmtCurrency(quickMetrics.topClientRevenue)}
+          <p className="text-xl font-mono text-accent-purple mt-1">
+            {formatCurrency(quickMetrics.topClientRevenue)}
           </p>
-          <span className="text-[10px] text-text-muted">This month</span>
+          <span className="text-[11px] text-text-muted mt-1 block">This month</span>
         </div>
       </div>
+      )}
+
+      {/* ─── Cross-Module Summary Cards ─── */}
+      {isOn('cross-module') && (
+      <div className="grid grid-cols-3 gap-5">
+        {/* Debt Collection */}
+        <div
+          className="block-card py-6 px-5 border-l-4 border-l-accent-expense cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200"
+          style={{ borderRadius: '6px' }}
+          onClick={() => setModule('debt-collection')}
+        >
+          <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+            Debt Collection
+          </span>
+          <p className="text-3xl font-mono text-text-primary mt-2">
+            {debtStats ? formatCurrency(debtStats.total) : '$0.00'}
+          </p>
+          <span className="text-xs text-text-muted mt-1 block">
+            {debtStats?.count ?? 0} outstanding debt{(debtStats?.count ?? 0) !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* Bills / AP */}
+        <div
+          className="block-card py-6 px-5 border-l-4 border-l-accent-warning cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200"
+          style={{ borderRadius: '6px' }}
+          onClick={() => setModule('bills')}
+        >
+          <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+            Bills / AP
+          </span>
+          <p className="text-3xl font-mono text-text-primary mt-2">
+            {billsStats ? formatCurrency(billsStats.unpaid_total) : '$0.00'}
+          </p>
+          <span className="text-xs text-text-muted mt-1 block">
+            {billsStats?.overdue_count ?? 0} overdue bill{(billsStats?.overdue_count ?? 0) !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* Payroll */}
+        <div
+          className="block-card py-6 px-5 border-l-4 border-l-accent-purple cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200"
+          style={{ borderRadius: '6px' }}
+          onClick={() => setModule('payroll')}
+        >
+          <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+            Payroll
+          </span>
+          <p className="text-3xl font-mono text-text-primary mt-2">
+            {payrollStats?.active_count ?? 0}
+          </p>
+          <span className="text-xs text-text-muted mt-1 block">
+            active employee{(payrollStats?.active_count ?? 0) !== 1 ? 's' : ''}
+          </span>
+          {payrollStats?.last_payroll_date && (
+            <p className="text-[11px] text-text-muted mt-0.5">Last run: {formatDate(payrollStats.last_payroll_date)}</p>
+          )}
+          {(payrollStats?.ytd_payroll ?? 0) > 0 && (
+            <p className="text-[11px] text-text-secondary font-mono mt-0.5">YTD: {formatCurrency(payrollStats!.ytd_payroll!)}</p>
+          )}
+        </div>
+      </div>
+      )}
 
       {/* ─── Revenue vs Expenses AreaChart (12 months) ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
-        <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-          Revenue vs Expenses (Last 12 Months)
+      {isOn('revenue-trend') && (
+      <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+        <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
+          Revenue vs Expenses
         </h2>
-        <div style={{ width: '100%', minHeight: 320 }}>
-          <ResponsiveContainer width="100%" height={320}>
+        <p className="text-[11px] text-text-muted mb-5">Trailing 12-month overview</p>
+        {/* Print-fallback table — hidden on screen, shown in PDF */}
+        {cashflow.length > 0 && (
+          <table className="chart-print-fallback" style={{ width: '100%', fontSize: '9pt', marginBottom: 10 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>Month</th>
+                <th style={{ textAlign: 'right' }}>Revenue</th>
+                <th style={{ textAlign: 'right' }}>Expenses</th>
+                <th style={{ textAlign: 'right' }}>Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cashflow.map((p) => (
+                <tr key={p.month}>
+                  <td>{p.month}</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency(p.income)}</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency(p.expenses)}</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency(p.income - p.expenses)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div className="chart-screen-only" style={{ width: '100%', minHeight: 360 }}>
+          <ResponsiveContainer width="100%" height={360}>
             <AreaChart data={cashflow}>
               <defs>
                 <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor={CHART_INCOME} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={CHART_INCOME} stopOpacity={0.02} />
                 </linearGradient>
                 <linearGradient id="gradExpenses" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor={CHART_EXPENSE} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={CHART_EXPENSE} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <XAxis
                 dataKey="month"
-                tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                tick={{ fill: CHART_AXIS, fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                tick={{ fill: CHART_AXIS, fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
@@ -911,45 +1188,49 @@ const Dashboard: React.FC = () => {
               <Area
                 type="monotone"
                 dataKey="income"
-                stroke="#22c55e"
+                stroke={CHART_INCOME}
                 strokeWidth={2}
                 fill="url(#gradRevenue)"
-                activeDot={{ r: 4, fill: '#22c55e' }}
+                activeDot={{ r: 4, fill: CHART_INCOME }}
               />
               <Area
                 type="monotone"
                 dataKey="expenses"
-                stroke="#ef4444"
+                stroke={CHART_EXPENSE}
                 strokeWidth={2}
                 fill="url(#gradExpenses)"
-                activeDot={{ r: 4, fill: '#ef4444' }}
+                activeDot={{ r: 4, fill: CHART_EXPENSE }}
               />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* ─── Income Sources Pie + Cash Flow Forecast ─── */}
-      <div className="grid grid-cols-2 gap-4">
+      {(isOn('income-pie') || isOn('cash-forecast')) && (
+      <div className="grid grid-cols-2 gap-6">
         {/* Income Sources PieChart */}
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
-          <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-            Income Sources Breakdown
+        {isOn('income-pie') && (
+        <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
+            Income Sources
           </h2>
+          <p className="text-[11px] text-text-muted mb-5">Revenue breakdown by client</p>
           {clientRevenue.length === 0 ? (
-            <div className="flex items-center justify-center" style={{ minHeight: 300 }}>
+            <div className="flex items-center justify-center" style={{ minHeight: 340 }}>
               <span className="text-xs text-text-muted">No revenue data available</span>
             </div>
           ) : (
-            <div style={{ width: '100%', minHeight: 300 }}>
-              <ResponsiveContainer width="100%" height={300}>
+            <div style={{ width: '100%', minHeight: 340 }}>
+              <ResponsiveContainer width="100%" height={340}>
                 <PieChart>
                   <Pie
                     data={clientRevenue}
                     cx="40%"
                     cy="50%"
-                    innerRadius={55}
-                    outerRadius={100}
+                    innerRadius={60}
+                    outerRadius={110}
                     paddingAngle={2}
                     dataKey="value"
                     nameKey="name"
@@ -978,36 +1259,59 @@ const Dashboard: React.FC = () => {
             </div>
           )}
         </div>
+        )}
 
         {/* Cash Flow Forecast */}
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
-          <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-            Cash Flow Forecast (Next 3 Months)
+        {isOn('cash-forecast') && (
+        <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
+            Cash Flow Forecast
           </h2>
+          <p className="text-[11px] text-text-muted mb-5">Projected next 3 months with confidence band</p>
           {cashForecast.length === 0 ? (
-            <div className="flex items-center justify-center" style={{ minHeight: 300 }}>
+            <div className="flex items-center justify-center" style={{ minHeight: 340 }}>
               <span className="text-xs text-text-muted">
                 Insufficient historical data for forecast
               </span>
             </div>
           ) : (
-            <div style={{ width: '100%', minHeight: 300 }}>
-              <ResponsiveContainer width="100%" height={300}>
+            <>
+              {/* Print-fallback inline summary (feature 20) */}
+              {cashflow.length > 0 && (() => {
+                const last12 = cashflow.slice(-12);
+                const avgRev = last12.reduce((s, p) => s + p.income, 0) / Math.max(last12.length, 1);
+                const first = last12[0];
+                const last = last12[last12.length - 1];
+                const trendPct =
+                  first && first.income > 0
+                    ? ((last.income - first.income) / first.income) * 100
+                    : 0;
+                const proj = cashForecast[0]?.projected ?? 0;
+                return (
+                  <div className="chart-print-fallback" style={{ fontSize: '10pt', lineHeight: 1.5 }}>
+                    <div><strong>Last 12 months avg:</strong> {formatCurrency(avgRev)}</div>
+                    <div><strong>Trend:</strong> {trendPct >= 0 ? '+' : ''}{trendPct.toFixed(1)}%</div>
+                    <div><strong>Projected next month:</strong> {formatCurrency(proj)}</div>
+                  </div>
+                );
+              })()}
+              <div className="chart-screen-only" style={{ width: '100%', minHeight: 340 }}>
+              <ResponsiveContainer width="100%" height={340}>
                 <AreaChart data={cashForecast}>
                   <defs>
                     <linearGradient id="gradConfidence" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor={CHART_SERIES[2]} stopOpacity={0.15} />
+                      <stop offset="95%" stopColor={CHART_SERIES[2]} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <XAxis
                     dataKey="month"
-                    tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                    tick={{ fill: CHART_AXIS, fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                    tick={{ fill: CHART_AXIS, fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(v: number) => fmtCompact(v)}
@@ -1030,86 +1334,125 @@ const Dashboard: React.FC = () => {
                   <Line
                     type="monotone"
                     dataKey="projected"
-                    stroke="#3b82f6"
+                    stroke={CHART_SERIES[2]}
                     strokeWidth={2}
-                    dot={{ r: 4, fill: '#3b82f6', stroke: '#0a0a0a', strokeWidth: 2 }}
-                    activeDot={{ r: 6, fill: '#3b82f6' }}
+                    dot={{ r: 4, fill: CHART_SERIES[2], stroke: '#0a0a0a', strokeWidth: 2 }}
+                    activeDot={{ r: 6, fill: CHART_SERIES[2] }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
+              </div>
+            </>
           )}
         </div>
+        )}
       </div>
+      )}
 
       {/* ─── Expense Category Treemap ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
-        <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-          Expense Breakdown by Category
+      {isOn('expense-treemap') && (
+      <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+        <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
+          Expense Breakdown
         </h2>
+        <p className="text-[11px] text-text-muted mb-5">Spending by category (12 months)</p>
         {expenseCategories.length === 0 ? (
-          <div className="flex items-center justify-center" style={{ minHeight: 300 }}>
+          <div className="flex items-center justify-center" style={{ minHeight: 340 }}>
             <span className="text-xs text-text-muted">No expense data available</span>
           </div>
         ) : (
-          <div style={{ width: '100%', minHeight: 300 }}>
-            <ResponsiveContainer width="100%" height={300}>
-              <Treemap
-                data={expenseCategories}
-                dataKey="size"
-                nameKey="name"
-                stroke="#0a0a0a"
-                content={<TreemapContent />}
-              />
-            </ResponsiveContainer>
-          </div>
+          <>
+            {/* Print fallback: ranked list with DataBars (feature 19/23) */}
+            <div className="chart-print-fallback" style={{ fontSize: '10pt' }}>
+              {(() => {
+                const totalExp = expenseCategories.reduce((s, c) => s + c.size, 0);
+                return expenseCategories.map((c, i) => (
+                  <div key={c.name} style={{ marginBottom: 6 }}>
+                    <DataBar
+                      value={c.size}
+                      total={totalExp || 1}
+                      color={c.fill}
+                      thickness={5}
+                      label={`${i + 1}. ${c.name}`}
+                      rightText={formatCurrency(c.size)}
+                    />
+                  </div>
+                ));
+              })()}
+            </div>
+            <div className="chart-screen-only" style={{ width: '100%', minHeight: 340 }}>
+              <ResponsiveContainer width="100%" height={340}>
+                <Treemap
+                  data={expenseCategories as any[]}
+                  dataKey="size"
+                  nameKey="name"
+                  stroke="#0a0a0a"
+                  content={<TreemapContent />}
+                />
+              </ResponsiveContainer>
+            </div>
+          </>
         )}
       </div>
+      )}
 
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
+      {/* Quick Actions — interactive only */}
+      {isOn('quick-actions') && (
+      <div className="no-print">
+        <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
           Quick Actions
         </h2>
-        <div className="grid grid-cols-4 gap-4">
+        <p className="text-[11px] text-text-muted mb-4">Jump into common workflows</p>
+        <div className="grid grid-cols-4 gap-5">
           <QuickAction
-            icon={<FileText size={20} />}
+            icon={<FileText size={22} />}
             label="New Invoice"
+            description="Create and send an invoice"
+            accentClass="border-l-accent-income"
             onClick={() => setModule('invoicing')}
           />
           <QuickAction
-            icon={<Receipt size={20} />}
+            icon={<Receipt size={22} />}
             label="Record Expense"
+            description="Log a new business expense"
+            accentClass="border-l-accent-expense"
             onClick={() => setModule('expenses')}
           />
           <QuickAction
-            icon={<Clock size={20} />}
+            icon={<Clock size={22} />}
             label="Start Timer"
+            description="Track billable hours"
+            accentClass="border-l-accent-blue"
             onClick={() => setModule('time-tracking')}
           />
           <QuickAction
-            icon={<Users size={20} />}
+            icon={<Users size={22} />}
             label="Run Payroll"
+            description="Process employee payroll"
+            accentClass="border-l-accent-purple"
             onClick={() => setModule('payroll')}
           />
         </div>
       </div>
+      )}
 
       {/* ─── Bottom 2-Column Grid: Activity + Due/Clients ─── */}
-      <div className="grid grid-cols-2 gap-4">
+      {(isOn('activity') || isOn('upcoming-due') || isOn('top-clients')) && (
+      <div className="grid grid-cols-2 gap-6">
         {/* Left Column: Recent Activity (Enhanced) */}
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
-          <div className="flex items-center justify-between mb-4">
+        {isOn('activity') && (
+        <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
-              <Activity size={14} className="text-text-muted" />
-              <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+              <Activity size={16} className="text-text-muted" />
+              <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
                 Recent Activity
               </h2>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 no-print">
               <select
                 className="block-select text-[10px] py-0.5 px-2"
-                style={{ width: 'auto', minWidth: '100px', borderRadius: '2px', height: '24px' }}
+                style={{ width: 'auto', minWidth: '100px', borderRadius: '6px', height: '24px' }}
                 value={activityFilter}
                 onChange={(e) => setActivityFilter(e.target.value)}
               >
@@ -1153,17 +1496,17 @@ const Dashboard: React.FC = () => {
                     if (details) {
                       if (entry.entity_type === 'invoices' && details.invoice_number) {
                         richDescription = `Invoice ${details.invoice_number}`;
-                        if (details.total) richDescription += ` for ${fmtCurrency(details.total)}`;
+                        if (details.total) richDescription += ` for ${formatCurrency(details.total)}`;
                         if (details.client_name) richDescription += ` — ${details.client_name}`;
                       } else if (entry.entity_type === 'expenses' && details.description) {
                         richDescription = details.description;
-                        if (details.amount) richDescription += ` — ${fmtCurrency(details.amount)}`;
+                        if (details.amount) richDescription += ` — ${formatCurrency(details.amount)}`;
                         if (details.vendor_name) richDescription += ` (${details.vendor_name})`;
                       } else if (entry.entity_type === 'clients' && details.name) {
                         richDescription = details.name;
                         if (details.email) richDescription += ` (${details.email})`;
                       } else if (entry.entity_type === 'payments' && details.amount) {
-                        richDescription = `Payment ${fmtCurrency(details.amount)}`;
+                        richDescription = `Payment ${formatCurrency(details.amount)}`;
                         if (details.invoice_number) richDescription += ` on ${details.invoice_number}`;
                       }
                     }
@@ -1179,25 +1522,25 @@ const Dashboard: React.FC = () => {
                 return (
                   <div
                     key={entry.id}
-                    className="flex items-center gap-3 py-2"
+                    className="activity-feed-row flex items-center gap-3 py-3"
                     style={{ borderBottom: '1px solid #2e2e2e' }}
                   >
                     <span
-                      className="text-[10px] font-mono font-semibold uppercase px-2 py-0.5"
+                      className="text-[10px] font-mono font-semibold uppercase px-2 py-1"
                       style={{
                         backgroundColor: badge.bg,
                         color: badge.text,
-                        borderRadius: '2px',
-                        minWidth: 52,
+                        borderRadius: '6px',
+                        minWidth: 56,
                         textAlign: 'center',
                       }}
                     >
                       {actionLabel}
                     </span>
-                    <span className="text-xs text-text-primary flex-1 truncate" title={richDescription}>
+                    <span className="text-sm text-text-primary flex-1 truncate" title={richDescription}>
                       {richDescription}
                     </span>
-                    <span className="text-[10px] text-text-muted font-mono whitespace-nowrap">
+                    <span className="text-[11px] text-text-muted font-mono whitespace-nowrap">
                       {relativeTime}
                     </span>
                   </div>
@@ -1206,14 +1549,17 @@ const Dashboard: React.FC = () => {
             </div>
           )}
         </div>
+        )}
 
         {/* Right Column: Upcoming Due + Top Clients stacked */}
-        <div className="space-y-4">
+        {(isOn('upcoming-due') || isOn('top-clients')) && (
+        <div className="space-y-6">
           {/* Upcoming Due */}
-          <div className="block-card p-5" style={{ borderRadius: '2px' }}>
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle size={14} className="text-text-muted" />
-              <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+          {isOn('upcoming-due') && (
+          <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+            <div className="flex items-center gap-2 mb-5">
+              <AlertTriangle size={16} className="text-text-muted" />
+              <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
                 Upcoming Due
               </h2>
             </div>
@@ -1229,33 +1575,33 @@ const Dashboard: React.FC = () => {
                   return (
                     <div
                       key={inv.id}
-                      className="flex items-center gap-3 py-2"
+                      className="flex items-center gap-3 py-3"
                       style={{ borderBottom: '1px solid #2e2e2e' }}
                     >
                       <span
                         style={{
-                          width: 6,
-                          height: 6,
+                          width: 8,
+                          height: 8,
                           backgroundColor: color,
-                          borderRadius: '1px',
+                          borderRadius: '6px',
                           flexShrink: 0,
                         }}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-text-primary font-semibold truncate">
-                            {inv.invoice_number}
+                          <span className="text-sm text-text-primary font-semibold truncate">
+                            <EntityChip type="invoice" id={inv.id} label={inv.invoice_number} variant="inline" />
                           </span>
-                          <span className="text-xs font-mono text-text-primary ml-2">
-                            {fmtCurrency(amountDue)}
+                          <span className="text-sm font-mono font-semibold text-text-primary ml-2">
+                            {formatCurrency(amountDue)}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between mt-0.5">
-                          <span className="text-[10px] text-text-muted truncate">
-                            {inv.client_name || 'Unknown'}
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-[11px] text-text-muted truncate">
+                            {(inv as any).client_id ? <EntityChip type="client" id={(inv as any).client_id} label={inv.client_name || 'Unknown'} variant="inline" /> : (inv.client_name || 'Unknown')}
                           </span>
-                          <span className="text-[10px] text-text-muted font-mono ml-2">
-                            {inv.due_date}
+                          <span className="text-[11px] text-text-muted font-mono ml-2">
+                            {formatDate(inv.due_date)}
                           </span>
                         </div>
                       </div>
@@ -1265,80 +1611,72 @@ const Dashboard: React.FC = () => {
               </div>
             )}
           </div>
+          )}
 
           {/* Top Clients */}
-          <div className="block-card p-5" style={{ borderRadius: '2px' }}>
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 size={14} className="text-text-muted" />
-              <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+          {isOn('top-clients') && (
+          <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+            <div className="flex items-center gap-2 mb-5">
+              <BarChart3 size={16} className="text-text-muted" />
+              <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
                 Top Clients (90 Days)
               </h2>
             </div>
             {topClients.length === 0 ? (
               <p className="text-xs text-text-muted">No client revenue data</p>
             ) : (
-              <div className="space-y-3">
-                {topClients.map((client, idx) => {
-                  const pct =
-                    maxClientRevenue > 0
-                      ? (client.total_paid / maxClientRevenue) * 100
-                      : 0;
-                  return (
-                    <div key={idx}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-text-primary truncate">
-                          {client.name}
-                        </span>
-                        <span className="text-xs font-mono text-text-muted ml-2">
-                          {fmtCurrency(client.total_paid)}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          width: '100%',
-                          height: 6,
-                          backgroundColor: '#2e2e2e',
-                          borderRadius: '1px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${pct}%`,
-                            height: '100%',
-                            backgroundColor: 'var(--color-accent-blue)',
-                            borderRadius: '1px',
-                            transition: 'width 0.3s ease',
-                          }}
-                        />
-                      </div>
+              <div className="space-y-4">
+                {topClients.map((client, idx) => (
+                  <div key={idx}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm text-text-primary truncate">
+                        <span className="text-text-muted font-mono mr-2">{idx + 1}.</span>
+                        {client.id ? (
+                          <EntityChip type="client" id={client.id} label={client.name} variant="inline" />
+                        ) : (
+                          client.name
+                        )}
+                      </span>
+                      <span className="text-sm font-mono font-semibold text-text-secondary ml-2">
+                        {formatCurrency(client.total_paid)}
+                      </span>
                     </div>
-                  );
-                })}
+                    <DataBar
+                      value={client.total_paid}
+                      total={maxClientRevenue}
+                      color="#3b82f6"
+                      thickness={6}
+                    />
+                  </div>
+                ))}
               </div>
             )}
           </div>
+          )}
         </div>
+        )}
       </div>
+      )}
 
       {/* ─── Intelligence Alerts ─── */}
       {anomalies.length > 0 && (
-        <div className="col-span-full border-2 border-orange-500 bg-orange-50 p-5" style={{ borderRadius: '2px' }}>
-          <h2 className="text-xs font-black uppercase tracking-wider text-orange-700 mb-3">
+        <div className="col-span-full border-2 border-orange-500 bg-accent-warning-bg p-6" style={{ borderRadius: '6px' }}>
+          <h2 className="text-sm font-black uppercase tracking-wider text-accent-warning mb-4">
             Intelligence Alerts
           </h2>
           <div className="space-y-2">
             {anomalies.map((a: any) => (
-              <div key={a.id} className="flex items-start justify-between gap-4 bg-white border border-orange-300 p-3">
+              <div key={a.id} className="flex items-start justify-between gap-4 bg-bg-secondary border border-accent-warning p-3">
                 <div>
-                  <p className="text-sm font-bold text-gray-900">{a.anomaly_type?.replace(/_/g, ' ').toUpperCase()}</p>
-                  <p className="text-sm text-gray-600 mt-0.5">{a.description}</p>
+                  <p className="text-sm font-bold text-text-primary">{a.anomaly_type?.replace(/_/g, ' ').toUpperCase()}</p>
+                  <p className="text-sm text-text-secondary mt-0.5">{a.description}</p>
                 </div>
                 <button
                   onClick={async () => {
                     await api.dismissAnomaly(a.id);
                     setAnomalies(prev => prev.filter(x => x.id !== a.id));
                   }}
-                  className="flex-shrink-0 text-xs font-black text-gray-400 hover:text-gray-900 border border-gray-300 px-2 py-1 hover:border-gray-900 transition-colors"
+                  className="flex-shrink-0 text-xs font-black text-text-muted hover:text-text-primary border border-border-secondary px-2 py-1 hover:border-border-primary transition-colors"
                 >
                   ×
                 </button>
@@ -1347,6 +1685,9 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      </div>{/* end max-w-[1400px] wrapper */}
+      <PrintReportFooter />
     </div>
   );
 };

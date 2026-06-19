@@ -1,9 +1,36 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Building2, ChevronDown, Search, Bell, X, LogOut } from 'lucide-react';
+import {
+  Building2, ChevronDown, Search, Bell, X, LogOut, FileText, Receipt,
+  UserCircle, FileCheck, Clock, BarChart3, Trash2, RefreshCw, CheckCheck, AlertTriangle,
+} from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAuthStore } from '../../stores/authStore';
+import { usePersonalizationStore } from '../../stores/personalizationStore';
 import api from '../../lib/api';
+import { useNavigation } from '../../lib/navigation';
+import TrashBin from '../TrashBin';
+
+// Map quick-action ID -> icon + handler. The TopBar consumes the user's
+// configured list (max 5) from personalization store.
+const QUICK_ICONS: Record<string, React.FC<{ size?: number }>> = {
+  'new-invoice': FileText,
+  'new-expense': Receipt,
+  'new-client': UserCircle,
+  'new-quote': FileCheck,
+  'start-timer': Clock,
+  search: Search,
+  reports: BarChart3,
+};
+const QUICK_LABELS: Record<string, string> = {
+  'new-invoice': 'New Invoice',
+  'new-expense': 'New Expense',
+  'new-client': 'New Client',
+  'new-quote': 'New Quote',
+  'start-timer': 'Start Timer',
+  search: 'Search',
+  reports: 'Reports',
+};
 
 const TopBar: React.FC = () => {
   const searchOpen = useAppStore((s) => s.searchOpen);
@@ -11,26 +38,81 @@ const TopBar: React.FC = () => {
   const setSearchQuery = useAppStore((s) => s.setSearchQuery);
   const searchResults = useAppStore((s) => s.searchResults);
   const setSearchResults = useAppStore((s) => s.setSearchResults);
+  const setModule = useAppStore((s) => s.setModule);
+  const { goToEntity } = useNavigation();
   const notificationCount = useAppStore((s) => s.notificationCount);
+  const quickActions = usePersonalizationStore((s) => s.quickActions);
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const authUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
+  const setNotificationCount = useAppStore((s) => s.setNotificationCount);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [localQuery, setLocalQuery] = useState('');
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifs, setNotifs] = useState<any[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [checking, setChecking] = useState(false);
 
-  // Cmd+K / Ctrl+K — plain (not shift) opens global search.
-  // ESC only acts when the search modal is open.
+  // Load notifications + keep the bell's unread badge in sync.
+  const loadNotifs = useCallback(async () => {
+    try {
+      const list = await api.listNotifications(false);
+      const arr = Array.isArray(list) ? list : [];
+      setNotifs(arr);
+      setNotificationCount(arr.filter((n: any) => !n.is_read).length);
+    } catch { /* non-fatal */ }
+  }, [setNotificationCount]);
+
+  // Initial load + light polling so the badge reflects new alerts.
+  useEffect(() => {
+    loadNotifs();
+    const t = setInterval(loadNotifs, 60_000);
+    return () => clearInterval(t);
+  }, [loadNotifs]);
+
+  const openNotifs = async () => {
+    setNotifOpen((v) => !v);
+    if (!notifOpen) { setNotifLoading(true); await loadNotifs(); setNotifLoading(false); }
+  };
+  const handleCheckNow = async () => {
+    setChecking(true);
+    try { await api.runNotificationChecks(); await loadNotifs(); } finally { setChecking(false); }
+  };
+  const handleMarkAllRead = async () => { await api.markAllNotificationsRead(); await loadNotifs(); };
+  const handleNotifClick = async (n: any) => {
+    if (!n.is_read) { await api.markNotificationRead(n.id); await loadNotifs(); }
+  };
+  const handleDismiss = async (id: string) => { await api.dismissNotification(id); await loadNotifs(); };
+
+  const notifUnread = notifs.filter((n) => !n.is_read).length;
+  const relTime = (iso: string): string => {
+    if (!iso) return '';
+    const t = new Date(iso.replace(' ', 'T') + (iso.includes('Z') ? '' : 'Z')).getTime();
+    if (isNaN(t)) return iso;
+    const mins = Math.round((Date.now() - t) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.round(hrs / 24)}d ago`;
+  };
+  const notifIcon = (type: string) => {
+    if (['overdue', 'budget_alert', 'penalty', 'compliance'].includes(type)) return <AlertTriangle size={13} className="text-accent-expense shrink-0 mt-0.5" />;
+    return <Bell size={13} className="text-accent-blue shrink-0 mt-0.5" />;
+  };
+
+  // Cmd+K / Ctrl+K shortcut
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'k' || e.key === 'K')) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k' && !e.shiftKey) {
         e.preventDefault();
         setSearchOpen(true);
-        return;
       }
       if (e.key === 'Escape' && searchOpen) {
-        e.preventDefault();
         setSearchOpen(false);
         setLocalQuery('');
         setSearchQuery('');
@@ -39,22 +121,14 @@ const TopBar: React.FC = () => {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setSearchOpen, setSearchQuery, setSearchResults, searchOpen]);
+  }, [searchOpen, setSearchOpen, setSearchQuery, setSearchResults]);
 
   // Focus input when modal opens
   useEffect(() => {
-    if (searchOpen) {
-      const t = setTimeout(() => inputRef.current?.focus(), 50);
-      return () => clearTimeout(t);
-    }
+    if (!searchOpen) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, [searchOpen]);
-
-  // Clear pending debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
 
   // Debounced search
   const handleSearchInput = useCallback(
@@ -98,22 +172,27 @@ const TopBar: React.FC = () => {
   return (
     <>
       <header
-        className="flex items-center justify-between h-12 px-4 bg-bg-secondary border-b border-border-primary shrink-0"
+        className="flex items-center justify-between h-14 px-4 shrink-0"
         style={{
-          borderRadius: '0px',
-          WebkitAppRegion: 'drag' as any,
-          /* macOS hiddenInset title bar: pad left for traffic lights */
+          background: 'var(--color-bg-secondary)',
+          backdropFilter: 'blur(20px) saturate(1.5)',
+          WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
+          borderBottom: '1px solid var(--structure)',
           paddingLeft: navigator.userAgent.includes('Mac') ? '80px' : '16px',
+          // @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property
+          WebkitAppRegion: 'drag',
         }}
       >
         {/* Left — Company */}
-        <div className="flex items-center gap-2 min-w-0 shrink" style={{ WebkitAppRegion: 'no-drag' as any }}>
+        {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}
+        <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' }}>
           <button
-            aria-label={`Switch company (current: ${activeCompany?.name ?? 'None'})`}
-            className="flex items-center gap-2 px-2 py-1 text-text-primary hover:bg-bg-hover transition-colors min-w-0"
-            style={{ borderRadius: '2px' }}
+            className="flex items-center gap-2 px-2.5 py-1.5 text-text-primary transition-all duration-150"
+            style={{ borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.06)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
           >
-            <Building2 size={16} className="text-text-muted shrink-0" />
+            <Building2 size={16} className="text-accent-blue shrink-0" />
             <span className="text-sm font-medium truncate max-w-[200px]">
               {activeCompany?.name ?? 'No Company'}
             </span>
@@ -124,65 +203,204 @@ const TopBar: React.FC = () => {
         {/* Center — Search trigger */}
         <button
           onClick={() => setSearchOpen(true)}
-          aria-label="Open global search (⌘K)"
-          aria-keyshortcuts="Meta+K Control+K"
-          className="flex items-center gap-2 px-3 py-1.5 w-80 max-w-[40vw] bg-bg-primary border border-border-secondary text-text-muted text-sm hover:border-border-focus transition-colors"
-          style={{ borderRadius: '2px', WebkitAppRegion: 'no-drag' as any }}
+          className="flex items-center gap-2 px-3 py-1.5 w-80 text-text-muted text-sm transition-all duration-150"
+          // @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property
+          style={{ borderRadius: '6px', WebkitAppRegion: 'no-drag', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
         >
           <Search size={14} />
           <span className="flex-1 text-left">Search...</span>
           <kbd
             className="text-[10px] px-1.5 py-0.5 bg-bg-tertiary border border-border-secondary text-text-muted"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             ⌘K
           </kbd>
         </button>
 
-        {/* Right — User + Notifications + Logout */}
-        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' as any }}>
-          <button
-            type="button"
-            aria-label={`Notifications${notificationCount > 0 ? ` (${notificationCount} unread)` : ''}`}
-            className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
-          >
-            <Bell size={18} />
-            {notificationCount > 0 && (
-              <span
-                className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold text-white bg-accent-expense"
-                style={{ borderRadius: '2px' }}
+        {/* Quick Action buttons (user-configurable, max 5) */}
+        {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}
+        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
+          {quickActions.slice(0, 5).map((qa) => {
+            const Icon = QUICK_ICONS[qa] ?? FileText;
+            const label = QUICK_LABELS[qa] ?? qa;
+            return (
+              <button
+                key={qa}
+                title={label}
+                onClick={() => {
+                  if (qa === 'search') setSearchOpen(true);
+                  else if (qa === 'new-invoice') setModule('invoicing');
+                  else if (qa === 'new-expense') setModule('expenses');
+                  else if (qa === 'new-client') setModule('clients');
+                  else if (qa === 'new-quote') setModule('quotes');
+                  else if (qa === 'start-timer') setModule('time-tracking');
+                  else if (qa === 'reports') setModule('reports');
+                  // Modules listen for 'app:new-item' to open create form.
+                  if (qa.startsWith('new-')) {
+                    window.dispatchEvent(new CustomEvent('app:new-item', { detail: { source: 'topbar' } }));
+                  }
+                }}
+                className="p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+                style={{ borderRadius: 'var(--app-radius, 6px)' }}
               >
-                {notificationCount > 99 ? '99+' : notificationCount}
-              </span>
-            )}
-          </button>
+                <Icon size={16} />
+              </button>
+            );
+          })}
+        </div>
 
-          {/* User avatar */}
+        {/* Right — User + Notifications + Logout */}
+        {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}
+        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
+          <button
+            aria-label="Trash"
+            title="Trash (deleted items, recoverable for 30 days)"
+            onClick={() => setTrashOpen(true)}
+            className="p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+            style={{ borderRadius: '6px' }}
+          >
+            <Trash2 size={18} />
+          </button>
+          <div className="relative">
+            <button
+              aria-label="Notifications"
+              onClick={openNotifs}
+              className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+              style={{ borderRadius: '6px' }}
+            >
+              <Bell size={18} />
+              {notificationCount > 0 && (
+                <span
+                  className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold text-white bg-accent-expense"
+                  style={{ borderRadius: '6px' }}
+                >
+                  {notificationCount > 99 ? '99+' : notificationCount}
+                </span>
+              )}
+            </button>
+
+            {notifOpen && (
+              <>
+                {/* click-away backdrop */}
+                <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                <div
+                  className="absolute right-0 mt-2 w-96 z-50 overflow-hidden"
+                  style={{
+                    borderRadius: '10px',
+                    // Solid elevated token — popover sits inside the header's own
+                    // backdrop-filter, where a nested blur silently no-ops in Chromium,
+                    // so opacity must not depend on it (text would bleed through otherwise).
+                    background: 'var(--color-bg-elevated-solid)',
+                    backdropFilter: 'blur(20px) saturate(1.4)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                    border: '1px solid var(--structure)',
+                    boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+                  }}
+                >
+                  {/* header */}
+                  <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-primary">
+                    <div className="flex items-center gap-2">
+                      <Bell size={14} className="text-text-secondary" />
+                      <span className="text-sm font-semibold text-text-primary">Notifications</span>
+                      {notifUnread > 0 && <span className="text-[10px] font-bold text-white bg-accent-expense px-1.5 py-0.5" style={{ borderRadius: 6 }}>{notifUnread}</span>}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={handleCheckNow} disabled={checking} title="Run alert checks now"
+                        className="p-1.5 text-text-muted hover:text-text-primary" style={{ borderRadius: 6 }}>
+                        <RefreshCw size={13} className={checking ? 'animate-spin' : ''} />
+                      </button>
+                      {notifUnread > 0 && (
+                        <button onClick={handleMarkAllRead} title="Mark all read"
+                          className="p-1.5 text-text-muted hover:text-text-primary" style={{ borderRadius: 6 }}>
+                          <CheckCheck size={14} />
+                        </button>
+                      )}
+                      <button onClick={() => setNotifOpen(false)} className="p-1.5 text-text-muted hover:text-text-primary" style={{ borderRadius: 6 }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* list */}
+                  <div className="max-h-[60vh] overflow-y-auto">
+                    {notifLoading ? (
+                      <div className="px-3 py-8 text-center text-xs text-text-muted">Loading…</div>
+                    ) : notifs.length === 0 ? (
+                      <div className="px-3 py-10 text-center text-xs text-text-muted">
+                        <Bell size={24} className="mx-auto mb-2 opacity-40" />
+                        You're all caught up.<br />
+                        <button onClick={handleCheckNow} className="text-accent-blue hover:underline mt-1">Run checks now</button>
+                      </div>
+                    ) : (
+                      notifs.map((n) => (
+                        <button
+                          key={n.id}
+                          onClick={() => handleNotifClick(n)}
+                          className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-bg-hover transition-colors border-b border-border-primary/40 group"
+                          style={{ background: n.is_read ? 'transparent' : 'rgba(96,165,250,0.06)' }}
+                        >
+                          {notifIcon(n.type)}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {!n.is_read && <span className="w-1.5 h-1.5 rounded-full bg-accent-blue shrink-0" />}
+                              <span className={`text-xs truncate ${n.is_read ? 'text-text-secondary' : 'text-text-primary font-semibold'}`}>{n.title}</span>
+                            </div>
+                            {n.message && <p className="text-[11px] text-text-muted mt-0.5 line-clamp-2">{n.message}</p>}
+                            <span className="text-[10px] text-text-muted">{relTime(n.created_at)}</span>
+                          </div>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => { e.stopPropagation(); handleDismiss(n.id); }}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-text-muted hover:text-accent-expense transition-opacity"
+                            title="Dismiss"
+                          >
+                            <X size={12} />
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  {/* footer */}
+                  <div className="px-3 py-2 border-t border-border-primary text-center">
+                    <button
+                      onClick={() => { setNotifOpen(false); setModule('notifications'); }}
+                      className="text-[11px] text-accent-blue hover:underline"
+                    >
+                      View all notifications
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* User avatar + name */}
           {authUser && (
             <div
-              className="flex items-center gap-2 px-2 py-1 ml-1"
-              style={{ borderLeft: '1px solid var(--color-border-primary)' }}
+              className="flex items-center gap-2 px-2 py-1 ml-2"
+              style={{ borderLeft: '1px solid var(--structure)' }}
             >
               <div
                 className="flex items-center justify-center text-white text-[11px] font-bold shrink-0"
                 style={{
-                  width: '24px', height: '24px', borderRadius: '2px',
-                  background: authUser.avatar_color || '#3b82f6',
+                  width: '26px', height: '26px', borderRadius: '6px',
+                  background: authUser.avatar_color || 'var(--accent-primary)',
                 }}
               >
                 {authUser.display_name.charAt(0).toUpperCase()}
               </div>
-              <span className="text-xs text-text-secondary hidden xl:inline max-w-[100px] truncate">
+              <span className="text-xs text-text-secondary max-w-[120px] truncate font-medium">
                 {authUser.display_name}
               </span>
               <button
-                type="button"
-                onClick={() => { void logout(); }}
-                className="p-1 text-text-muted hover:text-accent-expense transition-colors"
-                style={{ borderRadius: '2px' }}
+                onClick={logout}
+                className="p-1 text-text-muted hover:text-accent-expense transition-all duration-150"
+                style={{ borderRadius: '6px' }}
                 title="Sign Out"
-                aria-label="Sign out"
               >
                 <LogOut size={14} />
               </button>
@@ -191,20 +409,26 @@ const TopBar: React.FC = () => {
         </div>
       </header>
 
+      {/* Trash Bin Overlay */}
+      {trashOpen && <TrashBin onClose={() => setTrashOpen(false)} />}
+
       {/* Search Modal Overlay */}
       {searchOpen && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/60"
           onClick={closeSearch}
-          role="presentation"
         >
           <div
-            className="w-full max-w-xl bg-bg-elevated border border-border-primary shadow-2xl"
-            style={{ borderRadius: '2px' }}
+            className="w-full max-w-xl"
+            style={{
+              borderRadius: '10px',
+              background: 'rgba(20, 22, 30, 0.90)',
+              backdropFilter: 'blur(24px) saturate(1.5)',
+              WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset',
+            }}
             onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Global search"
           >
             {/* Search Input */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border-primary">
@@ -216,17 +440,12 @@ const TopBar: React.FC = () => {
                 className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
                 value={localQuery}
                 onChange={(e) => handleSearchInput(e.target.value)}
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-                aria-label="Search query"
               />
               <button
+                aria-label="Close search"
                 onClick={closeSearch}
                 className="p-1 text-text-muted hover:text-text-primary"
-                style={{ borderRadius: '2px' }}
-                aria-label="Close search"
-                type="button"
+                style={{ borderRadius: '6px' }}
               >
                 <X size={14} />
               </button>
@@ -244,7 +463,7 @@ const TopBar: React.FC = () => {
                   <div className="px-4 py-1">
                     <span
                       className="inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-accent-blue/15 text-accent-blue"
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: '6px' }}
                     >
                       {type}
                     </span>
@@ -254,8 +473,11 @@ const TopBar: React.FC = () => {
                       key={result.id}
                       className="flex flex-col w-full px-4 py-2 text-left hover:bg-bg-hover transition-colors"
                       onClick={() => {
+                        // Result `type` is one of client/invoice/expense/project,
+                        // all keyed in navigation's entityModuleMap, so goToEntity
+                        // routes to the right module and stashes the focus param.
+                        goToEntity(result.type, result.id);
                         closeSearch();
-                        // Navigation to result can be handled by consumer
                       }}
                     >
                       <span className="text-sm text-text-primary">{result.title}</span>
@@ -272,7 +494,7 @@ const TopBar: React.FC = () => {
             <div className="flex items-center justify-between px-4 py-2 border-t border-border-primary text-[11px] text-text-muted">
               <span>Type to search</span>
               <span>
-                <kbd className="px-1 py-0.5 bg-bg-tertiary border border-border-secondary" style={{ borderRadius: '2px' }}>
+                <kbd className="px-1 py-0.5 bg-bg-tertiary border border-border-secondary" style={{ borderRadius: '6px' }}>
                   ESC
                 </kbd>{' '}
                 to close
