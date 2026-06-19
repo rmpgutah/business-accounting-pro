@@ -286,7 +286,9 @@ export function MetricHero({
               fontWeight: 700,
               marginTop: 8,
               lineHeight: 1.1,
-              overflowWrap: 'anywhere',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
             {value}
