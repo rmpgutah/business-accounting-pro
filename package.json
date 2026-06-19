@@ -1,6 +1,6 @@
 {
   "name": "business-accounting-pro",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "productName": "Business Accounting Pro",
   "description": "Professional business accounting software for income, expenses, taxes, payroll, invoicing and more",
   "main": "dist/main/main/main.js",
@@ -35,7 +35,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.104.2",
+    "@anthropic-ai/sdk": "^0.105.0",
     "@types/archiver": "^7.0.0",
     "@types/qrcode": "^1.5.6",
     "archiver": "^7.0.1",
