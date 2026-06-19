@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   ArrowLeft,
   UserCircle,
@@ -23,6 +23,11 @@ import {
   ChevronUp,
   Shield,
   BarChart3,
+  Upload,
+  Trash2,
+  FileImage,
+  FileSpreadsheet,
+  File,
 } from 'lucide-react';
 import {
   BarChart,
@@ -901,7 +906,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
 
         {/* Tab Content */}
         <div className="mt-4">
-          {tabLoading ? (
+          {tabLoading && activeTab !== 'documents' ? (
             <div className="py-12 text-center text-sm text-text-muted font-mono">
               Loading {activeTab}...
             </div>
@@ -911,6 +916,8 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
           ) : activeTab === 'activity' ? (
             /* Feature 41: Activity Timeline */
             <ActivityTimelineTab data={activityData} />
+          ) : activeTab === 'documents' ? (
+            <DocumentsPanel clientId={clientId} companyId={activeCompany?.id ?? ''} />
           ) : tabData.length === 0 ? (
             <EmptyState
               icon={
@@ -927,7 +934,6 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
               {activeTab === 'invoices' && <InvoicesTable data={tabData} onNavigate={(id) => nav.goToInvoice(id)} />}
               {activeTab === 'projects' && <ProjectsTable data={tabData} onNavigate={(id) => nav.goToProject(id)} />}
               {activeTab === 'time' && <TimeEntriesTable data={tabData} />}
-              {activeTab === 'documents' && <DocumentsTable data={tabData} />}
               {activeTab === 'debts' && <DebtsTable data={tabData} />}
             </div>
           )}
@@ -1165,26 +1171,199 @@ const TimeEntriesTable: React.FC<{ data: any[] }> = ({ data }) => (
   </table>
 );
 
-const DocumentsTable: React.FC<{ data: any[] }> = ({ data }) => (
-  <table className="block-table">
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Type</th>
-        <th>Date</th>
-      </tr>
-    </thead>
-    <tbody>
-      {data.map((d) => (
-        <tr key={d.id}>
-          <td className="text-text-primary font-medium">{d.name ?? d.filename ?? '--'}</td>
-          <td className="text-text-secondary text-xs uppercase">{d.type ?? d.mime_type ?? '--'}</td>
-          <td className="text-text-secondary text-xs">{d.created_at ?? '--'}</td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
-);
+// ─── Documents Panel ─────────────────────────────────────────────────────────
+const MIME_EXT_MAP: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  txt: 'text/plain', csv: 'text/csv',
+};
+
+function docMime(name: string, hint?: string): string {
+  if (hint && hint !== 'application/octet-stream') return hint;
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  return MIME_EXT_MAP[ext] ?? 'application/octet-stream';
+}
+
+function fmtFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function DocIcon({ mime }: { mime: string }) {
+  if (mime.startsWith('image/')) return <FileImage size={16} className="text-accent-blue" />;
+  if (mime.includes('spreadsheet') || mime.includes('excel') || mime === 'text/csv')
+    return <FileSpreadsheet size={16} className="text-accent-income" />;
+  if (mime === 'application/pdf') return <FileText size={16} className="text-accent-expense" />;
+  return <File size={16} className="text-text-muted" />;
+}
+
+const DocumentsPanel: React.FC<{ clientId: string; companyId: string }> = ({ clientId, companyId }) => {
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const dragCount = useRef(0);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await api.query('documents', { client_id: clientId, company_id: companyId });
+      setDocs(Array.isArray(rows) ? rows : []);
+    } catch { setDocs([]); }
+    finally { setLoading(false); }
+  }, [clientId, companyId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const uploadFile = async (name: string, path: string, size: number, typehint?: string) => {
+    setUploading(true);
+    try {
+      await api.create('documents', {
+        filename: name,
+        file_path: path,
+        file_size: size,
+        mime_type: docMime(name, typehint),
+        entity_type: 'client',
+        entity_id: clientId,
+        company_id: companyId,
+        uploaded_at: new Date().toISOString(),
+      });
+      await load();
+    } catch { /* silent — db error will surface in console */ }
+    finally { setUploading(false); }
+  };
+
+  const handleBrowse = async () => {
+    const file = await api.openFileDialog({
+      filters: [
+        { name: 'Documents & Images', extensions: ['pdf','doc','docx','xls','xlsx','txt','csv','png','jpg','jpeg','gif','webp'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (!file) return;
+    await uploadFile(file.name, file.path, file.size);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCount.current = 0;
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    for (const f of files) {
+      await uploadFile(f.name, (f as any).path, f.size, f.type);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Remove "${name}" from this client's documents?`)) return;
+    await api.remove('documents', id);
+    setDocs(prev => prev.filter(d => d.id !== id));
+  };
+
+  return (
+    <div
+      className="relative"
+      onDragEnter={e => { e.preventDefault(); dragCount.current++; setDragOver(true); }}
+      onDragOver={e => e.preventDefault()}
+      onDragLeave={() => { dragCount.current--; if (dragCount.current === 0) setDragOver(false); }}
+      onDrop={handleDrop}
+    >
+      {/* Drag-over overlay */}
+      {dragOver && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded"
+          style={{ background: 'rgba(59,130,246,0.08)', border: '2px dashed var(--accent-primary)', borderRadius: 'var(--app-radius)' }}>
+          <Upload size={32} className="text-accent-primary" />
+          <p className="text-sm font-semibold text-accent-primary">Drop files to upload</p>
+        </div>
+      )}
+
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+          {docs.length} document{docs.length !== 1 ? 's' : ''}
+        </p>
+        <button
+          onClick={handleBrowse}
+          disabled={uploading}
+          className="block-btn inline-flex items-center gap-1.5 text-xs"
+        >
+          <Upload size={13} />
+          {uploading ? 'Uploading…' : 'Upload File'}
+        </button>
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div className="py-12 text-center text-sm text-text-muted">Loading documents…</div>
+      ) : docs.length === 0 ? (
+        <div
+          className="flex flex-col items-center justify-center gap-3 py-16 cursor-pointer"
+          style={{ border: '1.5px dashed var(--border-primary)', borderRadius: 'var(--app-radius)' }}
+          onClick={handleBrowse}
+        >
+          <div className="w-12 h-12 flex items-center justify-center bg-bg-elevated" style={{ borderRadius: 'var(--app-radius)' }}>
+            <Paperclip size={22} className="text-text-muted" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium text-text-secondary">No documents yet</p>
+            <p className="text-xs text-text-muted mt-0.5">Drag & drop files here, or click to browse</p>
+          </div>
+        </div>
+      ) : (
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Uploaded</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((d) => {
+                const mime = d.mime_type ?? docMime(d.filename ?? '');
+                const name = d.filename ?? d.name ?? '—';
+                return (
+                  <tr key={d.id}>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <DocIcon mime={mime} />
+                        <span className="text-text-primary font-medium text-sm truncate max-w-[260px]">{name}</span>
+                      </div>
+                    </td>
+                    <td className="text-text-muted text-xs uppercase tracking-wide">
+                      {mime.split('/')[1]?.replace('vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx')
+                        .replace('vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx')
+                        .replace('vnd.ms-excel', 'xls') ?? mime}
+                    </td>
+                    <td className="text-text-muted text-xs font-mono">{d.file_size ? fmtFileSize(Number(d.file_size)) : '—'}</td>
+                    <td className="text-text-muted text-xs">{d.uploaded_at ? formatDate(d.uploaded_at) : d.created_at ? formatDate(d.created_at) : '—'}</td>
+                    <td>
+                      <button
+                        onClick={() => handleDelete(d.id, name)}
+                        className="p-1 text-text-muted hover:text-accent-expense transition-colors"
+                        title="Remove document"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const DebtsTable: React.FC<{ data: any[] }> = ({ data }) => (
   <table className="block-table">
