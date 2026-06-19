@@ -338,54 +338,6 @@ const ExpensesModule: React.FC = () => {
           onClick={() => switchTab('compliance')}
         />
         <TabBtn
-          active={tab === 'insights'}
-          icon={<Lightbulb size={16} />}
-          label="Insights"
-          onClick={() => switchTab('insights')}
-        />
-        <TabBtn
-          active={tab === 'compliance'}
-          icon={<ShieldCheck size={16} />}
-          label="Compliance"
-          onClick={() => switchTab('compliance')}
-        />
-        <TabBtn
-          active={tab === 'insights'}
-          icon={<Lightbulb size={16} />}
-          label="Insights"
-          onClick={() => switchTab('insights')}
-        />
-        <TabBtn
-          active={tab === 'compliance'}
-          icon={<ShieldCheck size={16} />}
-          label="Compliance"
-          onClick={() => switchTab('compliance')}
-        />
-        <TabBtn
-          active={tab === 'insights'}
-          icon={<Lightbulb size={16} />}
-          label="Insights"
-          onClick={() => switchTab('insights')}
-        />
-        <TabBtn
-          active={tab === 'compliance'}
-          icon={<ShieldCheck size={16} />}
-          label="Compliance"
-          onClick={() => switchTab('compliance')}
-        />
-        <TabBtn
-          active={tab === 'insights'}
-          icon={<Lightbulb size={16} />}
-          label="Insights"
-          onClick={() => switchTab('insights')}
-        />
-        <TabBtn
-          active={tab === 'compliance'}
-          icon={<ShieldCheck size={16} />}
-          label="Compliance"
-          onClick={() => switchTab('compliance')}
-        />
-        <TabBtn
           active={tab === 'settings'}
           icon={<Settings size={16} />}
           label="Settings"
