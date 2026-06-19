@@ -21,6 +21,14 @@ routes = [
   { pattern = "accounting.rmpgutah.us/*", zone_name = "rmpgutah.us" },
 ]
 
+# Static assets — the built React SPA.  Cloudflare serves these directly
+# without invoking the Worker, keeping the Worker for API/auth routes only.
+# SPA routes (/ /app/* /auth/*) fall through to the Worker's catch-all which
+# serves index.html via the ASSETS binding.
+[assets]
+directory = "./dist/web"
+binding = "ASSETS"
+
 # D1 binding. Replace `database_id` with the ID printed by:
 #   wrangler d1 create bap_db
 # That command only needs to be run ONCE per environment.

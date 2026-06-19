@@ -23,11 +23,13 @@ import { clientFormPage } from './ui/client-form';
 import { vendorFormPage } from './ui/vendor-form';
 import { mileageFormPage } from './ui/mileage-form';
 import { invoiceFormPage } from './ui/invoice-form';
+import { handleRpc } from './api-rpc';
 
 export interface Env {
   DB: D1Database;
   FILES: R2Bucket;
   SESSIONS: KVNamespace;
+  ASSETS: Fetcher;
   JWT_SECRET: string;
   DESKTOP_SYNC_TOKEN: string;
   STRIPE_SECRET_KEY?: string;
@@ -877,5 +879,59 @@ function constantTimeStrEqual(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+// ─── /api/rpc/public — unauthenticated channels (auth bootstrap) ─────────────
+// Called before the user has a session: has-users, login, register.
+// The channel whitelist is strict — nothing reads or writes company data here.
+const PUBLIC_CHANNELS = new Set(['auth:has-users', 'auth:list-users', 'auth:login', 'auth:register']);
+
+app.post('/api/rpc/public', async (c) => {
+  const body = await c.req.json<{ channel: string; args: any[] }>();
+  if (!PUBLIC_CHANNELS.has(body.channel)) {
+    return c.json({ error: 'Channel not allowed without auth' }, 403);
+  }
+  try {
+    const result = await handleRpc(body.channel, body.args || [], '', c.env.DB, c.env.JWT_SECRET);
+    // For login/register: set the session cookie on success
+    if ((body.channel === 'auth:login' || body.channel === 'auth:register') && result?.user) {
+      const companies: any[] = result.companies || [];
+      const cid = companies[0]?.id || '';
+      const token = await signJWT({ sub: result.user.id, cid, role: result.user.role }, c.env.JWT_SECRET);
+      c.header('Set-Cookie', setSessionCookie(token, c.env.ENVIRONMENT === 'production'));
+    }
+    return c.json(result ?? null);
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'RPC error' }, 400);
+  }
+});
+
+// ─── /api/rpc — React SPA bridge (authenticated) ─────────────────────────────
+// The React renderer calls this single endpoint for all data operations,
+// using the same channel names as the Electron IPC layer.
+app.post('/api/rpc', requireUserAPI, async (c) => {
+  const body = await c.req.json<{ channel: string; args: any[] }>();
+  const cid = c.get('companyId') ?? '';
+  try {
+    const result = await handleRpc(body.channel, body.args || [], cid, c.env.DB, c.env.JWT_SECRET);
+    return c.json(result ?? null);
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'RPC error' }, 400);
+  }
+});
+
+// ─── SPA catch-all — serve the React app for any unmatched route ─────────────
+// Static assets (JS/CSS bundles) are served directly by Cloudflare Workers
+// Assets without invoking this handler.  Only requests that don't match a
+// static file fall through here.
+app.get('*', async (c) => {
+  const p = new URL(c.req.url).pathname;
+  // Let API / auth / portal / sync routes 404 naturally
+  if (p.startsWith('/api/') || p.startsWith('/portal') || p.startsWith('/sync')) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+  // Serve the SPA shell for everything else (/, /app/*, /auth/*, deep links)
+  const assetUrl = new URL('/index.html', c.req.url);
+  return c.env.ASSETS.fetch(new Request(assetUrl.toString(), c.req.raw));
+});
 
 export default app;
