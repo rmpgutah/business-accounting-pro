@@ -2882,13 +2882,6 @@ export function generateVerificationAffidavitHTML(
 // SHARED HELPERS (Bill / PO / Expense templates)
 // ═══════════════════════════════════════════════════════════════
 
-function safeImg(src: string | null | undefined, alt: string, style: string): string {
-  if (!src) return '';
-  const s = String(src);
-  if (!/^data:|^https?:/i.test(s)) return '';
-  return `<img src="${esc(s)}" alt="${esc(alt)}" style="${style}">`;
-}
-
 function addrLines(parts: Array<string | null | undefined>): string {
   // Split each part on newlines so multiline addresses don't run into one string
   const out: string[] = [];
