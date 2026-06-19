@@ -3402,37 +3402,36 @@ export function generateExpenseReceiptHTML(
       )
     : '';
 
-  // ── Details & Classification grid (all fields preserved) ──
-  const dash = (v: any): string => {
-    if (v === 0) return '0';
-    if (v === null || v === undefined || v === '') return '—';
-    return String(v);
-  };
+  // ── Details & Classification grid — smart filtering ──
+  // Payment method is already in the meta strip — skip here to avoid duplication.
+  // Only include fields that carry signal: skip zeros, empty strings, false-default booleans.
   const titleCase = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   const reimbursableLabel = expense.is_reimbursable
     ? (expense.reimbursed ? `Reimbursed${expense.reimbursed_date ? ' ' + fmtDateMaybe(expense.reimbursed_date) : ''}` : 'Pending')
     : 'No';
   const exch = Number(expense.exchange_rate || 1);
   const miles = Number(expense.miles || 0);
-  const detailRows: Array<[string, string]> = [
-    ['Payment Method', expense.payment_method ? titleCase(String(expense.payment_method)) : '—'],
-    ['Status', expense.status ? titleCase(String(expense.status)) : '—'],
-    ['Approval', expense.approval_status ? titleCase(String(expense.approval_status)) : '—'],
-    ['Project', dash(expense.project_name)],
-    ['Billable', expense.is_billable ? 'Yes' : 'No'],
-    ['Reimbursable', reimbursableLabel],
-    ['Tax-Deductible', expense.is_tax_deductible === 0 ? 'No' : 'Yes'],
-    ['Tax Amount', fmt(tax)],
-    ['Tip Amount', fmt(Number(expense.tip_amount || 0))],
-    ['Currency', String(expense.currency || 'USD')],
-    ['Exchange Rate', exch && exch !== 1 ? exch.toFixed(4) : '—'],
-    ['Schedule C Line', dash(expense.schedule_c_line)],
-    ['Mileage', miles > 0 ? `${miles.toFixed(1)} mi @ $${Number(expense.mileage_rate || 0.7).toFixed(2)}` : '—'],
-    ['Merchant Location', dash(expense.merchant_location)],
-    ['Recurring', expense.is_recurring ? 'Yes' : 'No'],
-    ['Submitted', expense.created_at ? fmtDateMaybe(expense.created_at) : '—'],
-  ];
-  const detailsHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px 10px;">
+  const detailRows: Array<[string, string]> = [];
+  const addDetail = (cond: unknown, k: string, v: string) => { if (cond) detailRows.push([k, v]); };
+  addDetail(true,   'Status',         expense.status ? titleCase(String(expense.status)) : '—');
+  addDetail(expense.approval_status && String(expense.approval_status).toLowerCase() !== 'pending',
+                    'Approval',       titleCase(String(expense.approval_status || '')));
+  addDetail(true,   'Tax-Deductible', expense.is_tax_deductible === 0 ? 'No' : 'Yes');
+  addDetail(tax > 0,'Tax Amount',     fmt(tax));
+  addDetail(expense.is_billable,      'Billable',      'Yes');
+  addDetail(expense.is_reimbursable,  'Reimbursable',  reimbursableLabel);
+  addDetail(expense.project_name,     'Project',       String(expense.project_name));
+  addDetail(expense.schedule_c_line,  'Schedule C',    String(expense.schedule_c_line));
+  addDetail(Number(expense.tip_amount || 0) > 0, 'Tip', fmt(Number(expense.tip_amount || 0)));
+  addDetail(expense.currency && expense.currency !== 'USD', 'Currency', String(expense.currency));
+  addDetail(exch !== 1,               'Exchange Rate', exch.toFixed(4));
+  addDetail(miles > 0,                'Mileage',       `${miles.toFixed(1)} mi @ $${Number(expense.mileage_rate || 0.7).toFixed(2)}`);
+  addDetail(expense.merchant_location,'Location',      String(expense.merchant_location));
+  addDetail(Number(expense.shipping_amount || 0) > 0, 'Shipping', fmt(Number(expense.shipping_amount || 0)));
+  addDetail(expense.is_recurring,     'Recurring',     'Yes');
+  addDetail(expense.created_at,       'Submitted',     expense.created_at ? fmtDateMaybe(expense.created_at) : '—');
+  const detailCols = detailRows.length > 8 ? 4 : 3;
+  const detailsHTML = `<div style="display:grid;grid-template-columns:repeat(${detailCols},1fr);gap:7px 16px;">
     ${detailRows.map(([k, v]) => `<div>
       <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#555;font-weight:600;">${esc(k)}</div>
       <div style="font-size:11px;color:#000;font-weight:600;">${esc(v)}</div>

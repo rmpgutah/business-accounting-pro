@@ -3,7 +3,7 @@
 // Mirrors InvoiceDetail's structure: header → body → RelatedPanel + EntityTimeline.
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as ReceiptIcon, Eye, Printer, FileDown, Flag, RefreshCw, Repeat, MapPin, Clock } from 'lucide-react';
+import { ArrowLeft, Edit, Copy, CheckCircle, XCircle, DollarSign, Receipt as ReceiptIcon, Eye, Printer, FileDown, Flag, RefreshCw, Repeat, MapPin, Clock, MoreHorizontal } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate, humanizeLabel, formatPaymentMethod } from '../../lib/format';
@@ -39,6 +39,7 @@ const ExpenseDetail: React.FC<Props> = ({ expenseId, onBack, onEdit }) => {
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [vendorStats, setVendorStats] = useState<{ ytd: number; count: number } | null>(null);
   const [project, setProject] = useState<{ id: string; name: string; budget: number; spent: number } | null>(null);
+  const [showMore, setShowMore] = useState(false);
 
   const reload = async () => {
     if (!activeCompany) return;
@@ -354,42 +355,15 @@ table{width:100%;border-collapse:collapse;}
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center gap-2 text-sm text-text-muted hover:text-text-primary">
+      {/* Primary header row: Back ← … Edit + lifecycle actions … ⋯ More */}
+      <div className="flex items-center justify-between gap-2">
+        <button onClick={onBack} className="flex items-center gap-2 text-sm text-text-muted hover:text-text-primary flex-shrink-0">
           <ArrowLeft size={16} /> Back
         </button>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <button onClick={() => onEdit(expenseId)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
             <Edit size={13} /> Edit
           </button>
-          <button onClick={duplicate} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
-            <Copy size={13} /> Duplicate
-          </button>
-          <button onClick={convertToRecurring} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
-            <Repeat size={13} /> Recurring
-          </button>
-          {expense.flagged_for_review ? (
-            <button onClick={unflag} className="flex items-center gap-1 px-3 py-2 border border-accent-expense text-xs font-bold uppercase text-accent-expense hover:border-accent-blue">
-              <Flag size={13} /> Unflag
-            </button>
-          ) : (
-            <button onClick={flagForReview} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-expense text-accent-expense">
-              <Flag size={13} /> Flag for Review
-            </button>
-          )}
-          <button onClick={handlePreview} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
-            <Eye size={13} /> Preview
-          </button>
-          <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
-            <Printer size={13} /> Print
-          </button>
-          <button onClick={handleSavePdf} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
-            <FileDown size={13} /> PDF
-          </button>
-          <button onClick={handlePrintVoucher} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
-            <Printer size={13} /> Voucher
-          </button>
-          {/* Lifecycle actions: Submitted → Approved/Declined → Paid */}
           {stage === 'submitted' && (<>
             <button onClick={() => transition('approved')} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-income text-accent-income">
               <CheckCircle size={13} /> Approve
@@ -416,13 +390,57 @@ table{width:100%;border-collapse:collapse;}
               <RefreshCw size={13} /> Unmark Paid
             </button>
           )}
+          <span className="h-5 w-px bg-border-primary opacity-60" />
+          <button
+            onClick={() => setShowMore(v => !v)}
+            className="flex items-center gap-1 px-3 py-2 border text-xs font-bold uppercase"
+            style={{
+              borderColor: showMore ? 'var(--accent-primary)' : 'var(--color-border-primary)',
+              color: showMore ? 'var(--accent-primary)' : undefined,
+            }}
+          >
+            <MoreHorizontal size={13} /> {showMore ? 'Less' : 'More'}
+          </button>
+        </div>
+      </div>
+      {/* Secondary actions panel — preview/print/export + admin ops */}
+      {showMore && (
+        <div className="block-card flex items-center gap-2 flex-wrap p-3">
+          <button onClick={handlePreview} className="flex items-center gap-1 px-3 py-1.5 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+            <Eye size={12} /> Preview
+          </button>
+          <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-1.5 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+            <Printer size={12} /> Print
+          </button>
+          <button onClick={handleSavePdf} className="flex items-center gap-1 px-3 py-1.5 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+            <FileDown size={12} /> PDF
+          </button>
+          <button onClick={handlePrintVoucher} className="flex items-center gap-1 px-3 py-1.5 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+            <Printer size={12} /> Voucher
+          </button>
+          <span className="h-4 w-px bg-border-primary opacity-60" />
+          <button onClick={duplicate} className="flex items-center gap-1 px-3 py-1.5 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+            <Copy size={12} /> Duplicate
+          </button>
+          <button onClick={convertToRecurring} className="flex items-center gap-1 px-3 py-1.5 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+            <Repeat size={12} /> Recurring
+          </button>
+          {expense.flagged_for_review ? (
+            <button onClick={unflag} className="flex items-center gap-1 px-3 py-1.5 border border-accent-expense text-xs font-bold uppercase text-accent-expense">
+              <Flag size={12} /> Unflag
+            </button>
+          ) : (
+            <button onClick={flagForReview} className="flex items-center gap-1 px-3 py-1.5 border border-border-primary text-xs font-bold uppercase hover:border-accent-expense text-accent-expense">
+              <Flag size={12} /> Flag
+            </button>
+          )}
           {!!expense.is_reimbursable && !expense.reimbursed && (
-            <button onClick={markReimbursed} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
-              <DollarSign size={13} /> Mark Reimbursed
+            <button onClick={markReimbursed} className="flex items-center gap-1 px-3 py-1.5 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue">
+              <DollarSign size={12} /> Mark Reimbursed
             </button>
           )}
         </div>
-      </div>
+      )}
 
       {/* KPI Header Cards (Changes 31-34) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -485,7 +503,7 @@ table{width:100%;border-collapse:collapse;}
 
       {/* Flag banner */}
       {expense.flagged_for_review ? (
-        <div className="block-card p-3 flex items-center gap-3" style={{ borderLeft: '3px solid #ef4444' }}>
+        <div className="block-card p-3 flex items-center gap-3" style={{ borderLeft: '3px solid var(--color-accent-expense)' }}>
           <Flag size={16} className="text-accent-expense" />
           <div className="text-xs flex-1">
             <strong className="text-accent-expense">Flagged for Review.</strong> {expense.flag_reason ? <span className="text-text-secondary">{expense.flag_reason}</span> : null}
@@ -495,7 +513,7 @@ table{width:100%;border-collapse:collapse;}
 
       <div className="block-card p-5">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 6 }}>
+          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <ReceiptIcon size={18} className="text-accent-blue" />
           </div>
           <div className="flex-1">
@@ -518,33 +536,68 @@ table{width:100%;border-collapse:collapse;}
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+          {/* Always shown */}
           <Field label="Vendor">
             {expense.vendor_id
               ? <EntityChip type="vendor" id={expense.vendor_id} label={expense.vendor_name || ''} variant="inline" />
-              : <span className="text-text-muted">—</span>}
+              : <span className="text-text-muted">{expense.vendor_name || '—'}</span>}
           </Field>
           <Field label="Category">{expense.category_name || '—'}</Field>
-          <Field label="Project">
-            {expense.project_id
-              ? <EntityChip type="project" id={expense.project_id} label={expense.project_name || ''} variant="inline" />
-              : <span className="text-text-muted">—</span>}
+          <Field label="Tax-Deductible">
+            <span className={expense.is_tax_deductible === 0 ? 'text-text-muted' : 'text-accent-income'}>
+              {expense.is_tax_deductible === 0 ? 'No' : 'Yes'}
+            </span>
           </Field>
-          <Field label="Tax Amount">{formatCurrency(expense.tax_amount || 0)}</Field>
-          <Field label="Payment Method">{expense.payment_method ? humanizeLabel(expense.payment_method) : "—"}</Field>
-          <Field label="Reference">{expense.reference || '—'}</Field>
-          <Field label="Billable">{expense.is_billable ? 'Yes' : 'No'}</Field>
-          <Field label="Reimbursable">{expense.is_reimbursable ? (expense.reimbursed ? `Reimbursed ${expense.reimbursed_date || ''}` : 'Pending') : 'No'}</Field>
-          <Field label="Merchant Location">
-            {expense.merchant_location ? <span className="inline-flex items-center gap-1"><MapPin size={11} className="text-text-muted" />{expense.merchant_location}</span> : '—'}
+          <Field label="Status">
+            {expense.status ? expense.status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '—'}
           </Field>
-          <Field label="Status">{expense.status ? expense.status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '—'}</Field>
-          <Field label="Approval Status">{expense.approval_status ? expense.approval_status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '—'}</Field>
-          <Field label="Tax-Deductible">{expense.is_tax_deductible === 0 ? 'No' : 'Yes'}</Field>
-          <Field label="Tip Amount">{formatCurrency(expense.tip_amount || 0)}</Field>
-          <Field label="Currency">{expense.currency || 'USD'}{expense.exchange_rate && expense.exchange_rate !== 1 ? ` · @ ${Number(expense.exchange_rate).toFixed(4)}` : ''}</Field>
-          <Field label="Schedule C Line">{expense.schedule_c_line || '—'}</Field>
-          <Field label="Recurring">{expense.is_recurring ? 'Yes' : 'No'}</Field>
           <Field label="Submitted">{expense.created_at ? formatDate(expense.created_at) : '—'}</Field>
+          {/* Shown when set / non-default */}
+          {expense.project_id && (
+            <Field label="Project">
+              <EntityChip type="project" id={expense.project_id} label={expense.project_name || ''} variant="inline" />
+            </Field>
+          )}
+          {expense.payment_method && (
+            <Field label="Payment Method">{humanizeLabel(expense.payment_method)}</Field>
+          )}
+          {expense.reference && (
+            <Field label="Reference">{expense.reference}</Field>
+          )}
+          {(expense.tax_amount || 0) > 0 && (
+            <Field label="Tax Amount">{formatCurrency(expense.tax_amount)}</Field>
+          )}
+          {expense.is_billable ? (
+            <Field label="Billable"><span className="text-accent-income">Yes</span></Field>
+          ) : null}
+          {expense.is_reimbursable ? (
+            <Field label="Reimbursable">
+              {expense.reimbursed
+                ? `Reimbursed${expense.reimbursed_date ? ' ' + formatDate(expense.reimbursed_date) : ''}`
+                : 'Pending'}
+            </Field>
+          ) : null}
+          {expense.approval_status && (
+            <Field label="Approval">
+              {expense.approval_status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+            </Field>
+          )}
+          {expense.schedule_c_line && (
+            <Field label="Schedule C Line">{expense.schedule_c_line}</Field>
+          )}
+          {expense.merchant_location && (
+            <Field label="Location">
+              <span className="inline-flex items-center gap-1">
+                <MapPin size={11} className="text-text-muted" />{expense.merchant_location}
+              </span>
+            </Field>
+          )}
+          {(expense.tip_amount || 0) > 0 && (
+            <Field label="Tip Amount">{formatCurrency(expense.tip_amount)}</Field>
+          )}
+          {expense.is_recurring ? (
+            <Field label="Recurring"><span className="text-accent-blue">Yes</span></Field>
+          ) : null}
         </div>
 
         {/* Vendor Details — surfaces the vendor's address/contact/tax_id on the
@@ -662,7 +715,7 @@ table{width:100%;border-collapse:collapse;}
             </div>
             {project.budget > 0 && (
               <div className="mt-2">
-                <div className="h-2 bg-bg-tertiary" style={{ borderRadius: 6, overflow: 'hidden' }}>
+                <div className="h-2 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)', overflow: 'hidden' }}>
                   <div style={{
                     width: `${Math.min(100, (project.spent / project.budget) * 100).toFixed(1)}%`,
                     height: '100%',
