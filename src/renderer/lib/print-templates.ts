@@ -3498,16 +3498,16 @@ export function generateExpenseReceiptHTML(
   // ── Details & Classification ──
   const detailsTable = boxRow([{ label: 'Details & Classification', html: detailsHTML }]);
 
-  // ── Totals ──
-  const totalRows: { label: string; value: string; grand?: boolean }[] = [
-    { label: `Subtotal (pre-tax)`, value: fmt(subtotal) },
-  ];
+  // ── Totals — only show subtotal row when there is actual breakdown ──
+  const hasBreakdown = tax > 0 || expDiscountTotal > 0;
+  const totalRows: { label: string; value: string; grand?: boolean }[] = [];
+  if (hasBreakdown) totalRows.push({ label: 'Subtotal (pre-tax)', value: fmt(subtotal) });
   if (tax > 0) totalRows.push({ label: `Tax${expense.tax_inclusive ? ' (incl.)' : ''}`, value: fmt(tax) });
   if (expDiscountTotal > 0) totalRows.push({ label: 'Discount', value: `−${fmt(expDiscountTotal)}` });
-  totalRows.push({ label: `Total Expense`, value: fmt(total), grand: true });
+  totalRows.push({ label: 'Total Expense', value: fmt(total), grand: true });
   const totals = totalsBox(totalRows);
 
-  // ── Reimbursement + Totals: side-by-side to close whitespace ──
+  // ── Reimbursement + Totals: reimbursement fills left, totals hugs right edge ──
   const reimbLabel = String(reimbStatus).toUpperCase().replace('_', ' ');
   const reimbTotalsRow =
     `<div class="box-row">` +
@@ -3515,7 +3515,7 @@ export function generateExpenseReceiptHTML(
         `<div class="sec-label">Reimbursement</div>` +
         `<div style="margin-top:4px;font-size:13px;font-weight:700;">${cesc(reimbLabel)}</div>` +
       `</div>` +
-      `<div class="box" style="display:flex;justify-content:flex-end;align-items:flex-end;padding:6px 12px;">` +
+      `<div style="border-left:1px solid #000;">` +
         totals +
       `</div>` +
     `</div>`;
