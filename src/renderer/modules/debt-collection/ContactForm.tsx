@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { debtDb } from './dbHelpers';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
@@ -102,10 +103,11 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
     }
 
     try {
+      // debt_contacts has no company_id column; use debtDb helpers.
       if (contactId) {
-        await api.update('debt_contacts', contactId, payload);
+        await debtDb.updateContact(contactId, payload);
       } else {
-        await api.create('debt_contacts', payload);
+        await debtDb.createContact(payload);
       }
       onSaved();
     } catch (err: any) {

@@ -61,6 +61,67 @@ export function applyCustomizationGlobals(): void {
 
   // ── Section dividers (Dashboard › Layout) ────────────────────────────
   root.setAttribute('data-section-dividers', bool('dashboard', 'section-dividers') ? 'on' : 'off');
+
+  // ── Accent / chart colors (Dashboard › Colors & Theme) ───────────────
+  // The accent color drives `--color-accent-blue`, which is referenced by
+  // active sidebar items, primary buttons, focus rings, and KPI highlights.
+  // Only push if the value looks like a valid #RRGGBB to avoid corrupting
+  // the variable with an empty / partial input mid-edit.
+  const isHex = (v: unknown): v is string =>
+    typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v);
+
+  const accent = val('dashboard', 'accent-color');
+  if (isHex(accent)) root.style.setProperty('--color-accent-blue', accent);
+
+  const tileBg = val('dashboard', 'tile-background-color');
+  if (isHex(tileBg)) root.style.setProperty('--cust-tile-bg', tileBg);
+
+  const dashBg = val('dashboard', 'dashboard-background-color');
+  if (isHex(dashBg)) root.style.setProperty('--cust-dashboard-bg', dashBg);
+
+  const gridLine = val('dashboard', 'grid-line-color');
+  if (isHex(gridLine)) root.style.setProperty('--cust-grid-line', gridLine);
+
+  // Chart series — exposed for any chart component that wants to honor the
+  // user's color choices (e.g. AmortizationChart, KPI sparklines).
+  const series: Array<[string, string]> = [
+    ['revenue-color', '--cust-series-revenue'],
+    ['expense-color', '--cust-series-expense'],
+    ['profit-color', '--cust-series-profit'],
+    ['cash-color', '--cust-series-cash'],
+    ['kpi-color-positive', '--cust-series-positive'],
+    ['kpi-color-negative', '--cust-series-negative'],
+    ['kpi-color-neutral', '--cust-series-neutral'],
+    ['overdue-highlight-color', '--cust-overdue'],
+  ];
+  for (const [id, cssVar] of series) {
+    const c = val('dashboard', id);
+    if (isHex(c)) root.style.setProperty(cssVar, c);
+  }
+
+  // ── Invoicing accessibility & global affordances ─────────────────────
+  // These are scoped to the invoicing section in the Customization Center
+  // but their effect is most useful when applied app-wide — they're CSS-
+  // expressible and the user almost certainly wants them everywhere.
+  const fontScale = Number(val('invoicing', 'a11y-font-scale'));
+  if (Number.isFinite(fontScale) && fontScale >= 50 && fontScale <= 250) {
+    root.style.setProperty('--cust-font-scale', String(fontScale / 100));
+  }
+  // Reduced motion → matches the data attribute pattern other features use
+  // (see existing `data-density`). Components and Tailwind classes can key
+  // off this with a sibling selector like `[data-reduce-motion="on"] *`.
+  root.setAttribute(
+    'data-reduce-motion',
+    bool('invoicing', 'a11y-reduce-motion') ? 'on' : 'off',
+  );
+  root.setAttribute(
+    'data-high-contrast',
+    bool('invoicing', 'a11y-high-contrast') ? 'on' : 'off',
+  );
+  root.setAttribute(
+    'data-focus-visible',
+    bool('invoicing', 'a11y-focus-outline') ? 'on' : 'off',
+  );
 }
 
 let unsubscribe: (() => void) | null = null;

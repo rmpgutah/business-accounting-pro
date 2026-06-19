@@ -1,8 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Download, Printer } from 'lucide-react';
 import api from '../../lib/api';
+import PdfPreview from '../../components/PdfPreview';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency, formatDate } from '../../lib/format';
+import {
+  classicStyles, docFrame, docHeader, metaStrip, boxRow, ruledTable, totalsBox, footerBar,
+  esc as cesc,
+} from '../../lib/classic-styles';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtInvoiceFormatterProps {
@@ -53,14 +58,9 @@ interface Payment {
 }
 
 // ─── Helpers ────────────────────────────────────────────
+// esc is imported from classic-styles as cesc
 function esc(str: string | null | undefined): string {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return cesc(str);
 }
 
 function statementNumber(debtId: string): string {
@@ -100,7 +100,7 @@ function methodLabel(method: string): string {
 }
 
 // ─── HTML Generator ─────────────────────────────────────
-// All user-sourced strings are passed through esc() before interpolation.
+// All user-sourced strings are passed through esc()/cesc() before interpolation.
 function buildStatementHTML(
   debt: Debt,
   payments: Payment[],
@@ -118,9 +118,8 @@ function buildStatementHTML(
   const paymentsTotal = payments.reduce((s, p) => s + (p.amount || 0), 0);
 
   const companyName = esc(company?.name || 'Company Name');
-  const companyAddress = esc([
-    company?.address_line1, company?.city, company?.state, company?.zip,
-  ].filter(Boolean).join(', '));
+  const companyAddrParts = [company?.address_line1, company?.city, company?.state, company?.zip].filter(Boolean);
+  const companyAddrHtml = companyAddrParts.map((p: string) => cesc(p)).join(', ');
   const companyPhone = esc(company?.phone || '');
   const companyEmail = esc(company?.email || '');
 
@@ -138,236 +137,189 @@ function buildStatementHTML(
     ? Math.max(0, Math.floor((Date.now() - new Date(debt.interest_start_date).getTime()) / 86400000))
     : null;
 
-  const paymentRows = payments.length > 0
-    ? payments.map((p) => `
-        <tr>
-          <td>${esc(formatDate(p.received_date))}</td>
-          <td>${esc(methodLabel(p.method))}</td>
-          <td>${esc(p.reference_number)}</td>
-          <td style="text-align:right">${formatCurrency(p.amount)}</td>
-          <td>${p.applied_to_principal ? formatCurrency(p.applied_to_principal) : '—'}</td>
-          <td>${p.applied_to_interest ? formatCurrency(p.applied_to_interest) : '—'}</td>
-          <td>${p.applied_to_fees ? formatCurrency(p.applied_to_fees) : '—'}</td>
-          <td>${esc(p.notes)}</td>
-        </tr>`).join('')
-    : '<tr><td colspan="8" style="text-align:center;color:#555;font-style:italic">No payments recorded</td></tr>';
+  // ── Header ──
+  const coContactLine = [
+    companyAddrHtml,
+    [companyEmail, companyPhone ? 'Tel: ' + companyPhone : ''].filter(Boolean).join(' &middot; '),
+  ].filter(Boolean).join('<br>');
+  const header = docHeader({
+    coName: company?.name || 'Company Name',
+    coDetailHtml: coContactLine,
+    title: 'Statement',
+    numberHtml: `No. ${stmtNum}<br><span style="font-size:11px;font-weight:normal;">${todayStr}</span>`,
+  });
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8" />
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body, div, span, p, td, th, tr, strong { color: #111; }
-  body { font-family: Arial, sans-serif; font-size: 12px; color: #111; background: #fff; padding: 48px; }
-  .page { max-width: 800px; margin: 0 auto; color: #111; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; border-bottom: 3px solid #111; padding-bottom: 20px; }
-  .company-name { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; color: #111; }
-  .company-details { font-size: 11px; color: #555; margin-top: 4px; line-height: 1.6; }
-  .doc-title { text-align: right; color: #111; }
-  .doc-title h1 { font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #111; }
-  .doc-title .meta { font-size: 11px; color: #555; margin-top: 6px; line-height: 1.7; }
-  .doc-title .meta strong { color: #111; }
-  .parties { display: flex; gap: 40px; margin-bottom: 28px; padding: 20px; background: #f7f7f7; border-left: 4px solid #111; }
-  .party { flex: 1; }
-  .party-label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #555; margin-bottom: 6px; }
-  .party-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; color: #111; }
-  .party-detail { font-size: 11px; color: #444; line-height: 1.6; }
-  .party-detail strong { color: #111; }
-  .summary-box { border: 2px solid #111; margin-bottom: 28px; }
-  .summary-box-header { background: #111; color: #fff; padding: 8px 16px; font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
-  .summary-row { display: flex; justify-content: space-between; padding: 8px 16px; border-bottom: 1px solid #e5e5e5; font-size: 12px; color: #111; }
-  .summary-row span { color: #111; }
-  .summary-row:last-child { border-bottom: none; }
-  .summary-row.total { background: #111; color: #fff; font-weight: 900; font-size: 14px; padding: 12px 16px; }
-  .summary-row.total span { color: #fff; }
-  .summary-row.subtotal { border-top: 2px solid #111; font-weight: 700; }
-  .amount { font-family: "Courier New", monospace; color: inherit; }
-  .section { margin-bottom: 28px; }
-  .section-title { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #111; border-bottom: 2px solid #111; padding-bottom: 6px; margin-bottom: 12px; }
-  table { width: 100%; border-collapse: collapse; font-size: 11px; color: #111; }
-  th { background: #f0f0f0; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; padding: 7px 10px; text-align: left; border: 1px solid #ddd; color: #333; }
-  td { padding: 7px 10px; border: 1px solid #e5e5e5; vertical-align: top; color: #111; }
-  tr:nth-child(even) td { background: #fafafa; }
-  .amount-col { text-align: right; font-family: "Courier New", monospace; color: #111; }
-  .highlight-row td { background: #f0f0f0; font-weight: 700; color: #111; }
-  .interest-box { background: #f9f9f9; border: 1px solid #ddd; padding: 16px; margin-bottom: 28px; color: #111; }
-  .interest-row { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 0; color: #111; }
-  .interest-row span { color: #111; }
-  .interest-formula { font-size: 10px; color: #555; font-style: italic; margin-top: 8px; border-top: 1px solid #ddd; padding-top: 8px; }
-  .legal-notice { border: 1px solid #ccc; padding: 16px; margin-bottom: 28px; background: #fffbf0; }
-  .legal-notice-title { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #b45309; margin-bottom: 8px; }
-  .legal-notice p { font-size: 10px; color: #444; line-height: 1.7; margin-bottom: 4px; }
-  .legal-notice strong { color: #222; }
-  .notes-box { border: 1px solid #e5e5e5; padding: 14px; background: #fafafa; margin-bottom: 28px; }
-  .notes-label { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; color: #555; margin-bottom: 6px; }
-  .footer { border-top: 1px solid #ddd; padding-top: 14px; text-align: center; font-size: 10px; color: #555; margin-top: 32px; }
-  @media print { body { padding: 0; } -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-</style>
-</head>
-<body>
-<div class="page">
+  // ── Meta strip: statement # / date / type / stage ──
+  const meta = metaStrip([
+    { label: 'Statement #',   value: statementNumber(debt.id) },
+    { label: 'Issue Date',    value: todayStr },
+    { label: 'Account Type',  value: debt.type === 'receivable' ? 'Receivable' : 'Payable' },
+    { label: 'Stage',         value: stageLabel(debt.current_stage) },
+  ]);
 
-  <div class="header">
-    <div>
-      <div class="company-name">${companyName}</div>
-      <div class="company-details">
-        ${companyAddress ? companyAddress + '<br>' : ''}
-        ${companyPhone ? 'Tel: ' + companyPhone + (companyEmail ? '&nbsp;&nbsp;' : '') : ''}${companyEmail}
-      </div>
-    </div>
-    <div class="doc-title">
-      <h1>Statement of Account</h1>
-      <div class="meta">
-        Statement #: <strong>${stmtNum}</strong><br>
-        Issue Date: <strong>${todayStr}</strong><br>
-        Account Type: <strong>${debt.type === 'receivable' ? 'Receivable' : 'Payable'}</strong><br>
-        Stage: <strong>${stageStr}</strong>
-      </div>
-    </div>
-  </div>
+  // ── Party boxes: Creditor / Debtor / Account Reference ──
+  const creditorHtml = `<b>${companyName}</b>${companyAddrHtml ? '<br>' + companyAddrHtml : ''}` +
+    (companyPhone ? '<br>Tel: ' + companyPhone : '') +
+    (companyEmail ? '<br>' + companyEmail : '');
+  const debtorHtml = `<b>${debtorName}</b>` +
+    (debtorAddress ? '<br>' + debtorAddress : '') +
+    (debtorEmail ? '<br>Email: ' + debtorEmail : '') +
+    (debtorPhone ? '<br>Tel: ' + debtorPhone : '');
+  const refHtml = `<b>Ref:</b> ${sourceRef}<br>` +
+    `<b>Due:</b> ${esc(formatDate(debt.due_date)) || '—'}<br>` +
+    `<b>Delinquent:</b> ${esc(formatDate(debt.delinquent_date)) || '—'}` +
+    (jurisdiction ? `<br><b>Jurisdiction:</b> ${jurisdiction}` : '');
+  const parties = boxRow([
+    { label: 'From (Creditor)',          html: creditorHtml },
+    { label: 'Account Holder / Debtor',  html: debtorHtml },
+    { label: 'Account Reference',        html: refHtml },
+  ]);
 
-  <div class="parties">
-    <div class="party">
-      <div class="party-label">From</div>
-      <div class="party-name">${companyName}</div>
-      <div class="party-detail">
-        ${companyAddress || '—'}<br>
-        ${companyPhone ? 'Tel: ' + companyPhone + '<br>' : ''}
-        ${companyEmail}
-      </div>
-    </div>
-    <div class="party">
-      <div class="party-label">Account Holder / Debtor</div>
-      <div class="party-name">${debtorName}</div>
-      <div class="party-detail">
-        ${debtorAddress || '—'}<br>
-        ${debtorEmail ? 'Email: ' + debtorEmail + '<br>' : ''}
-        ${debtorPhone ? 'Tel: ' + debtorPhone : ''}
-      </div>
-    </div>
-    <div class="party">
-      <div class="party-label">Account Reference</div>
-      <div class="party-detail" style="line-height:2">
-        <strong>Ref:</strong> ${sourceRef}<br>
-        <strong>Due Date:</strong> ${esc(formatDate(debt.due_date))}<br>
-        <strong>Delinquent:</strong> ${esc(formatDate(debt.delinquent_date)) || '—'}<br>
-        ${jurisdiction ? '<strong>Jurisdiction:</strong> ' + jurisdiction : ''}
-      </div>
-    </div>
-  </div>
+  // ── Account summary (totals box) ──
+  const summaryBox = `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:8px;">Account Summary</div>` +
+    `<div style="display:flex;justify-content:flex-end;">` +
+    totalsBox([
+      { label: 'Original Principal',                                       value: formatCurrency(debt.original_amount) },
+      { label: `Interest Accrued (${interestPct} ${interestTypeLabel})`,   value: formatCurrency(debt.interest_accrued) },
+      { label: 'Collection Fees',                                          value: formatCurrency(debt.fees_accrued) },
+      { label: 'Total Charges',                                            value: formatCurrency(totalCharges) },
+      { label: 'Payments Received',                                        value: `− ${formatCurrency(paymentsTotal)}` },
+      { label: 'BALANCE DUE',                                              value: formatCurrency(debt.balance_due), grand: true },
+    ]) +
+    `</div></div>`;
 
-  <div class="summary-box">
-    <div class="summary-box-header">Account Summary</div>
-    <div>
-      <div class="summary-row"><span>Original Principal</span><span class="amount">${formatCurrency(debt.original_amount)}</span></div>
-      <div class="summary-row"><span>Interest Accrued (${esc(interestPct)} ${esc(interestTypeLabel)})</span><span class="amount">${formatCurrency(debt.interest_accrued)}</span></div>
-      <div class="summary-row"><span>Collection Fees</span><span class="amount">${formatCurrency(debt.fees_accrued)}</span></div>
-      <div class="summary-row subtotal"><span>Total Charges</span><span class="amount">${formatCurrency(totalCharges)}</span></div>
-      <div class="summary-row" style="color:#16a34a"><span>Payments Received</span><span class="amount">− ${formatCurrency(paymentsTotal)}</span></div>
-      <div class="summary-row total"><span>BALANCE DUE</span><span class="amount">${formatCurrency(debt.balance_due)}</span></div>
-    </div>
-  </div>
+  // ── Charge breakdown table ──
+  const chargeRows: string[][] = [];
+  chargeRows.push([
+    esc(formatDate(debt.delinquent_date) || formatDate(debt.due_date)),
+    'Original Principal Balance',
+    sourceRef,
+    formatCurrency(debt.original_amount),
+  ]);
+  if (debt.interest_accrued > 0) {
+    chargeRows.push([
+      esc(formatDate(debt.interest_start_date)) || '—',
+      `Interest — ${esc(interestPct)} per annum (${esc(interestTypeLabel)}${debt.interest_type === 'compound' && debt.compound_frequency ? ', ' + debt.compound_frequency + '×/yr' : ''})`,
+      `Calculated to ${todayStr}`,
+      formatCurrency(debt.interest_accrued),
+    ]);
+  }
+  if (debt.fees_accrued > 0) {
+    chargeRows.push(['—', 'Collection &amp; Administrative Fees', '—', formatCurrency(debt.fees_accrued)]);
+  }
+  chargeRows.push([`<b colspan="1">Total Charges</b>`, '', '', `<b>${formatCurrency(totalCharges)}</b>`]);
 
-  <div class="section">
-    <div class="section-title">Charge Breakdown</div>
-    <table>
-      <thead>
-        <tr><th>Date</th><th>Description</th><th>Reference</th><th style="text-align:right">Amount</th></tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>${esc(formatDate(debt.delinquent_date)) || esc(formatDate(debt.due_date))}</td>
-          <td>Original Principal Balance</td>
-          <td>${sourceRef}</td>
-          <td class="amount-col">${formatCurrency(debt.original_amount)}</td>
-        </tr>
-        ${debt.interest_accrued > 0 ? `
-        <tr>
-          <td>${esc(formatDate(debt.interest_start_date)) || '—'}</td>
-          <td>Interest — ${esc(interestPct)} per annum (${esc(interestTypeLabel)}${debt.interest_type === 'compound' && debt.compound_frequency ? ', ' + debt.compound_frequency + '&times;/yr' : ''})</td>
-          <td>Calculated to ${todayStr}</td>
-          <td class="amount-col">${formatCurrency(debt.interest_accrued)}</td>
-        </tr>` : ''}
-        ${debt.fees_accrued > 0 ? `
-        <tr>
-          <td>—</td>
-          <td>Collection &amp; Administrative Fees</td>
-          <td>—</td>
-          <td class="amount-col">${formatCurrency(debt.fees_accrued)}</td>
-        </tr>` : ''}
-        <tr class="highlight-row">
-          <td colspan="3"><strong>Total Charges</strong></td>
-          <td class="amount-col"><strong>${formatCurrency(totalCharges)}</strong></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  const chargeTable = `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:8px;">Charge Breakdown</div>` +
+    ruledTable(
+      [
+        { label: 'Date' },
+        { label: 'Description' },
+        { label: 'Reference' },
+        { label: 'Amount', align: 'right', width: '100px' },
+      ],
+      chargeRows,
+    ) + `</div>`;
 
-  ${debt.interest_rate > 0 ? `
-  <div class="section">
-    <div class="section-title">Interest Calculation Detail</div>
-    <div class="interest-box">
-      <div class="interest-row"><span>Principal (P)</span><span>${formatCurrency(debt.original_amount)}</span></div>
-      <div class="interest-row"><span>Annual Rate (r)</span><span>${esc(interestPct)}</span></div>
-      <div class="interest-row"><span>Interest Type</span><span>${esc(interestTypeLabel)}</span></div>
-      ${debt.interest_type === 'compound' ? `<div class="interest-row"><span>Compounding Frequency (n)</span><span>${debt.compound_frequency || 12}&times; per year</span></div>` : ''}
-      <div class="interest-row"><span>Interest Start Date</span><span>${esc(formatDate(debt.interest_start_date)) || esc(formatDate(debt.delinquent_date)) || '—'}</span></div>
-      ${daysAccrued !== null ? `<div class="interest-row"><span>Days Accrued</span><span>${daysAccrued} days</span></div>` : ''}
-      <div class="interest-row" style="font-weight:700;padding-top:8px;border-top:1px solid #ddd;margin-top:4px">
-        <span>Interest Accrued to Date</span><span>${formatCurrency(debt.interest_accrued)}</span>
-      </div>
-      <div class="interest-formula">Formula: ${debt.interest_type === 'compound'
-    ? 'A = P &times; (1 + r/n)<sup>n&times;t</sup> &minus; P'
-    : 'I = P &times; r &times; t'
-  }</div>
-    </div>
-  </div>` : ''}
+  // ── Interest Calculation Detail (only when interest > 0) ──
+  const interestDetailHTML = debt.interest_rate > 0 ? (
+    `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:8px;">Interest Calculation Detail</div>` +
+    ruledTable(
+      [{ label: 'Parameter' }, { label: 'Value', align: 'right', width: '200px' }],
+      [
+        ['Principal (P)',       formatCurrency(debt.original_amount)],
+        ['Annual Rate (r)',     esc(interestPct)],
+        ['Interest Type',      esc(interestTypeLabel)],
+        ...(debt.interest_type === 'compound'
+          ? [['Compounding Frequency (n)', `${debt.compound_frequency || 12}× per year`]] as string[][]
+          : []),
+        ['Interest Start Date', esc(formatDate(debt.interest_start_date) || formatDate(debt.delinquent_date)) || '—'],
+        ...(daysAccrued !== null ? [['Days Accrued', `${daysAccrued} days`]] as string[][] : []),
+        ['Interest Accrued to Date', formatCurrency(debt.interest_accrued)],
+        ['Formula', debt.interest_type === 'compound'
+          ? 'A = P &times; (1 + r/n)<sup>n&times;t</sup> &minus; P'
+          : 'I = P &times; r &times; t'],
+      ],
+    ) + `</div>`
+  ) : '';
 
-  <div class="section">
-    <div class="section-title">Payment History</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Date Received</th><th>Method</th><th>Reference #</th>
-          <th style="text-align:right">Amount</th>
-          <th>To Principal</th><th>To Interest</th><th>To Fees</th><th>Notes</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${paymentRows}
-        ${payments.length > 0 ? `
-        <tr class="highlight-row">
-          <td colspan="3"><strong>Total Payments Received</strong></td>
-          <td class="amount-col"><strong>${formatCurrency(paymentsTotal)}</strong></td>
-          <td colspan="4"></td>
-        </tr>` : ''}
-      </tbody>
-    </table>
-  </div>
+  // ── Payment history table ──
+  const paymentRows: string[][] = payments.length > 0
+    ? [
+        ...payments.map((p) => [
+          esc(formatDate(p.received_date)),
+          esc(methodLabel(p.method)),
+          esc(p.reference_number),
+          formatCurrency(p.amount),
+          p.applied_to_principal ? formatCurrency(p.applied_to_principal) : '—',
+          p.applied_to_interest  ? formatCurrency(p.applied_to_interest)  : '—',
+          p.applied_to_fees      ? formatCurrency(p.applied_to_fees)      : '—',
+          esc(p.notes),
+        ]),
+        [`<b>Total Payments</b>`, '', '', `<b>${formatCurrency(paymentsTotal)}</b>`, '', '', '', ''],
+      ]
+    : [['<i>No payments recorded</i>', '', '', '', '', '', '', '']];
 
-  <div class="legal-notice">
-    <div class="legal-notice-title">&#9888; Important Legal Notice</div>
-    <p>This statement reflects the current balance as of <strong>${todayStr}</strong>. Interest continues to accrue at <strong>${esc(interestPct)} per annum (${esc(interestTypeLabel)})</strong> until paid in full.</p>
-    ${debt.statute_of_limitations_date ? `<p>The statute of limitations for this debt in <strong>${jurisdiction || 'the applicable jurisdiction'}</strong> expires on <strong>${esc(formatDate(debt.statute_of_limitations_date))}</strong>.</p>` : ''}
-    <p>Failure to remit may result in referral to a collections agency, legal proceedings, and/or credit reporting.</p>
-    <p>To dispute this debt or arrange a payment plan, contact us at ${companyEmail || companyPhone || '[company contact]'}.</p>
-  </div>
+  const paymentTable = `<div style="padding:10px 16px;border-bottom:2px solid #000;">` +
+    `<div class="sec-label" style="margin-bottom:8px;">Payment History</div>` +
+    ruledTable(
+      [
+        { label: 'Date Received' },
+        { label: 'Method' },
+        { label: 'Reference #' },
+        { label: 'Amount',       align: 'right', width: '90px' },
+        { label: 'To Principal', align: 'right', width: '90px' },
+        { label: 'To Interest',  align: 'right', width: '90px' },
+        { label: 'To Fees',      align: 'right', width: '80px' },
+        { label: 'Notes' },
+      ],
+      paymentRows,
+    ) + `</div>`;
 
-  ${notes ? `
-  <div class="notes-box">
-    <div class="notes-label">Account Notes</div>
-    <p style="font-size:11px;color:#444;line-height:1.6">${notes}</p>
-  </div>` : ''}
+  // ── Legal Notice ──
+  const solLine = debt.statute_of_limitations_date
+    ? `The statute of limitations in <b>${jurisdiction || 'the applicable jurisdiction'}</b> expires on <b>${esc(formatDate(debt.statute_of_limitations_date))}</b>. `
+    : '';
+  const legalBox = boxRow([{
+    label: 'Important Legal Notice',
+    html: `<p style="font-size:11px;line-height:1.6;">` +
+      `This statement reflects the current balance as of <b>${todayStr}</b>. ` +
+      `Interest continues to accrue at <b>${esc(interestPct)} per annum (${esc(interestTypeLabel)})</b> until paid in full. ` +
+      solLine +
+      `Failure to remit may result in referral to a collections agency, legal proceedings, and/or credit reporting. ` +
+      `To dispute this debt or arrange a payment plan, contact us at ${companyEmail || companyPhone || '[company contact]'}.` +
+      `</p>`,
+  }]);
 
-  <div class="footer">
-    Statement generated by ${companyName} &middot; ${todayStr} &middot; Statement # ${stmtNum}<br>
-    This document is confidential and intended solely for the named account holder.
-  </div>
+  // ── Notes ──
+  const notesHTML = notes
+    ? boxRow([{ label: 'Account Notes', html: `<div style="white-space:pre-line;font-size:11px;">${notes}</div>` }])
+    : '';
 
-</div>
-</body>
-</html>`;
+  // ── Footer ──
+  const footer = footerBar(
+    `Statement generated by ${companyName} · ${todayStr} · Statement # ${stmtNum} · Confidential — for named account holder only.`
+  );
+
+  // ── Assemble ──
+  const inner =
+    header +
+    meta +
+    parties +
+    summaryBox +
+    chargeTable +
+    interestDetailHTML +
+    paymentTable +
+    legalBox +
+    notesHTML +
+    footer;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Statement ${stmtNum}</title>` +
+    `<style>${classicStyles()}</style></head><body>` +
+    docFrame(inner) +
+    `</body></html>`;
 }
 
 // ─── Component ──────────────────────────────────────────
@@ -494,12 +446,10 @@ const DebtInvoiceFormatter: React.FC<DebtInvoiceFormatterProps> = ({ debtId, onB
             Rendered exactly as the exported PDF
           </span>
         </div>
-        {/* iframe isolates the statement CSS so it can't leak into the app */}
-        <iframe
-          srcDoc={html}
-          title="Statement Preview"
-          style={{ width: '100%', minHeight: '900px', border: 'none', background: '#fff' }}
-          sandbox="allow-same-origin"
+        <PdfPreview
+          html={html}
+          title={`Statement of Account — ${debt.debtor_name}`}
+          style={{ flex: 1, minHeight: 900, width: '100%' }}
         />
       </div>
     </div>

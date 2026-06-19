@@ -81,9 +81,9 @@ const BudgetVsActualReport: React.FC = () => {
   const varColor = (v: number) => v >= 0 ? 'text-accent-income' : 'text-accent-expense';
   const barColor = (pct: number) => {
     const usage = 100 - pct; // pct is variance %, usage = how much of budget used
-    if (usage <= 80) return '#22c55e';
-    if (usage <= 100) return '#eab308';
-    return '#ef4444';
+    if (usage <= 80) return 'var(--color-accent-income)';
+    if (usage <= 100) return 'var(--color-accent-warning)';
+    return 'var(--color-accent-expense)';
   };
 
   const handleExportCSV = () => {

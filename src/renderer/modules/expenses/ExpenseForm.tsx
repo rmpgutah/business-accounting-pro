@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Receipt, DollarSign, Paperclip, X, Plus, Trash2, FileText, AlertTriangle, Sparkles } from 'lucide-react';
 import api from '../../lib/api';
-import { required, validateForm } from '../../lib/validation';
+import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { CategoryContext } from '../../components/ContextPanel';
 import { FieldLabel } from '../../components/FieldLabel';

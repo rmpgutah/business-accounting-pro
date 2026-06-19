@@ -1,8 +1,8 @@
 // src/renderer/components/ImportWizard.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Upload, X, Check } from 'lucide-react';
 import api from '../lib/api';
-import { useModalBehavior, trapFocusOnKeyDown } from '../lib/use-modal-behavior';
+import { ErrorBanner } from './ErrorBanner';
 
 interface Props {
   table: string;
@@ -21,15 +21,35 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
   const [result, setResult] = useState<{ imported: number; errors: string[] } | null>(null);
   const [error, setError] = useState('');
 
+  // ESC to cancel (unless we're mid-import, to avoid data-corruption surprises)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !importing) {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel, importing]);
+
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
+    reader.onerror = () => setError('Could not read file. Please try a different CSV.');
     reader.onload = ev => {
       const text = String(ev.target?.result ?? '');
-      const lines = text.split('\n').filter(l => l.trim());
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) { setError('CSV must have a header row and at least one data row.'); return; }
-      const hdrs = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      const rawHdrs = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      // De-dup duplicate headers so Object.fromEntries doesn't silently collapse columns
+      const seen = new Map<string, number>();
+      const hdrs = rawHdrs.map(h => {
+        const count = seen.get(h) ?? 0;
+        seen.set(h, count + 1);
+        return count === 0 ? h : `${h}_${count + 1}`;
+      });
       const dataRows = lines.slice(1).map(line => {
         const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
         return Object.fromEntries(hdrs.map((h, i) => [h, vals[i] ?? '']));
@@ -42,11 +62,11 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
         if (match) autoMap[f] = match;
       }
       setMapping(autoMap);
+      setError('');
       setStep(2);
     };
-    reader.onerror = () => { setError('Failed to read file. Please try again.'); };
     reader.readAsText(file);
-    // Reset so the same file can be picked again
+    // Reset the input so re-selecting the same file still triggers change
     e.target.value = '';
   };
 
@@ -54,6 +74,7 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
     const missing = requiredFields.filter(f => !mapping[f]);
     if (missing.length > 0) { setError(`Map required fields: ${missing.join(', ')}`); return; }
     setImporting(true);
+    setError('');
     let imported = 0;
     const errors: string[] = [];
     for (const row of rows) {
@@ -67,39 +88,39 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
     setImporting(false);
   };
 
-  // A11Y: ESC close, body scroll lock, restore focus, focus trap, role=dialog
-  const { containerRef } = useModalBehavior({ onClose: onCancel });
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-      onClick={onCancel}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       role="presentation"
+      onClick={onCancel}
     >
       <div
-        ref={containerRef}
+        className="bg-bg-elevated w-full max-w-xl border border-border-primary"
+        style={{ borderRadius: '2px' }}
+        onClick={e => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-wizard-title"
-        tabIndex={-1}
-        onClick={e => e.stopPropagation()}
-        onKeyDown={trapFocusOnKeyDown(containerRef)}
-        className="bg-bg-secondary w-full max-w-xl border border-border-primary"
       >
         <div className="flex justify-between items-center p-4 border-b border-border-primary">
-          <h2 id="import-wizard-title" className="font-black uppercase tracking-wider text-sm">Import {table} — Step {step} of 3</h2>
-          <button onClick={onCancel} aria-label="Close import wizard"><X size={18} /></button>
+          <h2 id="import-wizard-title" className="font-black uppercase tracking-wider text-sm text-text-primary">
+            Import {table} — Step {step} of 3
+          </h2>
+          <button type="button" onClick={onCancel} aria-label="Close import wizard" className="text-text-muted hover:text-text-primary">
+            <X size={18} />
+          </button>
         </div>
         <div className="p-4">
-          {error && <div className="bg-accent-expense-bg border border-red-300 text-red-700 text-xs p-2 mb-3">{error}</div>}
+          {error && <ErrorBanner message={error} onDismiss={() => setError('')} />}
 
           {step === 1 && (
             <div className="text-center py-8">
-              <Upload size={32} className="mx-auto text-text-muted mb-4" />
-              <p className="text-sm text-text-muted mb-1">Upload a CSV file</p>
+              <Upload size={32} className="mx-auto text-text-muted mb-4" aria-hidden="true" />
+              <p className="text-sm text-text-secondary mb-1">Upload a CSV file</p>
               <p className="text-xs text-text-muted mb-4">Required columns: <span className="font-bold">{requiredFields.join(', ')}</span></p>
-              <label className="cursor-pointer inline-block bg-accent-blue text-white px-4 py-2 text-xs font-bold uppercase hover:opacity-90">
+              <label className="cursor-pointer inline-block bg-accent-blue text-white px-4 py-2 text-xs font-bold uppercase hover:opacity-90" style={{ borderRadius: '2px' }}>
                 Choose CSV File
-                <input type="file" accept=".csv" className="hidden" onChange={handleFile} />
+                <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
               </label>
             </div>
           )}
@@ -107,19 +128,26 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
           {step === 2 && (
             <div>
               <p className="text-xs text-text-muted mb-3">{rows.length} rows found. Map CSV columns to fields:</p>
-              {requiredFields.map(field => (
-                <div key={field} className="flex items-center gap-3 mb-2">
-                  <span className="text-xs font-bold w-36 uppercase text-text-secondary">{field}</span>
-                  <select className="block-select flex-1"
-                    value={mapping[field] ?? ''}
-                    onChange={e => { setMapping(prev => ({ ...prev, [field]: e.target.value })); setError(''); }}>
-                    <option value="">— select column —</option>
-                    {[...headers].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).map(h => <option key={h} value={h}>{h}</option>)}
-                  </select>
-                </div>
-              ))}
+              {requiredFields.map(field => {
+                const id = `import-map-${field}`;
+                return (
+                  <div key={field} className="flex items-center gap-3 mb-2">
+                    <label htmlFor={id} className="text-xs font-bold w-36 uppercase text-text-secondary">{field}</label>
+                    <select
+                      id={id}
+                      className="bg-bg-primary border border-border-primary text-text-primary px-2 py-1.5 text-sm flex-1 focus:outline-none focus:border-border-focus"
+                      style={{ borderRadius: '2px' }}
+                      value={mapping[field] ?? ''}
+                      onChange={e => { setMapping(prev => ({ ...prev, [field]: e.target.value })); setError(''); }}
+                    >
+                      <option value="">— select column —</option>
+                      {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </div>
+                );
+              })}
               {rows[0] && (
-                <div className="mt-3 text-xs text-text-muted border border-border-primary bg-bg-secondary p-2">
+                <div className="mt-3 text-xs text-text-muted border border-border-primary bg-bg-secondary p-2" style={{ borderRadius: '2px' }}>
                   Preview row 1: {Object.entries(rows[0]).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}
                 </div>
               )}
@@ -128,8 +156,8 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
 
           {step === 3 && result && (
             <div className="text-center py-6">
-              <Check size={32} className="mx-auto text-accent-income mb-3" />
-              <p className="font-bold text-sm">{result.imported} record{result.imported !== 1 ? 's' : ''} imported successfully</p>
+              <Check size={32} className="mx-auto text-accent-income mb-3" aria-hidden="true" />
+              <p className="font-bold text-sm text-text-primary">{result.imported} record{result.imported !== 1 ? 's' : ''} imported successfully</p>
               {result.errors.length > 0 && (
                 <p className="text-xs text-accent-expense mt-2">{result.errors.length} error{result.errors.length !== 1 ? 's' : ''}: {result.errors.slice(0, 3).join('; ')}</p>
               )}
@@ -139,16 +167,18 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
         <div className="flex justify-end gap-3 p-4 border-t border-border-primary">
           {step === 2 && (
             <>
-              <button onClick={() => setStep(1)} className="px-4 py-2 text-xs font-bold uppercase border border-border-secondary hover:border-border-focus">Back</button>
-              <button onClick={handleImport} disabled={importing}
-                className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90 disabled:opacity-50">
+              <button type="button" onClick={() => setStep(1)} className="px-4 py-2 text-xs font-bold uppercase border border-border-secondary text-text-secondary hover:border-border-focus" style={{ borderRadius: '2px' }}>Back</button>
+              <button type="button" onClick={handleImport} disabled={importing}
+                className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90 disabled:opacity-50" style={{ borderRadius: '2px' }}>
                 {importing ? 'Importing…' : `Import ${rows.length} Row${rows.length !== 1 ? 's' : ''}`}
               </button>
             </>
           )}
-          {step === 3 && <button onClick={onDone} className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90">Done</button>}
+          {step === 3 && <button type="button" onClick={onDone} className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90" style={{ borderRadius: '2px' }}>Done</button>}
         </div>
       </div>
     </div>
   );
 };
+
+export default ImportWizard;

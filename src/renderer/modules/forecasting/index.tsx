@@ -5,15 +5,7 @@ import {
   DollarSign,
   Calculator,
   SlidersHorizontal,
-  Download,
-  Printer,
 } from 'lucide-react';
-import {
-  downloadCSVBlob,
-  dateStampedFilename,
-  printWhenReady,
-  type CSVColumn,
-} from '../../lib/csv-export';
 import {
   LineChart,
   Line,
@@ -23,16 +15,21 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { addMonths } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
-import { CHART_AXIS } from '../../lib/chart-palette';
+
+// ─── Currency Formatter ─────────────────────────────────
+const fmt = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 const fmtCompact = (value: number) => {
   if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
-  return formatCurrency(value);
+  return fmt.format(value);
 };
 
 // ─── Types ──────────────────────────────────────────────
@@ -104,11 +101,10 @@ function projectNext(
 }
 
 // ─── Month Name Helper ──────────────────────────────────
-// addMonths clamps end-of-month dates (Jan 31 + 1 → Feb 28/29) so that
-// labelling a month doesn't accidentally roll forward an extra month.
 function futureMonthLabel(offsetFromNow: number): string {
-  const d = addMonths(new Date(), offsetFromNow);
-  return formatDate(d.toISOString());
+  const d = new Date();
+  d.setMonth(d.getMonth() + offsetFromNow);
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
 }
 
 // ─── Scenario Config ────────────────────────────────────
@@ -119,19 +115,19 @@ const SCENARIO_CONFIG: Record<
   conservative: {
     label: 'Conservative',
     multiplier: 0.9,
-    color: '#f59e0b',
+    color: 'var(--color-accent-warning)',
     description: '90% of linear regression projection',
   },
   moderate: {
     label: 'Moderate',
     multiplier: 1.0,
-    color: '#3b82f6',
+    color: 'var(--color-accent-blue)',
     description: 'Linear regression as-is',
   },
   aggressive: {
     label: 'Aggressive',
     multiplier: 1.1,
-    color: '#22c55e',
+    color: 'var(--color-accent-income)',
     description: '110% of linear regression projection',
   },
 };
@@ -143,9 +139,9 @@ const ScenarioTooltip: React.FC<any> = ({ active, payload, label }) => {
     <div
       className="text-xs px-3 py-2"
       style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #2e2e2e',
-        borderRadius: '6px',
+        backgroundColor: 'var(--color-bg-elevated)',
+        border: '1px solid var(--hairline)',
+        borderRadius: '2px',
       }}
     >
       <p className="text-text-muted mb-1">{label}</p>
@@ -154,7 +150,7 @@ const ScenarioTooltip: React.FC<any> = ({ active, payload, label }) => {
           {p.dataKey === 'actual'
             ? 'Actual'
             : p.dataKey.charAt(0).toUpperCase() + p.dataKey.slice(1)}
-          : {formatCurrency(p.value)}
+          : {fmt.format(p.value)}
         </p>
       ))}
     </div>
@@ -303,18 +299,13 @@ const Forecasting: React.FC = () => {
   const whatIfChartData = useMemo(() => {
     if (whatIfRevenue <= 0) return chartData;
 
-    // The base projections (point.conservative/moderate/aggressive) already
-    // had the scenario multiplier applied inside projectNext(). The what-if
-    // boost is incremental NEW revenue from added clients/invoices — adding
-    // it raw avoids a double-multiplier (e.g. conservative was previously
-    // 0.81× of new business when it should be 0.9× of historical only).
     return chartData.map((point) => {
       if (point.actual !== undefined) return point;
       return {
         ...point,
-        conservative: (point.conservative || 0) + whatIfRevenue,
-        moderate: (point.moderate || 0) + whatIfRevenue,
-        aggressive: (point.aggressive || 0) + whatIfRevenue,
+        conservative: (point.conservative || 0) + whatIfRevenue * SCENARIO_CONFIG.conservative.multiplier,
+        moderate: (point.moderate || 0) + whatIfRevenue * SCENARIO_CONFIG.moderate.multiplier,
+        aggressive: (point.aggressive || 0) + whatIfRevenue * SCENARIO_CONFIG.aggressive.multiplier,
       };
     });
   }, [chartData, whatIfRevenue]);
@@ -328,16 +319,13 @@ const Forecasting: React.FC = () => {
       aggressive: [],
     };
 
-    // Same fix as whatIfChartData: scenario multiplier was already applied
-    // to the base projection inside projectNext(). Apply the what-if boost
-    // raw — once — so we don't double-discount conservative or double-boost
-    // aggressive on the incremental new-business portion.
     for (const scenario of ['conservative', 'moderate', 'aggressive'] as Scenario[]) {
       adjusted[scenario] = projections[scenario].map((p) => {
+        const boost = whatIfRevenue * SCENARIO_CONFIG[scenario].multiplier;
         return {
           ...p,
-          revenue: p.revenue + whatIfRevenue,
-          net: p.revenue + whatIfRevenue - p.expenses,
+          revenue: p.revenue + boost,
+          net: p.revenue + boost - p.expenses,
         };
       });
     }
@@ -346,54 +334,6 @@ const Forecasting: React.FC = () => {
   }, [projections, whatIfRevenue]);
 
   const activeProjections = whatIfProjections[activeScenario];
-
-  // ─── Export / Print ────────────────────────────────────
-  const handleExportCSV = useCallback(() => {
-    const columns: CSVColumn[] = [
-      { key: 'month', label: 'Month' },
-      { key: 'type', label: 'Type' },
-      { key: 'scenario', label: 'Scenario' },
-      { key: 'revenue', label: 'Revenue' },
-      { key: 'expenses', label: 'Expenses' },
-      { key: 'net', label: 'Net' },
-      { key: 'note', label: 'Note' },
-    ];
-
-    const rows: any[] = [];
-    // Historical rows.
-    for (const r of historicalRevenue) {
-      const exp = historicalExpenses.find((e) => e.month === r.month)?.total ?? 0;
-      rows.push({
-        month: r.month,
-        type: 'Actual',
-        scenario: '',
-        revenue: r.total,
-        expenses: exp,
-        net: r.total - exp,
-        note: '',
-      });
-    }
-    // Projections — one block per scenario, clearly marked as estimates.
-    for (const s of ['conservative', 'moderate', 'aggressive'] as Scenario[]) {
-      for (const p of whatIfProjections[s]) {
-        rows.push({
-          month: p.month,
-          type: 'Projected',
-          scenario: SCENARIO_CONFIG[s].label,
-          revenue: p.revenue,
-          expenses: p.expenses,
-          net: p.net,
-          note: `ESTIMATE — ${SCENARIO_CONFIG[s].description}`,
-        });
-      }
-    }
-    if (rows.length === 0) return;
-    downloadCSVBlob(rows, dateStampedFilename('forecasting'), columns);
-  }, [historicalRevenue, historicalExpenses, whatIfProjections]);
-
-  const handlePrint = useCallback(() => {
-    printWhenReady({ isReady: () => !loading });
-  }, [loading]);
   const totalProjectedRevenue = activeProjections.reduce((s, p) => s + p.revenue, 0);
   const totalProjectedExpenses = activeProjections.reduce((s, p) => s + p.expenses, 0);
   const totalProjectedCashflow = totalProjectedRevenue - totalProjectedExpenses;
@@ -414,38 +354,13 @@ const Forecasting: React.FC = () => {
           <Calculator size={20} className="text-accent-purple" />
           <h1 className="module-title">Financial Forecasting</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-text-muted">
-            Based on {historicalRevenue.length} months of historical data
-          </span>
-          <button className="block-btn flex items-center gap-2" onClick={handleExportCSV}>
-            <Download size={14} />
-            Export CSV
-          </button>
-          <button className="block-btn flex items-center gap-2" onClick={handlePrint}>
-            <Printer size={14} />
-            Print
-          </button>
-        </div>
-      </div>
-
-      {/* Estimate disclaimer — always visible, prints too */}
-      <div
-        className="text-[11px] px-3 py-2"
-        style={{
-          background: 'rgba(245, 158, 11, 0.08)',
-          border: '1px solid rgba(245, 158, 11, 0.3)',
-          borderRadius: '6px',
-          color: '#f59e0b',
-        }}
-      >
-        <strong>Estimate:</strong> All projected figures below are linear-regression forecasts
-        based on the last 6 months of data. They are not guarantees and should not be used for
-        tax filing or legal purposes.
+        <span className="text-xs text-text-muted">
+          Based on {historicalRevenue.length} months of historical data
+        </span>
       </div>
 
       {/* ─── Scenario Selector ─── */}
-      <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4" style={{ borderRadius: '2px' }}>
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
           Scenario
         </h2>
@@ -459,9 +374,9 @@ const Forecasting: React.FC = () => {
                 onClick={() => setActiveScenario(scenario)}
                 className="flex-1 p-3 text-left transition-colors"
                 style={{
-                  backgroundColor: isActive ? `${config.color}15` : '#141414',
-                  border: `1px solid ${isActive ? config.color : '#2e2e2e'}`,
-                  borderRadius: '6px',
+                  backgroundColor: isActive ? `color-mix(in srgb, ${config.color} 12%, transparent)` : 'var(--color-bg-surface)',
+                  border: `1px solid ${isActive ? config.color : 'var(--hairline)'}`,
+                  borderRadius: '2px',
                   cursor: 'pointer',
                 }}
               >
@@ -477,7 +392,7 @@ const Forecasting: React.FC = () => {
                   />
                   <span
                     className="text-xs font-semibold"
-                    style={{ color: isActive ? config.color : '#9a9a9a' }}
+                    style={{ color: isActive ? config.color : 'var(--color-text-muted)' }}
                   >
                     {config.label}
                   </span>
@@ -497,13 +412,13 @@ const Forecasting: React.FC = () => {
             <span className="stat-label">Projected Revenue (Next Quarter)</span>
           </div>
           <p className="stat-value text-accent-income">
-            {formatCurrency(totalProjectedRevenue)}
+            {fmt.format(totalProjectedRevenue)}
           </p>
           <span className="text-xs text-text-muted">
-            ~{formatCurrency(totalProjectedRevenue / 3)} / month avg
+            ~{fmt.format(totalProjectedRevenue / 3)} / month avg
             {whatIfRevenue > 0 && (
               <span className="text-accent-purple ml-1">
-                (includes +{formatCurrency(whatIfRevenue)}/mo what-if)
+                (includes +{fmt.format(whatIfRevenue)}/mo what-if)
               </span>
             )}
           </span>
@@ -515,10 +430,10 @@ const Forecasting: React.FC = () => {
             <span className="stat-label">Projected Expenses (Next Quarter)</span>
           </div>
           <p className="stat-value text-accent-expense">
-            {formatCurrency(totalProjectedExpenses)}
+            {fmt.format(totalProjectedExpenses)}
           </p>
           <span className="text-xs text-text-muted">
-            ~{formatCurrency(totalProjectedExpenses / 3)} / month avg
+            ~{fmt.format(totalProjectedExpenses / 3)} / month avg
           </span>
         </div>
 
@@ -544,14 +459,14 @@ const Forecasting: React.FC = () => {
                   : 'var(--color-accent-expense)',
             }}
           >
-            {formatCurrency(totalProjectedCashflow)}
+            {fmt.format(totalProjectedCashflow)}
           </p>
           <span className="text-xs text-text-muted">Revenue minus expenses</span>
         </div>
       </div>
 
       {/* ─── Scenario Comparison Chart ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
           Revenue Projection — All Scenarios
         </h2>
@@ -560,12 +475,12 @@ const Forecasting: React.FC = () => {
             <LineChart data={whatIfChartData}>
               <XAxis
                 dataKey="month"
-                tick={{ fill: CHART_AXIS, fontSize: 11 }}
+                tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: CHART_AXIS, fontSize: 11 }}
+                tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v: number) => fmtCompact(v)}
@@ -586,9 +501,9 @@ const Forecasting: React.FC = () => {
               <Line
                 type="monotone"
                 dataKey="actual"
-                stroke="#ffffff"
+                stroke="var(--color-text-primary)"
                 strokeWidth={2}
-                dot={{ r: 3, fill: '#ffffff', stroke: '#0a0a0a', strokeWidth: 2 }}
+                dot={{ r: 3, fill: 'var(--color-text-primary)', stroke: 'var(--color-bg-base)', strokeWidth: 2 }}
                 connectNulls={false}
               />
               {/* Conservative */}
@@ -601,7 +516,7 @@ const Forecasting: React.FC = () => {
                 dot={{
                   r: activeScenario === 'conservative' ? 4 : 2,
                   fill: SCENARIO_CONFIG.conservative.color,
-                  stroke: '#0a0a0a',
+                  stroke: 'var(--color-bg-base)',
                   strokeWidth: 2,
                 }}
                 connectNulls={false}
@@ -617,7 +532,7 @@ const Forecasting: React.FC = () => {
                 dot={{
                   r: activeScenario === 'moderate' ? 4 : 2,
                   fill: SCENARIO_CONFIG.moderate.color,
-                  stroke: '#0a0a0a',
+                  stroke: 'var(--color-bg-base)',
                   strokeWidth: 2,
                 }}
                 connectNulls={false}
@@ -633,7 +548,7 @@ const Forecasting: React.FC = () => {
                 dot={{
                   r: activeScenario === 'aggressive' ? 4 : 2,
                   fill: SCENARIO_CONFIG.aggressive.color,
-                  stroke: '#0a0a0a',
+                  stroke: 'var(--color-bg-base)',
                   strokeWidth: 2,
                 }}
                 connectNulls={false}
@@ -645,7 +560,7 @@ const Forecasting: React.FC = () => {
       </div>
 
       {/* ─── What-If Section ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
         <div className="flex items-center gap-2 mb-4">
           <SlidersHorizontal size={14} className="text-accent-purple" />
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -685,7 +600,7 @@ const Forecasting: React.FC = () => {
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-text-secondary">Avg Invoice Value</span>
               <span className="text-sm font-mono text-accent-purple font-semibold">
-                {formatCurrency(avgInvoiceValue)}
+                {fmt.format(avgInvoiceValue)}
               </span>
             </div>
             <input
@@ -714,9 +629,9 @@ const Forecasting: React.FC = () => {
           <div
             className="mt-4 p-3"
             style={{
-              backgroundColor: '#a855f710',
-              border: '1px solid #a855f730',
-              borderRadius: '6px',
+              backgroundColor: 'color-mix(in srgb, var(--color-accent-purple) 6%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-accent-purple) 18%, transparent)',
+              borderRadius: '2px',
             }}
           >
             <p className="text-xs text-text-secondary">
@@ -726,22 +641,22 @@ const Forecasting: React.FC = () => {
               </span>{' '}
               at{' '}
               <span className="text-accent-purple font-semibold">
-                {formatCurrency(avgInvoiceValue)}
+                {fmt.format(avgInvoiceValue)}
               </span>{' '}
               avg invoice would generate an additional{' '}
               <span className="text-accent-purple font-semibold font-mono">
-                {formatCurrency(whatIfRevenue)}
+                {fmt.format(whatIfRevenue)}
               </span>{' '}
-              per month ({formatCurrency(whatIfRevenue * 3)} per quarter).
+              per month ({fmt.format(whatIfRevenue * 3)} per quarter).
             </p>
           </div>
         )}
       </div>
 
       {/* Month-by-Month Projection Table */}
-      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
-          Month-by-Month Projections — Estimate ({SCENARIO_CONFIG[activeScenario].label})
+          Month-by-Month Projections ({SCENARIO_CONFIG[activeScenario].label})
         </h2>
         <table className="block-table">
           <thead>
@@ -757,10 +672,10 @@ const Forecasting: React.FC = () => {
               <tr key={i}>
                 <td className="font-medium">{row.month}</td>
                 <td className="font-mono text-right text-accent-income">
-                  {formatCurrency(row.revenue)}
+                  {fmt.format(row.revenue)}
                 </td>
                 <td className="font-mono text-right text-accent-expense">
-                  {formatCurrency(row.expenses)}
+                  {fmt.format(row.expenses)}
                 </td>
                 <td
                   className="font-mono text-right font-semibold"
@@ -771,7 +686,7 @@ const Forecasting: React.FC = () => {
                         : 'var(--color-accent-expense)',
                   }}
                 >
-                  {formatCurrency(row.net)}
+                  {fmt.format(row.net)}
                 </td>
               </tr>
             ))}
@@ -779,10 +694,10 @@ const Forecasting: React.FC = () => {
             <tr style={{ borderTop: '2px solid var(--color-border-secondary)' }}>
               <td className="font-bold">Quarter Total</td>
               <td className="font-mono text-right font-bold text-accent-income">
-                {formatCurrency(totalProjectedRevenue)}
+                {fmt.format(totalProjectedRevenue)}
               </td>
               <td className="font-mono text-right font-bold text-accent-expense">
-                {formatCurrency(totalProjectedExpenses)}
+                {fmt.format(totalProjectedExpenses)}
               </td>
               <td
                 className="font-mono text-right font-bold"
@@ -793,7 +708,7 @@ const Forecasting: React.FC = () => {
                       : 'var(--color-accent-expense)',
                 }}
               >
-                {formatCurrency(totalProjectedCashflow)}
+                {fmt.format(totalProjectedCashflow)}
               </td>
             </tr>
           </tbody>
@@ -803,7 +718,7 @@ const Forecasting: React.FC = () => {
       {/* Historical Data Summary */}
       <div className="grid grid-cols-2 gap-4">
         {/* Historical Revenue */}
-        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
             Historical Revenue (Last 6 Months)
           </h2>
@@ -824,7 +739,7 @@ const Forecasting: React.FC = () => {
                   <tr key={i}>
                     <td>{row.month}</td>
                     <td className="font-mono text-right text-accent-income">
-                      {formatCurrency(row.total)}
+                      {fmt.format(row.total)}
                     </td>
                   </tr>
                 ))}
@@ -834,7 +749,7 @@ const Forecasting: React.FC = () => {
         </div>
 
         {/* Historical Expenses */}
-        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
             Historical Expenses (Last 6 Months)
           </h2>
@@ -855,7 +770,7 @@ const Forecasting: React.FC = () => {
                   <tr key={i}>
                     <td>{row.month}</td>
                     <td className="font-mono text-right text-accent-expense">
-                      {formatCurrency(row.total)}
+                      {fmt.format(row.total)}
                     </td>
                   </tr>
                 ))}

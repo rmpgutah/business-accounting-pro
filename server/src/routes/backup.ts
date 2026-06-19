@@ -22,16 +22,29 @@ function sanitizeEmail(email: string): string {
  * This is the authoritative path-traversal barrier — every fs path flows through here.
  */
 function resolveInBackupDir(filename: string): string {
-  const full = path.resolve(BACKUP_DIR, filename);
+  // Strip any directory component first. path.basename is a sanitizer that
+  // removes path separators and traversal segments, so only a flat filename is
+  // ever joined to BACKUP_DIR. All callers already pass flat names, so this is
+  // a no-op in practice — it's defense-in-depth ahead of the containment check.
+  const safe = path.basename(filename);
+  const full = path.resolve(BACKUP_DIR, safe);
   if (full !== BACKUP_DIR && !full.startsWith(BACKUP_DIR + path.sep)) {
     throw new Error('Path escapes backup directory');
   }
   return full;
 }
 
-function verifySignature(body: Buffer, signature: string): boolean {
+/**
+ * Constant-time HMAC check. `message` is the signed payload: the raw body for
+ * uploads, or the (sanitized) email for download/status GETs which have no body.
+ * Returns false for a missing/short/mismatched signature — callers treat false
+ * as "reject". Every /api/backup route is authenticated solely by this HMAC, so
+ * the signature is mandatory, never optional.
+ */
+function verifySignature(message: Buffer | string, signature: string | undefined): boolean {
+  if (!signature) return false;
   const secret = process.env.SYNC_SECRET!;
-  const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
+  const expected = crypto.createHmac('sha256', secret).update(message).digest('hex');
   try {
     return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
   } catch {
@@ -56,8 +69,8 @@ backupRouter.post('/upload', (req, res) => {
     req.on('end', () => {
       const body = Buffer.concat(chunks);
 
-      if (signature && !verifySignature(body, signature)) {
-        return res.status(403).json({ error: 'Invalid signature' });
+      if (!verifySignature(body, signature)) {
+        return res.status(403).json({ error: 'Invalid or missing signature' });
       }
 
       if (body.length < 100) {
@@ -98,6 +111,11 @@ backupRouter.post('/upload', (req, res) => {
 backupRouter.get('/download/:email', (req, res) => {
   try {
     const safeEmail = sanitizeEmail(req.params.email);
+    // GETs have no body, so the HMAC is over the sanitized email. Without this
+    // any caller who knows a user's email could exfiltrate their database.
+    if (!verifySignature(safeEmail, req.headers['x-bap-signature'] as string | undefined)) {
+      return res.status(403).json({ error: 'Invalid or missing signature' });
+    }
     const latestFilename = `${safeEmail}_latest.db`;
     const fullPath = resolveInBackupDir(latestFilename);
 
@@ -120,6 +138,9 @@ backupRouter.get('/download/:email', (req, res) => {
 backupRouter.get('/status/:email', (req, res) => {
   try {
     const safeEmail = sanitizeEmail(req.params.email);
+    if (!verifySignature(safeEmail, req.headers['x-bap-signature'] as string | undefined)) {
+      return res.status(403).json({ error: 'Invalid or missing signature' });
+    }
     const latestFilename = `${safeEmail}_latest.db`;
     const fullPath = resolveInBackupDir(latestFilename);
 

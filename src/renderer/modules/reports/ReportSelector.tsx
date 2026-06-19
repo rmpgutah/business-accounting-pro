@@ -56,6 +56,7 @@ interface ReportCard {
   description: string;
   icon: LucideIcon;
   accentClass: string;
+  accentStyle?: React.CSSProperties;
 }
 
 interface ReportSelectorProps {
@@ -150,7 +151,8 @@ const REPORTS: ReportCard[] = [
     description:
       'All account balances with total debits and credits. Confirms the books are in balance.',
     icon: List,
-    accentClass: 'border-l-[#06b6d4]',
+    accentClass: '',
+    accentStyle: { borderLeftColor: 'var(--color-accent-blue)' },
   },
   {
     id: 'ap-aging',
@@ -158,7 +160,8 @@ const REPORTS: ReportCard[] = [
     description:
       'Outstanding bills grouped by age: Current, 1-30, 31-60, 61-90, and 90+ days.',
     icon: CreditCard,
-    accentClass: 'border-l-[#f97316]',
+    accentClass: '',
+    accentStyle: { borderLeftColor: 'var(--color-accent-warning)' },
   },
   {
     id: 'general-ledger',
@@ -166,7 +169,8 @@ const REPORTS: ReportCard[] = [
     description:
       'Complete transaction history for every account with running balances.',
     icon: BookOpen,
-    accentClass: 'border-l-[#8b5cf6]',
+    accentClass: '',
+    accentStyle: { borderLeftColor: 'var(--color-accent-purple)' },
   },
   {
     id: 'expense-by-category',
@@ -174,14 +178,16 @@ const REPORTS: ReportCard[] = [
     description:
       'Visual breakdown of expenses by category with bar chart and percentage of total.',
     icon: PieChart,
-    accentClass: 'border-l-[#a855f7]',
+    accentClass: '',
+    accentStyle: { borderLeftColor: 'var(--color-accent-purple)' },
   },
   {
     id: 'expense-detail',
     title: 'Expense Detail Report',
     description: 'Itemized expense report with line items, grouped by category, vendor, or project.',
     icon: Receipt,
-    accentClass: 'border-l-[#ec4899]',
+    accentClass: '',
+    accentStyle: { borderLeftColor: 'var(--color-accent-expense)' },
   },
   {
     id: 'tax-summary',
@@ -189,7 +195,8 @@ const REPORTS: ReportCard[] = [
     description:
       'Tax collected, tax paid, and net tax liability for the selected period.',
     icon: Calculator,
-    accentClass: 'border-l-[#f59e0b]',
+    accentClass: '',
+    accentStyle: { borderLeftColor: 'var(--color-accent-warning)' },
   },
   {
     id: 'financial-statements',
@@ -227,7 +234,8 @@ const REPORTS: ReportCard[] = [
     title: 'Vendor Spend Analysis',
     description: 'Spending by vendor with YoY comparison, top vendors, and payment terms compliance.',
     icon: Building2,
-    accentClass: 'border-l-[#f97316]',
+    accentClass: '',
+    accentStyle: { borderLeftColor: 'var(--color-accent-warning)' },
   },
   {
     id: 'project-profitability',
@@ -255,14 +263,16 @@ const REPORTS: ReportCard[] = [
     title: 'Inventory Valuation',
     description: 'Current inventory value, turnover rate, and cost analysis by item and category.',
     icon: Package,
-    accentClass: 'border-l-[#8b5cf6]',
+    accentClass: '',
+    accentStyle: { borderLeftColor: 'var(--color-accent-purple)' },
   },
   {
     id: 'sales-tax',
     title: 'Sales Tax Report',
     description: 'Sales tax collected, by jurisdiction, with filing period summaries.',
     icon: Receipt,
-    accentClass: 'border-l-[#f59e0b]',
+    accentClass: '',
+    accentStyle: { borderLeftColor: 'var(--color-accent-warning)' },
   },
 ];
 
@@ -304,7 +314,7 @@ const ReportSelector: React.FC<ReportSelectorProps> = ({ onSelect }) => {
                   key={report.id}
                   onClick={() => onSelect(report.id)}
                   className={`block-card p-5 border-l-2 ${report.accentClass} text-left hover:bg-bg-hover transition-colors cursor-pointer group`}
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: '6px', ...report.accentStyle }}
                 >
                   <div className="flex items-start gap-3">
                     <div

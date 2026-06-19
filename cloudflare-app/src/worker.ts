@@ -29,11 +29,13 @@ import { projectFormPage } from './ui/project-form';
 import { documentFormPage } from './ui/document-form';
 import { simpleFormPage, type SimpleField } from './ui/generic-form';
 import { shell } from './ui/shell';
+import { handleRpc } from './api-rpc';
 
 export interface Env {
   DB: D1Database;
   FILES: R2Bucket;
   SESSIONS: KVNamespace;
+  ASSETS: Fetcher;
   JWT_SECRET: string;
   DESKTOP_SYNC_TOKEN: string;
   STRIPE_SECRET_KEY?: string;
@@ -93,19 +95,10 @@ async function requireUserAPI(c: any, next: () => Promise<void>): Promise<Respon
   await next();
 }
 
-// ─── Root ────────────────────────────────────────────────────
-app.get('/', async (c) => {
-  const token = readSessionCookie(c.req.header('cookie') ?? null);
-  if (token && await verifyJWT(token, c.env.JWT_SECRET)) return c.redirect('/app/dashboard', 302);
-  return c.redirect('/auth/login', 302);
-});
-
-// ─── Auth: HTML pages ────────────────────────────────────────
-app.get('/auth/login', (c) => c.html(landingPage({ mode: 'login' })));
-app.get('/auth/register', (c) => c.html(landingPage({ mode: 'register' })));
+// ─── Auth: logout ────────────────────────────────────────────
 app.get('/auth/logout', (c) => {
   c.header('Set-Cookie', clearSessionCookie());
-  return c.redirect('/auth/login', 302);
+  return c.redirect('/', 302);
 });
 
 // ─── Auth: JSON endpoints ────────────────────────────────────
@@ -539,9 +532,8 @@ app.get('/app/invoices/:id', async (c) => {
 // ─── /api/* — JSON endpoints used by the SPA bits ───────────
 app.use('/api/*', async (c, next) => {
   // Sync endpoints carry their own token; everything else needs a user session.
-  if (c.req.path.startsWith('/api/sync/')) return next();
-  if (c.req.path === '/api/health') return next();
-  if (c.req.path === '/api/stripe/webhook') return next();
+  const p = c.req.path;
+  if (p.startsWith('/api/sync/') || p === '/api/rpc/public' || p === '/api/health' || p === '/api/stripe/webhook') return next();
   return requireUserAPI(c, next);
 });
 
@@ -865,7 +857,7 @@ async function loadPortalContext(env: Env, token: string): Promise<{ clientId: s
 function simpleErrorPage(msg: string): string {
   // Minimal styled error — same tokens as the shell so it doesn't look orphaned.
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error</title>
-<style>body{font-family:-apple-system,sans-serif;background:#050508;color:#e4e4ef;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:20px}.box{max-width:420px;background:#0e0e14;border:1px solid #1e1e2e;border-radius:2px;padding:32px}.box h1{font-size:1.3rem;color:#fff;margin:0 0 12px;font-weight:800}.box p{color:#8888a0;font-size:0.95rem;margin:0}</style></head>
+<style>body{font-family:-apple-system,sans-serif;background:#0a0a0a;color:#f0f0f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:20px}.box{max-width:420px;background:#141414;border:1px solid #2e2e2e;border-radius:2px;padding:32px}.box h1{font-size:1.3rem;color:#f0f0f0;margin:0 0 12px;font-weight:800}.box p{color:#a0a0a0;font-size:0.95rem;margin:0}</style></head>
 <body><div class="box"><h1>Access denied</h1><p>${esc(msg)}</p></div></body></html>`;
 }
 
@@ -3517,4 +3509,60 @@ function nextRecurringDate(from: string, freq: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+// ─── /api/rpc/public — unauthenticated channels (auth bootstrap) ─────────────
+// Called before the user has a session: has-users, login, register.
+// The channel whitelist is strict — nothing reads or writes company data here.
+const PUBLIC_CHANNELS = new Set(['auth:has-users', 'auth:list-users', 'auth:login', 'auth:register']);
+
+app.post('/api/rpc/public', async (c) => {
+  const body = await c.req.json<{ channel: string; args: any[] }>();
+  if (!PUBLIC_CHANNELS.has(body.channel)) {
+    return c.json({ error: 'Channel not allowed without auth' }, 403);
+  }
+  try {
+    const result = await handleRpc(body.channel, body.args || [], '', c.env.DB, c.env.JWT_SECRET);
+    // For login/register: set the session cookie on success
+    if ((body.channel === 'auth:login' || body.channel === 'auth:register') && result?.user) {
+      const companies: any[] = result.companies || [];
+      const cid = companies[0]?.id || '';
+      const token = await signJWT({ sub: result.user.id, cid, role: result.user.role }, c.env.JWT_SECRET);
+      c.header('Set-Cookie', setSessionCookie(token, c.env.ENVIRONMENT === 'production'));
+    }
+    return c.json(result ?? null);
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'RPC error' }, 400);
+  }
+});
+
+// ─── /api/rpc — React SPA bridge (authenticated) ─────────────────────────────
+// The React renderer calls this single endpoint for all data operations,
+// using the same channel names as the Electron IPC layer.
+app.post('/api/rpc', requireUserAPI, async (c) => {
+  const body = await c.req.json<{ channel: string; args: any[] }>();
+  const cid = c.get('companyId') ?? '';
+  const uid = c.get('userId') ?? '';
+  try {
+    const result = await handleRpc(body.channel, body.args || [], cid, c.env.DB, c.env.JWT_SECRET, uid);
+    return c.json(result ?? null);
+  } catch (err: any) {
+    return c.json({ error: err?.message || 'RPC error' }, 400);
+  }
+});
+
+// ─── SPA catch-all — serve the React app for any unmatched route ─────────────
+// Static assets (JS/CSS bundles) are served directly by Cloudflare Workers
+// Assets without invoking this handler.  Only requests that don't match a
+// static file fall through here.
+app.get('*', async (c) => {
+  const p = new URL(c.req.url).pathname;
+  // Let API / auth / portal / sync routes 404 naturally
+  if (p.startsWith('/api/') || p.startsWith('/portal') || p.startsWith('/sync')) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+  // Serve the SPA shell for everything else (/, /app/*, /auth/*, deep links)
+  const assetUrl = new URL('/index.html', c.req.url);
+  return c.env.ASSETS.fetch(new Request(assetUrl.toString(), c.req.raw));
+});
+
 export default handler;
+

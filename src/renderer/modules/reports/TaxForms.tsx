@@ -358,7 +358,7 @@ const Form941View: React.FC<{ data: any }> = ({ data }) => {
     <tr style={tone === 'bold' ? { background: 'rgba(0,0,0,0.04)' } : undefined}>
       <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 70 }}>{n}</td>
       <td style={{ padding: '6px 10px', fontSize: 11, fontWeight: tone === 'bold' ? 700 : 400 }}>{label}</td>
-      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? '#dc2626' : tone === 'green' ? '#16a34a' : 'var(--color-text-primary)' }}>
+      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? 'var(--color-accent-expense)' : tone === 'green' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}>
         {typeof value === 'number' ? fmt$(value) : value}
       </td>
     </tr>
@@ -404,7 +404,7 @@ const Form941View: React.FC<{ data: any }> = ({ data }) => {
       </div>
 
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#475569', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-tertiary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           Part 2 — Liability by Month · Schedule: {data.deposit_schedule}
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -428,7 +428,7 @@ const ScheduleCView: React.FC<{ data: any }> = ({ data }) => {
     <tr style={tone === 'bold' ? { background: 'rgba(0,0,0,0.04)' } : undefined}>
       <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 60 }}>{n}</td>
       <td style={{ padding: '6px 10px', fontSize: 11, fontWeight: tone === 'bold' ? 700 : 400 }}>{label}</td>
-      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? '#dc2626' : tone === 'green' ? '#16a34a' : 'var(--color-text-primary)' }}>
+      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? 'var(--color-accent-expense)' : tone === 'green' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}>
         {typeof value === 'number' ? fmt$(value) : value}
       </td>
     </tr>
@@ -439,9 +439,9 @@ const ScheduleCView: React.FC<{ data: any }> = ({ data }) => {
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Stat label="Gross Receipts" value={fmt$(data.line1_gross_receipts)} />
-          <Stat label="Total Expenses" value={fmt$(data.line28_total_expenses)} color="#dc2626" />
-          <Stat label="Net Profit" value={fmt$(data.line31_net_profit)} highlight color={data.line31_net_profit >= 0 ? '#16a34a' : '#dc2626'} />
-          <Stat label="Uncategorized" value={fmt$(data.uncategorized_total)} color="#d97706" />
+          <Stat label="Total Expenses" value={fmt$(data.line28_total_expenses)} color="var(--color-accent-expense)" />
+          <Stat label="Net Profit" value={fmt$(data.line31_net_profit)} highlight color={data.line31_net_profit >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)'} />
+          <Stat label="Uncategorized" value={fmt$(data.uncategorized_total)} color="var(--color-accent-warning)" />
         </div>
         {data.uncategorized_total > 0 && (
           <div style={{ marginTop: 8, fontSize: 11, color: 'var(--color-warning, #d97706)', display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -469,7 +469,7 @@ const ScheduleCView: React.FC<{ data: any }> = ({ data }) => {
       </div>
 
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#475569', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-tertiary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           Part II — Expenses
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -522,9 +522,9 @@ const Nec1099View: React.FC<{ forms: any[] }> = ({ forms }) => {
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Stat label="Total Recipients" value={String(forms.length)} />
-          <Stat label="Ready to File" value={String(filable.length)} color="#16a34a" />
-          <Stat label="Blocked (no TIN)" value={String(blocked.length)} color="#dc2626" />
-          <Stat label="Below $600" value={String(belowThreshold.length)} color="#94a3b8" />
+          <Stat label="Ready to File" value={String(filable.length)} color="var(--color-accent-income)" />
+          <Stat label="Blocked (no TIN)" value={String(blocked.length)} color="var(--color-accent-expense)" />
+          <Stat label="Below $600" value={String(belowThreshold.length)} color="var(--color-text-muted)" />
         </div>
       </div>
 
@@ -554,7 +554,7 @@ const Nec1099View: React.FC<{ forms: any[] }> = ({ forms }) => {
                       </div>
                     )}
                   </td>
-                  <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: f.has_tin ? 'var(--color-text-primary)' : '#dc2626' }}>
+                  <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: f.has_tin ? 'var(--color-text-primary)' : 'var(--color-accent-expense)' }}>
                     {f.recipient_tin || 'MISSING'}
                   </td>
                   <td style={{ padding: '6px 10px', fontSize: 12, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>
@@ -564,9 +564,9 @@ const Nec1099View: React.FC<{ forms: any[] }> = ({ forms }) => {
                     {f.payment_count} payment{f.payment_count === 1 ? '' : 's'}
                   </td>
                   <td style={{ padding: '6px 10px', fontSize: 10 }}>
-                    {ready && <span style={{ color: '#16a34a', fontWeight: 700 }}>READY</span>}
-                    {noTin && <span style={{ color: '#dc2626', fontWeight: 700 }}>NO TIN — Request W-9</span>}
-                    {!f.meets_filing_threshold && <span style={{ color: '#94a3b8' }}>Below $600 (no filing required)</span>}
+                    {ready && <span style={{ color: 'var(--color-accent-income)', fontWeight: 700 }}>READY</span>}
+                    {noTin && <span style={{ color: 'var(--color-accent-expense)', fontWeight: 700 }}>NO TIN — Request W-9</span>}
+                    {!f.meets_filing_threshold && <span style={{ color: 'var(--color-text-muted)' }}>Below $600 (no filing required)</span>}
                   </td>
                 </tr>
               );
@@ -601,7 +601,7 @@ const W2View: React.FC<{ forms: any[] }> = ({ forms }) => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
           <Stat label="Employees" value={String(forms.length)} />
           <Stat label="Box 1 Wages" value={fmt$(totals.box1)} />
-          <Stat label="Box 2 Fed Tax" value={fmt$(totals.box2)} color="#dc2626" />
+          <Stat label="Box 2 Fed Tax" value={fmt$(totals.box2)} color="var(--color-accent-expense)" />
           <Stat label="Box 3 SS Wages" value={fmt$(totals.box3)} />
           <Stat label="Box 5 Medicare" value={fmt$(totals.box5)} />
         </div>
@@ -627,7 +627,7 @@ const W2View: React.FC<{ forms: any[] }> = ({ forms }) => {
                     </div>
                   )}
                 </td>
-                <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: f.employee_ssn ? 'var(--color-text-primary)' : '#dc2626' }}>
+                <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: f.employee_ssn ? 'var(--color-text-primary)' : 'var(--color-accent-expense)' }}>
                   {f.employee_ssn ? '•••-••-' + (f.employee_ssn.slice(-4) || '????') : 'MISSING'}
                 </td>
                 <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 600 }}>{fmt$(f.box1_wages_tips)}</td>
@@ -654,7 +654,7 @@ const ScheduleSEView: React.FC<{ data: any }> = ({ data }) => {
     <tr style={tone === 'bold' ? { background: 'rgba(0,0,0,0.04)' } : undefined}>
       <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 70 }}>{n}</td>
       <td style={{ padding: '6px 10px', fontSize: 11, fontWeight: tone === 'bold' ? 700 : 400 }}>{label}</td>
-      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? '#dc2626' : tone === 'green' ? '#16a34a' : 'var(--color-text-primary)' }}>
+      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? 'var(--color-accent-expense)' : tone === 'green' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}>
         {typeof value === 'number' ? fmt$(value) : value}
       </td>
     </tr>
@@ -666,10 +666,10 @@ const ScheduleSEView: React.FC<{ data: any }> = ({ data }) => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          <Stat label="Schedule C Profit" value={fmt$(data.schedule_c_net_profit)} color={data.schedule_c_net_profit >= 0 ? '#16a34a' : '#dc2626'} />
+          <Stat label="Schedule C Profit" value={fmt$(data.schedule_c_net_profit)} color={data.schedule_c_net_profit >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)'} />
           <Stat label="SS Tax (12.4%)" value={fmt$(data.line10_ss_tax)} />
           <Stat label="Medicare Tax (2.9%)" value={fmt$(data.line11_medicare_tax)} />
-          <Stat label="Total SE Tax" value={fmt$(data.line12_total_se_tax)} highlight color="#dc2626" />
+          <Stat label="Total SE Tax" value={fmt$(data.line12_total_se_tax)} highlight color="var(--color-accent-expense)" />
         </div>
         {!noTaxOwed && (
           <div style={{ marginTop: 10, padding: 10, background: 'rgba(22, 163, 74, 0.08)', border: '1px solid rgba(22, 163, 74, 0.3)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-primary)' }}>
@@ -702,7 +702,7 @@ const ScheduleSEView: React.FC<{ data: any }> = ({ data }) => {
       </div>
 
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#475569', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-tertiary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           Part II — Self-Employment Tax
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -733,7 +733,7 @@ const SalesTaxView: React.FC<{ data: any }> = ({ data }) => {
           <Stat label="Gross Sales" value={fmt$(data.total_gross_sales)} />
           <Stat label="Taxable Sales" value={fmt$(data.total_taxable_sales)} />
           <Stat label="Tax Collected" value={fmt$(data.total_tax_collected)} />
-          <Stat label="Net Remittance" value={fmt$(data.net_remittance)} highlight color="#dc2626" />
+          <Stat label="Net Remittance" value={fmt$(data.net_remittance)} highlight color="var(--color-accent-expense)" />
         </div>
         {Math.abs(data.total_variance) > 1 && (
           <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-primary)' }}>
@@ -770,7 +770,7 @@ const SalesTaxView: React.FC<{ data: any }> = ({ data }) => {
                 <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{fmt$(l.taxable_sales)}</td>
                 <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 600 }}>{fmt$(l.tax_due)}</td>
                 <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{fmt$(l.tax_collected)}</td>
-                <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: Math.abs(l.variance) < 0.5 ? '#16a34a' : '#d97706' }}>{fmt$(l.variance)}</td>
+                <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: Math.abs(l.variance) < 0.5 ? 'var(--color-accent-income)' : 'var(--color-accent-warning)' }}>{fmt$(l.variance)}</td>
                 <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', color: 'var(--color-text-muted)' }}>{l.invoice_count}</td>
               </tr>
             ))}
@@ -905,7 +905,7 @@ const Form940View: React.FC<{ data: any }> = ({ data }) => {
     <tr style={tone === 'bold' ? { background: 'rgba(0,0,0,0.04)' } : undefined}>
       <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 70 }}>{n}</td>
       <td style={{ padding: '6px 10px', fontSize: 11, fontWeight: tone === 'bold' ? 700 : 400 }}>{label}</td>
-      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? '#dc2626' : tone === 'green' ? '#16a34a' : 'var(--color-text-primary)' }}>
+      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? 'var(--color-accent-expense)' : tone === 'green' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}>
         {typeof value === 'number' ? fmt$(value) : value}
       </td>
     </tr>
@@ -920,8 +920,8 @@ const Form940View: React.FC<{ data: any }> = ({ data }) => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Stat label="Employees" value={String(data.employee_count)} />
           <Stat label="Taxable Wages" value={fmt$(data.line7_total_taxable)} />
-          <Stat label="Total FUTA" value={fmt$(data.line12_total_futa)} highlight color="#dc2626" />
-          <Stat label={data.line14_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line14_balance_due > 0 ? data.line14_balance_due : data.line15_overpayment)} color={data.line14_balance_due > 0 ? '#dc2626' : '#16a34a'} />
+          <Stat label="Total FUTA" value={fmt$(data.line12_total_futa)} highlight color="var(--color-accent-expense)" />
+          <Stat label={data.line14_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line14_balance_due > 0 ? data.line14_balance_due : data.line15_overpayment)} color={data.line14_balance_due > 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
         </div>
         {data.warnings.length > 0 && (
           <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-primary)' }}>
@@ -1008,7 +1008,7 @@ const Misc1099View: React.FC<{ forms: any[] }> = ({ forms }) => {
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Stat label="Recipients" value={String(forms.length)} />
-          <Stat label="Ready to File" value={String(ready)} color="#16a34a" />
+          <Stat label="Ready to File" value={String(ready)} color="var(--color-accent-income)" />
           <Stat label="Total Paid" value={fmt$(totals.total)} highlight />
           <Stat label="Largest Box" value={(() => {
             const entries = [
@@ -1063,7 +1063,7 @@ const Misc1099View: React.FC<{ forms: any[] }> = ({ forms }) => {
             {forms.map((f: any, i: number) => (
               <tr key={f.recipient_id || i} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
                 <td style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600 }}>{f.recipient_name || '(unnamed)'}</td>
-                <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: f.has_tin ? 'var(--color-text-primary)' : '#dc2626' }}>
+                <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: f.has_tin ? 'var(--color-text-primary)' : 'var(--color-accent-expense)' }}>
                   {f.has_tin ? '•••' + (f.recipient_tin || '').slice(-4) : '⛔ missing'}
                 </td>
                 <td style={{ padding: '6px 10px', fontSize: 11 }}>
@@ -1073,9 +1073,9 @@ const Misc1099View: React.FC<{ forms: any[] }> = ({ forms }) => {
                 </td>
                 <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>{fmt$(f.total_paid)}</td>
                 <td style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700 }}>
-                  {f.meets_filing_threshold && f.has_tin ? <span style={{ color: '#16a34a' }}>✓ READY</span> :
-                    !f.has_tin ? <span style={{ color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={11} /> NO TIN</span> :
-                    <span style={{ color: '#94a3b8' }}>⏸ &lt; threshold</span>}
+                  {f.meets_filing_threshold && f.has_tin ? <span style={{ color: 'var(--color-accent-income)' }}>✓ READY</span> :
+                    !f.has_tin ? <span style={{ color: 'var(--color-accent-expense)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={11} /> NO TIN</span> :
+                    <span style={{ color: 'var(--color-text-muted)' }}>⏸ &lt; threshold</span>}
                 </td>
               </tr>
             ))}
@@ -1094,7 +1094,7 @@ const Form944View: React.FC<{ data: any }> = ({ data }) => {
     <tr style={tone === 'bold' ? { background: 'rgba(0,0,0,0.04)' } : undefined}>
       <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 70 }}>{n}</td>
       <td style={{ padding: '6px 10px', fontSize: 11, fontWeight: tone === 'bold' ? 700 : 400 }}>{label}</td>
-      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? '#dc2626' : tone === 'green' ? '#16a34a' : 'var(--color-text-primary)' }}>
+      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? 'var(--color-accent-expense)' : tone === 'green' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}>
         {typeof value === 'number' ? fmt$(value) : value}
       </td>
     </tr>
@@ -1108,8 +1108,8 @@ const Form944View: React.FC<{ data: any }> = ({ data }) => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Stat label="Employees" value={String(data.employee_count)} />
           <Stat label="Wages (line 1)" value={fmt$(data.line1_wages_tips)} />
-          <Stat label="Total Tax (line 9)" value={fmt$(data.line9_total_after_credits)} highlight color="#dc2626" />
-          <Stat label={data.line11_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line11_balance_due > 0 ? data.line11_balance_due : data.line12a_overpayment)} color={data.line11_balance_due > 0 ? '#dc2626' : '#16a34a'} />
+          <Stat label="Total Tax (line 9)" value={fmt$(data.line9_total_after_credits)} highlight color="var(--color-accent-expense)" />
+          <Stat label={data.line11_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line11_balance_due > 0 ? data.line11_balance_due : data.line12a_overpayment)} color={data.line11_balance_due > 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
         </div>
         {data.warnings.length > 0 && (
           <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
@@ -1172,7 +1172,7 @@ const Form945View: React.FC<{ data: any }> = ({ data }) => {
     <tr style={tone === 'bold' ? { background: 'rgba(0,0,0,0.04)' } : undefined}>
       <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 70 }}>{n}</td>
       <td style={{ padding: '6px 10px', fontSize: 11, fontWeight: tone === 'bold' ? 700 : 400 }}>{label}</td>
-      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? '#dc2626' : tone === 'green' ? '#16a34a' : 'var(--color-text-primary)' }}>
+      <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? 'var(--color-accent-expense)' : tone === 'green' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}>
         {typeof value === 'number' ? fmt$(value) : value}
       </td>
     </tr>
@@ -1186,8 +1186,8 @@ const Form945View: React.FC<{ data: any }> = ({ data }) => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Stat label="Source Rows" value={String(data.source_count)} />
           <Stat label="Backup W/H (line 2)" value={fmt$(data.line2_backup_withholding)} />
-          <Stat label="Total Tax (line 3)" value={fmt$(data.line3_total_taxes)} highlight color="#dc2626" />
-          <Stat label={data.line5_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line5_balance_due > 0 ? data.line5_balance_due : data.line6a_overpayment)} color={data.line5_balance_due > 0 ? '#dc2626' : '#16a34a'} />
+          <Stat label="Total Tax (line 3)" value={fmt$(data.line3_total_taxes)} highlight color="var(--color-accent-expense)" />
+          <Stat label={data.line5_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line5_balance_due > 0 ? data.line5_balance_due : data.line6a_overpayment)} color={data.line5_balance_due > 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
         </div>
         {data.warnings.length > 0 && (
           <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
@@ -1245,7 +1245,7 @@ const Schedule941BView: React.FC<{ data: any }> = ({ data }) => {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
           <Stat label="Pay Dates" value={String(data.pay_dates_count)} />
-          <Stat label="Quarter Total" value={fmt$(data.total_quarter_liability)} highlight color="#dc2626" />
+          <Stat label="Quarter Total" value={fmt$(data.total_quarter_liability)} highlight color="var(--color-accent-expense)" />
         </div>
       </div>
       {renderMonth(data.month1_name, data.month1_liability, data.month1_total)}
@@ -1267,7 +1267,7 @@ const Form945AView: React.FC<{ data: any }> = ({ data }) => {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
           <Stat label="Liability Dates" value={String(data.liability_dates_count)} />
-          <Stat label="Year Total" value={fmt$(data.total_year_liability)} highlight color="#dc2626" />
+          <Stat label="Year Total" value={fmt$(data.total_year_liability)} highlight color="var(--color-accent-expense)" />
         </div>
       </div>
       {data.months.filter((m: any) => m.daily.length > 0).map((m: any) => (
@@ -1307,7 +1307,7 @@ const Generic1099View: React.FC<{ forms: any[]; variant: string; amountKey: stri
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Stat label="Recipients" value={String(forms.length)} />
-          <Stat label="Ready to File" value={String(ready)} color="#16a34a" />
+          <Stat label="Ready to File" value={String(ready)} color="var(--color-accent-income)" />
           <Stat label={`Total ${amountLabel}`} value={fmt$(grand)} highlight />
           <Stat label="Threshold" value={thresholdAmount > 0 ? '≥ ' + fmt$(thresholdAmount) : 'Any'} />
         </div>
@@ -1329,7 +1329,7 @@ const Generic1099View: React.FC<{ forms: any[]; variant: string; amountKey: stri
             {forms.map((f: any, i: number) => (
               <tr key={f.recipient_id || i} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
                 <td style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600 }}>{f.recipient_name || '(unnamed)'}</td>
-                <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: f.has_tin ? 'var(--color-text-primary)' : '#dc2626' }}>
+                <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: f.has_tin ? 'var(--color-text-primary)' : 'var(--color-accent-expense)' }}>
                   {f.has_tin ? '•••' + (f.recipient_tin || '').slice(-4) : '⛔ missing'}
                 </td>
                 <td style={{ padding: '6px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>
@@ -1339,9 +1339,9 @@ const Generic1099View: React.FC<{ forms: any[]; variant: string; amountKey: stri
                   {fmt$(Number(f[amountKey]) || 0)}
                 </td>
                 <td style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700 }}>
-                  {f.meets_filing_threshold && f.has_tin ? <span style={{ color: '#16a34a' }}>✓ READY</span> :
-                    !f.has_tin ? <span style={{ color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={11} /> NO TIN</span> :
-                    <span style={{ color: '#94a3b8' }}>⏸ pending</span>}
+                  {f.meets_filing_threshold && f.has_tin ? <span style={{ color: 'var(--color-accent-income)' }}>✓ READY</span> :
+                    !f.has_tin ? <span style={{ color: 'var(--color-accent-expense)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={11} /> NO TIN</span> :
+                    <span style={{ color: 'var(--color-text-muted)' }}>⏸ pending</span>}
                 </td>
               </tr>
             ))}
@@ -1402,7 +1402,7 @@ const Form1096View: React.FC<{ data: any }> = ({ data }) => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           <Stat label="Total Forms (Box 3)" value={String(data.total_forms)} highlight />
           <Stat label="Federal Withheld (Box 4)" value={fmt$(data.total_fed_withheld)} />
-          <Stat label="Total Reported (Box 5)" value={fmt$(data.total_reported)} color="#dc2626" />
+          <Stat label="Total Reported (Box 5)" value={fmt$(data.total_reported)} color="var(--color-accent-expense)" />
         </div>
         {data.warnings.length > 0 && (
           <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
@@ -1431,7 +1431,7 @@ const Form1096View: React.FC<{ data: any }> = ({ data }) => {
                 <td style={{ padding: '6px 10px', fontSize: 12, fontWeight: 700 }}>{r.variant}</td>
                 <td style={{ padding: '6px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>Box {r.irs_box}</td>
                 <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{r.forms_count}</td>
-                <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: r.ready_to_file_count === r.forms_count ? '#16a34a' : '#d97706' }}>
+                <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: r.ready_to_file_count === r.forms_count ? 'var(--color-accent-income)' : 'var(--color-accent-warning)' }}>
                   {r.ready_to_file_count} / {r.forms_count}
                 </td>
                 <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>{fmt$(r.total_amount)}</td>
@@ -1450,7 +1450,7 @@ const ScheduleLine: React.FC<{ n: string; label: string; value: any; tone?: 'red
   <tr style={tone === 'bold' ? { background: 'rgba(0,0,0,0.04)' } : undefined}>
     <td style={{ padding: '6px 10px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)', width: 70 }}>{n}</td>
     <td style={{ padding: '6px 10px', fontSize: 11, fontWeight: tone === 'bold' ? 700 : 400 }}>{label}</td>
-    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? '#dc2626' : tone === 'green' ? '#16a34a' : 'var(--color-text-primary)' }}>
+    <td style={{ padding: '6px 10px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: tone === 'bold' ? 800 : 600, color: tone === 'red' ? 'var(--color-accent-expense)' : tone === 'green' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}>
       {typeof value === 'number' ? fmt$(value) : (value || '—')}
     </td>
   </tr>
@@ -1524,8 +1524,8 @@ const Schedule2View: React.FC<{ data: any }> = ({ data }) => {
       <ScheduleWarnings warnings={data.warnings || []} />
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-          <Stat label="SE Tax (line 4)" value={fmt$(data.line4_se_tax)} color="#dc2626" />
-          <Stat label="TOTAL Other Taxes (line 21)" value={fmt$(data.line21_total_other_taxes)} highlight color="#dc2626" />
+          <Stat label="SE Tax (line 4)" value={fmt$(data.line4_se_tax)} color="var(--color-accent-expense)" />
+          <Stat label="TOTAL Other Taxes (line 21)" value={fmt$(data.line21_total_other_taxes)} highlight color="var(--color-accent-expense)" />
         </div>
       </div>
       <ScheduleSection title="Part I — Tax" rows={[
@@ -1648,9 +1648,9 @@ const ScheduleDView: React.FC<{ data: any }> = ({ data }) => {
       <ScheduleWarnings warnings={data.warnings || []} />
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          <Stat label="Short-Term (Line 7)" value={fmt$(data.line7_total_short_term_gain_loss)} color={data.line7_total_short_term_gain_loss < 0 ? '#dc2626' : '#16a34a'} />
-          <Stat label="Long-Term (Line 15)" value={fmt$(data.line15_total_long_term_gain_loss)} color={data.line15_total_long_term_gain_loss < 0 ? '#dc2626' : '#16a34a'} />
-          <Stat label="Combined (Line 16)" value={fmt$(data.line16_combined_total)} highlight color={data.line16_combined_total < 0 ? '#dc2626' : '#16a34a'} />
+          <Stat label="Short-Term (Line 7)" value={fmt$(data.line7_total_short_term_gain_loss)} color={data.line7_total_short_term_gain_loss < 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
+          <Stat label="Long-Term (Line 15)" value={fmt$(data.line15_total_long_term_gain_loss)} color={data.line15_total_long_term_gain_loss < 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
+          <Stat label="Combined (Line 16)" value={fmt$(data.line16_combined_total)} highlight color={data.line16_combined_total < 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
         </div>
       </div>
       <ScheduleSection title="Summary" rows={[
@@ -1672,9 +1672,9 @@ const Form1040ESView: React.FC<{ data: any }> = ({ data }) => {
       <ScheduleWarnings warnings={data.warnings || []} />
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          <Stat label="Projected Total Tax" value={fmt$(data.projected_total_tax)} color="#dc2626" />
+          <Stat label="Projected Total Tax" value={fmt$(data.projected_total_tax)} color="var(--color-accent-expense)" />
           <Stat label="Net Estimated Tax" value={fmt$(data.net_estimated_tax)} />
-          <Stat label="Recommended Total" value={fmt$(data.recommended_total)} highlight color="#dc2626" />
+          <Stat label="Recommended Total" value={fmt$(data.recommended_total)} highlight color="var(--color-accent-expense)" />
           <Stat label="Per Quarter" value={fmt$(data.recommended_quarterly)} highlight />
         </div>
       </div>
@@ -1707,7 +1707,7 @@ const Form1040ESView: React.FC<{ data: any }> = ({ data }) => {
             <div key={v.voucher_number} style={{ border: '2px solid var(--color-border-primary)', borderRadius: 6, padding: 12 }}>
               <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--color-text-muted)' }}>Voucher {v.voucher_number} of 4</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-primary)', marginTop: 2 }}>Due {v.due_date_label}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: '#dc2626', marginTop: 6 }}>{fmt$(v.amount)}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-expense)', marginTop: 6 }}>{fmt$(v.amount)}</div>
             </div>
           ))}
         </div>
@@ -1726,9 +1726,9 @@ const Form8995View: React.FC<{ data: any }> = ({ data }) => {
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Stat label="QBI (Schedule C)" value={fmt$(data.line2_total_qbi)} />
-          <Stat label="QBI Component (× 20%)" value={fmt$(data.line5_qbi_component)} color="#16a34a" />
+          <Stat label="QBI Component (× 20%)" value={fmt$(data.line5_qbi_component)} color="var(--color-accent-income)" />
           <Stat label="Income Limit" value={fmt$(data.line14_income_limitation)} />
-          <Stat label="QBI DEDUCTION (Line 15)" value={fmt$(data.line15_qbi_deduction)} highlight color="#16a34a" />
+          <Stat label="QBI DEDUCTION (Line 15)" value={fmt$(data.line15_qbi_deduction)} highlight color="var(--color-accent-income)" />
         </div>
       </div>
       <ScheduleSection title="Computation" rows={[
@@ -1759,9 +1759,9 @@ const Form4562View: React.FC<{ data: any }> = ({ data }) => {
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
           <Stat label="Assets" value={String(data.asset_count)} />
-          <Stat label="Section 179" value={fmt$(data.line12_section_179_deduction)} color="#16a34a" />
-          <Stat label="Bonus Depreciation" value={fmt$(data.line15_bonus_depreciation)} color="#16a34a" />
-          <Stat label="TOTAL Depreciation (Line 22)" value={fmt$(data.line22_total_depreciation)} highlight color="#16a34a" />
+          <Stat label="Section 179" value={fmt$(data.line12_section_179_deduction)} color="var(--color-accent-income)" />
+          <Stat label="Bonus Depreciation" value={fmt$(data.line15_bonus_depreciation)} color="var(--color-accent-income)" />
+          <Stat label="TOTAL Depreciation (Line 22)" value={fmt$(data.line22_total_depreciation)} highlight color="var(--color-accent-income)" />
         </div>
       </div>
       <ScheduleSection title="Part I — Section 179 Election" rows={[
@@ -1804,7 +1804,7 @@ const Form8829View: React.FC<{ data: any }> = ({ data }) => {
           <Stat label="Business sq ft" value={String(data.line1_business_sq_ft)} />
           <Stat label="Total sq ft" value={String(data.line2_total_sq_ft)} />
           <Stat label="Business %" value={data.line3_business_pct.toFixed(2) + '%'} />
-          <Stat label="Home Office Deduction (Line 35)" value={fmt$(data.line35_total_home_office_deduction)} highlight color="#16a34a" />
+          <Stat label="Home Office Deduction (Line 35)" value={fmt$(data.line35_total_home_office_deduction)} highlight color="var(--color-accent-income)" />
         </div>
       </div>
       <ScheduleSection title="Part I — Square Footage" rows={[
@@ -1842,9 +1842,9 @@ const Form4797View: React.FC<{ data: any }> = ({ data }) => {
       <ScheduleWarnings warnings={data.warnings || []} />
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          <Stat label="Section 1231 Net (Line 9)" value={fmt$(data.line9_subtract_line_8)} color={data.line9_subtract_line_8 >= 0 ? '#16a34a' : '#dc2626'} />
-          <Stat label="Ordinary Net (Line 17)" value={fmt$(data.line17_combine_lines_10_16)} color={data.line17_combine_lines_10_16 >= 0 ? '#16a34a' : '#dc2626'} />
-          <Stat label="Section 1245 Recapture (Line 22)" value={fmt$(data.line22_total_section_1245_recapture)} color="#dc2626" />
+          <Stat label="Section 1231 Net (Line 9)" value={fmt$(data.line9_subtract_line_8)} color={data.line9_subtract_line_8 >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)'} />
+          <Stat label="Ordinary Net (Line 17)" value={fmt$(data.line17_combine_lines_10_16)} color={data.line17_combine_lines_10_16 >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)'} />
+          <Stat label="Section 1245 Recapture (Line 22)" value={fmt$(data.line22_total_section_1245_recapture)} color="var(--color-accent-expense)" />
         </div>
       </div>
       <ScheduleSection title="Part I — Section 1231 Property" rows={[
@@ -1877,9 +1877,9 @@ const Form7004View: React.FC<{ data: any }> = ({ data }) => {
           Form 7004 · {data.form_code_description} · {data.taxpayer_name}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          <Stat label="Original Due" value={data.original_due_date} color="#94a3b8" />
-          <Stat label="Extended Due" value={data.extended_due_date} highlight color="#16a34a" />
-          <Stat label="Balance Due" value={fmt$(data.line8_balance_due)} color={data.line8_balance_due > 0 ? '#dc2626' : '#16a34a'} />
+          <Stat label="Original Due" value={data.original_due_date} color="var(--color-text-muted)" />
+          <Stat label="Extended Due" value={data.extended_due_date} highlight color="var(--color-accent-income)" />
+          <Stat label="Balance Due" value={fmt$(data.line8_balance_due)} color={data.line8_balance_due > 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
         </div>
       </div>
       <ScheduleSection title="Part II — Tax Computation" rows={[
@@ -1902,9 +1902,9 @@ const Form4868View: React.FC<{ data: any }> = ({ data }) => {
       <ScheduleWarnings warnings={data.warnings || []} />
       <div className="block-card" style={{ padding: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          <Stat label="Original Due" value={data.original_due_date} color="#94a3b8" />
-          <Stat label="Extended Due" value={data.extended_due_date} highlight color="#16a34a" />
-          <Stat label="Balance Due" value={fmt$(data.line6_balance_due)} color={data.line6_balance_due > 0 ? '#dc2626' : '#16a34a'} />
+          <Stat label="Original Due" value={data.original_due_date} color="var(--color-text-muted)" />
+          <Stat label="Extended Due" value={data.extended_due_date} highlight color="var(--color-accent-income)" />
+          <Stat label="Balance Due" value={fmt$(data.line6_balance_due)} color={data.line6_balance_due > 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
         </div>
       </div>
       <ScheduleSection title="Tax Computation" rows={[
@@ -1929,7 +1929,7 @@ const Form1065View: React.FC<{ data: any }> = ({ data }) => {
           <Stat label="Partners" value={String(data.number_of_partners)} />
           <Stat label="Gross Receipts" value={fmt$(data.line1a_gross_receipts)} />
           <Stat label="Total Income" value={fmt$(data.line8_total_income)} />
-          <Stat label="Ordinary Income (Line 23)" value={fmt$(data.line23_ordinary_business_income)} highlight color={data.line23_ordinary_business_income >= 0 ? '#16a34a' : '#dc2626'} />
+          <Stat label="Ordinary Income (Line 23)" value={fmt$(data.line23_ordinary_business_income)} highlight color={data.line23_ordinary_business_income >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)'} />
         </div>
       </div>
       <ScheduleSection title="Income (lines 1-8)" rows={[
@@ -1972,7 +1972,7 @@ const Form1120View: React.FC<{ data: any }> = ({ data }) => {
           <Stat label="Total Income" value={fmt$(data.line11_total_income)} />
           <Stat label="Total Deductions" value={fmt$(data.line27_total_deductions)} />
           <Stat label="Taxable Income" value={fmt$(data.line30_taxable_income)} />
-          <Stat label="Total Tax (21%)" value={fmt$(data.line31_total_tax)} highlight color="#dc2626" />
+          <Stat label="Total Tax (21%)" value={fmt$(data.line31_total_tax)} highlight color="var(--color-accent-expense)" />
         </div>
       </div>
       <ScheduleSection title="Income (lines 1-11)" rows={[
@@ -2022,7 +2022,7 @@ const Form1120SView: React.FC<{ data: any }> = ({ data }) => {
           <Stat label="Shareholders" value={String(data.number_of_shareholders)} />
           <Stat label="Officer Comp" value={fmt$(data.line7_compensation_officers)} />
           <Stat label="Total Income" value={fmt$(data.line6_total_income)} />
-          <Stat label="Ordinary Income (Line 21)" value={fmt$(data.line21_ordinary_business_income_loss)} highlight color={data.line21_ordinary_business_income_loss >= 0 ? '#16a34a' : '#dc2626'} />
+          <Stat label="Ordinary Income (Line 21)" value={fmt$(data.line21_ordinary_business_income_loss)} highlight color={data.line21_ordinary_business_income_loss >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)'} />
         </div>
       </div>
       <ScheduleSection title="Income (lines 1-6)" rows={[
@@ -2062,7 +2062,7 @@ const Form1041View: React.FC<{ data: any }> = ({ data }) => {
           <Stat label="Type" value={data.entity_type} />
           <Stat label="Total Income" value={fmt$(data.line9_total_income)} />
           <Stat label="Taxable Income" value={fmt$(data.line22_taxable_income)} />
-          <Stat label="Total Tax" value={fmt$(data.line23_total_tax)} highlight color="#dc2626" />
+          <Stat label="Total Tax" value={fmt$(data.line23_total_tax)} highlight color="var(--color-accent-expense)" />
         </div>
       </div>
       <ScheduleSection title="Income" rows={[

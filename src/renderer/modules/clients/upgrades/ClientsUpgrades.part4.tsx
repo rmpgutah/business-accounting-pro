@@ -82,9 +82,9 @@ function downloadBlob(filename: string, content: string, mime: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// Build a printable document by writing into a Blob URL loaded in a new tab.
-// Avoids document.write entirely (no live-DOM string injection).
-function printHTML(title: string, bodyHtml: string): void {
+// Build a printable document and send it through Electron's print pipeline.
+// Replaces the legacy window.open/Blob URL approach.
+async function printHTML(title: string, bodyHtml: string): Promise<void> {
   const html =
     `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>` +
     `<style>` +
@@ -101,16 +101,8 @@ function printHTML(title: string, bodyHtml: string): void {
     `<p class="muted" style="margin-top:24px">Generated ${escapeHtml(
       new Date().toLocaleString()
     )}</p>` +
-    `<script>window.onload=function(){setTimeout(function(){window.print();},250);};<\/script>` +
     `</body></html>`;
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const w = window.open(url, '_blank');
-  if (!w) {
-    URL.revokeObjectURL(url);
-    return;
-  }
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  await api.print(html);
 }
 
 function escapeHtml(s: unknown): string {

@@ -91,7 +91,7 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
         </button>
         <button onClick={() => setShowSkipModal(true)} className="block-btn flex items-center gap-1.5 text-xs"
           title="Skip the next scheduled payment — interest still accrues"
-          style={{ borderColor: '#d97706', color: '#d97706' }}>
+          style={{ borderColor: 'var(--color-accent-warning)', color: 'var(--color-accent-warning)' }}>
           <SkipForward size={12} /> Skip Payment
         </button>
         <button
@@ -147,9 +147,9 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
       <div className="block-card" style={{ padding: 16, marginBottom: 12 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
           <Stat label="Original Principal" value={fmt$(loan.principal, cur)} />
-          <Stat label="Current Balance" value={fmt$(loan.current_balance, cur)} highlight color="#dc2626" />
-          <Stat label="Total Paid" value={fmt$(loan.total_paid_to_date, cur)} color="#16a34a" />
-          <Stat label="Interest Paid" value={fmt$(loan.total_interest_paid, cur)} color="#d97706" />
+          <Stat label="Current Balance" value={fmt$(loan.current_balance, cur)} highlight color="var(--color-accent-expense)" />
+          <Stat label="Total Paid" value={fmt$(loan.total_paid_to_date, cur)} color="var(--color-accent-income)" />
+          <Stat label="Interest Paid" value={fmt$(loan.total_interest_paid, cur)} color="var(--color-accent-warning)" />
           <Stat label={`Next Due${loan.next_payment_due ? ' · ' + loan.next_payment_due : ''}`}
             value={fmt$(loan.payment_amount, cur)} />
         </div>
@@ -163,7 +163,7 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
             <div style={{
               width: pctPaid + '%',
               height: '100%',
-              background: 'linear-gradient(90deg, #16a34a, #22c55e)',
+              background: 'var(--color-accent-income)',
               transition: 'width 200ms ease',
             }} />
           </div>
@@ -212,12 +212,12 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
             gridTemplateColumns: '1fr 1fr',
             gap: 12,
             padding: 12,
-            background: 'rgba(22, 163, 74, 0.06)',
-            border: '1px solid rgba(22, 163, 74, 0.2)',
+            background: 'color-mix(in srgb, var(--color-accent-income) 6%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--color-accent-income) 20%, transparent)',
             borderRadius: 6,
           }}>
-            <Stat label="Interest Saved" value={fmt$(scenario.interest_saved, cur)} color="#16a34a" highlight />
-            <Stat label="Months Saved" value={String(scenario.months_saved)} color="#16a34a" highlight />
+            <Stat label="Interest Saved" value={fmt$(scenario.interest_saved, cur)} color="var(--color-accent-income)" highlight />
+            <Stat label="Months Saved" value={String(scenario.months_saved)} color="var(--color-accent-income)" highlight />
             <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
               Baseline payoff: <span style={{ fontFamily: 'SF Mono, Menlo, monospace' }}>{scenario.baseline_payoff_date}</span>
               <br />Total interest: <span style={{ fontFamily: 'SF Mono, Menlo, monospace' }}>{fmt$(scenario.baseline_total_interest, cur)}</span>
@@ -252,9 +252,9 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
                     <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border-primary)', opacity: isSkipped ? 0.5 : 1, textDecoration: isSkipped ? 'line-through' : 'none' }}>
                       <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)' }}>{r.payment_number}{isSkipped ? ' ⏭' : ''}</td>
                       <td style={{ padding: '5px 8px', fontSize: 10, fontFamily: 'SF Mono, Menlo, monospace' }}>{r.due_date}</td>
-                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 600 }}>{isSkipped ? <span style={{ color: '#d97706', textDecoration: 'none', display: 'inline-block', fontSize: 9, fontWeight: 700 }}>SKIPPED</span> : fmt$(r.scheduled_payment, cur)}</td>
-                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>{isSkipped ? '—' : fmt$(r.principal_amount, cur)}</td>
-                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#dc2626' }}>{isSkipped ? '—' : fmt$(r.interest_amount, cur)}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 600 }}>{isSkipped ? <span style={{ color: 'var(--color-accent-warning)', textDecoration: 'none', display: 'inline-block', fontSize: 9, fontWeight: 700 }}>SKIPPED</span> : fmt$(r.scheduled_payment, cur)}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-income)' }}>{isSkipped ? '—' : fmt$(r.principal_amount, cur)}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-expense)' }}>{isSkipped ? '—' : fmt$(r.interest_amount, cur)}</td>
                       <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)' }}>{fmt$(r.remaining_balance, cur)}</td>
                     </tr>
                   );
@@ -292,10 +292,10 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
                       <td style={{ padding: '5px 8px', fontSize: 10, fontFamily: 'SF Mono, Menlo, monospace' }}>{p.payment_date}</td>
                       <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>
                         {fmt$(p.amount, cur)}
-                        {p.is_extra_principal ? <span style={{ fontSize: 9, color: '#16a34a', marginLeft: 4 }}>(extra)</span> : null}
+                        {p.is_extra_principal ? <span style={{ fontSize: 9, color: 'var(--color-accent-income)', marginLeft: 4 }}>(extra)</span> : null}
                       </td>
-                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>{fmt$(p.principal_amount, cur)}</td>
-                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#dc2626' }}>{fmt$(p.interest_amount, cur)}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-income)' }}>{fmt$(p.principal_amount, cur)}</td>
+                      <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-expense)' }}>{fmt$(p.interest_amount, cur)}</td>
                       <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)' }}>{humanizeLabel(p.payment_method)}</td>
                       <td style={{ padding: '3px 6px', fontSize: 10, textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <button
@@ -479,16 +479,16 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
             toggle the manual override on. */}
         <div style={{
           marginTop: 10, padding: '8px 10px',
-          background: 'rgba(96,165,250,0.06)',
-          border: '1px solid rgba(96,165,250,0.2)',
+          background: 'var(--color-accent-blue-bg)',
+          border: '1px solid color-mix(in srgb, var(--color-accent-blue) 20%, transparent)',
           borderRadius: 6, fontSize: 11,
         }}>
           <div style={{ color: 'var(--color-text-muted)', fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 }}>
             Auto-split preview (daily accrual on save · monthly proxy shown here)
           </div>
           <div style={{ display: 'flex', gap: 16, fontFamily: 'SF Mono, Menlo, monospace' }}>
-            <span><span style={{ color: 'var(--color-text-muted)' }}>Principal: </span><span style={{ color: '#16a34a', fontWeight: 700 }}>${previewPrincipal.toFixed(2)}</span></span>
-            <span><span style={{ color: 'var(--color-text-muted)' }}>Interest: </span><span style={{ color: '#dc2626', fontWeight: 700 }}>${previewInterest.toFixed(2)}</span></span>
+            <span><span style={{ color: 'var(--color-text-muted)' }}>Principal: </span><span style={{ color: 'var(--color-accent-income)', fontWeight: 700 }}>${previewPrincipal.toFixed(2)}</span></span>
+            <span><span style={{ color: 'var(--color-text-muted)' }}>Interest: </span><span style={{ color: 'var(--color-accent-expense)', fontWeight: 700 }}>${previewInterest.toFixed(2)}</span></span>
             {(loan.escrow_per_payment || 0) > 0 && (
               <span><span style={{ color: 'var(--color-text-muted)' }}>Escrow: </span><span style={{ fontWeight: 700 }}>${previewEscrow.toFixed(2)}</span></span>
             )}
@@ -510,13 +510,13 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
                 <input type="number" step="0.01" className="block-input"
                   value={principal || ''}
                   onChange={(e) => setPrincipal(parseFloat(e.target.value) || 0)}
-                  style={{ color: '#16a34a' }} />
+                  style={{ color: 'var(--color-accent-income)' }} />
               </Field>
               <Field label="Interest Portion">
                 <input type="number" step="0.01" className="block-input"
                   value={interest || ''}
                   onChange={(e) => setInterest(parseFloat(e.target.value) || 0)}
-                  style={{ color: '#dc2626' }} />
+                  style={{ color: 'var(--color-accent-expense)' }} />
               </Field>
               <Field label="Escrow Portion">
                 <input type="number" step="0.01" className="block-input"
@@ -527,14 +527,14 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
             {/* Live balance check */}
             <div style={{
               marginTop: 8, padding: '6px 8px',
-              background: splitBalanced ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
-              border: '1px solid ' + (splitBalanced ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'),
+              background: splitBalanced ? 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
+              border: '1px solid ' + (splitBalanced ? 'color-mix(in srgb, var(--color-accent-income) 30%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 30%, transparent)'),
               borderRadius: 4, fontSize: 10,
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span style={{ fontFamily: 'SF Mono, Menlo, monospace' }}>
                 P+I+E = ${componentsSum.toFixed(2)} · Amount = ${amount.toFixed(2)}
-                {!splitBalanced && <span style={{ color: '#dc2626', marginLeft: 6 }}>diff ${Math.abs(splitDiff).toFixed(2)}</span>}
+                {!splitBalanced && <span style={{ color: 'var(--color-accent-expense)', marginLeft: 6 }}>diff ${Math.abs(splitDiff).toFixed(2)}</span>}
               </span>
               {!splitBalanced && (
                 <button
@@ -566,7 +566,7 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
           <span>
             <span style={{ fontWeight: 600 }}>Cross-post to Expenses ledger</span>
             <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: 10, marginTop: 2 }}>
-              Creates one "Loan Payment" expense for the full amount, split into <b style={{ color: '#f59e0b' }}>Interest</b> (deductible) + <b style={{ color: '#6366f1' }}>Principal</b> line items. Edit/delete the payment — the expense follows.
+              Creates one "Loan Payment" expense for the full amount, split into <b style={{ color: 'var(--color-accent-warning)' }}>Interest</b> (deductible) + <b style={{ color: 'var(--color-accent-blue)' }}>Principal</b> line items. Edit/delete the payment — the expense follows.
             </span>
           </span>
         </label>
@@ -672,13 +672,13 @@ const PaymentEditModal: React.FC<{
             <input type="number" step="0.01" className="block-input"
               value={form.principal_amount || ''}
               onChange={(e) => setForm({ ...form, principal_amount: parseFloat(e.target.value) || 0 })}
-              style={{ color: '#16a34a' }} />
+              style={{ color: 'var(--color-accent-income)' }} />
           </Field>
           <Field label="Interest Portion">
             <input type="number" step="0.01" className="block-input"
               value={form.interest_amount || ''}
               onChange={(e) => setForm({ ...form, interest_amount: parseFloat(e.target.value) || 0 })}
-              style={{ color: '#dc2626' }} />
+              style={{ color: 'var(--color-accent-expense)' }} />
           </Field>
           <Field label="Escrow Portion">
             <input type="number" step="0.01" className="block-input"
@@ -720,8 +720,8 @@ const PaymentEditModal: React.FC<{
         {/* Balance hint — green when components sum to amount, red when off */}
         <div style={{
           marginTop: 12, padding: '8px 10px',
-          background: balanced ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
-          border: '1px solid ' + (balanced ? 'rgba(22,163,74,0.3)' : 'rgba(220,38,38,0.3)'),
+          background: balanced ? 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
+          border: '1px solid ' + (balanced ? 'color-mix(in srgb, var(--color-accent-income) 30%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 30%, transparent)'),
           borderRadius: 6, fontSize: 11,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
@@ -731,7 +731,7 @@ const PaymentEditModal: React.FC<{
             <span style={{ color: 'var(--color-text-muted)' }}> · Amount = </span>
             <span style={{ fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>${form.amount.toFixed(2)}</span>
             {!balanced && (
-              <span style={{ color: '#dc2626', marginLeft: 8 }}>· diff ${Math.abs(diff).toFixed(2)}</span>
+              <span style={{ color: 'var(--color-accent-expense)', marginLeft: 8 }}>· diff ${Math.abs(diff).toFixed(2)}</span>
             )}
           </div>
           {!balanced && (
@@ -807,7 +807,7 @@ const SkipPaymentModal: React.FC<{
       <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 8, maxWidth: 480, width: '100%', padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <SkipForward size={16} style={{ color: '#d97706' }} />
+            <SkipForward size={16} style={{ color: 'var(--color-accent-warning)' }} />
             <span style={{ fontSize: 16, fontWeight: 700 }}>Skip a Payment</span>
           </div>
           <button onClick={onClose} className="block-btn" style={{ padding: '4px 8px' }}><X size={14} /></button>
@@ -816,7 +816,7 @@ const SkipPaymentModal: React.FC<{
         {/* What will be skipped */}
         <div style={{
           padding: '10px 14px', marginBottom: 12, borderRadius: 6,
-          background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.25)',
+          background: 'color-mix(in srgb, var(--color-accent-warning) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-warning) 25%, transparent)',
         }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--color-text-muted)', marginBottom: 4 }}>
             Next Scheduled Payment
@@ -825,7 +825,7 @@ const SkipPaymentModal: React.FC<{
             <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'SF Mono, Menlo, monospace' }}>
               {nextDue ? new Date(nextDue + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
             </span>
-            <span style={{ fontSize: 18, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: '#d97706' }}>
+            <span style={{ fontSize: 18, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-warning)' }}>
               ${payment.toFixed(2)}
             </span>
           </div>
@@ -852,7 +852,7 @@ const SkipPaymentModal: React.FC<{
 
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--color-text-secondary)' }}>
             <input type="checkbox" checked={capitalize} onChange={(e) => setCapitalize(e.target.checked)}
-              style={{ marginTop: 3, accentColor: '#d97706' }} />
+              style={{ marginTop: 3, accentColor: 'var(--color-accent-warning)' }} />
             <span>
               <strong>Capitalize accrued interest</strong>
               <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
@@ -865,7 +865,7 @@ const SkipPaymentModal: React.FC<{
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 16 }}>
           <button onClick={onClose} className="block-btn">Cancel</button>
           <button onClick={handleSkip} disabled={busy || !effectiveReason} className="block-btn-primary"
-            style={{ background: '#d97706', borderColor: '#d97706' }}>
+            style={{ background: 'var(--color-accent-warning)', borderColor: 'var(--color-accent-warning)' }}>
             <SkipForward size={12} style={{ marginRight: 4, display: 'inline' }} />
             {busy ? 'Skipping...' : 'Skip This Payment'}
           </button>
@@ -941,7 +941,7 @@ const LinkedExpensesPanel: React.FC<{ loanId: string; currency: string; refreshK
         <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
           {expenses.length} payment{expenses.length === 1 ? '' : 's'} · Total {fmt(total)}
           {(interestTotal > 0 || principalTotal > 0) && (
-            <span> · <span style={{ color: '#f59e0b' }}>Int {fmt(interestTotal)}</span> · <span style={{ color: '#6366f1' }}>Prin {fmt(principalTotal)}</span></span>
+            <span> · <span style={{ color: 'var(--color-accent-warning)' }}>Int {fmt(interestTotal)}</span> · <span style={{ color: 'var(--color-accent-blue)' }}>Prin {fmt(principalTotal)}</span></span>
           )}
         </span>
       </div>
@@ -968,8 +968,8 @@ const LinkedExpensesPanel: React.FC<{ loanId: string; currency: string; refreshK
                   <tr key={e.id} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
                     <td style={{ padding: '5px 8px', fontSize: 10, fontFamily: 'SF Mono, Menlo, monospace' }}>{e.date}</td>
                     <td style={{ padding: '5px 8px', fontSize: 10 }}>{e.description || '—'}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#f59e0b' }}>{interest > 0 ? fmt(interest) : '—'}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: '#6366f1' }}>{principal > 0 ? fmt(principal) : '—'}</td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-warning)' }}>{interest > 0 ? fmt(interest) : '—'}</td>
+                    <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-blue)' }}>{principal > 0 ? fmt(principal) : '—'}</td>
                     <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>{fmt(e.amount || 0)}</td>
                     <td style={{ padding: '5px 8px', fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>{formatStatus(e.status).label}</td>
                   </tr>

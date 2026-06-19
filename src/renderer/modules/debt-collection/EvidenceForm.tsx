@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, Paperclip } from 'lucide-react';
+import { debtDb } from './dbHelpers';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
@@ -88,10 +89,8 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
   const handleAttachFile = async () => {
     try {
       const result = await api.openFileDialog();
-      if (result && !result.canceled && result.filePaths?.length > 0) {
-        const fullPath = result.filePaths[0];
-        const fileName = fullPath.split(/[\\/]/).pop() || fullPath;
-        setForm((prev) => ({ ...prev, file_path: fullPath, file_name: fileName }));
+      if (result && result.path) {
+        setForm((prev) => ({ ...prev, file_path: result.path, file_name: result.name }));
       }
     } catch (err) {
       console.error('File dialog error:', err);
@@ -117,10 +116,11 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
     };
 
     try {
+      // debt_evidence has no company_id column.
       if (evidenceId) {
-        await api.update('debt_evidence', evidenceId, payload);
+        await debtDb.updateEvidence(evidenceId, payload);
       } else {
-        await api.create('debt_evidence', payload);
+        await debtDb.createEvidence(payload);
       }
       onSaved();
     } catch (err: any) {

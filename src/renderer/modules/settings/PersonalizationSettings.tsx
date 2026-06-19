@@ -55,7 +55,7 @@ const ColorSwatch: React.FC<{ value: string; selected: boolean; onClick: () => v
     style={{
       background: value,
       borderRadius: 'var(--app-radius, 4px)',
-      border: selected ? '2px solid #fff' : '2px solid rgba(255,255,255,0.1)',
+      border: selected ? '2px solid #fff' : '2px solid var(--color-border-secondary)',
       boxShadow: selected ? `0 0 0 2px ${value}` : 'none',
     }}
   />
@@ -122,29 +122,7 @@ const PersonalizationSettings: React.FC = () => {
   const activeTab = state.dashboardTabs.find((t) => t.id === state.activeTabId) ?? state.dashboardTabs[0];
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
-      <div className="module-header">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: 'var(--app-radius, 6px)' }}
-          >
-            <Palette size={18} className="text-accent-blue" />
-          </div>
-          <div>
-            <h2 className="module-title text-text-primary">Personalization</h2>
-            <p className="text-xs text-text-muted mt-0.5">
-              Customize theme, dashboard, sidebar, and notifications for your account
-            </p>
-          </div>
-        </div>
-        <div className="module-actions">
-          <button className="block-btn flex items-center gap-1.5 text-xs" onClick={handleSaveCloud}>
-            <Download size={13} /> Sync to Cloud
-          </button>
-        </div>
-      </div>
-
+    <>
       {/* ─── Theme ─────────────────────────────────────── */}
       <Section
         title="Theme"
@@ -737,7 +715,7 @@ const PersonalizationSettings: React.FC = () => {
           ))}
         </div>
       </Section>
-    </div>
+    </>
   );
 };
 

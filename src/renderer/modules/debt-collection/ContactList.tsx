@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2, Mail, Phone } from 'lucide-react';
 import api from '../../lib/api';
+import { debtDb } from './dbHelpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface Contact {
@@ -59,7 +60,7 @@ const ContactList: React.FC<ContactListProps> = ({ debtId, onAdd, onEdit }) => {
     const ok = window.confirm(`Delete contact "${name}"? This cannot be undone.`);
     if (!ok) return;
     try {
-      await api.remove('debt_contacts', id);
+      await debtDb.deleteContact(id);
       setContacts((prev) => prev.filter((c) => c.id !== id));
     } catch (err) {
       console.error('Failed to delete contact:', err);

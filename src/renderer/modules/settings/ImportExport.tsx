@@ -35,17 +35,17 @@ const IMPORTABLE_TABLES: { value: string; label: string; columns: string[] }[] =
 ];
 
 const EXPORTABLE_TABLES = [
-  { value: 'categories', label: 'Categories' },
-  { value: 'accounts', label: 'Chart of Accounts' },
   { value: 'clients', label: 'Clients' },
-  { value: 'employees', label: 'Employees' },
-  { value: 'expenses', label: 'Expenses' },
   { value: 'invoices', label: 'Invoices' },
-  { value: 'journal_entries', label: 'Journal Entries' },
-  { value: 'payments', label: 'Payments' },
-  { value: 'projects', label: 'Projects' },
-  { value: 'time_entries', label: 'Time Entries' },
+  { value: 'expenses', label: 'Expenses' },
+  { value: 'accounts', label: 'Chart of Accounts' },
   { value: 'vendors', label: 'Vendors' },
+  { value: 'projects', label: 'Projects' },
+  { value: 'employees', label: 'Employees' },
+  { value: 'time_entries', label: 'Time Entries' },
+  { value: 'journal_entries', label: 'Journal Entries' },
+  { value: 'categories', label: 'Categories' },
+  { value: 'payments', label: 'Payments' },
 ];
 
 // ─── Import Section ─────────────────────────────────────
@@ -113,7 +113,7 @@ const ImportSection: React.FC = () => {
       <div className="flex items-center gap-3">
         <div
           className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: '2px' }}
         >
           <Upload size={16} className="text-accent-blue" />
         </div>
@@ -138,9 +138,7 @@ const ImportSection: React.FC = () => {
                 setColumnMapping({});
               }}
             >
-              {[...IMPORTABLE_TABLES]
-                .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
-                .map(t => (
+              {IMPORTABLE_TABLES.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
@@ -165,7 +163,7 @@ const ImportSection: React.FC = () => {
                 Preview: {preview.totalRows} row{preview.totalRows !== 1 ? 's' : ''} found
               </span>
               <button
-                className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1 transition-colors"
+                className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1"
                 onClick={() => { setPreview(null); setResult(null); setColumnMapping({}); }}
               >
                 <X size={12} />
@@ -210,9 +208,7 @@ const ImportSection: React.FC = () => {
                       onChange={(e) => handleMappingChange(csvCol, e.target.value)}
                     >
                       <option value="(skip)">(skip)</option>
-                      {[...(tableConfig?.columns ?? [])]
-                        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-                        .map(col => (
+                      {tableConfig?.columns.map(col => (
                         <option key={col} value={col}>{col}</option>
                       ))}
                     </select>
@@ -275,68 +271,45 @@ const ExportSection: React.FC = () => {
   const [backupLoading, setBackupLoading] = useState(false);
 
   const handleExport = useCallback(async () => {
-    // Validate date range before hitting main.
-    if (dateFrom && dateTo && dateFrom > dateTo) {
-      setExportMsg('“Date From” must be on or before “Date To”.');
-      setTimeout(() => setExportMsg(''), 5000);
-      return;
-    }
     setExporting(true);
-    setExportMsg('Preparing export…');
+    setExportMsg('');
     try {
       const filters: Record<string, any> = {};
       if (dateFrom) filters.created_at_gte = dateFrom;
-      // Make the "to" bound inclusive of the entire end day.
-      if (dateTo) filters.created_at_lte = `${dateTo} 23:59:59`;
-      const result = await api.exportCsv(
-        exportTable,
-        Object.keys(filters).length > 0 ? filters : undefined
-      );
+      if (dateTo) filters.created_at_lte = dateTo;
+      const result = await api.exportCsv(exportTable, Object.keys(filters).length > 0 ? filters : undefined);
       if (result?.path) {
         setExportMsg(`Exported to ${result.path}`);
       } else if (result?.error) {
-        setExportMsg(`Export failed: ${result.error}`);
+        setExportMsg(result.error);
       } else if (result?.cancelled) {
         setExportMsg('Export cancelled');
-      } else {
-        setExportMsg('Export completed.');
       }
     } catch (err: any) {
-      // Surface permission / disk-full errors clearly.
-      const msg = err?.message || 'Export failed';
-      setExportMsg(/permission|EACCES|EPERM/i.test(msg)
-        ? `Export failed — write permission denied. Try a different folder. (${msg})`
-        : msg);
+      setExportMsg(err.message || 'Export failed');
     } finally {
       setExporting(false);
-      setTimeout(() => setExportMsg(''), 8000);
+      setTimeout(() => setExportMsg(''), 5000);
     }
   }, [exportTable, dateFrom, dateTo]);
 
   const handleFullBackup = useCallback(async () => {
     setBackupLoading(true);
-    setBackupMsg('Creating backup — this may take a moment…');
+    setBackupMsg('');
     try {
       const result = await api.exportFullBackup();
       if (result?.path) {
-        setBackupMsg(
-          `Backup saved: ${result.path} (${result.tableCount ?? '?'} tables, ${result.rowCount ?? '?'} rows)`
-        );
+        setBackupMsg(`Backup saved: ${result.path} (${result.tableCount || '?'} tables)`);
       } else if (result?.error) {
-        setBackupMsg(`Backup failed: ${result.error}`);
+        setBackupMsg(result.error);
       } else if (result?.cancelled) {
         setBackupMsg('Backup cancelled');
-      } else {
-        setBackupMsg('Backup completed.');
       }
     } catch (err: any) {
-      const msg = err?.message || 'Backup failed';
-      setBackupMsg(/permission|EACCES|EPERM|ENOSPC/i.test(msg)
-        ? `Backup failed — check disk space / write permissions. (${msg})`
-        : msg);
+      setBackupMsg(err.message || 'Backup failed');
     } finally {
       setBackupLoading(false);
-      setTimeout(() => setBackupMsg(''), 10000);
+      setTimeout(() => setBackupMsg(''), 8000);
     }
   }, []);
 
@@ -345,7 +318,7 @@ const ExportSection: React.FC = () => {
       <div className="flex items-center gap-3">
         <div
           className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: '2px' }}
         >
           <Download size={16} className="text-accent-blue" />
         </div>
@@ -417,7 +390,7 @@ const ExportSection: React.FC = () => {
               className="block-btn-success flex items-center gap-1.5"
               onClick={handleFullBackup}
               disabled={backupLoading}
-              style={{ background: 'var(--color-accent-income)', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 14px', fontWeight: 600, cursor: 'pointer' }}
+              style={{ background: 'var(--color-accent-income)', color: '#fff', border: 'none', borderRadius: '2px', padding: '6px 14px', fontWeight: 600, cursor: 'pointer' }}
             >
               <Archive size={14} />
               {backupLoading ? 'Creating Backup...' : 'Export All Data'}

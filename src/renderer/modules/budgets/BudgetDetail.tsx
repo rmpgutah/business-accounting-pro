@@ -332,7 +332,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
               </thead>
               <tbody>
                 {linesWithActual.map((line) => (
-                  <tr key={line.id} style={line.overBudget ? { background: 'rgba(239,68,68,0.05)' } : {}}>
+                  <tr key={line.id} style={line.overBudget ? { background: 'var(--color-accent-expense-bg)' } : {}}>
                     <td className="text-text-primary font-medium text-sm flex items-center gap-1.5">
                       {line.overBudget && <AlertTriangle size={11} className="text-accent-expense flex-shrink-0" />}
                       {line.category}

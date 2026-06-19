@@ -83,11 +83,17 @@ export function registerLoanIpc(ipcMain: IpcMain, deps: LoanIpcDeps): void {
       const cid = db.getCurrentCompanyId();
       if (!cid) return { error: 'No active company' };
       const dbi = db.getDb();
-      const { generateSchedule, periodicPayment } = require('../services/loan-calculator');
+      const { generateSchedule, periodicPayment, periodicRate, paymentsForTerm } = require('../services/loan-calculator');
 
-      // Compute the level payment for storage on the loan row.
-      const r = (payload.interest_rate || 0) / 12; // monthly proxy for display
-      const n = payload.term_months || 1;
+      // Compute the level payment for storage on the loan row, using the loan's
+      // ACTUAL payment frequency. The old code hardcoded a monthly rate
+      // (interest_rate/12) and monthly count (term_months), so the stored
+      // payment_amount — shown in the loan list and summed into "Monthly Burn" —
+      // was a monthly figure that disagreed with the real biweekly/weekly/
+      // quarterly schedule the amortization table generated.
+      const freq = payload.payment_frequency || 'monthly';
+      const r = periodicRate(payload.interest_rate || 0, freq);
+      const n = paymentsForTerm(payload.term_months || 1, freq);
       const computed = periodicPayment(payload.principal || 0, r, n);
 
       const loanData = {

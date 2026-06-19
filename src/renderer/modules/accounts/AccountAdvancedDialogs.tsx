@@ -42,7 +42,7 @@ export const GroupsDialog: React.FC<{ companyId: string; accounts: AccountLite[]
   const [groups, setGroups] = useState<any[]>([]);
   const [members, setMembers] = useState<Record<string, Set<string>>>({});
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState('#3b82f6');
+  const [newColor, setNewColor] = useState('var(--color-accent-blue)');
 
   const load = async () => {
     const gs = await api.query('account_groups', { company_id: companyId });

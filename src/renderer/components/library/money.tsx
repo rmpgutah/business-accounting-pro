@@ -214,6 +214,7 @@ export function RunwayGauge({
         width={size}
         height={size / 2 + stroke}
         viewBox={`0 0 ${size} ${size / 2 + stroke}`}
+        style={{ maxWidth: '100%', height: 'auto' }}
         aria-hidden="true"
       >
         <path
@@ -330,8 +331,8 @@ export function BurnRateTile({
         </span>
       </div>
 
-      <div className="flex items-end justify-between">
-        <div>
+      <div className="flex items-end justify-between" style={{ gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
           <div className="font-mono text-2xl font-bold text-text-primary tabular-nums">
             {formatCurrency(burn, currency)}
           </div>
@@ -341,7 +342,9 @@ export function BurnRateTile({
           </div>
         </div>
 
-        <svg width={w} height={h} aria-hidden="true" className="shrink-0">
+        {/* viewBox + shrinkable flex basis: the trend gives up width before
+            overflowing the card (same fix as MetricHero). */}
+        <svg viewBox={`0 0 ${w} ${h}`} aria-hidden="true" style={{ flex: `0 1 ${w}px`, minWidth: 0, maxWidth: w, height: h }}>
           <polyline
             points={points}
             fill="none"

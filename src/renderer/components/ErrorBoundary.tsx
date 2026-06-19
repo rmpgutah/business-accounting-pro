@@ -34,7 +34,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex items-center justify-center h-full p-12">
+        <div className="flex items-center justify-center h-full p-12" role="alert">
           <div className="block-card-elevated max-w-md w-full">
             <h2 className="text-base font-bold text-text-primary mb-2 font-mono">
               Module Error
@@ -47,7 +47,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               style={{
                 background: 'var(--color-bg-primary)',
                 border: '1px solid var(--color-border-primary)',
-                borderRadius: '6px',
+                borderRadius: '2px',
               }}
             >
               <code
@@ -59,12 +59,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             </div>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={this.handleReload}
                 className="block-btn-primary text-xs"
               >
                 Reload Module
               </button>
               <button
+                type="button"
                 onClick={this.handleHardReload}
                 className="block-btn text-xs"
               >

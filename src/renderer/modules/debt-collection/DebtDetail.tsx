@@ -29,12 +29,14 @@ import PaymentPlanCard from './PaymentPlanCard';
 import SettlementCard from './SettlementCard';
 import ComplianceLog from './ComplianceLog';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
+import { applyDebtPaymentDelta } from '../../../shared/payment-math';
 import { todayLocal } from '../../lib/date-helpers';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useNavigation } from '../../lib/navigation';
 import { calcRiskScore, getRiskBadge, collectionScore, getCollectionBadge } from './riskScore';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+import CollectionCostsPanel from './CollectionCostsPanel';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtDetailProps {
@@ -208,10 +210,10 @@ const stageColor: Record<string, string> = {
 const getAgingBadge = (delinquencyDate: string): { label: string; color: string; bg: string } => {
   if (!delinquencyDate) return { label: '—', color: 'var(--color-text-muted)', bg: 'transparent' };
   const days = Math.floor((Date.now() - new Date(delinquencyDate).getTime()) / 86400000);
-  if (days <= 30)  return { label: `${days}d`, color: '#16a34a', bg: '#16a34a22' };
-  if (days <= 90)  return { label: `${days}d`, color: '#d97706', bg: '#d9770622' };
-  if (days <= 180) return { label: `${days}d`, color: '#ea580c', bg: '#ea580c22' };
-  return { label: `${days}d`, color: '#dc2626', bg: '#dc262622' };
+  if (days <= 30)  return { label: `${days}d`, color: 'var(--color-accent-income)', bg: 'var(--color-accent-income-bg)' };
+  if (days <= 90)  return { label: `${days}d`, color: 'var(--color-accent-warning)', bg: 'var(--color-accent-warning-bg)' };
+  if (days <= 180) return { label: `${days}d`, color: 'var(--color-accent-expense)', bg: 'var(--color-accent-expense-bg)' };
+  return { label: `${days}d`, color: 'var(--color-accent-expense)', bg: 'var(--color-accent-expense-bg)' };
 };
 
 // ─── Helpers ────────────────────────────────────────────
@@ -472,7 +474,23 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   const handleDeletePayment = async (id: string) => {
     if (!window.confirm('Delete this payment record?')) return;
     try {
+      // Grab the amount BEFORE removing so we can give it back to the debt.
+      const pay = await api.get('debt_payments', id);
       await api.remove('debt_payments', id);
+      // Deleting a payment used to leave balance_due/payments_made wrong (and a
+      // settled debt stuck settled with money still owed). Reverse it as a
+      // negative delta, preserving any accrued interest/fees in balance_due.
+      if (pay && debt) {
+        const next = applyDebtPaymentDelta(
+          { balance_due: debt.balance_due, payments_made: debt.payments_made, status: debt.status },
+          -(Number(pay.amount) || 0),
+        );
+        await api.update('debts', debtId, {
+          balance_due: next.balance_due,
+          payments_made: next.payments_made,
+          status: next.status,
+        });
+      }
       triggerRefresh();
     } catch (err: any) {
       console.error('Failed to delete payment:', err);
@@ -560,10 +578,8 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
   const handleUploadDocument = async () => {
     try {
       const result = await api.openFileDialog();
-      if (result && !result.canceled && result.filePaths?.length > 0) {
-        const fullPath = result.filePaths[0];
-        const fileName = fullPath.split(/[\\/]/).pop() || fullPath;
-        await api.uploadDebtDocument(debtId, fullPath, fileName, 0);
+      if (result && result.path) {
+        await api.uploadDebtDocument(debtId, result.path, result.name, result.size || 0);
         triggerRefresh();
       }
     } catch (err: any) {
@@ -667,6 +683,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         status: 'written_off',
         write_off_reason: writeOffReason.trim(),
       });
+      // Debt Wave: a written-off debt's recoverable collection costs are by
+      // definition unrecoverable — flip every still-pending linked cost so
+      // expense reports stop counting them as future recoveries.
+      await api.debtMarkCostsUnrecoverable(debtId).catch(() => {});
       setShowWriteOff(false);
       setWriteOffReason('');
       triggerRefresh();
@@ -815,8 +835,8 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             {debt.credit_score > 0 && (
               <span style={{
                 fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
-                background: debt.credit_score >= 670 ? '#22c55e22' : debt.credit_score >= 580 ? '#d9770622' : '#ef444422',
-                color: debt.credit_score >= 670 ? '#22c55e' : debt.credit_score >= 580 ? '#d97706' : '#ef4444',
+                background: debt.credit_score >= 670 ? 'var(--color-accent-income-bg)' : debt.credit_score >= 580 ? 'var(--color-accent-warning-bg)' : 'var(--color-accent-expense-bg)',
+                color: debt.credit_score >= 670 ? 'var(--color-accent-income)' : debt.credit_score >= 580 ? 'var(--color-accent-warning)' : 'var(--color-accent-expense)',
               }}>
                 Credit: {debt.credit_score}
               </span>
@@ -1137,12 +1157,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {(!!debt.cease_desist_active || !!debt.do_not_call) && (
           <div className="mt-3 flex items-center gap-3 px-4 py-2.5 border border-red-700/50" style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}>
             {!!debt.cease_desist_active && (
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#dc262622', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-expense-bg)', color: 'var(--color-accent-expense)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Cease & Desist Active
               </span>
             )}
             {!!debt.do_not_call && (
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#d9770622', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-warning-bg)', color: 'var(--color-accent-warning)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Do Not Call
               </span>
             )}
@@ -1158,7 +1178,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {/* Contact Preference Badges (non-restricted) */}
         {!debt.cease_desist_active && !debt.do_not_call && debt.preferred_contact_method && (
           <div className="mt-2 flex items-center gap-2">
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {debt.preferred_contact_method} preferred
             </span>
           </div>
@@ -1225,7 +1245,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {/* Feature 16: Interest Frozen Banner */}
         {!!debt.interest_frozen && (
           <div className="mt-3 flex items-center gap-3 px-4 py-2 border border-blue-700/50" style={{ borderRadius: '6px', background: 'rgba(59,130,246,0.08)' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#3b82f622', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Interest Frozen
             </span>
             {debt.interest_frozen_date && <span className="text-xs text-text-muted">since {debt.interest_frozen_date}</span>}
@@ -1364,11 +1384,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                 {debt.statute_of_limitations_date ? (
                   (() => {
                     const dLeft = Math.ceil((new Date(debt.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
-                    const color = dLeft < 30 ? '#ef4444' : dLeft < 90 ? '#f97316' : dLeft < 180 ? '#d97706' : '#22c55e';
+                    const color = dLeft < 30 ? 'var(--color-accent-expense)' : dLeft < 90 ? 'var(--color-accent-expense)' : dLeft < 180 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)';
+                    const colorBg = dLeft < 30 ? 'var(--color-accent-expense-bg)' : dLeft < 90 ? 'var(--color-accent-expense-bg)' : dLeft < 180 ? 'var(--color-accent-warning-bg)' : 'var(--color-accent-income-bg)';
                     return (
                       <span className="flex items-center gap-2">
                         <span>{formatDate(debt.statute_of_limitations_date)}</span>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: color + '22', color }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: colorBg, color }}>
                           {dLeft > 0 ? `${dLeft}d left` : 'EXPIRED'}
                         </span>
                       </span>
@@ -1585,14 +1606,14 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                 return (
                   <div className="space-y-3">
                     <div className="flex h-4 w-full overflow-hidden" style={{ borderRadius: 6 }}>
-                      {pctFees > 0 && <div style={{ width: `${pctFees}%`, background: '#ef4444' }} title={`Fees: ${pctFees}%`} />}
-                      {pctInterest > 0 && <div style={{ width: `${pctInterest}%`, background: '#f97316' }} title={`Interest: ${pctInterest}%`} />}
-                      {pctPrincipal > 0 && <div style={{ width: `${pctPrincipal}%`, background: '#22c55e' }} title={`Principal: ${pctPrincipal}%`} />}
+                      {pctFees > 0 && <div style={{ width: `${pctFees}%`, background: 'var(--color-accent-expense)' }} title={`Fees: ${pctFees}%`} />}
+                      {pctInterest > 0 && <div style={{ width: `${pctInterest}%`, background: 'var(--color-accent-warning)' }} title={`Interest: ${pctInterest}%`} />}
+                      {pctPrincipal > 0 && <div style={{ width: `${pctPrincipal}%`, background: 'var(--color-accent-income)' }} title={`Principal: ${pctPrincipal}%`} />}
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: '#ef4444', borderRadius: 3 }} /> Fees {formatCurrency(totalFees)}</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: '#f97316', borderRadius: 3 }} /> Interest {formatCurrency(totalInterest)}</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: '#22c55e', borderRadius: 3 }} /> Principal {formatCurrency(totalPrincipal)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: 'var(--color-accent-expense)', borderRadius: 3 }} /> Fees {formatCurrency(totalFees)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: 'var(--color-accent-warning)', borderRadius: 3 }} /> Interest {formatCurrency(totalInterest)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: 'var(--color-accent-income)', borderRadius: 3 }} /> Principal {formatCurrency(totalPrincipal)}</span>
                     </div>
                   </div>
                 );
@@ -1716,7 +1737,8 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {promises.map((p: any) => {
                   const isPast = p.promised_date < todayLocal();
-                  const badgeColor = p.kept ? '#16a34a' : isPast ? '#ef4444' : '#d97706';
+                  const badgeColor = p.kept ? 'var(--color-accent-income)' : isPast ? 'var(--color-accent-expense)' : 'var(--color-accent-warning)';
+                  const badgeBg = p.kept ? 'var(--color-accent-income-bg)' : isPast ? 'var(--color-accent-expense-bg)' : 'var(--color-accent-warning-bg)';
                   const badgeLabel = p.kept ? 'Kept' : isPast ? 'Broken' : 'Pending';
                   return (
                     <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--color-bg-secondary)', borderRadius: 6 }}>
@@ -1724,7 +1746,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{formatCurrency(Number(p.promised_amount))}</div>
                       {p.notes && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', flex: 1 }}>{p.notes}</div>}
                       <div style={{ flex: 1 }} />
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: badgeColor + '22', color: badgeColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: badgeBg, color: badgeColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                         {badgeLabel}
                       </span>
                       <button
@@ -1909,12 +1931,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {skipTraces.map((st: any) => {
-                  const resultColor: Record<string, string> = { pending: '#d97706', verified: '#22c55e', invalid: '#ef4444', no_contact: '#6b7280' };
+                  const resultColor: Record<string, string> = { pending: 'var(--color-accent-warning)', verified: 'var(--color-accent-income)', invalid: 'var(--color-accent-expense)', no_contact: 'var(--color-text-muted)' };
+                  const resultBg: Record<string, string> = { pending: 'var(--color-accent-warning-bg)', verified: 'var(--color-accent-income-bg)', invalid: 'var(--color-accent-expense-bg)', no_contact: 'var(--color-bg-secondary)' };
                   return (
                     <div key={st.id} className="p-2.5 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: (resultColor[st.result] || '#777') + '22', color: resultColor[st.result] || '#777', textTransform: 'uppercase' }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: resultBg[st.result] || 'var(--color-bg-secondary)', color: resultColor[st.result] || 'var(--color-text-muted)', textTransform: 'uppercase' }}>
                             {st.result}
                           </span>
                           {st.source && <span className="text-xs text-text-primary font-medium">{st.source}</span>}
@@ -1967,7 +1990,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       : e.court_relevance === 'medium'
                         ? 'block-badge block-badge-warning'
                         : 'block-badge block-badge-blue';
-                  const typeBadge = formatStatus(e.type);
+                  // Evidence types aren't in the global status map — derive a
+                  // friendly title-case label so badges don't render as "—".
+                  const typeLabel = (e.type || '')
+                    .split('_')
+                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(' ') || '—';
                   return (
                     <div
                       key={e.id}
@@ -1975,7 +2003,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className={typeBadge.className}>{typeBadge.label}</span>
+                        <span className="block-badge">{typeLabel}</span>
                         <span className="text-xs text-text-primary font-medium truncate">
                           {e.title}
                         </span>
@@ -2015,7 +2043,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             ) : (
               <div className="space-y-3">
                 {legalActions.map((la) => {
-                  const typeBadge = formatStatus(la.action_type);
+                  const actionTypeLabel = (la.action_type || '')
+                    .split('_')
+                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(' ') || '—';
                   const legalStatusBadge = formatStatus(la.status);
                   const checklist = parseChecklist(la.checklist_json);
                   const checklistPct =
@@ -2029,7 +2060,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
                     >
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className={typeBadge.className}>{typeBadge.label}</span>
+                        <span className="block-badge">{actionTypeLabel}</span>
                         <span className={legalStatusBadge.className}>{legalStatusBadge.label}</span>
                         {la.case_number && (
                           <span className="text-xs font-mono text-text-muted">
@@ -2272,15 +2303,15 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                 <div className="space-y-3">
                   {timeline.map((ev) => {
                     const kindColors: Record<string, string> = {
-                      comm: '#60a5fa',
-                      stage: '#a78bfa',
-                      payment: '#22c55e',
-                      promise: '#f59e0b',
-                      compliance: '#f97316',
-                      settlement: '#06b6d4',
-                      note: '#94a3b8',
+                      comm: 'var(--color-accent-blue)',
+                      stage: 'var(--color-accent-purple)',
+                      payment: 'var(--color-accent-income)',
+                      promise: 'var(--color-accent-warning)',
+                      compliance: 'var(--color-accent-warning)',
+                      settlement: 'var(--color-accent-blue)',
+                      note: 'var(--color-text-muted)',
                     };
-                    const dotColor = kindColors[ev.kind] || '#94a3b8';
+                    const dotColor = kindColors[ev.kind] || 'var(--color-text-muted)';
                     const ts = ev.ts ? ev.ts.slice(0, 10) : '';
                     return (
                       <div key={ev.id} className="relative flex gap-3 items-start">
@@ -2371,6 +2402,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── Collection Costs (Debt-Collection Expense Wave) ───────
+          Expenses linked to this debt via related_debt_id, with
+          recoverability roll-ups, ROI, and apply-to-balance. */}
+      <div className="mt-6">
+        <CollectionCostsPanel debtId={debtId} onBalanceChanged={triggerRefresh} />
       </div>
 
       {/* ── Cross-entity integration ────────────────────────────── */}

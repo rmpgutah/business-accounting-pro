@@ -1,5 +1,5 @@
-// Landing / sign-in page. Mirrors the marketing hero style — single column,
-// indigo accent, dark background. The form posts to /auth/login as JSON.
+// Landing / sign-in page. Emerald-accented, matches the desktop app's UI.
+// The form posts to /auth/login as JSON.
 
 import { shell } from './shell';
 
@@ -7,7 +7,7 @@ export function landingPage(opts: { mode: 'login' | 'register'; error?: string; 
   const isLogin = opts.mode === 'login';
   const body = `
 <section style="min-height:calc(100vh - 60px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 20px;position:relative;overflow:hidden">
-  <div style="position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:700px;height:700px;background:radial-gradient(circle,rgba(99,102,241,0.08) 0%,transparent 70%);pointer-events:none"></div>
+  <div style="position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:700px;height:700px;background:radial-gradient(circle,rgba(16,185,129,0.08) 0%,transparent 70%);pointer-events:none"></div>
 
   <div style="display:inline-flex;align-items:center;gap:8px;background:var(--bg-elevated);border:1px solid var(--border);padding:6px 16px;border-radius:2px;font-size:0.8rem;color:var(--text-dim);margin-bottom:1.5rem">
     <span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span>

@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow, dialog, shell } from 'electron';
 import { v4 as uuid } from 'uuid';
+import Anthropic from '@anthropic-ai/sdk';
 import * as db from '../database';
 import { TABLES_WITHOUT_COMPANY_ID } from '../database/tableConfig';
 import crypto from 'crypto';
@@ -9,10 +10,14 @@ import path from 'path';
 import os from 'os';
 import { generateInvoicePDF, buildInvoiceHTML } from '../services/pdf-generator';
 import { SCHEDULE_C_BY_CATEGORY } from '../services/schedule-c-map';
+import { monthlyDepreciation } from '../services/depreciation';
 import { sendInvoiceEmail } from '../services/email-sender';
 import { registerStripeIpc } from '../integrations/stripe';
 import { registerEntityGraphIpc, recordRelationBidirectional } from '../integrations/entity-graph';
 import { registerLoanIpc } from './loans';
+import { registerExpenseDebtIpc } from './expense-debt';
+import { registerHrPortalIpc } from './hr-portal';
+import { registerDebtWaveIpc } from './debt-wave';
 import { registerTaxIpc } from './tax';
 import { registerComplianceIpc } from './compliance';
 import { registerPayrollWaveIpc } from './payroll-wave';
@@ -34,11 +39,16 @@ import { calculateFullPayroll } from '../services/TaxCalculationEngine';
 import { bootstrapBuiltinCommands } from '../services/CommandRegistry';
 import { eventBus } from '../services/EventBus';
 import { workflowEngine } from '../services/WorkflowEngine';
+import { reindexEntity, removeFromIndex } from '../services/intelligence/searchIndex';
+import { INDEXED_TABLES } from '../services/intelligence/indexConfig';
 import http from 'http';
 import https from 'https';
 
 // ─── Server Sync Config ──────────────────────────────────
 const SYNC_SERVER = process.env.SYNC_SERVER_URL || 'https://accounting.rmpgutah.us';
+
+// ─── B3 AI Copilot — active stream registry ──────────────
+const copilotStreams = new Map<string, AbortController>();
 
 // Debounced auto-backup: waits 30s after last write, then uploads DB to server
 // CONCURRENCY: a single global timer is correct here — the SQLite file holds
@@ -98,9 +108,34 @@ function scheduleAutoBackup() {
   }, 30000); // 30 second debounce
 }
 
+// Coalesce rapid re-index calls per (table,id) onto a microtask-ish timer so
+// bulk writes don't thrash FTS. Best-effort; never throws into the write path.
+const reindexTimers = new Map<string, NodeJS.Timeout>();
+function scheduleReindex(table: string, id: string, op: 'upsert' | 'delete'): void {
+  if (!INDEXED_TABLES.has(table)) return;
+  const key = `${table}:${id}`;
+  const existing = reindexTimers.get(key);
+  if (existing) clearTimeout(existing);
+  reindexTimers.set(key, setTimeout(() => {
+    reindexTimers.delete(key);
+    try {
+      const d = db.getDb();
+      if (op === 'delete') removeFromIndex(d, table, id);
+      else reindexEntity(d, table, id);
+    } catch (e) { console.warn('[search-index] reindex failed', table, id, e); }
+  }, 150));
+}
+
 let _lastLoginEmail: string | null = null;
 function setLastLoginEmail(email: string) { _lastLoginEmail = email; }
 function getLastLoginEmail(): string | null { return _lastLoginEmail; }
+
+// Mirror of the server's sanitizeEmail (server/src/routes/backup.ts). Both
+// sides must HMAC over the identical string, so this logic must stay in lockstep
+// with the server: same whitelist, same 100-char cap.
+function sanitizeBackupEmail(email: string): string {
+  return (email || '').replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
+}
 
 // Helper: download backup from server
 function downloadBackup(email: string): Promise<Buffer | null> {
@@ -109,11 +144,18 @@ function downloadBackup(email: string): Promise<Buffer | null> {
     const isHttps = url.protocol === 'https:';
     const transport = isHttps ? https : http;
 
+    // The server authenticates download/status by HMAC over the sanitized
+    // email. We sign the raw email; the server applies the same sanitize +
+    // HMAC and compares. Mirror the upload secret-resolution exactly.
+    const secret = process.env.SYNC_SECRET || 'bap-sync-default';
+    const signature = crypto.createHmac('sha256', secret).update(sanitizeBackupEmail(email)).digest('hex');
+
     const req = transport.request({
       hostname: url.hostname,
       port: url.port || (isHttps ? 443 : 80),
       path: url.pathname,
       method: 'GET',
+      headers: { 'x-bap-signature': signature },
     }, (res) => {
       if (res.statusCode !== 200) { resolve(null); return; }
       const ct = res.headers['content-type'] || '';
@@ -757,6 +799,7 @@ export function registerIpcHandlers(): void {
       }
       const record = db.create(table, payload);
       if (companyId) db.logAudit(companyId, table, record.id, 'create');
+      scheduleReindex(table, record.id as string, 'upsert');
       // Debt child table audit
       const DEBT_CHILD_AUDIT: Record<string, string> = {
         debt_payments: 'payment_recorded',
@@ -829,6 +872,7 @@ export function registerIpcHandlers(): void {
         }
         db.logAudit(companyId, table, id, 'update', changes);
       }
+      scheduleReindex(table, id, 'upsert');
       // Debt audit: log each changed field
       if (table === 'debts' && id && old) {
         try {
@@ -974,6 +1018,7 @@ export function registerIpcHandlers(): void {
         cleanupReferencesBeforeDelete(table, id);
       }
       db.remove(table, id);
+      scheduleReindex(table, id, 'delete');
       syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
       scheduleAutoBackup();
     } catch (err) {
@@ -1016,7 +1061,8 @@ export function registerIpcHandlers(): void {
       const tx = dbi.transaction(() => {
         const run = (sql: string) => { try { dbi.prepare(sql).run(id); } catch { /* table may not exist */ } };
         // Null all enforced + soft FK references so nothing dangles.
-        run("UPDATE expenses SET vendor_id = NULL WHERE vendor_id = ?");
+        run("DELETE FROM vendor_locations WHERE vendor_id = ?");
+        run("UPDATE expenses SET vendor_id = NULL, vendor_location_id = NULL WHERE vendor_id = ?");
         run("UPDATE bills SET vendor_id = NULL WHERE vendor_id = ?");
         run("UPDATE purchase_orders SET vendor_id = NULL WHERE vendor_id = ?");
         run("UPDATE bank_rules SET action_vendor_id = NULL WHERE action_vendor_id = ?");
@@ -1037,6 +1083,61 @@ export function registerIpcHandlers(): void {
     } catch (err: any) {
       return { error: err?.message || 'Delete failed' };
     }
+  });
+
+  // ─── Vendor Locations ─────────────────────────────────────────────────
+  ipcMain.handle('vendor-locations:list', (_event, { vendor_id }: { vendor_id: string }) => {
+    try {
+      const rows = db.getDb()
+        .prepare("SELECT * FROM vendor_locations WHERE vendor_id = ? ORDER BY is_primary DESC, name ASC")
+        .all(vendor_id);
+      return rows;
+    } catch (err: any) { return { error: err?.message || 'Query failed' }; }
+  });
+
+  ipcMain.handle('vendor-locations:sync', (_event, { vendor_id, locations }: { vendor_id: string; locations: any[] }) => {
+    try {
+      const dbi = db.getDb();
+      dbi.transaction(() => {
+        dbi.prepare("DELETE FROM vendor_locations WHERE vendor_id = ?").run(vendor_id);
+        const stmt = dbi.prepare(
+          `INSERT INTO vendor_locations
+           (id, vendor_id, name, location_type, address_line1, address_line2,
+            city, state, zip, country, phone, email, is_primary, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+        );
+        for (const loc of locations) {
+          stmt.run(
+            loc.id || uuid(), vendor_id, loc.name || '', loc.location_type || 'physical',
+            loc.address_line1 || '', loc.address_line2 || '',
+            loc.city || '', loc.state || '', loc.zip || '', loc.country || '',
+            loc.phone || '', loc.email || '', loc.is_primary ? 1 : 0, loc.notes || '',
+          );
+        }
+      })();
+      try { scheduleAutoBackup(); } catch { /* non-fatal */ }
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message || 'Sync failed' }; }
+  });
+
+  ipcMain.handle('vendor-locations:delete', (_event, { id }: { id: string }) => {
+    try {
+      db.getDb().prepare("DELETE FROM vendor_locations WHERE id = ?").run(id);
+      try { scheduleAutoBackup(); } catch { /* non-fatal */ }
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message || 'Delete failed' }; }
+  });
+
+  ipcMain.handle('vendor-locations:set-primary', (_event, { id, vendor_id }: { id: string; vendor_id: string }) => {
+    try {
+      const dbi = db.getDb();
+      dbi.transaction(() => {
+        dbi.prepare("UPDATE vendor_locations SET is_primary = 0 WHERE vendor_id = ?").run(vendor_id);
+        dbi.prepare("UPDATE vendor_locations SET is_primary = 1 WHERE id = ?").run(id);
+      })();
+      try { scheduleAutoBackup(); } catch { /* non-fatal */ }
+      return { ok: true };
+    } catch (err: any) { return { error: err?.message || 'Set primary failed' }; }
   });
 
   // ─── Fixed Asset delete (dedicated, supports full/permanent delete) ──
@@ -1334,6 +1435,9 @@ export function registerIpcHandlers(): void {
     }
   });
   registerLoanIpc(ipcMain, { scheduleAutoBackup, findClosedPeriod, postJournalEntry });
+  registerExpenseDebtIpc(ipcMain, { scheduleAutoBackup });
+  registerHrPortalIpc(ipcMain, { scheduleAutoBackup });
+  registerDebtWaveIpc(ipcMain, { scheduleAutoBackup });
 
   // ─── A7: Line-item snippets (reusable templates) ──────
   ipcMain.handle('snippets:list', (_event, opts?: { category?: string }) => {
@@ -1633,7 +1737,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:reimbursement:list', (_e, { status }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().listReimbursements(cid, status); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:per-diem:upsert', (_e, record: any) => { try { const cid = db.getCurrentCompanyId(); return ie().upsertPerDiemRate({ ...record, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:per-diem:lookup', (_e, { city, state, year }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ie().lookupPerDiem(cid, city, state, year); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:expense:bulk-recategorize', (_e, { expense_ids, category_id }: any) => { try { return ie().bulkRecategorizeExpenses(expense_ids, category_id); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:expense:bulk-recategorize', (_e, { expense_ids, category_id }: any) => { const r = eu().bulkRecategorize(expense_ids || [], category_id); scheduleAutoBackup(); return r; });
   ipcMain.handle('feat:expense:report', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ie().buildExpenseReport(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:expense:duplicates', (_e, { expense, days_window }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().findExpenseDuplicates(cid, expense, days_window); } catch (e: any) { return { error: e?.message }; } });
 
@@ -2464,6 +2568,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:vendor-pay:status', (_e, { vendor_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ptd().vendorPaymentStatus(cid, vendor_id); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-ach:submit', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptd().submitACHUpdate({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-ach:approve', (_e, { id, approved_by }: any) => { try { return { ok: ptd().approveACHUpdate(id, approved_by) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vendor-ach:reject', (_e, { id, rejected_by }: any) => { try { return { ok: ptd().rejectACHUpdate(id, rejected_by) }; } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:vendor-ach:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ptd().listACHUpdates(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-1099:download', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptd().recordVendor1099Download({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:vendor-attest:submit', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptd().submitComplianceAttestation({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
 
@@ -2761,7 +2867,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('feat:tag-hier:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return ecm().upsertTagHierarchy({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:tag-hier:tree', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ecm().getTagTree(cid); } catch (e: any) { return { error: e?.message }; } });
   ipcMain.handle('feat:tags:suggest', (_e, { description }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ecm().suggestTagsForExpense(cid, description); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:exp:bulk-tag', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ecm().bulkTagExpenses({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
+  ipcMain.handle('feat:exp:bulk-tag', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const r = ecm().bulkTagExpenses({ ...opts, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
 
   // Batch AP — Spend Analytics Advanced
   ipcMain.handle('feat:spend:heatmap', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ecm().spendHeatmap(cid, opts); } catch (e: any) { return { error: e?.message }; } });
@@ -3016,10 +3122,10 @@ export function registerIpcHandlers(): void {
   // Workflow (EX21-EX30)
   ipcMain.handle('ex:check-policy', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().checkPolicyViolations(c, p) : {}; });
   ipcMain.handle('ex:approval-chain', (_e, { amount }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().getApprovalChain(c, amount) : {}; });
-  ipcMain.handle('ex:batch-approve', (_e, { expenseIds, approvedBy }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchApprove(c, expenseIds, approvedBy) : {}; });
-  ipcMain.handle('ex:batch-reject', (_e, { expenseIds, reason }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().batchReject(c, expenseIds, reason) : {}; });
+  ipcMain.handle('ex:batch-approve', (_e, { expenseIds, approvedBy }: any) => { const c = db.getCurrentCompanyId(); if (!c) return {}; const r = ex3().batchApprove(c, expenseIds, approvedBy); scheduleAutoBackup(); return r; });
+  ipcMain.handle('ex:batch-reject', (_e, { expenseIds, reason }: any) => { const c = db.getCurrentCompanyId(); if (!c) return {}; const r = ex3().batchReject(c, expenseIds, reason); scheduleAutoBackup(); return r; });
   ipcMain.handle('ex:generate-report', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().generateExpenseReport(c, p) : {}; });
-  ipcMain.handle('ex:void-expense', (_e, { expenseId, reason }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().voidExpense(c, expenseId, reason) : {}; });
+  ipcMain.handle('ex:void-expense', (_e, { expenseId, reason }: any) => { const c = db.getCurrentCompanyId(); if (!c) return {}; const r = ex3().voidExpense(c, expenseId, reason); scheduleAutoBackup(); return r; });
   ipcMain.handle('ex:split-expense', (_e, { expenseId, splits }: any) => ex3().splitExpense(expenseId, splits));
   ipcMain.handle('ex:request-clarification', (_e, { expenseId, question }: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().requestClarification(c, expenseId, question) : {}; });
   ipcMain.handle('ex:submit-on-behalf', (_e, p: any) => { const c = db.getCurrentCompanyId(); return c ? ex3().submitOnBehalf(c, p.data, p.onBehalfOf) : {}; });
@@ -4626,44 +4732,67 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── Global Search ───────────────────────────────────
-  ipcMain.handle('search:global', (_event, query) => {
-    if (!query || query.length > 200) return [];
-    const results: Array<{ type: string; id: string; title: string; subtitle: string }> = [];
-    const q = `%${query}%`;
+  ipcMain.handle('search:index', (_e, { query, limit }: { query: string; limit?: number }) => {
     const companyId = db.getCurrentCompanyId();
-    if (!companyId) return results;
+    if (!companyId || !query) return [];
+    try {
+      const { search } = require('../services/intelligence/searchIndex');
+      return search(db.getDb(), companyId, query, Math.min(limit || 20, 50));
+    } catch (e) { console.warn('[search:index] failed', e); return []; }
+  });
 
-    const dbInstance = db.getDb();
+  ipcMain.handle('search:backfill', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return { indexed: 0 };
+    try {
+      const { backfillCompany } = require('../services/intelligence/searchIndex');
+      return { indexed: backfillCompany(db.getDb(), companyId) };
+    } catch (e) { console.warn('[search:backfill] failed', e); return { indexed: 0, error: String(e) }; }
+  });
 
-    const clients = dbInstance.prepare(
-      'SELECT id, name, email FROM clients WHERE company_id = ? AND (name LIKE ? OR email LIKE ?) LIMIT 5'
-    ).all(companyId, q, q) as any[];
-    for (const c of clients) {
-      results.push({ type: 'client', id: c.id, title: c.name, subtitle: c.email || '' });
+  // Intelligence Core (B1) — role-checked mutation dispatch. Role enforced in main; never trust renderer.
+  ipcMain.handle('action:invoke', (_e, { actionId, params }: { actionId: string; params?: any }) => {
+    const companyId = db.getCurrentCompanyId();
+    const userId = db.getCurrentUserId();
+    if (!companyId || !userId) return { error: 'Not authenticated' };
+    const { MUTATE_ACTIONS, ROLE_RANK } = require('../../shared/action-registry');
+    const action = MUTATE_ACTIONS.find((a: any) => a.id === actionId);
+    if (!action) return { error: 'Unknown or non-mutating action' };
+    // Role check — never trust the renderer.
+    const userRow: any = db.runQuery('SELECT role FROM users WHERE id = ?', [userId])[0];
+    const role = (userRow?.role || 'viewer');
+    if (action.requiredRole && (ROLE_RANK[role] ?? 0) < ROLE_RANK[action.requiredRole]) {
+      return { error: `Requires ${action.requiredRole} role` };
     }
+    try {
+      let result: any;
+      if (actionId === 'invoice.markPaid') {
+        if (!params?.invoiceId) return { error: 'invoiceId required' };
+        result = db.update('invoices', params.invoiceId, { status: 'paid' });
+        db.logAudit(companyId, 'invoices', params.invoiceId, 'update', { status: { new: 'paid' } });
+      } else if (actionId === 'client.createQuick') {
+        if (!params?.name) return { error: 'name required' };
+        result = db.create('clients', { company_id: companyId, name: params.name, email: params.email || '' });
+        db.logAudit(companyId, 'clients', result.id, 'create');
+      } else {
+        return { error: 'No handler' };
+      }
+      scheduleReindex(actionId.startsWith('invoice') ? 'invoices' : 'clients',
+        (params.invoiceId || result.id), 'upsert');
+      scheduleAutoBackup();
+      return { ok: true, result };
+    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+  });
 
-    const invoices = dbInstance.prepare(
-      'SELECT id, invoice_number, status FROM invoices WHERE company_id = ? AND invoice_number LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const i of invoices) {
-      results.push({ type: 'invoice', id: i.id, title: `Invoice ${i.invoice_number}`, subtitle: i.status });
-    }
-
-    const expenses = dbInstance.prepare(
-      'SELECT id, description, amount FROM expenses WHERE company_id = ? AND description LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const e of expenses) {
-      results.push({ type: 'expense', id: e.id, title: e.description || 'Expense', subtitle: `$${e.amount}` });
-    }
-
-    const projects = dbInstance.prepare(
-      'SELECT id, name, status FROM projects WHERE company_id = ? AND name LIKE ? LIMIT 5'
-    ).all(companyId, q) as any[];
-    for (const p of projects) {
-      results.push({ type: 'project', id: p.id, title: p.name, subtitle: p.status });
-    }
-
-    return results.slice(0, 20);
+  ipcMain.handle('search:global', (_event, query) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId || !query || String(query).length > 200) return [];
+    try {
+      const { search } = require('../services/intelligence/searchIndex');
+      return search(db.getDb(), companyId, String(query), 20).map((h: any) => ({
+        type: h.entity_type, id: h.entity_id, title: h.title, subtitle: h.subtitle || '',
+      }));
+    } catch (e) { console.warn('[search:global] failed', e); return []; }
   });
 
   // ─── Notifications ───────────────────────────────────
@@ -7136,10 +7265,14 @@ export function registerIpcHandlers(): void {
       dbInstance.prepare(
         "UPDATE settings SET value = ?, updated_at = datetime('now') WHERE id = ?"
       ).run(value, existing.id);
-      scheduleAutoBackup();
     } else {
       db.create('settings', { company_id: companyId, key, value });
     }
+    // Back up on BOTH paths — the first save of any setting for a company hit
+    // the INSERT branch, which previously skipped scheduleAutoBackup(), so a
+    // brand-new API key / SMTP config could be lost on restore until the next
+    // unrelated write happened to trigger a backup.
+    scheduleAutoBackup();
   });
 
   // ─── Settings list (company-scoped) ──────────────────────
@@ -7196,6 +7329,18 @@ export function registerIpcHandlers(): void {
       return { success: true };
     } catch (err: any) {
       return { error: err?.message || 'Print failed' };
+    }
+  });
+
+  ipcMain.handle('print:render', async (
+    _event,
+    { html, pdfOptions }: { html: string; pdfOptions?: import('../services/print-preview').PDFOptions }
+  ): Promise<{ base64?: string; error?: string }> => {
+    try {
+      const buf = await htmlToPDFBuffer(html, pdfOptions);
+      return { base64: buf.toString('base64') };
+    } catch (err: any) {
+      return { error: err?.message || 'PDF render failed' };
     }
   });
 
@@ -8019,10 +8164,13 @@ export function registerIpcHandlers(): void {
       }
 
       const billId = uuid();
+      // Carry the PO's tax_amount onto the bill — omitting it left the bill's
+      // subtotal+tax out of sync with its (tax-inclusive) total and undercounted
+      // any tax reporting that reads bills.tax_amount.
       dbInstance.prepare(`
-        INSERT INTO bills (id, company_id, vendor_id, bill_number, status, issue_date, due_date, subtotal, total, notes, reference)
-        VALUES (?, ?, ?, ?, 'received', date('now'), date('now', '+30 days'), ?, ?, ?, ?)
-      `).run(billId, companyId, po.vendor_id, billNumber, po.subtotal || 0, po.total || 0, po.notes || '', `PO: ${po.po_number}`);
+        INSERT INTO bills (id, company_id, vendor_id, bill_number, status, issue_date, due_date, subtotal, tax_amount, total, notes, reference)
+        VALUES (?, ?, ?, ?, 'received', date('now'), date('now', '+30 days'), ?, ?, ?, ?, ?)
+      `).run(billId, companyId, po.vendor_id, billNumber, po.subtotal || 0, po.tax_amount || 0, po.total || 0, po.notes || '', `PO: ${po.po_number}`);
 
       for (const item of poItems) {
         dbInstance.prepare(`
@@ -8143,14 +8291,17 @@ export function registerIpcHandlers(): void {
     return schedule;
   });
 
-  ipcMain.handle('assets:run-depreciation', (_event, { periodDate }: { periodDate: string }) => {
+  ipcMain.handle('assets:run-depreciation', (_event, { periodDate, assetId }: { periodDate: string; assetId?: string }) => {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) throw new Error('No active company');
     const dbInstance = db.getDb();
 
-    const assets = dbInstance.prepare(`
-      SELECT * FROM fixed_assets WHERE company_id = ? AND status = 'active'
-    `).all(companyId) as any[];
+    // Honor an optional assetId so "run depreciation" on a selected subset only
+    // touches those assets. Without it the handler depreciated EVERY active
+    // asset on every call, ignoring the user's selection.
+    const assets = (assetId
+      ? dbInstance.prepare(`SELECT * FROM fixed_assets WHERE company_id = ? AND status = 'active' AND id = ?`).all(companyId, assetId)
+      : dbInstance.prepare(`SELECT * FROM fixed_assets WHERE company_id = ? AND status = 'active'`).all(companyId)) as any[];
 
     let processed = 0;
     const depTx = dbInstance.transaction(() => {
@@ -8163,19 +8314,18 @@ export function registerIpcHandlers(): void {
 
         const cost = asset.purchase_price || 0;
         const salvage = asset.salvage_value || 0;
-        const life = asset.useful_life_years || 5;
-        const depreciable = cost - salvage;
         const accum = asset.accumulated_depreciation || 0;
 
-        let monthlyDep = 0;
-        if (asset.depreciation_method === 'straight_line') {
-          monthlyDep = depreciable / (life * 12);
-        } else if (asset.depreciation_method === 'double_declining') {
-          const bookValue = cost - accum;
-          monthlyDep = (bookValue * (2 / life)) / 12;
-        }
-
-        monthlyDep = Math.min(monthlyDep, Math.max(0, (cost - accum - salvage)));
+        // Per-method monthly figure (incl. the formerly-missing SYD branch),
+        // salvage-floored. See services/depreciation.ts (unit-tested).
+        const monthlyDep = monthlyDepreciation(asset.depreciation_method, {
+          cost,
+          salvage,
+          life: asset.useful_life_years || 5,
+          accumulated: accum,
+          purchaseDate: asset.purchase_date,
+          periodDate,
+        });
         if (monthlyDep <= 0) continue;
 
         const newAccum = accum + monthlyDep;
@@ -8255,7 +8405,14 @@ export function registerIpcHandlers(): void {
           if (rule.transaction_type && tx.type !== rule.transaction_type) matches = false;
 
           if (matches) {
-            dbInstance.prepare(`UPDATE bank_transactions SET status = 'categorized', description = COALESCE(NULLIF(?, ''), description) WHERE id = ?`)
+            // NOTE: bank_transactions.status CHECK only allows
+            // ('pending','matched','excluded') — writing 'categorized' here
+            // threw a CHECK-constraint error that rolled back the whole batch,
+            // so "Apply Rules" silently did nothing. The rule's meaningful
+            // effect on a bank_transaction is the description rename (the table
+            // has no category column to hold action_category_id/account_id);
+            // leave status as 'pending' so the txn still flows to matching.
+            dbInstance.prepare(`UPDATE bank_transactions SET description = COALESCE(NULLIF(?, ''), description) WHERE id = ?`)
               .run(rule.action_description || '', tx.id);
             dbInstance.prepare(`UPDATE bank_rules SET times_applied = times_applied + 1, updated_at = datetime('now') WHERE id = ?`).run(rule.id);
             applied++;
@@ -9168,11 +9325,27 @@ export function registerIpcHandlers(): void {
           notes: notes || '',
         });
 
+        // Capture pre-adjustment state for weighted-average costing.
+        const before = rawDb.prepare(`SELECT quantity, unit_cost FROM inventory_items WHERE id = ?`).get(itemId) as any;
+        const oldQty = Number(before?.quantity) || 0;
+        const oldCost = Number(before?.unit_cost) || 0;
+
         // Update the inventory item's quantity
         const delta = type === 'out' ? -Math.abs(quantity) : Math.abs(quantity);
         rawDb.prepare(
           `UPDATE inventory_items SET quantity = quantity + ?, updated_at = datetime('now') WHERE id = ?`
         ).run(delta, itemId);
+
+        // On a receipt at a real cost, roll unit_cost forward as a weighted
+        // moving average. Previously unit_cost never changed on receipt, so the
+        // item's value (qty × unit_cost), the Stock Value KPI and the valuation
+        // exports all stayed wrong whenever stock came in at a new price.
+        const recvQty = Math.abs(quantity);
+        const recvCost = Number(unitCost) || 0;
+        if (type !== 'out' && recvCost > 0 && oldQty + recvQty > 0) {
+          const newCost = Math.round(((oldQty * oldCost + recvQty * recvCost) / (oldQty + recvQty)) * 10000) / 10000;
+          rawDb.prepare(`UPDATE inventory_items SET unit_cost = ? WHERE id = ?`).run(newCost, itemId);
+        }
 
         const item = rawDb.prepare(`SELECT quantity, reorder_point FROM inventory_items WHERE id = ?`).get(itemId) as any;
         return { ok: true, newQuantity: item?.quantity ?? 0, reorderPoint: item?.reorder_point ?? 0 };
@@ -9247,6 +9420,28 @@ export function registerIpcHandlers(): void {
       GROUP BY due_date ORDER BY due_date
     `).all(companyId, d);
     return { inflow, outflow };
+  });
+
+  ipcMain.handle('intelligence:entity-hint', (_e, { entityType, id }: { entityType: string; id: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId || !id) return '';
+    try {
+      if (entityType === 'client') {
+        const row: any = db.runQuery(
+          `SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS amt FROM invoices
+           WHERE company_id = ? AND client_id = ? AND status NOT IN ('paid','cancelled','draft')
+             AND COALESCE(due_date,'') <> '' AND date(due_date) < date('now')`,
+          [companyId, id])[0];
+        if (row?.n > 0) return `${row.n} overdue invoice${row.n > 1 ? 's' : ''} ($${Math.round(row.amt).toLocaleString()})`;
+      } else if (entityType === 'vendor') {
+        const row: any = db.runQuery(
+          `SELECT COUNT(*) AS n FROM expenses WHERE company_id = ? AND vendor_id = ?
+             AND instr(COALESCE(tags,''),'anomaly') > 0`,
+          [companyId, id])[0];
+        if (row?.n > 0) return `${row.n} flagged charge${row.n > 1 ? 's' : ''}`;
+      }
+      return '';
+    } catch { return ''; }
   });
 
   // ─── Rules Engine ────────────────────────────────────────
@@ -15531,6 +15726,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('vn:payment-terms', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorPaymentTermsBreakdown(c) : []; });
   ipcMain.handle('vn:portfolio-summary', () => { const c = db.getCurrentCompanyId(); return c ? vn().vendorPortfolioSummary(c) : {}; });
   ipcMain.handle('vn:quarterly-spend', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorQuarterlySpend(c, vendorId) : []; });
+  ipcMain.handle('vn:disputes', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorDisputes(c, vendorId) : []; });
+  ipcMain.handle('vn:w9-records', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorW9Records(c, vendorId) : []; });
+  ipcMain.handle('vn:insurance-policies', (_e, { vendorId }: any) => { const c = db.getCurrentCompanyId(); return c ? vn().vendorInsurancePolicies(c, vendorId) : []; });
 
   // ─── Debt Collection Wave 2 (DC1–DC150) ─────────────────
   const dc2 = () => require('../services/debt-collection-wave2');
@@ -16752,6 +16950,259 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('esign:get-audit-log', (_event, { documentId }: { documentId: string }) => {
     return db.getDb().prepare('SELECT * FROM esign_audit_log WHERE document_id = ? ORDER BY created_at DESC').all(documentId);
+  });
+
+  // ─── B3: AI Copilot ──────────────────────────────────────────────────────────
+
+  ipcMain.handle('copilot:ask', async (event, params: {
+    streamId: string;
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  }) => {
+    const { streamId, messages } = params;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      event.sender.send('copilot:chunk', {
+        streamId, type: 'error',
+        error: 'ANTHROPIC_API_KEY not configured. Add it to your .env file and restart.',
+      });
+      return null;
+    }
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) {
+      event.sender.send('copilot:chunk', { streamId, type: 'error', error: 'No active company selected.' });
+      return null;
+    }
+
+    const abortController = new AbortController();
+    copilotStreams.set(streamId, abortController);
+    const anthropic = new Anthropic({ apiKey });
+
+    const tools: Anthropic.Messages.Tool[] = [
+      {
+        name: 'search_records',
+        description: 'Search across invoices, expenses, clients, and vendors using full-text search. Returns up to 5 matching records.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            query: { type: 'string', description: 'The search query text' },
+            entity_type: {
+              type: 'string',
+              enum: ['invoice', 'expense', 'client', 'vendor', 'any'],
+              description: 'Filter by record type (default: any)',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'get_financial_summary',
+        description: 'Get total income (paid invoices), total expenses, and net profit for a date range.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            start_date: { type: 'string', description: 'Start date in YYYY-MM-DD format' },
+            end_date: { type: 'string', description: 'End date in YYYY-MM-DD format' },
+          },
+          required: ['start_date', 'end_date'],
+        },
+      },
+      {
+        name: 'get_anomalies',
+        description: 'List recently detected financial anomalies and duplicate invoice groups.',
+        input_schema: { type: 'object' as const, properties: {}, required: [] },
+      },
+      {
+        name: 'forecast_cash_flow',
+        description: 'Forecast cash flow for the next N days based on historical bank transaction patterns.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            days_ahead: { type: 'number', description: 'Number of days to forecast (default: 30, max: 90)' },
+          },
+          required: [],
+        },
+      },
+      {
+        name: 'propose_action',
+        description: 'Propose an action for the user to review and approve. Use this instead of executing mutations directly. The user sees a confirmation card.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            action_type: {
+              type: 'string',
+              enum: ['navigate', 'create_invoice', 'create_expense', 'export_report', 'run_report'],
+              description: 'Type of action to propose',
+            },
+            description: { type: 'string', description: 'Clear human-readable description of what will happen if approved' },
+            params: { type: 'object', description: 'Action parameters (module name for navigate, template data for create_*, report name for reports)' },
+          },
+          required: ['action_type', 'description'],
+        },
+      },
+    ];
+
+    function executeTool(toolName: string, input: Record<string, any>): string {
+      try {
+        switch (toolName) {
+          case 'search_records': {
+            const query = String(input.query ?? '').trim();
+            if (!query) return JSON.stringify({ results: [] });
+            const entityType = input.entity_type ?? 'any';
+            const typeClause = entityType !== 'any' ? `AND entity_type = '${entityType}'` : '';
+            const rows = db.getDb().prepare(`
+              SELECT entity_type, entity_id, title, subtitle
+              FROM search_index
+              WHERE company_id = ? AND search_index MATCH ?
+              ${typeClause}
+              LIMIT 5
+            `).all(companyId, query + '*') as Array<{ entity_type: string; entity_id: string; title: string; subtitle: string }>;
+            return JSON.stringify({ results: rows.map(r => ({ type: r.entity_type, id: r.entity_id, title: r.title, subtitle: r.subtitle })) });
+          }
+          case 'get_financial_summary': {
+            const { start_date, end_date } = input;
+            const incomeRow = db.getDb().prepare(
+              `SELECT COALESCE(SUM(total), 0) as total FROM invoices WHERE company_id = ? AND status = 'paid' AND issue_date BETWEEN ? AND ?`
+            ).get(companyId, start_date, end_date) as { total: number };
+            const expenseRow = db.getDb().prepare(
+              `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE company_id = ? AND date BETWEEN ? AND ?`
+            ).get(companyId, start_date, end_date) as { total: number };
+            const income = incomeRow?.total ?? 0;
+            const expenses = expenseRow?.total ?? 0;
+            return JSON.stringify({ start_date, end_date, income, expenses, net: income - expenses });
+          }
+          case 'get_anomalies': {
+            const anomalies = db.getDb().prepare(
+              `SELECT type, description, severity, detected_at FROM financial_anomalies WHERE company_id = ? ORDER BY detected_at DESC LIMIT 10`
+            ).all(companyId) as any[];
+            const { intelligenceService } = require('../services/IntelligenceService');
+            const duplicates = intelligenceService.detectDuplicateInvoices(companyId) as string[][];
+            return JSON.stringify({ anomaly_count: anomalies.length, anomalies, duplicate_invoice_groups: duplicates });
+          }
+          case 'forecast_cash_flow': {
+            const daysAhead = Math.min(Number(input.days_ahead ?? 30), 90);
+            const { intelligenceService } = require('../services/IntelligenceService');
+            const forecast = intelligenceService.forecastCashFlow(companyId, daysAhead) as { predicted: number; low: number; high: number };
+            return JSON.stringify({ days_ahead: daysAhead, ...forecast });
+          }
+          case 'propose_action': {
+            const proposal = {
+              proposalId: uuid(),
+              action_type: input.action_type,
+              description: input.description,
+              params: input.params ?? {},
+            };
+            event.sender.send('copilot:chunk', { streamId, type: 'proposal', proposal });
+            return JSON.stringify({ status: 'proposal_shown_to_user', proposalId: proposal.proposalId });
+          }
+          default:
+            return JSON.stringify({ error: `Unknown tool: ${toolName}` });
+        }
+      } catch (err: any) {
+        return JSON.stringify({ error: err?.message ?? 'Tool execution failed' });
+      }
+    }
+
+    const apiMessages: Anthropic.Messages.MessageParam[] = messages.map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
+
+    try {
+      let continueLoop = true;
+      while (continueLoop) {
+        if (abortController.signal.aborted) break;
+
+        const stream = anthropic.messages.stream(
+          {
+            model: 'claude-opus-4-8',
+            system: `You are an AI Copilot embedded in Business Accounting Pro, a professional desktop accounting application.
+You have read-only access to the user's financial data via tools. Help them analyze finances, find records, spot anomalies, and forecast cash flow.
+CRITICAL RULE: Never execute data mutations or money movements. Always use propose_action to suggest changes — the user must approve before anything is created or modified.
+Be concise and data-driven. Format dollar amounts with $ and two decimal places. Use tables or bullet lists for structured data.`,
+            messages: apiMessages,
+            tools,
+            thinking: { type: 'adaptive' },
+            max_tokens: 4096,
+          },
+          { signal: abortController.signal }
+        );
+
+        stream.on('text', (text: string) => {
+          event.sender.send('copilot:chunk', { streamId, type: 'delta', text });
+        });
+
+        const response = await stream.finalMessage();
+        apiMessages.push({ role: 'assistant', content: response.content });
+
+        if (response.stop_reason === 'tool_use') {
+          const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+          for (const block of response.content) {
+            if (block.type === 'tool_use') {
+              event.sender.send('copilot:chunk', { streamId, type: 'tool_call', toolName: block.name });
+              const result = executeTool(block.name, block.input as Record<string, any>);
+              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
+            }
+          }
+          apiMessages.push({ role: 'user', content: toolResults });
+        } else {
+          continueLoop = false;
+        }
+      }
+      event.sender.send('copilot:chunk', { streamId, type: 'done' });
+      return { ok: true };
+    } catch (err: any) {
+      if (err?.name !== 'AbortError' && !abortController.signal.aborted) {
+        event.sender.send('copilot:chunk', { streamId, type: 'error', error: err?.message ?? 'Unexpected error from AI service.' });
+      } else {
+        event.sender.send('copilot:chunk', { streamId, type: 'done' });
+      }
+      return null;
+    } finally {
+      copilotStreams.delete(streamId);
+    }
+  });
+
+  ipcMain.handle('copilot:stop', (_event, { streamId }: { streamId: string }) => {
+    const ac = copilotStreams.get(streamId);
+    if (ac) { ac.abort(); copilotStreams.delete(streamId); }
+    return { ok: true };
+  });
+
+  ipcMain.handle('copilot:threads:list', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    return db.getDb().prepare(
+      `SELECT id, title, created_at, updated_at FROM copilot_threads WHERE company_id = ? ORDER BY updated_at DESC LIMIT 20`
+    ).all(companyId);
+  });
+
+  ipcMain.handle('copilot:threads:load', (_event, { threadId }: { threadId: string }) => {
+    const row = db.getDb().prepare(`SELECT * FROM copilot_threads WHERE id = ?`).get(threadId) as any;
+    if (!row) return null;
+    return { ...row, messages: JSON.parse(row.messages_json || '[]') };
+  });
+
+  ipcMain.handle('copilot:threads:save', (_event, p: { threadId: string; title: string; messages: any[] }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const exists = db.getDb().prepare(`SELECT id FROM copilot_threads WHERE id = ?`).get(p.threadId);
+    if (exists) {
+      db.getDb().prepare(
+        `UPDATE copilot_threads SET title = ?, messages_json = ?, updated_at = datetime('now') WHERE id = ?`
+      ).run(p.title, JSON.stringify(p.messages), p.threadId);
+    } else {
+      db.getDb().prepare(
+        `INSERT INTO copilot_threads (id, company_id, title, messages_json) VALUES (?, ?, ?, ?)`
+      ).run(p.threadId, companyId, p.title, JSON.stringify(p.messages));
+    }
+    scheduleAutoBackup();
+    return { ok: true };
+  });
+
+  ipcMain.handle('copilot:threads:delete', (_event, { threadId }: { threadId: string }) => {
+    db.getDb().prepare(`DELETE FROM copilot_threads WHERE id = ?`).run(threadId);
+    scheduleAutoBackup();
+    return { ok: true };
   });
 }
 

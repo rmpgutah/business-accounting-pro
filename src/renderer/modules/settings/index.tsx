@@ -113,9 +113,9 @@ const VpsBackup: React.FC = () => {
       {result && (
         <div style={{
           padding: '10px 14px', marginBottom: '12px', borderRadius: '6px',
-          background: result.type === 'success' ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)',
-          border: `1px solid ${result.type === 'success' ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)'}`,
-          color: result.type === 'success' ? '#34d399' : '#f87171',
+          background: result.type === 'success' ? 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
+          border: `1px solid ${result.type === 'success' ? 'color-mix(in srgb, var(--color-accent-income) 20%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 20%, transparent)'}`,
+          color: result.type === 'success' ? 'var(--color-accent-income)' : 'var(--color-accent-expense)',
           fontSize: '13px',
         }}>
           {result.msg}
@@ -224,11 +224,11 @@ const DangerZone: React.FC = () => {
   };
 
   return (
-    <div className="block-card" style={{ borderColor: 'rgba(248,113,113,0.25)' }}>
+    <div className="block-card" style={{ borderColor: 'color-mix(in srgb, var(--color-accent-expense) 25%, transparent)' }}>
       <div className="flex items-center gap-3 mb-4">
         <div
           className="w-8 h-8 flex items-center justify-center shrink-0"
-          style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.2)' }}
+          style={{ borderRadius: '6px', background: 'color-mix(in srgb, var(--color-accent-expense) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-expense) 20%, transparent)' }}
         >
           <AlertTriangle size={16} className="text-accent-expense" />
         </div>
@@ -237,7 +237,7 @@ const DangerZone: React.FC = () => {
           <p className="text-xs text-text-muted mt-0.5">Irreversible actions</p>
         </div>
       </div>
-      <div className="border-t pt-4 space-y-4" style={{ borderColor: 'rgba(248,113,113,0.15)' }}>
+      <div className="border-t pt-4 space-y-4" style={{ borderColor: 'color-mix(in srgb, var(--color-accent-expense) 15%, transparent)' }}>
         {/* Delete Company */}
         <div className="flex items-center justify-between">
           <div>
@@ -780,7 +780,7 @@ export default function SettingsModule() {
           {companyForm.signature_image && (
             <div className="mb-3">
               <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Current Saved Signature</div>
-              <div style={{ border: '1px solid #333', borderRadius: '6px', background: '#fff', padding: '8px', display: 'inline-block' }}>
+              <div style={{ border: '1px solid var(--color-border-primary)', borderRadius: '6px', background: 'var(--color-bg-secondary)', padding: '8px', display: 'inline-block' }}>
                 <img
                   src={companyForm.signature_image}
                   alt="Saved signature"
@@ -1057,7 +1057,7 @@ export default function SettingsModule() {
           </div>
           <div className="flex items-center gap-3">
             {backupMsg && (
-              <span className="text-xs font-medium" style={{ color: '#22c55e' }}>{backupMsg}</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-accent-income)' }}>{backupMsg}</span>
             )}
             <button
               className="block-btn-success flex items-center gap-1.5"

@@ -57,13 +57,13 @@ const PAYMENTS_PER_YEAR: Record<PaymentFrequency, number> = {
   annual: 1,
 };
 
-function paymentsForTerm(termMonths: number, freq: PaymentFrequency): number {
+export function paymentsForTerm(termMonths: number, freq: PaymentFrequency): number {
   // For non-monthly frequencies, scale appropriately. A 360-month
   // (30-yr) loan paid biweekly = 360 * 26/12 = 780 payments.
   return Math.round(termMonths * (PAYMENTS_PER_YEAR[freq] / 12));
 }
 
-function periodicRate(annualRate: number, freq: PaymentFrequency): number {
+export function periodicRate(annualRate: number, freq: PaymentFrequency): number {
   return annualRate / PAYMENTS_PER_YEAR[freq];
 }
 

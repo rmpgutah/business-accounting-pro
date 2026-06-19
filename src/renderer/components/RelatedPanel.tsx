@@ -52,14 +52,49 @@ const MODULE_FOR: Record<string, string> = {
   bill_payment: 'bills',
   employee: 'payroll',
   pay_stub: 'payroll',
+  payroll_run: 'payroll',
   time_entry: 'time-tracking',
   budget: 'budgets',
   account: 'accounts',
   journal_entry: 'accounts',
   fixed_asset: 'fixed-assets',
   bank_account: 'bank-recon',
+  bank_transaction: 'bank-recon',
+  loan: 'loans',
   stripe_object: 'stripe-sync',
 };
+
+// Child rows (line items, payments, reminders, comms…) are tagged with their
+// PARENT's entityType by the graph builder, but carry their own row id. To
+// open the right record, prefer the parent FK on the row over the row's own
+// id. Without this, clicking "Line Items" tried to open an invoice whose id
+// was actually a line-item id — a dead link.
+const PARENT_FK_FOR: Record<string, string[]> = {
+  invoice: ['invoice_id'],
+  bill: ['bill_id'],
+  expense: ['expense_id'],
+  purchase_order: ['purchase_order_id', 'po_id'],
+  debt: ['debt_id'],
+  account: ['account_id'],
+  employee: ['employee_id'],
+  journal_entry: ['journal_entry_id', 'entry_id'],
+  fixed_asset: ['asset_id', 'fixed_asset_id'],
+  loan: ['loan_id'],
+  payroll_run: ['payroll_run_id'],
+  client: ['client_id'],
+  project: ['project_id'],
+  vendor: ['vendor_id'],
+};
+
+/** Resolve the record id a row should navigate to for its target type. */
+function resolveTargetId(row: Record<string, unknown>, targetType: string): string | null {
+  const r = row as any;
+  for (const fk of PARENT_FK_FOR[targetType] ?? []) {
+    if (r[fk]) return String(r[fk]);
+  }
+  const rid = r.id ?? r.stripe_id;
+  return rid ? String(rid) : null;
+}
 
 function inferTitle(entityType: string, row: Record<string, unknown>): string {
   // Best-effort: pick the most human field.
@@ -121,12 +156,20 @@ const RelatedPanel: React.FC<Props> = ({ entityType, entityId, only, hide, compa
   [groups, only, hide]);
 
   const handleNavigate = (row: Record<string, unknown>, targetType: string) => {
-    const modId = MODULE_FOR[targetType];
+    // Payments aren't separately navigable — route them to their parent
+    // invoice/bill instead of dead-ending on the payment row itself.
+    let type = targetType;
+    const r = row as any;
+    if (targetType === 'payment' && r.invoice_id) type = 'invoice';
+    if (targetType === 'bill_payment' && r.bill_id) type = 'bill';
+    if (targetType === 'pay_stub' && r.employee_id) type = 'employee';
+
+    const modId = MODULE_FOR[type];
     if (!modId) return;
     // Push a focus hint to the app store so the target module can auto-open
     // the correct record. Each module reads appStore.focusEntity on mount.
-    const rid = (row as any).id ?? (row as any).stripe_id;
-    if (rid) setFocusEntity({ type: targetType, id: String(rid) });
+    const rid = resolveTargetId(row, type);
+    if (rid) setFocusEntity({ type, id: rid });
     setModule(modId);
   };
 

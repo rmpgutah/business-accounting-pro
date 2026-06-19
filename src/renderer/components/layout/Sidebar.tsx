@@ -41,6 +41,7 @@ import {
   FileCheck,
   PenTool,
   Car,
+  Bot,
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -88,6 +89,7 @@ const sections: NavSection[] = [
       // users reported "I don't see anything for LOAN on the side." High-value
       // module deserves prominence.
       { id: 'loans', label: 'Loans', icon: Banknote },
+      { id: 'vendors-ap', label: 'Vendors & AP', icon: Building2 },
       { id: 'bills', label: 'Bills (AP)', icon: FileInput },
       { id: 'purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
       { id: 'bank-recon', label: 'Bank Recon', icon: Landmark },
@@ -100,6 +102,7 @@ const sections: NavSection[] = [
   {
     title: 'ANALYTICS',
     items: [
+      { id: 'cockpit', label: 'Intelligence Cockpit', icon: LayoutGridIcon },
       { id: 'reports', label: 'Reports', icon: BarChart3 },
       { id: 'kpi-dashboard', label: 'KPI Dashboard', icon: Gauge },
       { id: 'forecasting', label: 'Forecasting', icon: TrendingUp },
@@ -144,6 +147,8 @@ const Sidebar: React.FC = () => {
   const setModule = useAppStore((s) => s.setModule);
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const copilotOpen = useAppStore((s) => s.copilotOpen);
+  const toggleCopilot = useAppStore((s) => s.toggleCopilot);
   const sidebarOrder = usePersonalizationStore((s) => s.sidebarOrder);
   const hiddenModules = usePersonalizationStore((s) => s.hiddenModules);
   const pinnedModules = usePersonalizationStore((s) => s.pinnedModules);
@@ -293,8 +298,23 @@ const Sidebar: React.FC = () => {
         )}
       </nav>
 
-      {/* Collapse Toggle */}
-      <div className="border-t border-border-primary px-2 py-2 shrink-0">
+      {/* AI Copilot + Collapse */}
+      <div className="border-t border-border-primary px-2 py-2 shrink-0 flex flex-col gap-1">
+        <button
+          onClick={toggleCopilot}
+          className="flex items-center gap-2 w-full py-1.5 px-2 transition-all duration-150"
+          style={{
+            borderRadius: 'var(--app-radius)',
+            color: copilotOpen ? 'var(--accent-primary)' : 'var(--text-muted)',
+            background: copilotOpen ? 'color-mix(in srgb, var(--accent-primary) 10%, transparent)' : undefined,
+          }}
+          onMouseEnter={(e) => { if (!copilotOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+          onMouseLeave={(e) => { if (!copilotOpen) e.currentTarget.style.background = ''; }}
+          title={sidebarCollapsed ? 'AI Copilot (⌘\\)' : undefined}
+        >
+          <Bot size={15} className="shrink-0" />
+          {!sidebarCollapsed && <span className="text-[12px] font-medium">AI Copilot</span>}
+        </button>
         <button
           onClick={toggleSidebar}
           className="flex items-center justify-center w-full py-1.5 text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all duration-150"

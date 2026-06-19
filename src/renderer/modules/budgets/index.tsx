@@ -17,6 +17,7 @@ import BudgetForm from './BudgetForm';
 import BudgetDetail from './BudgetDetail';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAppStore } from '../../stores/appStore';
 import { formatCurrency, formatDate } from '../../lib/format';
 
 type View = 'list' | 'new' | 'edit' | 'detail';
@@ -60,10 +61,10 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 ];
 
 const HEALTH_COLORS = {
-  on_track: '#22c55e',
-  warning: '#eab308',
-  critical: '#f97316',
-  over: '#ef4444',
+  on_track: 'var(--color-accent-income)',
+  warning: 'var(--color-accent-warning)',
+  critical: 'var(--color-accent-warning)',
+  over: 'var(--color-accent-expense)',
 };
 
 const computeBudgetHealth = (
@@ -99,6 +100,16 @@ const BudgetModule: React.FC = () => {
     setSelectedBudgetId(id);
     setView('detail');
   };
+
+  // Cross-module deep link from RelatedPanel/EntityChip → open budget detail.
+  const consumeFocusEntity = useAppStore((s) => s.consumeFocusEntity);
+  useEffect(() => {
+    const focus = consumeFocusEntity('budget');
+    if (focus) {
+      setSelectedBudgetId(focus.id);
+      setView('detail');
+    }
+  }, [consumeFocusEntity]);
 
   const handleCreated = (id: string) => {
     setSelectedBudgetId(id);
@@ -136,30 +147,29 @@ const BudgetModule: React.FC = () => {
             0
           );
 
-          // Compute actual from journal entries (debits to budget account_ids in period)
-          const accountIds = (lines || [])
-            .map((l) => l.account_id)
-            .filter((x): x is string => !!x);
+          // Actuals must match BudgetDetail/BudgetList, which sum expenses by
+          // category NAME. Budget lines created via BudgetForm only set
+          // `category` (free text) and leave `account_id` null, so the old
+          // GL-by-account_id query returned 0 for every normally-created
+          // budget — zeroing Actual/Variance/risk across the whole dashboard.
+          const lineCategories = (lines || [])
+            .map((l) => (l.category || '').toLowerCase().trim())
+            .filter((c) => !!c);
 
           let actual = 0;
-          if (accountIds.length > 0) {
+          if (lineCategories.length > 0) {
             try {
-              const placeholders = accountIds.map(() => '?').join(',');
               const rows: any[] = await api.rawQuery(
-                `SELECT SUM(jel.debit - jel.credit) AS spend
-                 FROM journal_entry_lines jel
-                 JOIN journal_entries je ON je.id = jel.journal_entry_id
-                 WHERE je.company_id = ?
-                   AND jel.account_id IN (${placeholders})
-                   AND je.date >= ? AND je.date <= ?`,
-                [
-                  activeCompany.id,
-                  ...accountIds,
-                  budget.start_date,
-                  budget.end_date,
-                ]
+                `SELECT LOWER(c.name) AS cat, COALESCE(SUM(e.amount), 0) AS spend
+                 FROM expenses e
+                 LEFT JOIN categories c ON e.category_id = c.id
+                 WHERE e.company_id = ? AND date(e.date) BETWEEN date(?) AND date(?)
+                 GROUP BY LOWER(c.name)`,
+                [activeCompany.id, budget.start_date, budget.end_date]
               );
-              actual = Number(rows?.[0]?.spend) || 0;
+              const spendByCat: Record<string, number> = {};
+              for (const r of rows || []) spendByCat[String(r.cat)] = Number(r.spend) || 0;
+              actual = lineCategories.reduce((s, cat) => s + (spendByCat[cat] || 0), 0);
             } catch {
               actual = 0;
             }
@@ -290,8 +300,8 @@ const BudgetModule: React.FC = () => {
             className="block-card p-3 flex items-start gap-3"
             style={{
               borderRadius: '6px',
-              borderColor: 'rgba(239,68,68,0.4)',
-              background: 'rgba(239,68,68,0.08)',
+              borderColor: 'color-mix(in srgb, var(--color-accent-expense) 40%, transparent)',
+              background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
             }}
           >
             <AlertTriangle

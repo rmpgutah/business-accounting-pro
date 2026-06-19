@@ -243,7 +243,7 @@ const emptyLine = (): IzLine => ({
   discount_amount: 0, discount_percent: 0,
   is_tax_deductible: true, is_tax_exempt: false,
   notes: '', item_type: 'item', tags: [],
-  is_billable: false, billed_invoice_id: null,
+  billed_invoice_id: null,
 });
 
 export default function ItemizationEditor({
@@ -806,7 +806,7 @@ export default function ItemizationEditor({
             <span>{formatCurrency(subtotal)}</span>
           </div>
           {totalDiscount > 0 && (
-            <div className="iz-totals-row" style={{ color: '#a855f7' }}>
+            <div className="iz-totals-row" style={{ color: 'var(--color-accent-purple)' }}>
               <span>Discount</span>
               <span>−{formatCurrency(totalDiscount)}</span>
             </div>

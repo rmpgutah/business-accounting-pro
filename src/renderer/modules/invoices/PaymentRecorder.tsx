@@ -3,6 +3,7 @@ import { X, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
 import { todayLocal } from '../../lib/date-helpers';
 import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
+import { computeInvoicePaidStatus } from '../../../shared/payment-math';
 
 // ─── Payment Methods ────────────────────────────────────
 const PAYMENT_METHODS = [
@@ -45,6 +46,8 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
   const [date, setDate] = useState<string>(todayLocal());
   const [method, setMethod] = useState<string>('transfer');
   const [reference, setReference] = useState<string>('');
+  // Invoice payment upload — optional proof/remittance file attached to the payment.
+  const [attachmentPath, setAttachmentPath] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>('');
   // Track the original payment amount when editing (to add back to balance)
@@ -77,6 +80,7 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
           setDate(p.date || todayLocal());
           setMethod(p.payment_method || 'transfer');
           setReference(p.reference || '');
+          setAttachmentPath(p.attachment_path || '');
         }
       } catch (err) {
         console.error('Failed to load payment:', err);
@@ -120,9 +124,24 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
           date,
           payment_method: method || 'transfer',
           reference: reference || '',
+          attachment_path: attachmentPath || '',
         });
+        // Editing a payment used to leave the invoice header (amount_paid,
+        // status, balance due) showing the OLD figure — the create path
+        // recomputes but the edit path never did. Re-derive from the full
+        // payment set so the invoice agrees with its rows.
+        const allPayments = await api.query('payments', { invoice_id: invoiceId });
+        const { amountPaid, status } = computeInvoicePaidStatus(
+          invoiceTotal,
+          (allPayments || []).map((p: any) => p.amount),
+        );
+        await api.update('invoices', invoiceId, { amount_paid: amountPaid, status });
       } else {
-        await api.recordInvoicePayment(invoiceId, parsedAmount, date, method, reference);
+        const res = await api.recordInvoicePayment(invoiceId, parsedAmount, date, method, reference);
+        // Persist the uploaded proof onto the just-created payment row.
+        if (attachmentPath && res?.paymentId) {
+          await api.update('payments', res.paymentId, { attachment_path: attachmentPath });
+        }
       }
       onSaved();
     } catch (err: any) {
@@ -262,6 +281,41 @@ const PaymentRecorder: React.FC<PaymentRecorderProps> = ({
               onChange={(e) => setReference(e.target.value)}
             />
           </div>
+        </div>
+
+        {/* Payment proof upload — attach a receipt / remittance / bank slip */}
+        <div className="mt-4">
+          <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
+            Payment Proof <span className="text-text-muted text-[10px]">(optional)</span>
+          </label>
+          {attachmentPath ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="truncate flex-1 text-text-secondary" title={attachmentPath}>
+                📎 {attachmentPath.split(/[/\\]/).pop()}
+              </span>
+              <a href={`file://${attachmentPath}`} target="_blank" rel="noreferrer" className="block-btn text-xs">View</a>
+              <button type="button" className="block-btn text-xs text-accent-expense" onClick={() => setAttachmentPath('')}>
+                Remove
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="block-btn text-xs"
+              onClick={async () => {
+                try {
+                  const r: any = await api.openFileDialog({
+                    filters: [{ name: 'Receipts & Documents', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'] }],
+                  });
+                  if (r?.path) setAttachmentPath(r.path);
+                } catch (e) {
+                  console.error('Attach payment proof failed:', e);
+                }
+              }}
+            >
+              Upload payment proof…
+            </button>
+          )}
         </div>
 
         {/* Actions */}

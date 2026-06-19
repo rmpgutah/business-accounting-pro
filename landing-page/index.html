@@ -9,11 +9,11 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --bg:#050508;--bg-card:#0e0e14;--bg-elevated:#15151e;
-      --border:#1e1e2e;--border-accent:#6366f1;
-      --text:#e4e4ef;--text-dim:#8888a0;--text-bright:#ffffff;
-      --accent:#6366f1;--accent-hover:#818cf8;
-      --green:#22c55e;--blue:#3b82f6;--purple:#a855f7;
+      --bg:#0a0a0a;--bg-card:#141414;--bg-elevated:#252525;--bg-hover:#2a2a2a;
+      --border:#2e2e2e;--border-focus:#525252;
+      --text:#f0f0f0;--text-dim:#a0a0a0;--text-muted:#6b6b6b;--text-bright:#f0f0f0;
+      --accent:#10b981;--accent-hover:#34d399;
+      --green:#34d399;--red:#fb7185;--amber:#f59e0b;--blue:#60a5fa;--purple:#c084fc;
     }
     html{scroll-behavior:smooth}
     body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}
@@ -21,7 +21,7 @@
     a:hover{color:var(--accent-hover)}
 
     /* NAV */
-    nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(5,5,8,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 2rem;height:60px;display:flex;align-items:center;justify-content:space-between}
+    nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(10,10,10,0.9);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 2rem;height:60px;display:flex;align-items:center;justify-content:space-between}
     .nav-brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem;color:var(--text-bright)}
     .nav-brand svg{width:28px;height:28px}
     .nav-links{display:flex;gap:2rem;align-items:center}
@@ -32,7 +32,7 @@
 
     /* HERO */
     .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:120px 2rem 80px;position:relative;overflow:hidden}
-    .hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(99,102,241,0.08) 0%,transparent 70%);pointer-events:none}
+    .hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(16,185,129,0.08) 0%,transparent 70%);pointer-events:none}
     .hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--bg-elevated);border:1px solid var(--border);padding:6px 16px;border-radius:2px;font-size:0.8rem;color:var(--text-dim);margin-bottom:2rem}
     .hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
@@ -72,10 +72,10 @@
     .mock-card{background:var(--bg-card);border:1px solid var(--border);border-radius:2px;padding:16px}
     .mock-card-label{width:60%;height:10px;background:var(--border);border-radius:2px;margin-bottom:10px}
     .mock-card-value{width:40%;height:18px;background:var(--bg-elevated);border-radius:2px}
-    .mock-card:nth-child(1) .mock-card-value{background:rgba(34,197,94,0.2)}
-    .mock-card:nth-child(2) .mock-card-value{background:rgba(59,130,246,0.2)}
-    .mock-card:nth-child(3) .mock-card-value{background:rgba(168,85,247,0.2)}
-    .mock-card:nth-child(4) .mock-card-value{background:rgba(99,102,241,0.2)}
+    .mock-card:nth-child(1) .mock-card-value{background:rgba(52,211,153,0.2)}
+    .mock-card:nth-child(2) .mock-card-value{background:rgba(96,165,250,0.2)}
+    .mock-card:nth-child(3) .mock-card-value{background:rgba(192,132,252,0.2)}
+    .mock-card:nth-child(4) .mock-card-value{background:rgba(16,185,129,0.2)}
     .mock-table{flex:1;background:var(--bg-card);border:1px solid var(--border);border-radius:2px;overflow:hidden}
     .mock-table-header{height:36px;background:var(--bg-elevated);display:flex;align-items:center;padding:0 16px;gap:20%}
     .mock-table-col{width:15%;height:8px;background:var(--border);border-radius:2px}
@@ -91,10 +91,10 @@
     .feature-card{background:var(--bg-card);border:1px solid var(--border);border-radius:2px;padding:2rem;transition:all 0.3s}
     .feature-card:hover{border-color:var(--border-accent);transform:translateY(-2px)}
     .feature-icon{width:44px;height:44px;border-radius:2px;display:flex;align-items:center;justify-content:center;margin-bottom:1.2rem;font-size:1.4rem}
-    .feature-icon.green{background:rgba(34,197,94,0.1);color:var(--green)}
-    .feature-icon.blue{background:rgba(59,130,246,0.1);color:var(--blue)}
-    .feature-icon.purple{background:rgba(168,85,247,0.1);color:var(--purple)}
-    .feature-icon.accent{background:rgba(99,102,241,0.1);color:var(--accent)}
+    .feature-icon.green{background:rgba(52,211,153,0.1);color:var(--green)}
+    .feature-icon.blue{background:rgba(96,165,250,0.1);color:var(--blue)}
+    .feature-icon.purple{background:rgba(192,132,252,0.1);color:var(--purple)}
+    .feature-icon.accent{background:rgba(16,185,129,0.1);color:var(--accent)}
     .feature-card h3{font-size:1.1rem;font-weight:700;color:var(--text-bright);margin-bottom:0.6rem}
     .feature-card p{font-size:0.9rem;color:var(--text-dim);line-height:1.6}
 
@@ -140,7 +140,7 @@
 <!-- NAV -->
 <nav>
   <div class="nav-brand">
-    <svg viewBox="0 0 1024 1024" fill="none"><rect width="1024" height="1024" rx="220" fill="#0e0e14"/><text x="512" y="620" text-anchor="middle" font-family="system-ui" font-weight="800" font-size="580" fill="#6366f1">$</text></svg>
+    <svg viewBox="0 0 1024 1024" fill="none"><rect width="1024" height="1024" rx="220" fill="#141414"/><text x="512" y="620" text-anchor="middle" font-family="system-ui" font-weight="800" font-size="580" fill="#10b981">$</text></svg>
     Business Accounting Pro
   </div>
   <div class="nav-links">

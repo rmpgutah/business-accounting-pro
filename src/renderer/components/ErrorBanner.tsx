@@ -8,8 +8,8 @@ interface ErrorBannerProps {
 }
 
 /**
- * Consistent error banner for report/module failures.
- * Shows a red-tinted glass box with the error message.
+ * Shared error banner for module/report failures.
+ * Use this instead of ad-hoc red divs so error surfaces look consistent.
  */
 export const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, onDismiss, title }) => {
   if (!message) return null;
@@ -19,8 +19,8 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, onDismiss, ti
       style={{
         padding: '12px 16px',
         background: 'var(--color-accent-expense-bg)',
-        border: '1px solid rgba(248,113,113,0.25)',
-        borderRadius: '8px',
+        border: '1px solid var(--color-accent-expense)',
+        borderRadius: '2px',
       }}
       role="alert"
     >
@@ -35,9 +35,11 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, onDismiss, ti
       </div>
       {onDismiss && (
         <button
+          type="button"
           onClick={onDismiss}
           className="text-accent-expense/70 hover:text-accent-expense shrink-0"
           aria-label="Dismiss error"
+          style={{ borderRadius: '2px' }}
         >
           <X size={14} />
         </button>

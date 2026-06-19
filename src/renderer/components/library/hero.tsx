@@ -239,43 +239,61 @@ export function MetricHero({
   // page reuse the first one's <defs>, which can blank or mis-color the fill.
   const gradId = useId();
 
+  // A sparkline needs at least 2 points to be meaningful. Callers pass
+  // `spark={[]}` to explicitly suppress it (e.g. when no real series
+  // exists — better no graph than a fake one).
+  const hasSpark = Array.isArray(spark) && spark.length > 1;
+
   // build sparkline path. Inset by half the stroke width so the 2px line never
   // clips against the SVG edges once overflow is hidden.
   const sw = 2;
   const w = 120;
   const h = 40;
-  const max = Math.max(...spark, 1);
-  const min = Math.min(...spark, 0);
+  const max = hasSpark ? Math.max(...spark) : 1;
+  const min = hasSpark ? Math.min(...spark) : 0;
   const range = max - min || 1;
-  const pts = spark.map((v, i) => {
+  const pts = (hasSpark ? spark : []).map((v, i) => {
     const x = sw / 2 + (spark.length > 1 ? (i / (spark.length - 1)) * (w - sw) : 0);
     const y = sw / 2 + (h - sw) - ((v - min) / range) * (h - sw);
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
-  const linePath = `M ${pts.join(' L ')}`;
-  const areaPath = `${linePath} L ${w},${h} L 0,${h} Z`;
+  const linePath = pts.length ? `M ${pts.join(' L ')}` : '';
+  const areaPath = linePath ? `${linePath} L ${w},${h} L 0,${h} Z` : '';
 
   return (
     <div
       className={`block-card${onClick ? ' cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200' : ''}`}
-      style={{ padding: 24, borderRadius: 6 }}
+      // overflow:hidden clips the sparkline at the card edge instead of
+      // letting it spill into the gutter when the card is narrow.
+      style={{ padding: 24, borderRadius: 6, overflow: 'hidden' }}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
     >
-      <div className="flex items-start justify-between" style={{ gap: 16 }}>
-        <div>
-          <div className="text-xs uppercase text-text-secondary" style={{ letterSpacing: '0.08em' }}>
+      <div className="flex items-start justify-between" style={{ gap: 12 }}>
+        {/* minWidth:0 lets this column shrink below its intrinsic width so
+            the flex row never exceeds the card; the value font clamps down
+            on narrow cards instead of pushing the sparkline out. */}
+        <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+          <div className="text-xs uppercase text-text-secondary truncate" style={{ letterSpacing: '0.08em' }}>
             {label}
           </div>
           <div
             className="font-mono text-text-primary"
-            style={{ fontSize: 32, fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}
+            style={{
+              fontSize: 'clamp(20px, 1.8vw + 8px, 32px)',
+              fontWeight: 700,
+              marginTop: 8,
+              lineHeight: 1.1,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
           >
             {value}
           </div>
-          <div className="flex items-center" style={{ marginTop: 10, gap: 6 }}>
+          <div className="flex items-center flex-wrap" style={{ marginTop: 10, gap: 6 }}>
             <span
               className="flex items-center text-xs"
               style={{
@@ -284,6 +302,7 @@ export function MetricHero({
                 padding: '2px 6px',
                 borderRadius: 6,
                 background: up ? 'var(--color-accent-income-bg)' : 'var(--color-accent-expense-bg)',
+                whiteSpace: 'nowrap',
               }}
             >
               <DeltaIcon size={13} style={{ marginRight: 2 }} />
@@ -292,16 +311,27 @@ export function MetricHero({
             <span className="text-xs text-text-muted">{deltaLabel}</span>
           </div>
         </div>
-        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ flexShrink: 0, overflow: 'hidden' }} role="img" aria-label={`${label} trend`}>
-          <defs>
-            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={a.fg} stopOpacity={0.28} />
-              <stop offset="100%" stopColor={a.fg} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <path d={areaPath} fill={`url(#${gradId})`} />
-          <path d={linePath} fill="none" stroke={a.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        {hasSpark && (
+          // flex: 0 1 120px → the sparkline gives up width before the value
+          // column does; minWidth:0 lets it shrink all the way rather than
+          // overflowing. viewBox + default preserveAspectRatio keeps the
+          // drawing proportional as it scales down.
+          <svg
+            viewBox={`0 0 ${w} ${h}`}
+            style={{ flex: `0 1 ${w}px`, minWidth: 0, maxWidth: w, height: h, overflow: 'hidden' }}
+            role="img"
+            aria-label={`${label} trend`}
+          >
+            <defs>
+              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={a.fg} stopOpacity={0.28} />
+                <stop offset="100%" stopColor={a.fg} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <path d={areaPath} fill={`url(#${gradId})`} />
+            <path d={linePath} fill="none" stroke={a.fg} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
       </div>
     </div>
   );

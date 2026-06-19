@@ -69,12 +69,12 @@ const ProjectsDashboard: React.FC<{
         `;
         const recentTimeSql = `
           SELECT t.id, p.name AS project_name, e.name AS employee_name,
-            t.duration_minutes, t.entry_date, t.is_billable
+            t.duration_minutes, t.date AS entry_date, t.is_billable
           FROM time_entries t
           LEFT JOIN projects p ON t.project_id = p.id
           LEFT JOIN employees e ON t.employee_id = e.id
           WHERE t.company_id = ?
-          ORDER BY t.entry_date DESC, t.created_at DESC
+          ORDER BY t.date DESC, t.created_at DESC
           LIMIT 10
         `;
         const [profit, time] = await Promise.all([
@@ -143,10 +143,10 @@ const ProjectsDashboard: React.FC<{
     }
     const total = profitRows.length || 1;
     return [
-      { key: 'active', label: 'Active', count: counts.active, color: '#22c55e' },
-      { key: 'on_hold', label: 'On Hold', count: counts.on_hold, color: '#eab308' },
-      { key: 'completed', label: 'Completed', count: counts.completed, color: '#3b82f6' },
-      { key: 'archived', label: 'Archived', count: counts.archived, color: '#6b7280' },
+      { key: 'active', label: 'Active', count: counts.active, color: 'var(--color-accent-income)' },
+      { key: 'on_hold', label: 'On Hold', count: counts.on_hold, color: 'var(--color-accent-warning)' },
+      { key: 'completed', label: 'Completed', count: counts.completed, color: 'var(--color-accent-blue)' },
+      { key: 'archived', label: 'Archived', count: counts.archived, color: 'var(--color-text-muted)' },
     ].map((s) => ({ ...s, pct: (s.count / total) * 100 }));
   }, [profitRows]);
 

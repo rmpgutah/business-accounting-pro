@@ -713,7 +713,7 @@ function ClientsUpgradesPart2(): React.ReactElement {
               {concentration.topShare.toFixed(1)}% of revenue
             </p>
             {concentration.topShare > 30 && (
-              <p className="mt-1 rounded px-2 py-1 text-xs" style={{ background: 'rgba(245,158,11,0.12)', color: ACCENT_WARNING }}>
+              <p className="mt-1 rounded px-2 py-1 text-xs" style={{ background: 'color-mix(in srgb, var(--color-accent-warning) 12%, transparent)', color: ACCENT_WARNING }}>
                 ⚠ Concentration risk: one client exceeds 30% of total revenue.
               </p>
             )}
@@ -1091,7 +1091,7 @@ function ClientsUpgradesPart2(): React.ReactElement {
                       <span
                         className="inline-block rounded px-1.5 py-0.5 text-xs font-semibold"
                         style={{
-                          background: c.health >= 70 ? 'rgba(52,211,153,0.15)' : c.health >= 40 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)',
+                          background: c.health >= 70 ? 'color-mix(in srgb, var(--color-accent-income) 15%, transparent)' : c.health >= 40 ? 'color-mix(in srgb, var(--color-accent-warning) 15%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 15%, transparent)',
                           color: c.health >= 70 ? ACCENT_INCOME : c.health >= 40 ? ACCENT_WARNING : ACCENT_EXPENSE,
                         }}
                       >

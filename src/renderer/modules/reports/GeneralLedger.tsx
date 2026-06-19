@@ -6,6 +6,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { formatCurrency, formatDate, humanizeLabel } from '../../lib/format';
+import { generateGeneralLedgerHTML } from '../../lib/financial-statement-templates';
 import EntityChip from '../../components/EntityChip';
 import ErrorBanner from '../../components/ErrorBanner';
 import PrintReportHeader from '../../components/PrintReportHeader';
@@ -545,12 +546,10 @@ const GeneralLedger: React.FC = () => {
   }, [filteredAccounts, startDate, endDate]);
 
   const handlePrintPDF = async () => {
-    const html = document.getElementById('gl-print-area')?.outerHTML || '';
-    try {
-      await api.printPreview(`<html><head><style>body{font-family:system-ui;padding:24px;}table{width:100%;border-collapse:collapse;}th,td{padding:6px;border-bottom:1px solid #ddd;font-size:11px;}.acc-neg::before{content:"(";}.acc-neg::after{content:")";}</style></head><body>${html}</body></html>`, `General Ledger ${startDate} to ${endDate}`);
-    } catch {
-      window.print();
-    }
+    if (!activeCompany) return;
+    const title = `General Ledger ${startDate} to ${endDate}`;
+    const html = generateGeneralLedgerHTML(filteredAccounts, activeCompany, { startDate, endDate });
+    await api.printPreview(html, title);
   };
 
   // Save line note
@@ -576,14 +575,13 @@ const GeneralLedger: React.FC = () => {
     const selected = flatLines.filter((l) => selectedLineIds.has(l.line_id));
     if (selected.length === 0) return;
     try {
-      // Create a balancing journal entry per source-account: move from old account to new
-      const grouped: Record<string, GLTransaction[]> = {};
+      const byAcct: Record<string, GLTransaction[]> = {};
       for (const l of selected) {
-        if (!grouped[l.account_id]) grouped[l.account_id] = [];
-        grouped[l.account_id].push(l);
+        if (!byAcct[l.account_id]) byAcct[l.account_id] = [];
+        byAcct[l.account_id].push(l);
       }
       const dateStr = format(new Date(), 'yyyy-MM-dd');
-      const entryNo = `RCLS-${Date.now().toString().slice(-6)}`;
+      const entryNo = await api.nextJournalNumber();
       const entryRes = await api.create('journal_entries', {
         company_id: activeCompany.id,
         entry_number: entryNo,
@@ -593,20 +591,25 @@ const GeneralLedger: React.FC = () => {
         is_adjusting: 1,
         is_posted: 1,
       });
-      const entryId = entryRes?.id || entryRes;
-      for (const fromAcct of Object.keys(grouped)) {
-        const ls = grouped[fromAcct];
-        const totalDebit = ls.reduce((s, l) => s + (l.debit || 0), 0);
-        const totalCredit = ls.reduce((s, l) => s + (l.credit || 0), 0);
-        // Reverse out of original account
-        if (totalDebit > 0) {
-          await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: fromAcct, debit: 0, credit: totalDebit, description: 'Reclassify out' });
-          await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: reclassifyTarget, debit: totalDebit, credit: 0, description: 'Reclassify in' });
+      const entryId = entryRes?.id;
+      if (!entryId) throw new Error('Reclassify entry header was not created');
+      try {
+        for (const fromAcct of Object.keys(byAcct)) {
+          const ls = byAcct[fromAcct];
+          const totalDebit = ls.reduce((s, l) => s + (l.debit || 0), 0);
+          const totalCredit = ls.reduce((s, l) => s + (l.credit || 0), 0);
+          if (totalDebit > 0) {
+            await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: fromAcct, debit: 0, credit: totalDebit, description: 'Reclassify out' });
+            await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: reclassifyTarget, debit: totalDebit, credit: 0, description: 'Reclassify in' });
+          }
+          if (totalCredit > 0) {
+            await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: fromAcct, debit: totalCredit, credit: 0, description: 'Reclassify out' });
+            await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: reclassifyTarget, debit: 0, credit: totalCredit, description: 'Reclassify in' });
+          }
         }
-        if (totalCredit > 0) {
-          await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: fromAcct, debit: totalCredit, credit: 0, description: 'Reclassify out' });
-          await api.create('journal_entry_lines', { journal_entry_id: entryId, account_id: reclassifyTarget, debit: 0, credit: totalCredit, description: 'Reclassify in' });
-        }
+      } catch (lineErr: any) {
+        await api.remove('journal_entries', entryId).catch(() => {});
+        throw new Error(`Line creation failed — reclassify entry rolled back (${lineErr?.message || lineErr})`);
       }
       setReclassifyOpen(false);
       setSelectedLineIds(new Set());
@@ -686,22 +689,54 @@ const GeneralLedger: React.FC = () => {
   // Feature #35 accountant-adj
   const toggleAccountantAdj = (t: GLTransaction) => updateLineField(t.line_id, { is_accountant_adj: t.is_accountant_adj ? 0 : 1 });
 
-  // Feature #28 transaction reversal
+  // Feature #28 transaction reversal.
+  //
+  // REPAIRED: the original implementation reversed only the clicked LINE,
+  // producing a one-sided (unbalanced) journal entry, auto-posted it, and
+  // numbered it outside the JE sequence (REV-xxxxxx). Double-entry
+  // bookkeeping has no such thing as a single-line reversal — the offset
+  // side must move too. This now reverses the ENTIRE parent entry: every
+  // line flipped (debit↔credit), numbered from the normal sequence,
+  // linked via reversed_from_id, and verified line-by-line — a partial
+  // failure rolls the header back instead of leaving a zero-line shell.
   const reverseLine = async (t: GLTransaction) => {
     if (!activeCompany) return;
-    if (!confirm(`Create offsetting JE to reverse line ${t.entry_number} (${formatCurrency(t.amount)})?`)) return;
+    if (!confirm(
+      `Reverse entry ${t.entry_number}?\n\nThis creates a balanced reversing entry that flips EVERY line of ${t.entry_number} (a single line cannot be reversed alone — the offsetting side must move too).`
+    )) return;
     try {
+      const srcLines: any = await api.query('journal_entry_lines', { journal_entry_id: t.entry_id });
+      if (!Array.isArray(srcLines) || srcLines.length === 0) {
+        alert(`Entry ${t.entry_number} has no lines to reverse.`);
+        return;
+      }
       const dateStr = format(new Date(), 'yyyy-MM-dd');
-      const entryNo = `REV-${Date.now().toString().slice(-6)}`;
+      const entryNo = await api.nextJournalNumber();
       const er = await api.create('journal_entries', {
         company_id: activeCompany.id, entry_number: entryNo, date: dateStr,
-        description: `Reversal of ${t.entry_number}`, reference: 'GL-Reverse', is_posted: 1,
+        description: `Reversal of ${t.entry_number}`, reference: 'GL-Reverse',
+        is_posted: 1, reversed_from_id: t.entry_id,
       });
-      const eid = er?.id || er;
-      await api.create('journal_entry_lines', {
-        journal_entry_id: eid, account_id: t.account_id,
-        debit: t.credit, credit: t.debit, description: 'Reversal',
-      });
+      const eid = er?.id;
+      if (!eid) throw new Error('Reversing entry header was not created');
+      try {
+        for (let i = 0; i < srcLines.length; i++) {
+          const l = srcLines[i];
+          await api.create('journal_entry_lines', {
+            journal_entry_id: eid,
+            account_id: l.account_id,
+            debit: Number(l.credit) || 0,   // flip
+            credit: Number(l.debit) || 0,
+            description: l.description || 'Reversal',
+            sort_order: i,
+          });
+        }
+      } catch (lineErr: any) {
+        // Roll back the header so we never leave a zero/partial-line shell
+        // (the bug that produced unbalanced REV-* entries).
+        await api.remove('journal_entries', eid).catch(() => {});
+        throw new Error(`Line creation failed (${lineErr?.message || lineErr}) — reversing entry rolled back`);
+      }
       setRefreshTick((tk) => tk + 1);
       window.dispatchEvent(new CustomEvent('je:posted'));
     } catch (err: any) { alert('Reversal failed: ' + (err?.message || err)); }
@@ -752,8 +787,14 @@ const GeneralLedger: React.FC = () => {
   const drillSubLedger = (t: GLTransaction) => {
     if (!t.source_type || !t.source_id) { alert('No sub-ledger source linked'); return; }
     useAppStore.getState().setFocusEntity({ type: t.source_type, id: t.source_id });
-    const map: Record<string, string> = { invoice: 'invoices', bill: 'bills', payment: 'payments' };
-    useAppStore.getState().setModule(map[t.source_type] || 'invoices');
+    const map: Record<string, string> = {
+      invoice: 'invoices', bill: 'bills', payment: 'payments',
+      expense: 'expenses', vendor: 'expenses', purchase_order: 'purchase-orders',
+      loan: 'loans', payroll: 'payroll', payroll_run: 'payroll',
+      bank_transaction: 'bank-recon', client: 'clients', quote: 'quotes',
+      debt: 'debt-collection',
+    };
+    useAppStore.getState().setModule(map[t.source_type] || 'accounts');
   };
 
   // Feature #29 print check stub
@@ -804,9 +845,9 @@ const GeneralLedger: React.FC = () => {
     const csv = ['Date,Entry,Account,Description,Debit,Credit'].concat(
       sel.map((t) => `${t.date},${t.entry_number},"${t.account_name}","${(t.description || '').replace(/"/g, '""')}",${t.debit},${t.credit}`)
     ).join('%0D%0A');
-    const subject = `GL lines export (${sel.length})`;
+    const subject = encodeURIComponent(`GL lines export (${sel.length})`);
     const body = `Selected GL lines:%0D%0A%0D%0A${csv}`;
-    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${body}`;
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
   };
 
   // Feature #32 mention
@@ -1067,7 +1108,7 @@ const GeneralLedger: React.FC = () => {
                 </button>
 
                 {isExpanded && (
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ borderTop: '1px solid var(--hairline)' }}>
                     {/* Beginning balance row */}
                     <div className="report-subtotal-row px-4 py-1.5 text-[10px] text-text-muted font-semibold flex justify-between" style={{ background: 'rgba(0,0,0,0.15)' }}>
                       <span>Balance brought forward</span>
@@ -1195,7 +1236,7 @@ const GeneralLedger: React.FC = () => {
                         })}
                       </tbody>
                       <tfoot>
-                        <tr className="report-grand-total-row" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}>
+                        <tr className="report-grand-total-row" style={{ borderTop: '1px solid var(--hairline)', background: 'var(--color-bg-elevated)' }}>
                           <td colSpan={6} className="py-2 px-4 text-right text-xs font-bold text-text-muted uppercase tracking-wider">Period Total</td>
                           <td className="text-right font-mono font-bold text-xs text-text-primary">
                             {formatCurrency(acct.transactions.reduce((s, t) => s + t.debit, 0))}
@@ -1303,7 +1344,7 @@ const GeneralLedger: React.FC = () => {
                 ))}
               </tbody>
             </table>
-            <button className="block-btn px-3 py-1 text-xs" onClick={() => setHighlightRules([...highlightRules, { id: `r-${Date.now()}`, field: 'amount', op: 'gt', value: '5000', color: '#ef4444' }])}>+ Add rule</button>
+            <button className="block-btn px-3 py-1 text-xs" onClick={() => setHighlightRules([...highlightRules, { id: `r-${Date.now()}`, field: 'amount', op: 'gt', value: '5000', color: 'var(--color-accent-expense)' }])}>+ Add rule</button>
             <div className="flex justify-end mt-3"><button className="block-btn px-3 py-1 text-xs" onClick={() => setRulesOpen(false)}>Close</button></div>
           </div>
         </div>
