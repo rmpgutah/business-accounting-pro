@@ -53,7 +53,7 @@ const Td: React.FC<{ children?: React.ReactNode; right?: boolean; mono?: boolean
 
 const pctColor = (pct: number, goodHigh = true): string => {
   const v = goodHigh ? pct : 100 - pct;
-  return v >= 90 ? '#16a34a' : v >= 70 ? '#f59e0b' : '#ef4444';
+  return v >= 90 ? 'var(--color-accent-income)' : v >= 70 ? 'var(--color-accent-warning)' : 'var(--color-accent-expense)';
 };
 
 interface Props { onViewExpense?: (id: string) => void }
@@ -183,7 +183,7 @@ const ExpenseCompliance: React.FC<Props> = ({ onViewExpense }) => {
           <div className="text-[9px] font-bold uppercase tracking-wider text-text-muted">Submission Delay (90d)</div>
           {timeliness && timeliness.sample_size > 0 ? (
             <>
-              <div className="text-lg font-bold font-mono mt-1" style={{ color: timeliness.avg_delay_days > 14 ? '#ef4444' : timeliness.avg_delay_days > 7 ? '#f59e0b' : '#16a34a' }}>
+              <div className="text-lg font-bold font-mono mt-1" style={{ color: timeliness.avg_delay_days > 14 ? 'var(--color-accent-expense)' : timeliness.avg_delay_days > 7 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)' }}>
                 {timeliness.avg_delay_days}d avg
               </div>
               <div className="text-[10px] text-text-muted">expense date → entered · {timeliness.sample_size} samples</div>
@@ -231,7 +231,7 @@ const ExpenseCompliance: React.FC<Props> = ({ onViewExpense }) => {
                     <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
                       <Td mono>{formatDate(r.date)}</Td>
                       <Td>{(r.description || '—').slice(0, 40)}</Td>
-                      <Td right mono color="#f59e0b">{formatCurrency(r.amount)}</Td>
+                      <Td right mono color="var(--color-accent-warning)">{formatCurrency(r.amount)}</Td>
                       <Td right><button className="block-btn text-[10px]" onClick={() => open(r.id)}>View</button></Td>
                     </tr>
                   ))}
@@ -252,8 +252,8 @@ const ExpenseCompliance: React.FC<Props> = ({ onViewExpense }) => {
                 <span className="text-text-secondary">Non-deductible <strong className="font-mono">{formatCurrency(taxSplit.nonDeductible)}</strong></span>
               </div>
               <div style={{ height: 10, background: 'var(--color-bg-tertiary)', borderRadius: 5, overflow: 'hidden', display: 'flex' }}>
-                <div style={{ width: `${taxSplit.deductiblePct}%`, background: 'var(--cust-series-positive, #22c55e)' }} />
-                <div style={{ flex: 1, background: 'var(--cust-series-neutral, #94a3b8)' }} />
+                <div style={{ width: `${taxSplit.deductiblePct}%`, background: 'var(--cust-series-positive, var(--color-accent-income))' }} />
+                <div style={{ flex: 1, background: 'var(--cust-series-neutral, var(--color-text-muted))' }} />
               </div>
               <div className="text-[10px] text-text-muted mt-1.5">{taxSplit.deductiblePct}% of {formatCurrency(taxSplit.total)} is tax-deductible</div>
             </div>
@@ -269,7 +269,7 @@ const ExpenseCompliance: React.FC<Props> = ({ onViewExpense }) => {
                     <tr key={i} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
                       <Td>{t.category || 'Uncategorized'}</Td>
                       <Td right mono>{t.count}×</Td>
-                      <Td right mono color="#16a34a">{formatCurrency(t.deductible_total)}</Td>
+                      <Td right mono color="var(--color-accent-income)">{formatCurrency(t.deductible_total)}</Td>
                     </tr>
                   ))}
                 </tbody>
@@ -308,7 +308,7 @@ const ExpenseCompliance: React.FC<Props> = ({ onViewExpense }) => {
                       <Td>{p.project_name}</Td>
                       <Td right mono>{formatCurrency(p.total_spent)}</Td>
                       <Td right mono>{p.budget ? formatCurrency(p.budget) : '—'}</Td>
-                      <Td right mono color={p.pct_of_budget > 100 ? '#ef4444' : p.pct_of_budget > 80 ? '#f59e0b' : undefined}>
+                      <Td right mono color={p.pct_of_budget > 100 ? 'var(--color-accent-expense)' : p.pct_of_budget > 80 ? 'var(--color-accent-warning)' : undefined}>
                         {p.pct_of_budget != null ? `${p.pct_of_budget}%` : '—'}
                       </Td>
                     </tr>
@@ -329,7 +329,7 @@ const ExpenseCompliance: React.FC<Props> = ({ onViewExpense }) => {
                     <Td>{l.loan_name}</Td>
                     <Td right mono>{l.expense_count}×</Td>
                     <Td right mono>{formatCurrency(l.total_amount)}</Td>
-                    <Td right mono color="#dc2626">{formatCurrency(l.interest_total)}</Td>
+                    <Td right mono color="var(--color-accent-expense)">{formatCurrency(l.interest_total)}</Td>
                   </tr>
                 ))}
               </tbody>

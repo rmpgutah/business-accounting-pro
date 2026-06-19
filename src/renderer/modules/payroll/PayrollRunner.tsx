@@ -1016,16 +1016,16 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
 
           {/* Feature 15: Period overlap warning */}
           {periodWarning && (
-            <div className="block-card p-3 border-l-4 border-yellow-500 bg-yellow-500/5 flex items-center gap-2" style={{ borderRadius: '6px' }}>
-              <AlertTriangle size={14} className="text-yellow-500 shrink-0" />
+            <div className="block-card p-3 border-l-4 border-accent-warning bg-accent-warning/5 flex items-center gap-2" style={{ borderRadius: '6px' }}>
+              <AlertTriangle size={14} className="text-accent-warning shrink-0" />
               <span className="text-xs text-text-secondary">{periodWarning}</span>
             </div>
           )}
 
           {/* Feature 21: Pay date warning */}
           {payDateWarning && (
-            <div className="block-card p-3 border-l-4 border-yellow-500 bg-yellow-500/5 flex items-center gap-2" style={{ borderRadius: '6px' }}>
-              <AlertTriangle size={14} className="text-yellow-500 shrink-0" />
+            <div className="block-card p-3 border-l-4 border-accent-warning bg-accent-warning/5 flex items-center gap-2" style={{ borderRadius: '6px' }}>
+              <AlertTriangle size={14} className="text-accent-warning shrink-0" />
               <span className="text-xs text-text-secondary">{payDateWarning}</span>
             </div>
           )}
@@ -1125,7 +1125,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
                       {hasOT && (
                         <td className="text-right font-mono text-xs">
                           {calc.hours_overtime > 0
-                            ? <span className="text-yellow-500 font-semibold">{calc.hours_overtime.toFixed(1)}</span>
+                            ? <span className="text-accent-warning font-semibold">{calc.hours_overtime.toFixed(1)}</span>
                             : <span className="text-text-muted">--</span>}
                         </td>
                       )}

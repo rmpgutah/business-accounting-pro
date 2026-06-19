@@ -232,7 +232,7 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => 
                       <button
                         onClick={() => togglePaid(inst)}
                         style={{
-                          background: inst.paid ? '#22c55e' : 'var(--color-bg-tertiary)',
+                          background: inst.paid ? 'var(--color-accent-income)' : 'var(--color-bg-tertiary)',
                           border: '1px solid var(--color-border-primary)',
                           borderRadius: 6,
                           width: 20,

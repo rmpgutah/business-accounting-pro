@@ -410,7 +410,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       {errors.length > 0 && (
         <div
           style={{
-            background: '#2a1215',
+            background: 'var(--color-accent-expense-bg)',
             border: '1px solid var(--color-accent-expense)',
             borderRadius: '2px',
             padding: '12px 16px',

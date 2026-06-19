@@ -305,7 +305,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     checked={allSelected}
                     onChange={toggleSelectAll}
                     className="cursor-pointer"
-                    style={{ accentColor: '#3b82f6' }}
+                    style={{ accentColor: 'var(--color-accent-blue)' }}
                   />
                 </th>
                 <SortableHeader field="name" label="Name" activeSortField={sortField} onSort={handleSort} />
@@ -331,7 +331,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                         checked={isSelected}
                         onChange={() => toggleSelect(client.id)}
                         className="cursor-pointer"
-                        style={{ accentColor: '#3b82f6' }}
+                        style={{ accentColor: 'var(--color-accent-blue)' }}
                       />
                     </td>
                     <td>
@@ -396,7 +396,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
-            background: 'var(--bg-secondary, #1e1e2e)',
+            background: 'var(--color-bg-secondary)',
             borderRadius: '2px',
             minWidth: '460px',
           }}
@@ -418,7 +418,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBatchSetInactive}
             disabled={batchLoading}
-            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-primary)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <XCircle size={13} />
             Set Inactive
@@ -427,7 +427,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleExportSelected}
-            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border-primary)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export CSV
@@ -456,7 +456,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => setShowDeleteConfirm(false)}
-                style={{ background: 'transparent', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid var(--color-border-primary)', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

@@ -279,10 +279,10 @@ const Inventory: React.FC = () => {
 
   // ─── Stock status helper ──────────────────────────────
   const stockStatus = (item: InventoryItem): { label: string; color: string; bg: string } => {
-    if ((item.quantity || 0) <= 0) return { label: 'Out', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' };
-    if (item.reorder_point > 0 && item.quantity <= item.reorder_point) return { label: 'Low', color: '#eab308', bg: 'rgba(234,179,8,0.12)' };
-    if (item.reorder_point > 0 && item.quantity >= item.reorder_point * 3) return { label: 'Overstock', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' };
-    return { label: 'In Stock', color: '#22c55e', bg: 'rgba(34,197,94,0.12)' };
+    if ((item.quantity || 0) <= 0) return { label: 'Out', color: 'var(--color-accent-expense)', bg: 'color-mix(in srgb, var(--color-accent-expense) 12%, transparent)' };
+    if (item.reorder_point > 0 && item.quantity <= item.reorder_point) return { label: 'Low', color: 'var(--color-accent-warning)', bg: 'color-mix(in srgb, var(--color-accent-warning) 12%, transparent)' };
+    if (item.reorder_point > 0 && item.quantity >= item.reorder_point * 3) return { label: 'Overstock', color: 'var(--color-accent-blue)', bg: 'color-mix(in srgb, var(--color-accent-blue) 12%, transparent)' };
+    return { label: 'In Stock', color: 'var(--color-accent-income)', bg: 'color-mix(in srgb, var(--color-accent-income) 12%, transparent)' };
   };
 
   // ─── Category Breakdown ───────────────────────────────
@@ -614,10 +614,10 @@ const Inventory: React.FC = () => {
                 const inStock = items.length - lowStockCount - outOfStockCount - overstockCount;
                 const total = items.length || 1;
                 const segments = [
-                  { label: 'In Stock', count: Math.max(0, inStock), color: '#22c55e' },
-                  { label: 'Low', count: lowStockCount - outOfStockCount > 0 ? lowStockCount - outOfStockCount : Math.max(0, lowStockCount), color: '#eab308' },
-                  { label: 'Out', count: outOfStockCount, color: '#ef4444' },
-                  { label: 'Overstock', count: overstockCount, color: '#3b82f6' },
+                  { label: 'In Stock', count: Math.max(0, inStock), color: 'var(--color-accent-income)' },
+                  { label: 'Low', count: lowStockCount - outOfStockCount > 0 ? lowStockCount - outOfStockCount : Math.max(0, lowStockCount), color: 'var(--color-accent-warning)' },
+                  { label: 'Out', count: outOfStockCount, color: 'var(--color-accent-expense)' },
+                  { label: 'Overstock', count: overstockCount, color: 'var(--color-accent-blue)' },
                 ];
                 return (
                   <div className="space-y-2">
@@ -970,7 +970,7 @@ const Inventory: React.FC = () => {
 
       {/* Bulk Action Bar */}
       {activeTab !== 'dashboard' && selectedItemIds.size > 0 && (
-        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'rgba(59,130,246,0.3)' }}>
+        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'color-mix(in srgb, var(--color-accent-blue) 30%, transparent)' }}>
           <span className="text-xs font-semibold text-text-primary">
             {selectedItemIds.size} item{selectedItemIds.size !== 1 ? 's' : ''} selected
           </span>
@@ -989,7 +989,7 @@ const Inventory: React.FC = () => {
       {activeTab === 'all' && lowStockCount > 0 && (
         <div
           className="flex items-center gap-2 px-4 py-2 border text-xs"
-          style={{ borderColor: 'var(--color-accent-expense)', background: 'rgba(239,68,68,0.08)', borderRadius: '6px', color: 'var(--color-accent-expense)' }}
+          style={{ borderColor: 'var(--color-accent-expense)', background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)', borderRadius: '6px', color: 'var(--color-accent-expense)' }}
         >
           <AlertTriangle size={13} />
           <strong>{lowStockCount} item{lowStockCount !== 1 ? 's' : ''} at or below reorder point.</strong>
@@ -1049,7 +1049,7 @@ const Inventory: React.FC = () => {
                   ? Math.max(item.reorder_qty || 0, item.reorder_point - item.quantity + (item.reorder_qty || 0))
                   : 0;
                 return (
-                  <tr key={item.id} style={isLow ? { background: 'rgba(239,68,68,0.04)' } : {}}>
+                  <tr key={item.id} style={isLow ? { background: 'color-mix(in srgb, var(--color-accent-expense) 4%, transparent)' } : {}}>
                     <td className="text-center">
                       <input
                         type="checkbox"

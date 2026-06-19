@@ -241,7 +241,7 @@ export function MissingReceiptsBanner({ days = 7 }: { days?: number }) {
   if (dismissed || missing.length === 0) return null;
   return (
     <div className="eu-banner-warn">
-      <AlertTriangle size={14} style={{ color: '#f59e0b' }} />
+      <AlertTriangle size={14} style={{ color: 'var(--color-accent-warning)' }} />
       <span>
         <strong>{missing.length}</strong> expense{missing.length === 1 ? '' : 's'} {missing.length === 1 ? 'is' : 'are'} missing receipts (older than {days} days).
       </span>

@@ -501,7 +501,7 @@ const ExpenseAnalytics: React.FC = () => {
                 <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 11 }} />
                 <YAxis type="category" dataKey="name" width={120} tick={{ fill: '#9ca3af', fontSize: 11 }} />
                 <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
-                <Bar dataKey="total" fill="#3b82f6" />
+                <Bar dataKey="total" fill="var(--color-accent-blue)" />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -518,7 +518,7 @@ const ExpenseAnalytics: React.FC = () => {
               <XAxis dataKey="label" tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
-              <Line type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="total" stroke="var(--color-accent-blue)" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -531,7 +531,7 @@ const ExpenseAnalytics: React.FC = () => {
               <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
               <Legend />
-              <Line type="monotone" dataKey="thisYear" stroke="#3b82f6" strokeWidth={2} dot={false} name="This Year" />
+              <Line type="monotone" dataKey="thisYear" stroke="var(--color-accent-blue)" strokeWidth={2} dot={false} name="This Year" />
               <Line type="monotone" dataKey="lastYear" stroke="#8b5cf6" strokeWidth={2} dot={false} name="Last Year" strokeDasharray="4 4" />
             </LineChart>
           </ResponsiveContainer>
@@ -554,7 +554,7 @@ const ExpenseAnalytics: React.FC = () => {
               <Bar dataKey="budget" fill="#6b7280" name="Budget" />
               <Bar dataKey="actual" name="Actual">
                 {budgetVsActual.map((d, i) => (
-                  <Cell key={i} fill={d.over ? '#ef4444' : '#22c55e'} />
+                  <Cell key={i} fill={d.over ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
                 ))}
               </Bar>
             </BarChart>
@@ -572,8 +572,8 @@ const ExpenseAnalytics: React.FC = () => {
             <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
             <Tooltip formatter={(v: any) => v == null ? '—' : formatCurrency(Number(v))} />
             <Legend />
-            <Line type="monotone" dataKey="actual" stroke="#3b82f6" strokeWidth={2} dot={false} name="Actual" />
-            <Line type="monotone" dataKey="forecast" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Forecast" />
+            <Line type="monotone" dataKey="actual" stroke="var(--color-accent-blue)" strokeWidth={2} dot={false} name="Actual" />
+            <Line type="monotone" dataKey="forecast" stroke="var(--color-accent-warning)" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Forecast" />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -647,8 +647,8 @@ const ExpenseAnalytics: React.FC = () => {
                     <td className="text-right font-mono">{formatCurrency(c.amount)}</td>
                     <td className="text-center">
                       {c.deductible
-                        ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#16a34a22', color: '#16a34a' }}>YES</span>
-                        : <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#6b728022', color: '#94a3b8' }}>NO</span>}
+                        ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>YES</span>
+                        : <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', color: 'var(--color-text-muted)' }}>NO</span>}
                     </td>
                     <td className="text-text-secondary text-xs">{c.scheduleCLine || '—'}</td>
                   </tr>
@@ -684,7 +684,7 @@ const ExpenseAnalytics: React.FC = () => {
                   <td className="text-text-secondary text-xs truncate max-w-[200px]">{a.description || '—'}</td>
                   <td className="text-right font-mono text-accent-expense">{formatCurrency(a.amount)}</td>
                   <td className="text-right font-mono text-text-muted">{formatCurrency(a.mean)}</td>
-                  <td className="text-right font-mono" style={{ color: '#ef4444', fontWeight: 700 }}>{a.z.toFixed(2)}</td>
+                  <td className="text-right font-mono" style={{ color: 'var(--color-accent-expense)', fontWeight: 700 }}>{a.z.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -704,8 +704,8 @@ const ExpenseAnalytics: React.FC = () => {
               fontWeight: 700,
               padding: '4px 10px',
               borderRadius: 6,
-              background: burnRate.trend === 'increasing' ? '#ef444422' : burnRate.trend === 'decreasing' ? '#22c55e22' : '#6b728022',
-              color: burnRate.trend === 'increasing' ? '#ef4444' : burnRate.trend === 'decreasing' ? '#22c55e' : '#94a3b8',
+              background: burnRate.trend === 'increasing' ? 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)' : burnRate.trend === 'decreasing' ? 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)' : 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)',
+              color: burnRate.trend === 'increasing' ? 'var(--color-accent-expense)' : burnRate.trend === 'decreasing' ? 'var(--color-accent-income)' : 'var(--color-text-muted)',
               textTransform: 'uppercase',
             }}>
               {burnRate.trend === 'increasing' ? '↑ Increasing' : burnRate.trend === 'decreasing' ? '↓ Decreasing' : '→ Stable'}
@@ -783,7 +783,7 @@ const ExpenseAnalytics: React.FC = () => {
                   <td className="text-text-primary font-medium">{p.name}</td>
                   <td className="text-right font-mono text-accent-expense">{formatCurrency(p.expenses)}</td>
                   <td className="text-right font-mono text-accent-income">{formatCurrency(p.billed)}</td>
-                  <td className="text-right font-mono" style={{ color: p.variance >= 0 ? '#22c55e' : '#ef4444' }}>
+                  <td className="text-right font-mono" style={{ color: p.variance >= 0 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)' }}>
                     {formatCurrency(p.variance)}
                   </td>
                 </tr>
@@ -833,7 +833,7 @@ const ExpenseAnalytics: React.FC = () => {
               Spend {formatCurrency(collectionCosts.portfolio.total_spend || 0)}
               {' · '}Collected {formatCurrency(collectionCosts.portfolio.total_collected || 0)}
               {collectionCosts.portfolio.roi != null && (
-                <span style={{ color: collectionCosts.portfolio.roi >= 1 ? '#22c55e' : '#ef4444', fontWeight: 700 }}>
+                <span style={{ color: collectionCosts.portfolio.roi >= 1 ? 'var(--color-accent-income)' : 'var(--color-accent-expense)', fontWeight: 700 }}>
                   {' · '}ROI {collectionCosts.portfolio.roi.toFixed(2)}×
                 </span>
               )}

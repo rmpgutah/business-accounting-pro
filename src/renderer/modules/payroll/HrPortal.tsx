@@ -24,7 +24,7 @@ interface DirectoryRow {
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
-  low: '#94a3b8', normal: '#60a5fa', high: '#f59e0b', urgent: '#ef4444',
+  low: 'var(--color-text-muted)', normal: 'var(--color-accent-blue)', high: 'var(--color-accent-warning)', urgent: 'var(--color-accent-expense)',
 };
 
 const HrPortal: React.FC = () => {
@@ -176,7 +176,7 @@ const HrPortal: React.FC = () => {
               className="w-full text-left px-3 py-2"
               style={{
                 borderBottom: '1px solid var(--color-border-primary)',
-                background: selectedId === d.id ? 'rgba(96,165,250,0.08)' : 'transparent',
+                background: selectedId === d.id ? 'color-mix(in srgb, var(--color-accent-blue) 8%, transparent)' : 'transparent',
                 opacity: d.status === 'active' ? 1 : 0.55,
               }}
             >
@@ -191,7 +191,7 @@ const HrPortal: React.FC = () => {
           )}
         </div>
         {debtSummary && debtSummary.count > 0 && (
-          <div className="px-3 py-2 text-[10px]" style={{ borderTop: '1px solid var(--color-border-primary)', background: 'rgba(239,68,68,0.06)' }}>
+          <div className="px-3 py-2 text-[10px]" style={{ borderTop: '1px solid var(--color-border-primary)', background: 'color-mix(in srgb, var(--color-accent-expense) 6%, transparent)' }}>
             <span className="font-bold text-accent-expense">{formatCurrency(debtSummary.total_balance)}</span>
             <span className="text-text-muted"> owed by employees ({debtSummary.count} case{debtSummary.count !== 1 ? 's' : ''})</span>
           </div>
@@ -237,7 +237,7 @@ const HrPortal: React.FC = () => {
               <Mini
                 label="Owed to Company"
                 value={formatCurrency((snapshot.debts || []).reduce((s: number, d: any) => s + (d.balance_due || 0), 0) + (snapshot.advances || []).filter((a: any) => !a.related_debt_id).reduce((s: number, a: any) => s + (a.balance || 0), 0))}
-                color={(snapshot.debts || []).length + (snapshot.advances || []).length > 0 ? '#f59e0b' : undefined}
+                color={(snapshot.debts || []).length + (snapshot.advances || []).length > 0 ? 'var(--color-accent-warning)' : undefined}
               />
             </div>
           </div>
@@ -257,7 +257,7 @@ const HrPortal: React.FC = () => {
                   <div>
                     <span className="font-mono font-bold">{formatCurrency(a.balance)}</span>
                     <span className="text-text-muted"> balance on {formatCurrency(a.advance_amount)} advance ({formatDate(a.advance_date)})</span>
-                    {a.related_debt_id && <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5" style={{ borderRadius: 4, background: '#dc262622', color: '#f87171' }}>IN COLLECTIONS</span>}
+                    {a.related_debt_id && <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5" style={{ borderRadius: 4, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>IN COLLECTIONS</span>}
                   </div>
                   {!a.related_debt_id && (a.balance || 0) > 0 && (
                     <button className="block-btn text-[10px] flex items-center gap-1" onClick={() => escalateAdvance(a.id)} title="Create a debt-collection case for this advance">
@@ -305,8 +305,8 @@ const HrPortal: React.FC = () => {
                         <span className="text-text-muted">/paycheck · {formatCurrency(w.total_withheld)} withheld over {w.deduction_count || 0} deduction{(w.deduction_count || 0) !== 1 ? 's' : ''}</span>
                         <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5 uppercase" style={{
                           borderRadius: 4,
-                          background: w.status === 'active' ? '#16a34a22' : w.status === 'completed' ? '#2563eb22' : '#94a3b822',
-                          color: w.status === 'active' ? '#16a34a' : w.status === 'completed' ? '#60a5fa' : '#94a3b8',
+                          background: w.status === 'active' ? 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)' : w.status === 'completed' ? 'var(--color-accent-blue-bg)' : 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)',
+                          color: w.status === 'active' ? 'var(--color-accent-income)' : w.status === 'completed' ? 'var(--color-accent-blue)' : 'var(--color-text-muted)',
                         }}>{w.status}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -403,7 +403,7 @@ const HrPortal: React.FC = () => {
           </div>
 
           {showCompose && (
-            <div className="p-3 space-y-2" style={{ borderBottom: '1px solid var(--color-border-primary)', background: 'rgba(96,165,250,0.03)' }}>
+            <div className="p-3 space-y-2" style={{ borderBottom: '1px solid var(--color-border-primary)', background: 'color-mix(in srgb, var(--color-accent-blue) 3%, transparent)' }}>
               <input className="block-input text-sm w-full" placeholder="Announcement title" value={compose.title} onChange={(e) => setCompose((p) => ({ ...p, title: e.target.value }))} />
               <textarea className="block-input text-xs w-full" rows={3} placeholder="Details…" value={compose.body} onChange={(e) => setCompose((p) => ({ ...p, body: e.target.value }))} />
               <div className="flex items-center gap-3 flex-wrap text-xs">
@@ -436,7 +436,7 @@ const HrPortal: React.FC = () => {
                     <div className="flex items-center gap-2 min-w-0">
                       {!!a.pinned && <Pin size={11} className="text-accent-blue shrink-0" />}
                       <span className="text-xs font-bold text-text-primary truncate">{a.title}</span>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 uppercase" style={{ borderRadius: 4, background: (PRIORITY_COLORS[a.priority] || '#60a5fa') + '22', color: PRIORITY_COLORS[a.priority] || '#60a5fa' }}>{a.priority}</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 uppercase" style={{ borderRadius: 4, background: `color-mix(in srgb, ${PRIORITY_COLORS[a.priority] || 'var(--color-accent-blue)'} 13%, transparent)`, color: PRIORITY_COLORS[a.priority] || 'var(--color-accent-blue)' }}>{a.priority}</span>
                       <span className="text-[9px] text-text-muted uppercase">{a.category}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

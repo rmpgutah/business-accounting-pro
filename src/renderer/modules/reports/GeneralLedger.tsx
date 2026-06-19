@@ -1108,7 +1108,7 @@ const GeneralLedger: React.FC = () => {
                 </button>
 
                 {isExpanded && (
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ borderTop: '1px solid var(--hairline)' }}>
                     {/* Beginning balance row */}
                     <div className="report-subtotal-row px-4 py-1.5 text-[10px] text-text-muted font-semibold flex justify-between" style={{ background: 'rgba(0,0,0,0.15)' }}>
                       <span>Balance brought forward</span>
@@ -1236,7 +1236,7 @@ const GeneralLedger: React.FC = () => {
                         })}
                       </tbody>
                       <tfoot>
-                        <tr className="report-grand-total-row" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}>
+                        <tr className="report-grand-total-row" style={{ borderTop: '1px solid var(--hairline)', background: 'var(--color-bg-elevated)' }}>
                           <td colSpan={6} className="py-2 px-4 text-right text-xs font-bold text-text-muted uppercase tracking-wider">Period Total</td>
                           <td className="text-right font-mono font-bold text-xs text-text-primary">
                             {formatCurrency(acct.transactions.reduce((s, t) => s + t.debit, 0))}
@@ -1344,7 +1344,7 @@ const GeneralLedger: React.FC = () => {
                 ))}
               </tbody>
             </table>
-            <button className="block-btn px-3 py-1 text-xs" onClick={() => setHighlightRules([...highlightRules, { id: `r-${Date.now()}`, field: 'amount', op: 'gt', value: '5000', color: '#ef4444' }])}>+ Add rule</button>
+            <button className="block-btn px-3 py-1 text-xs" onClick={() => setHighlightRules([...highlightRules, { id: `r-${Date.now()}`, field: 'amount', op: 'gt', value: '5000', color: 'var(--color-accent-expense)' }])}>+ Add rule</button>
             <div className="flex justify-end mt-3"><button className="block-btn px-3 py-1 text-xs" onClick={() => setRulesOpen(false)}>Close</button></div>
           </div>
         </div>

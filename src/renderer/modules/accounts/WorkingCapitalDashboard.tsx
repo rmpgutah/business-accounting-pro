@@ -147,7 +147,7 @@ const WorkingCapitalDashboard: React.FC<{ accounts: Account[]; lines: LineRow[] 
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
             <XAxis dataKey="label" stroke={CHART_AXIS} fontSize={11} />
             <YAxis stroke={CHART_AXIS} fontSize={11} />
-            <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ background: '#1f2937', border: '1px solid #374151' }} />
+            <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-secondary)' }} />
             <Line type="monotone" dataKey="wc" stroke={CHART_SERIES[2]} strokeWidth={2} dot={false} name="Working Capital" />
           </LineChart>
         </ResponsiveContainer>

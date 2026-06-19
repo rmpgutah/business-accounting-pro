@@ -202,7 +202,7 @@ const SmartMatchView: React.FC = () => {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: '#16a34a' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-income)' }}>
                     {fmt$(txn.amount)}
                   </div>
                 </div>
@@ -219,8 +219,8 @@ const SmartMatchView: React.FC = () => {
                     alignItems: 'center',
                     gap: 10,
                     padding: '8px 10px',
-                    background: i === 0 ? 'rgba(22, 163, 74, 0.06)' : 'transparent',
-                    border: '1px solid ' + (i === 0 ? 'rgba(22, 163, 74, 0.3)' : 'var(--color-border-primary)'),
+                    background: i === 0 ? 'color-mix(in srgb, var(--color-accent-income) 6%, transparent)' : 'transparent',
+                    border: '1px solid ' + (i === 0 ? 'color-mix(in srgb, var(--color-accent-income) 30%, transparent)' : 'var(--color-border-primary)'),
                     borderRadius: 6,
                   }}>
                     {/* Score badge */}
@@ -228,8 +228,8 @@ const SmartMatchView: React.FC = () => {
                       width: 40,
                       height: 40,
                       borderRadius: 4,
-                      background: c.score >= 90 ? '#16a34a' : c.score >= 75 ? '#65a30d' : '#d97706',
-                      color: '#fff',
+                      background: c.score >= 90 ? 'var(--color-accent-income)' : c.score >= 75 ? 'var(--color-accent-income)' : 'var(--color-accent-warning)',
+                      color: 'white',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',

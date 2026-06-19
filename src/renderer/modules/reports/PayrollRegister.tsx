@@ -347,12 +347,12 @@ const PayrollRegister: React.FC = () => {
               <div style={{ height: 200 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={monthlyTrend} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} />
+                    <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip
-                      contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', fontSize: 11 }}
-                      labelStyle={{ color: '#94a3b8' }}
+                      contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', fontSize: 11 }}
+                      labelStyle={{ color: 'var(--color-text-muted)' }}
                       formatter={(value: any) => [formatCurrency(Number(value) || 0), 'Gross Payroll']}
                     />
                     <Bar dataKey="gross" fill={CHART_SERIES[0]} radius={[4, 4, 0, 0]} />

@@ -805,7 +805,7 @@ const TrialBalance: React.FC = () => {
                   </tr>
                 );
               })}
-              <tr style={{ borderTop: '2px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)' }}>
+              <tr style={{ borderTop: '2px solid var(--structure)', background: 'var(--color-bg-elevated)' }}>
                 <td colSpan={3} className="py-2 px-4 text-right text-xs font-bold uppercase tracking-wider">Total</td>
                 <td className="text-right font-mono font-bold">{formatCurrency(visible.filter((l) => l.normal_side === 'debit').reduce((s, l) => s + Math.max(0, l.balance), 0))}</td>
                 <td className="text-right font-mono font-bold">{formatCurrency(visible.filter((l) => l.normal_side === 'credit').reduce((s, l) => s + Math.max(0, l.balance), 0))}</td>
@@ -924,7 +924,7 @@ const TrialBalance: React.FC = () => {
                           </tr>
                         );
                       })}
-                      <tr className="report-subtotal-row" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.1)' }}>
+                      <tr className="report-subtotal-row" style={{ borderTop: '1px solid var(--hairline)', background: 'var(--color-border-primary)' }}>
                         <td colSpan={2} className="py-1.5 px-4 text-right">
                           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Subtotal</span>
                         </td>
@@ -943,7 +943,7 @@ const TrialBalance: React.FC = () => {
                       </tr>
                     </React.Fragment>
                   ))}
-                  <tr className="report-grand-total-row" style={{ borderTop: '2px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)' }}>
+                  <tr className="report-grand-total-row" style={{ borderTop: '2px solid var(--structure)', background: 'var(--color-bg-elevated)' }}>
                     <td colSpan={2} className="py-3 px-4 text-right">
                       <span className="text-xs font-bold text-text-primary uppercase tracking-wider">Grand Total</span>
                     </td>

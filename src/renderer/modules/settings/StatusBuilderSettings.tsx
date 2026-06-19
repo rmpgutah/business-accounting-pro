@@ -244,7 +244,7 @@ const WorkflowDiagram: React.FC<{ statuses: CustomStatus[]; transitions: StatusT
       <svg width={width} height={height} style={{ minWidth: width }}>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-            <path d="M0,0 L0,8 L8,4 z" fill="#94a3b8" />
+            <path d="M0,0 L0,8 L8,4 z" fill="var(--color-text-muted)" />
           </marker>
         </defs>
         {lines.map((l, i) => {
@@ -254,7 +254,7 @@ const WorkflowDiagram: React.FC<{ statuses: CustomStatus[]; transitions: StatusT
           const y1 = a.y + nodeHeight;
           const x2 = b.x + nodeWidth / 2;
           const y2 = b.y;
-          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#arrow)" />;
+          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--color-text-muted)" strokeWidth="1.5" markerEnd="url(#arrow)" />;
         })}
         {statuses.map(s => {
           const p = positions[s.key];

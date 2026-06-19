@@ -130,11 +130,11 @@ const KpiCard: React.FC<{
   accent?: 'blue' | 'green' | 'red' | 'orange' | 'purple';
 }> = ({ label, value, hint, icon, accent = 'blue' }) => {
   const colors: Record<string, string> = {
-    blue: '#3b82f6',
-    green: '#22c55e',
-    red: '#ef4444',
-    orange: '#f59e0b',
-    purple: '#8b5cf6',
+    blue: 'var(--color-accent-blue)',
+    green: 'var(--color-accent-income)',
+    red: 'var(--color-accent-expense)',
+    orange: 'var(--color-accent-warning)',
+    purple: 'var(--color-accent-purple)',
   };
   return (
     <div className="block-card p-4">
@@ -389,12 +389,12 @@ const InvoicingModule: React.FC = () => {
 
   // ─── Status distribution stacked bar ────────────────
   const statusOrder: Array<{ key: string; label: string; color: string }> = [
-    { key: 'draft', label: 'Draft', color: '#6b7280' },
-    { key: 'sent', label: 'Sent', color: '#3b82f6' },
-    { key: 'partial', label: 'Partial', color: '#f59e0b' },
-    { key: 'paid', label: 'Paid', color: '#22c55e' },
-    { key: 'overdue', label: 'Overdue', color: '#ef4444' },
-    { key: 'void', label: 'Void', color: '#374151' },
+    { key: 'draft', label: 'Draft', color: 'var(--color-text-muted)' },
+    { key: 'sent', label: 'Sent', color: 'var(--color-accent-blue)' },
+    { key: 'partial', label: 'Partial', color: 'var(--color-accent-warning)' },
+    { key: 'paid', label: 'Paid', color: 'var(--color-accent-income)' },
+    { key: 'overdue', label: 'Overdue', color: 'var(--color-accent-expense)' },
+    { key: 'void', label: 'Void', color: 'var(--color-bg-tertiary)' },
   ];
   const totalStatus = statusOrder.reduce((s, x) => s + (statusCounts[x.key] || 0), 0);
 
@@ -564,20 +564,20 @@ const InvoicingModule: React.FC = () => {
           <div
             className="flex items-center justify-between px-4 py-3"
             style={{
-              background: 'rgba(239,68,68,0.08)',
-              border: '1px solid #ef4444',
+              background: 'var(--color-accent-expense-bg)',
+              border: '1px solid var(--color-accent-expense)',
               borderRadius: 6,
             }}
           >
             <div className="flex items-center gap-2">
-              <AlertTriangle size={16} style={{ color: '#ef4444' }} />
-              <span className="text-sm font-semibold" style={{ color: '#ef4444' }}>
+              <AlertTriangle size={16} style={{ color: 'var(--color-accent-expense)' }} />
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-accent-expense)' }}>
                 {duplicates.length} potential duplicate invoice{duplicates.length === 1 ? '' : 's'} detected
               </span>
             </div>
             <button
               className="block-btn text-xs"
-              style={{ color: '#ef4444', borderColor: '#ef4444' }}
+              style={{ color: 'var(--color-accent-expense)', borderColor: 'var(--color-accent-expense)' }}
               onClick={() => { setTab('invoices'); setView({ type: 'list' }); }}
             >
               Review
@@ -714,11 +714,11 @@ const InvoicingModule: React.FC = () => {
                     '90+': '90+ days',
                   };
                   const colorMap: Record<string, string> = {
-                    current: '#22c55e',
-                    '1-30': '#facc15',
-                    '31-60': '#f59e0b',
-                    '61-90': '#f97316',
-                    '90+': '#ef4444',
+                    current: 'var(--color-accent-income)',
+                    '1-30': 'var(--color-accent-warning)',
+                    '31-60': 'var(--color-accent-warning)',
+                    '61-90': 'var(--color-accent-expense)',
+                    '90+': 'var(--color-accent-expense)',
                   };
                   return (
                     <tr key={b}>
@@ -1020,137 +1020,71 @@ const InvoicingModule: React.FC = () => {
     );
   };
 
-  // If user is in a sub-view of the invoices tab, render that full-screen
+  // If user is in a sub-view of the invoices tab, render that full-screen (no tab bar)
   if (tab === 'invoices' && view.type !== 'list') {
     return renderInvoicesTab();
   }
 
-  // For the invoices tab list, render with a thin tab strip above the list
-  // (which has its own padding/scroll).
-  if (tab === 'invoices') {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center gap-1 border-b border-border-primary px-6 pt-4">
-          <TabBtn
-            active={false}
-            icon={<LayoutDashboard size={14} />}
-            label="Dashboard"
-            onClick={() => setTab('dashboard')}
-          />
-          <TabBtn
-            active={true}
-            icon={<FileText size={14} />}
-            label="Invoices"
-            onClick={() => { setTab('invoices'); setView({ type: 'list' }); }}
-          />
-          <TabBtn
-            active={false}
-            icon={<Repeat size={14} />}
-            label="Recurring"
-            onClick={() => setTab('recurring')}
-          />
-          <TabBtn
-            active={false}
-            icon={<BarChart3 size={14} />}
-            label="Analytics"
-            onClick={() => setTab('analytics')}
-          />
-          <TabBtn
-            active={false}
-            icon={<Sparkles size={14} />}
-            label="Upgrades"
-            onClick={() => setTab('upgrades')}
-          />
-        </div>
-        <div className="flex-1 min-h-0 overflow-hidden">
-          {renderInvoicesTab()}
-        </div>
-      </div>
-    );
-  }
+  // All other states: single shared tab bar above a content switcher.
+  // The invoices list and upgrades panel manage their own scroll internally;
+  // dashboard/recurring/analytics content scrolls via the outer container.
+  const tabsScrolling = tab === 'invoices' || tab === 'upgrades';
 
-  // Upgrades tab: render with a thin tab strip above the self-scrolling panel.
-  if (tab === 'upgrades') {
+  const tabBar = (
+    <div className="flex items-center gap-1 border-b border-border-primary px-6 pt-4 flex-shrink-0">
+      <TabBtn
+        active={tab === 'dashboard'}
+        icon={<LayoutDashboard size={14} />}
+        label="Dashboard"
+        onClick={() => setTab('dashboard')}
+      />
+      <TabBtn
+        active={tab === 'invoices'}
+        icon={<FileText size={14} />}
+        label="Invoices"
+        onClick={() => { setTab('invoices'); setView({ type: 'list' }); }}
+      />
+      <TabBtn
+        active={tab === 'recurring'}
+        icon={<Repeat size={14} />}
+        label="Recurring"
+        onClick={() => setTab('recurring')}
+      />
+      <TabBtn
+        active={tab === 'analytics'}
+        icon={<BarChart3 size={14} />}
+        label="Analytics"
+        onClick={() => setTab('analytics')}
+      />
+      <TabBtn
+        active={tab === 'upgrades'}
+        icon={<Sparkles size={14} />}
+        label="Upgrades"
+        onClick={() => setTab('upgrades')}
+      />
+    </div>
+  );
+
+  if (tabsScrolling) {
     return (
       <div className="flex flex-col h-full">
-        <div className="flex items-center gap-1 border-b border-border-primary px-6 pt-4">
-          <TabBtn
-            active={false}
-            icon={<LayoutDashboard size={14} />}
-            label="Dashboard"
-            onClick={() => setTab('dashboard')}
-          />
-          <TabBtn
-            active={false}
-            icon={<FileText size={14} />}
-            label="Invoices"
-            onClick={() => { setTab('invoices'); setView({ type: 'list' }); }}
-          />
-          <TabBtn
-            active={false}
-            icon={<Repeat size={14} />}
-            label="Recurring"
-            onClick={() => setTab('recurring')}
-          />
-          <TabBtn
-            active={false}
-            icon={<BarChart3 size={14} />}
-            label="Analytics"
-            onClick={() => setTab('analytics')}
-          />
-          <TabBtn
-            active={true}
-            icon={<Sparkles size={14} />}
-            label="Upgrades"
-            onClick={() => setTab('upgrades')}
-          />
-        </div>
+        {tabBar}
         <div className="flex-1 min-h-0 overflow-hidden">
-          <InvoicesUpgradesPanel />
+          {tab === 'invoices' && renderInvoicesTab()}
+          {tab === 'upgrades' && <InvoicesUpgradesPanel />}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-5 overflow-y-auto h-full">
-      {/* Tab nav */}
-      <div className="flex items-center gap-1 border-b border-border-primary">
-        <TabBtn
-          active={tab === 'dashboard'}
-          icon={<LayoutDashboard size={14} />}
-          label="Dashboard"
-          onClick={() => setTab('dashboard')}
-        />
-        <TabBtn
-          active={false}
-          icon={<FileText size={14} />}
-          label="Invoices"
-          onClick={() => { setTab('invoices'); setView({ type: 'list' }); }}
-        />
-        <TabBtn
-          active={tab === 'recurring'}
-          icon={<Repeat size={14} />}
-          label="Recurring"
-          onClick={() => setTab('recurring')}
-        />
-        <TabBtn
-          active={tab === 'analytics'}
-          icon={<BarChart3 size={14} />}
-          label="Analytics"
-          onClick={() => setTab('analytics')}
-        />
-        <TabBtn
-          active={false}
-          icon={<Sparkles size={14} />}
-          label="Upgrades"
-          onClick={() => setTab('upgrades')}
-        />
+    <div className="flex flex-col h-full">
+      {tabBar}
+      <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
+        {tab === 'dashboard' && renderDashboard()}
+        {tab === 'recurring' && renderRecurring()}
+        {tab === 'analytics' && renderAnalytics()}
       </div>
-
-      {tab === 'dashboard' && renderDashboard()}
-      {tab === 'recurring' && renderRecurring()}
-      {tab === 'analytics' && renderAnalytics()}
     </div>
   );
 };

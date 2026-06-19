@@ -688,7 +688,7 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
 
                 {/* Penalty assessment (only when the outcome triggers penalties) */}
                 {!clean && (
-                  <div className="mt-3 p-3" style={{ borderRadius: 6, background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.25)' }}>
+                  <div className="mt-3 p-3" style={{ borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-expense) 25%, transparent)' }}>
                     {assessment.lines.length === 0 ? (
                       <p className="text-[11px] text-text-muted">No penalties match this outcome. Define a penalty above with “Applies To” set to <b>{DISPOSITIONS.find(d=>d.value===form.disposition)?.label}</b> or <b>Any issue</b>, or enter an amount manually below.</p>
                     ) : (
@@ -712,7 +712,7 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                       <div className="flex items-center gap-3">
                         <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">Assessed Penalty</label>
                         <label className="flex items-center gap-1 text-[11px] text-text-muted">
-                          <input type="checkbox" checked={form.penalty_waived} onChange={(e) => setForm(f => ({ ...f, penalty_waived: e.target.checked }))} style={{ accentColor: '#16a34a' }} /> Waive
+                          <input type="checkbox" checked={form.penalty_waived} onChange={(e) => setForm(f => ({ ...f, penalty_waived: e.target.checked }))} style={{ accentColor: 'var(--color-accent-income)' }} /> Waive
                         </label>
                       </div>
                       <div className="flex items-center gap-1">
@@ -840,7 +840,7 @@ const PerformanceReviewsPanel: React.FC<{ employeeId: string }> = ({ employeeId 
             <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Reviewer</label><input className="block-input" placeholder="Manager / supervisor name" value={form.reviewer_name} onChange={e => setForm(f => ({...f, reviewer_name: e.target.value}))} /></div>
           </div>
           <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Overall Rating (1-5)</label>
-            <div className="flex gap-1">{[1,2,3,4,5].map(n => (<button key={n} type="button" onClick={() => setForm(f => ({...f, overall_rating: n}))} className={`w-9 h-9 text-sm font-bold transition-colors ${form.overall_rating >= n ? 'text-white' : 'text-text-muted'}`} style={{ borderRadius: 6, background: form.overall_rating >= n ? (n <= 2 ? '#dc2626' : n === 3 ? '#3b82f6' : '#16a34a') : 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border-primary)' }}>{n}</button>))}
+            <div className="flex gap-1">{[1,2,3,4,5].map(n => (<button key={n} type="button" onClick={() => setForm(f => ({...f, overall_rating: n}))} className={`w-9 h-9 text-sm font-bold transition-colors ${form.overall_rating >= n ? 'text-white' : 'text-text-muted'}`} style={{ borderRadius: 6, background: form.overall_rating >= n ? (n <= 2 ? 'var(--color-accent-expense)' : n === 3 ? 'var(--color-accent-blue)' : 'var(--color-accent-income)') : 'var(--color-border-primary)', border: '1px solid var(--color-border-primary)' }}>{n}</button>))}
               <span className="text-xs text-text-muted ml-2 self-center">{RATING_LABELS[form.overall_rating]}</span>
             </div>
           </div>
@@ -1088,7 +1088,7 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
           {(['onboarding', 'offboarding'] as const).map(p => (
             <button key={p} onClick={() => setPhase(p)}
               className={`px-3 py-1 text-xs font-semibold capitalize ${phase === p ? 'text-white' : 'text-text-secondary'}`}
-              style={{ borderRadius: 6, background: phase === p ? 'rgba(59,130,246,0.8)' : 'rgba(255,255,255,0.04)' }}>
+              style={{ borderRadius: 6, background: phase === p ? 'color-mix(in srgb, var(--color-accent-blue) 80%, transparent)' : 'var(--color-border-primary)' }}>
               {p}
             </button>
           ))}
@@ -1102,7 +1102,7 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
             <span className="text-text-muted font-semibold uppercase tracking-wider">{data.done} of {data.total} complete</span>
             <span className={`font-bold font-mono ${pct === 100 ? 'text-accent-income' : 'text-accent-blue'}`}>{pct}%</span>
           </div>
-          <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+          <div style={{ height: 6, borderRadius: 3, background: 'var(--color-border-primary)', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${pct}%`, borderRadius: 3, background: pct === 100 ? 'var(--color-accent-income)' : 'var(--color-accent-blue)', transition: 'width 0.3s ease' }} />
           </div>
         </div>
@@ -1121,7 +1121,7 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                     className="flex items-center gap-3 px-3 py-2 transition-colors"
                     style={{
                       borderBottom: i < steps.length - 1 ? '1px solid var(--color-border-primary)' : undefined,
-                      background: step.done ? 'rgba(22,163,74,0.04)' : undefined,
+                      background: step.done ? 'color-mix(in srgb, var(--color-accent-income) 4%, transparent)' : undefined,
                     }}>
                     {step.auto ? (
                       <span className={`w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0 ${step.done ? 'text-accent-income' : 'text-text-muted'}`} style={{ borderRadius: 6, border: `1.5px solid ${step.done ? 'var(--color-accent-income)' : 'var(--color-border-primary)'}` }}>
@@ -1129,12 +1129,12 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                       </span>
                     ) : (
                       <input type="checkbox" checked={step.done} onChange={(e) => toggle(step.key, e.target.checked)}
-                        style={{ width: 18, height: 18, accentColor: '#16a34a', cursor: 'pointer' }} />
+                        style={{ width: 18, height: 18, accentColor: 'var(--color-accent-income)', cursor: 'pointer' }} />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className={`text-xs ${step.done ? 'text-text-muted line-through' : 'text-text-primary font-medium'}`}>{step.label}</span>
-                        {step.auto && <span className="text-[9px] text-accent-blue px-1 py-0.5" style={{ borderRadius: 4, background: 'rgba(59,130,246,0.1)' }}>AUTO</span>}
+                        {step.auto && <span className="text-[9px] text-accent-blue px-1 py-0.5" style={{ borderRadius: 4, background: 'color-mix(in srgb, var(--color-accent-blue) 10%, transparent)' }}>AUTO</span>}
                       </div>
                       <p className="text-[11px] text-text-muted truncate">{step.description}</p>
                     </div>
@@ -1523,13 +1523,13 @@ const ESignModal: React.FC<{
   };
 
   const sigPreview = (name: string) => name.trim() ? (
-    <div className="mt-2 px-3 py-2" style={{ borderRadius: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border-primary)' }}>
+    <div className="mt-2 px-3 py-2" style={{ borderRadius: 6, background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-primary)' }}>
       <span style={{ fontFamily: CURSIVE, fontSize: 24, color: 'var(--color-text-primary)' }}>{name}</span>
     </div>
   ) : null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'var(--color-overlay, rgba(0,0,0,0.6))' }} onClick={onClose}>
       <div className="block-card w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto" style={{ borderRadius: '10px' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -1552,7 +1552,7 @@ const ESignModal: React.FC<{
 
         {/* Employer / admin signature */}
         <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
-          <input type="checkbox" checked={addEmployer} onChange={(e) => setAddEmployer(e.target.checked)} style={{ accentColor: '#16a34a' }} />
+          <input type="checkbox" checked={addEmployer} onChange={(e) => setAddEmployer(e.target.checked)} style={{ accentColor: 'var(--color-accent-income)' }} />
           Add employer / authorized representative signature
         </label>
         {addEmployer && (
@@ -1570,7 +1570,7 @@ const ESignModal: React.FC<{
         <p className="text-[10px] text-text-muted">Dates default to today; you may back-date to a past date but not the future.</p>
 
         <label className="flex items-start gap-2 text-xs text-text-secondary">
-          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ marginTop: 2, accentColor: '#16a34a' }} />
+          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ marginTop: 2, accentColor: 'var(--color-accent-income)' }} />
           <span>The named parties agree that typing their name constitutes their electronic signature and that they have read and accept this document.</span>
         </label>
 
@@ -2318,7 +2318,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             {[
               { label: 'Gross Pay', value: ytdSummary.ytd.ytd_gross, color: 'text-text-primary' },
               { label: 'Taxes', value: ytdSummary.ytd.ytd_taxes, color: 'text-accent-expense' },
-              { label: 'Deductions', value: ytdSummary.ytd.ytd_deductions, color: 'text-orange-500' },
+              { label: 'Deductions', value: ytdSummary.ytd.ytd_deductions, color: 'text-accent-warning' },
               { label: 'Net Pay', value: ytdSummary.ytd.ytd_net, color: 'text-accent-income' },
             ].map((item) => (
               <div key={item.label} className="text-center">

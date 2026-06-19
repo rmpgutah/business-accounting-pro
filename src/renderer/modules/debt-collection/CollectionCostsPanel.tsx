@@ -122,16 +122,16 @@ const CollectionCostsPanel: React.FC<Props> = ({ debtId, onBalanceChanged }) => 
           <Stat
             label="Total Spend"
             value={fmt$(summary.total_costs)}
-            color={summary.over_budget ? '#dc2626' : undefined}
+            color={summary.over_budget ? 'var(--color-accent-expense)' : undefined}
             title={summary.over_budget ? `OVER BUDGET — cap is ${fmt$(summary.expense_budget)}` : undefined}
           />
-          <Stat label="Recoverable" value={fmt$(summary.recoverable)} color="#16a34a" />
+          <Stat label="Recoverable" value={fmt$(summary.recoverable)} color="var(--color-accent-income)" />
           <Stat label="Applied to Balance" value={fmt$(summary.applied_to_debt)} />
-          <Stat label="Recovered" value={fmt$(summary.recovered)} color="#16a34a" />
+          <Stat label="Recovered" value={fmt$(summary.recovered)} color="var(--color-accent-income)" />
           <Stat
             label="ROI (collected ÷ spend)"
             value={summary.roi == null ? '—' : `${summary.roi.toFixed(2)}×`}
-            color={summary.roi != null && summary.roi < 1 ? '#dc2626' : '#16a34a'}
+            color={summary.roi != null && summary.roi < 1 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'}
             title={summary.cost_to_collect_pct != null ? `Cost-to-collect: ${summary.cost_to_collect_pct}% of recovered dollars` : 'No payments collected yet'}
           />
           {/* Spend budget — click to set/change the cap for this case. */}
@@ -150,13 +150,13 @@ const CollectionCostsPanel: React.FC<Props> = ({ debtId, onBalanceChanged }) => 
             <Stat
               label="Spend Budget"
               value={summary.expense_budget > 0 ? fmt$(summary.expense_budget) : 'Set cap…'}
-              color={summary.over_budget ? '#dc2626' : undefined}
+              color={summary.over_budget ? 'var(--color-accent-expense)' : undefined}
             />
           </button>
         </div>
       )}
       {summary?.over_budget && (
-        <div style={{ padding: '6px 14px', fontSize: 10, fontWeight: 700, color: '#f87171', background: 'rgba(239,68,68,0.08)', borderBottom: '1px solid var(--color-border-primary)' }}>
+        <div style={{ padding: '6px 14px', fontSize: 10, fontWeight: 700, color: 'var(--color-accent-expense)', background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)', borderBottom: '1px solid var(--color-border-primary)' }}>
           ⚠ Collection spend {fmt$(summary.total_costs)} exceeds this case's budget of {fmt$(summary.expense_budget)} — review before incurring further costs.
         </div>
       )}
@@ -190,16 +190,16 @@ const CollectionCostsPanel: React.FC<Props> = ({ debtId, onBalanceChanged }) => 
                     <td style={{ padding: '5px 8px', fontSize: 10, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</td>
                     <td style={{ padding: '5px 8px', fontSize: 10, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>
                       {fmt$(total)}
-                      {!!c.added_to_debt && <span style={{ fontSize: 8, color: '#16a34a', marginLeft: 4 }} title="Already applied to the debtor's balance">APPLIED</span>}
+                      {!!c.added_to_debt && <span style={{ fontSize: 8, color: 'var(--color-accent-income)', marginLeft: 4 }} title="Already applied to the debtor's balance">APPLIED</span>}
                     </td>
                     <td style={{ padding: '5px 8px', fontSize: 10 }}>
-                      {c.is_recoverable ? <span style={{ color: '#16a34a', fontWeight: 700 }}>Yes</span> : <span style={{ color: 'var(--color-text-muted)' }}>No</span>}
+                      {c.is_recoverable ? <span style={{ color: 'var(--color-accent-income)', fontWeight: 700 }}>Yes</span> : <span style={{ color: 'var(--color-text-muted)' }}>No</span>}
                     </td>
                     <td style={{ padding: '5px 8px', fontSize: 10 }}>
                       {c.recovery_status === 'recovered' ? (
-                        <span style={{ color: '#16a34a' }}>Recovered {fmt$(c.recovered_amount || 0)}</span>
+                        <span style={{ color: 'var(--color-accent-income)' }}>Recovered {fmt$(c.recovered_amount || 0)}</span>
                       ) : c.recovery_status === 'unrecoverable' ? (
-                        <span style={{ color: '#dc2626' }}>Unrecoverable</span>
+                        <span style={{ color: 'var(--color-accent-expense)' }}>Unrecoverable</span>
                       ) : c.is_recoverable ? (
                         <span className="flex items-center gap-1">
                           <button className="block-btn text-[9px] px-1.5 py-0.5" onClick={() => setRecovery(c.id, 'recovered', total)} title="Mark fully recovered from debtor">

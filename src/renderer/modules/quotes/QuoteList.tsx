@@ -621,10 +621,10 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
   };
 
   const probColor = (p?: number): string => {
-    if (p === undefined) return '#6b7280';
-    if (p >= 70) return '#22c55e';
-    if (p >= 30) return '#f59e0b';
-    return '#ef4444';
+    if (p === undefined) return 'var(--color-text-muted)';
+    if (p >= 70) return 'var(--color-accent-income)';
+    if (p >= 30) return 'var(--color-accent-warning)';
+    return 'var(--color-accent-expense)';
   };
 
   if (loading) {
@@ -1007,7 +1007,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                               width: 8,
                               height: 8,
                               borderRadius: '50%',
-                              background: '#ef4444',
+                              background: 'var(--color-accent-expense)',
                               display: 'inline-block',
                             }}
                           />
@@ -1111,9 +1111,9 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                             title="Convert to Invoice"
                             style={{
                               borderRadius: '6px',
-                              background: 'rgba(59,130,246,0.12)',
-                              border: '1px solid rgba(59,130,246,0.25)',
-                              color: '#3b82f6',
+                              background: 'var(--color-accent-blue-bg)',
+                              border: '1px solid color-mix(in srgb, var(--color-accent-blue) 25%, transparent)',
+                              color: 'var(--color-accent-blue)',
                             }}
                           >
                             <ArrowRightCircle size={12} />
@@ -1149,7 +1149,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
-            background: 'rgba(18,20,28,0.92)',
+            background: 'var(--color-bg-elevated)',
             borderRadius: '6px',
             minWidth: '320px',
           }}
@@ -1165,9 +1165,9 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 onClick={handleBulkSend}
                 disabled={batchLoading}
                 style={{
-                  background: 'rgba(59,130,246,0.15)',
-                  border: '1px solid rgba(59,130,246,0.4)',
-                  color: '#3b82f6',
+                  background: 'var(--color-accent-blue-bg)',
+                  border: '1px solid color-mix(in srgb, var(--color-accent-blue) 40%, transparent)',
+                  color: 'var(--color-accent-blue)',
                   borderRadius: '6px',
                   padding: '6px 12px',
                   cursor: 'pointer',
@@ -1181,8 +1181,8 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 disabled={batchLoading}
                 style={{
                   background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.10)',
-                  color: '#cbd5e1',
+                  border: '1px solid var(--color-border-secondary)',
+                  color: 'var(--color-text-secondary)',
                   borderRadius: '6px',
                   padding: '6px 12px',
                   cursor: 'pointer',
@@ -1196,8 +1196,8 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 disabled={batchLoading}
                 style={{
                   background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.10)',
-                  color: '#cbd5e1',
+                  border: '1px solid var(--color-border-secondary)',
+                  color: 'var(--color-text-secondary)',
                   borderRadius: '6px',
                   padding: '6px 12px',
                   cursor: 'pointer',
@@ -1210,8 +1210,8 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 onClick={handleExportCSV}
                 style={{
                   background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.10)',
-                  color: '#cbd5e1',
+                  border: '1px solid var(--color-border-secondary)',
+                  color: 'var(--color-text-secondary)',
                   borderRadius: '6px',
                   padding: '6px 12px',
                   cursor: 'pointer',
@@ -1224,8 +1224,8 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 onClick={() => setShowDeleteConfirm(true)}
                 style={{
                   background: 'transparent',
-                  border: '1px solid #ef4444',
-                  color: '#ef4444',
+                  border: '1px solid var(--color-accent-expense)',
+                  color: 'var(--color-accent-expense)',
                   borderRadius: '6px',
                   padding: '6px 12px',
                   cursor: 'pointer',
@@ -1258,7 +1258,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 onClick={() => setShowDeleteConfirm(false)}
                 style={{
                   background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.10)',
+                  border: '1px solid var(--color-border-secondary)',
                   borderRadius: '6px',
                   padding: '5px 10px',
                   cursor: 'pointer',
@@ -1281,7 +1281,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 onClick={handleBulkApplyTag}
                 disabled={batchLoading || !bulkTagValue.trim()}
                 style={{
-                  background: '#3b82f6',
+                  background: 'var(--color-accent-blue)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '6px',
@@ -1299,7 +1299,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 }}
                 style={{
                   background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.10)',
+                  border: '1px solid var(--color-border-secondary)',
                   borderRadius: '6px',
                   padding: '5px 10px',
                   cursor: 'pointer',

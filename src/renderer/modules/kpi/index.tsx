@@ -55,8 +55,8 @@ const MarginTooltip: React.FC<any> = ({ active, payload, label }) => {
     <div
       className="text-xs px-3 py-2"
       style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #2e2e2e',
+        backgroundColor: 'var(--color-bg-elevated)',
+        border: '1px solid var(--hairline)',
         borderRadius: '6px',
       }}
     >
@@ -482,12 +482,12 @@ const KPIDashboard: React.FC = () => {
               <LineChart data={grossMarginTrend}>
                 <XAxis
                   dataKey="month"
-                  tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                  tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                  tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   domain={[0, 100]}
@@ -499,8 +499,8 @@ const KPIDashboard: React.FC = () => {
                   dataKey="margin"
                   stroke={CHART_INCOME}
                   strokeWidth={2}
-                  dot={{ r: 4, fill: '#22c55e', stroke: '#0a0a0a', strokeWidth: 2 }}
-                  activeDot={{ r: 6, fill: '#22c55e' }}
+                  dot={{ r: 4, fill: 'var(--color-accent-income)', stroke: '#0a0a0a', strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: 'var(--color-accent-income)' }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -516,8 +516,8 @@ const KPIDashboard: React.FC = () => {
             <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Revenue vs Expenses (12 Months)</div>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={monthlyChartData} barGap={4}>
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} tickFormatter={(v: number) => `$${(v/1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v) => formatCurrency(Number(v))} />
                 <Bar dataKey="revenue" fill={CHART_INCOME} radius={[2,2,0,0]} name="Revenue" />
                 <Bar dataKey="expenses" fill={CHART_EXPENSE} radius={[2,2,0,0]} name="Expenses" />
@@ -533,10 +533,10 @@ const KPIDashboard: React.FC = () => {
             {(() => {
               const a = dashData.arAging;
               const segments = [
-                { label: 'Current',  value: Number(a.current_amt || 0),   color: '#16a34a' },
-                { label: '1–30d',    value: Number(a.days_1_30 || 0),     color: '#d97706' },
-                { label: '31–60d',   value: Number(a.days_31_60 || 0),    color: '#ea580c' },
-                { label: '60d+',     value: Number(a.days_60_plus || 0),  color: '#dc2626' },
+                { label: 'Current',  value: Number(a.current_amt || 0),   color: 'var(--color-accent-income)' },
+                { label: '1–30d',    value: Number(a.days_1_30 || 0),     color: 'var(--color-accent-warning)' },
+                { label: '31–60d',   value: Number(a.days_31_60 || 0),    color: 'var(--color-accent-expense)' },
+                { label: '60d+',     value: Number(a.days_60_plus || 0),  color: 'var(--color-accent-expense)' },
               ];
               const total = segments.reduce((s, x) => s + x.value, 0);
               if (total === 0) return (
@@ -564,7 +564,7 @@ const KPIDashboard: React.FC = () => {
             <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Financial Health Score</div>
             {(() => {
               const score = Number(dashData.healthScore ?? 0);
-              const color = score >= 80 ? '#16a34a' : score >= 60 ? '#d97706' : '#dc2626';
+              const color = score >= 80 ? 'var(--color-accent-income)' : score >= 60 ? 'var(--color-accent-warning)' : 'var(--color-accent-expense)';
               const label = score >= 80 ? 'Healthy' : score >= 60 ? 'Watch' : 'At Risk';
               return (
                 <div>
@@ -577,20 +577,6 @@ const KPIDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Top Clients by Revenue */}
-        {dashData?.topClients?.length > 0 && (
-          <div className="block-card">
-            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Top Clients by Revenue</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {dashData.topClients.slice(0, 6).map((c: any, i: number) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{c.client_name}</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--color-text-primary)', flexShrink: 0 }}>{formatCurrency(Number(c.total_revenue || 0))}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ─── Row 2: Advanced KPIs (3 cols) ─── */}

@@ -492,7 +492,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
             const totalCost = spent + labCost;
             const profit = rev - totalCost;
             const margin = rev > 0 ? (profit / rev) * 100 : 0;
-            const marginColor = margin >= 20 ? '#22c55e' : margin >= 0 ? '#eab308' : '#ef4444';
+            const marginColor = margin >= 20 ? 'var(--color-accent-income)' : margin >= 0 ? 'var(--color-accent-warning)' : 'var(--color-accent-expense)';
             const budgetUsed = project.budget && project.budget > 0 ? (totalCost / project.budget) * 100 : 0;
             const clientName = clientMap[project.client_id] ?? '--';
 
@@ -583,7 +583,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
                               flex: 1,
                               height: 4,
                               borderRadius: 2,
-                              background: filled ? 'var(--color-accent-blue)' : 'rgba(255,255,255,0.08)',
+                              background: filled ? 'var(--color-accent-blue)' : 'var(--color-border-primary)',
                             }}
                             title={p}
                           />

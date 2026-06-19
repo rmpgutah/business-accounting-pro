@@ -213,10 +213,10 @@ const BankReconDashboard: React.FC = () => {
 
   const healthColor =
     healthScore >= 80
-      ? '#22c55e'
+      ? 'var(--color-accent-income)'
       : healthScore >= 50
-        ? '#eab308'
-        : '#ef4444';
+        ? 'var(--color-accent-warning)'
+        : 'var(--color-accent-expense)';
 
   return (
     <div className="space-y-5">

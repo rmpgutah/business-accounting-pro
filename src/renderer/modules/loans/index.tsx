@@ -144,7 +144,7 @@ const LoansModule: React.FC = () => {
           marginBottom: 12,
           border: '1px solid var(--color-accent-expense)',
           borderLeft: '4px solid var(--color-accent-expense)',
-          background: 'rgba(220, 38, 38, 0.08)',
+          background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
           borderRadius: 6,
         }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>

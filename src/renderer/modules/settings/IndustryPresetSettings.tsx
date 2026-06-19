@@ -168,27 +168,25 @@ export const IndustryPresetSettings: React.FC = () => {
   const currentPreset = appliedKey ? allPresets.find((p) => p.key === appliedKey) : null;
 
   return (
-    <div className="p-6 space-y-5 overflow-y-auto h-full">
-      <div className="module-header">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 6 }}>
-            <Sparkles size={18} className="text-accent-blue" />
-          </div>
-          <div>
-            <h2 className="module-title text-text-primary">Industry Presets</h2>
-            <p className="text-xs text-text-muted mt-0.5">Apply industry-specific categories, accounts, vendors, and fields. Always additive — never destructive.</p>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button className="block-btn flex items-center gap-1 text-xs" onClick={() => setShowWizard(true)}>
-              <RefreshCw size={13} /> Re-run Wizard
-            </button>
-            <button className="block-btn flex items-center gap-1 text-xs" onClick={() => { setShowBuilder(true); setBuilderJson(builderTemplate); }}>
-              <Plus size={13} /> Custom Preset
-            </button>
-            <button className="block-btn flex items-center gap-1 text-xs" onClick={() => setShowJsonImport(true)}>
-              <Upload size={13} /> Import JSON
-            </button>
-          </div>
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 6 }}>
+          <Sparkles size={18} className="text-accent-blue" />
+        </div>
+        <div>
+          <h3 className="text-sm font-bold text-text-primary">Industry Presets</h3>
+          <p className="text-xs text-text-muted mt-0.5">Apply industry-specific categories, accounts, vendors, and fields. Always additive — never destructive.</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <button className="block-btn flex items-center gap-1 text-xs" onClick={() => setShowWizard(true)}>
+            <RefreshCw size={13} /> Re-run Wizard
+          </button>
+          <button className="block-btn flex items-center gap-1 text-xs" onClick={() => { setShowBuilder(true); setBuilderJson(builderTemplate); }}>
+            <Plus size={13} /> Custom Preset
+          </button>
+          <button className="block-btn flex items-center gap-1 text-xs" onClick={() => setShowJsonImport(true)}>
+            <Upload size={13} /> Import JSON
+          </button>
         </div>
       </div>
 
@@ -197,9 +195,9 @@ export const IndustryPresetSettings: React.FC = () => {
           className="text-xs"
           style={{
             padding: '10px 14px',
-            background: resultMsg.type === 'ok' ? 'rgba(34,197,94,0.08)' : 'rgba(248,113,113,0.08)',
-            border: `1px solid ${resultMsg.type === 'ok' ? 'rgba(34,197,94,0.25)' : 'rgba(248,113,113,0.25)'}`,
-            color: resultMsg.type === 'ok' ? '#22c55e' : '#f87171',
+            background: resultMsg.type === 'ok' ? 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
+            border: `1px solid ${resultMsg.type === 'ok' ? 'color-mix(in srgb, var(--color-accent-income) 25%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 25%, transparent)'}`,
+            color: resultMsg.type === 'ok' ? 'var(--color-accent-income)' : 'var(--color-accent-expense)',
             borderRadius: 6,
           }}
         >
@@ -291,7 +289,7 @@ export const IndustryPresetSettings: React.FC = () => {
 
       {/* JSON import dialog */}
       {showJsonImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--color-bg-elevated)' }}>
           <div className="block-card" style={{ width: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
             <div className="flex items-center justify-between p-4 border-b border-border-primary">
               <div className="text-sm font-bold text-text-primary">Import Preset (JSON)</div>
@@ -316,7 +314,7 @@ export const IndustryPresetSettings: React.FC = () => {
 
       {/* Custom builder dialog */}
       {showBuilder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'var(--color-bg-elevated)' }}>
           <div className="block-card" style={{ width: 700, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
             <div className="flex items-center justify-between p-4 border-b border-border-primary">
               <div>

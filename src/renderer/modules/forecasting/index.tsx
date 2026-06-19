@@ -115,19 +115,19 @@ const SCENARIO_CONFIG: Record<
   conservative: {
     label: 'Conservative',
     multiplier: 0.9,
-    color: '#f59e0b',
+    color: 'var(--color-accent-warning)',
     description: '90% of linear regression projection',
   },
   moderate: {
     label: 'Moderate',
     multiplier: 1.0,
-    color: '#3b82f6',
+    color: 'var(--color-accent-blue)',
     description: 'Linear regression as-is',
   },
   aggressive: {
     label: 'Aggressive',
     multiplier: 1.1,
-    color: '#22c55e',
+    color: 'var(--color-accent-income)',
     description: '110% of linear regression projection',
   },
 };
@@ -139,8 +139,8 @@ const ScenarioTooltip: React.FC<any> = ({ active, payload, label }) => {
     <div
       className="text-xs px-3 py-2"
       style={{
-        backgroundColor: '#1a1a1a',
-        border: '1px solid #2e2e2e',
+        backgroundColor: 'var(--color-bg-elevated)',
+        border: '1px solid var(--hairline)',
         borderRadius: '2px',
       }}
     >
@@ -374,8 +374,8 @@ const Forecasting: React.FC = () => {
                 onClick={() => setActiveScenario(scenario)}
                 className="flex-1 p-3 text-left transition-colors"
                 style={{
-                  backgroundColor: isActive ? `${config.color}15` : '#141414',
-                  border: `1px solid ${isActive ? config.color : '#2e2e2e'}`,
+                  backgroundColor: isActive ? `color-mix(in srgb, ${config.color} 12%, transparent)` : 'var(--color-bg-surface)',
+                  border: `1px solid ${isActive ? config.color : 'var(--hairline)'}`,
                   borderRadius: '2px',
                   cursor: 'pointer',
                 }}
@@ -392,7 +392,7 @@ const Forecasting: React.FC = () => {
                   />
                   <span
                     className="text-xs font-semibold"
-                    style={{ color: isActive ? config.color : '#9a9a9a' }}
+                    style={{ color: isActive ? config.color : 'var(--color-text-muted)' }}
                   >
                     {config.label}
                   </span>
@@ -475,12 +475,12 @@ const Forecasting: React.FC = () => {
             <LineChart data={whatIfChartData}>
               <XAxis
                 dataKey="month"
-                tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: '#6b6b6b', fontSize: 11 }}
+                tick={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v: number) => fmtCompact(v)}
@@ -501,9 +501,9 @@ const Forecasting: React.FC = () => {
               <Line
                 type="monotone"
                 dataKey="actual"
-                stroke="#ffffff"
+                stroke="var(--color-text-primary)"
                 strokeWidth={2}
-                dot={{ r: 3, fill: '#ffffff', stroke: '#0a0a0a', strokeWidth: 2 }}
+                dot={{ r: 3, fill: 'var(--color-text-primary)', stroke: 'var(--color-bg-base)', strokeWidth: 2 }}
                 connectNulls={false}
               />
               {/* Conservative */}
@@ -516,7 +516,7 @@ const Forecasting: React.FC = () => {
                 dot={{
                   r: activeScenario === 'conservative' ? 4 : 2,
                   fill: SCENARIO_CONFIG.conservative.color,
-                  stroke: '#0a0a0a',
+                  stroke: 'var(--color-bg-base)',
                   strokeWidth: 2,
                 }}
                 connectNulls={false}
@@ -532,7 +532,7 @@ const Forecasting: React.FC = () => {
                 dot={{
                   r: activeScenario === 'moderate' ? 4 : 2,
                   fill: SCENARIO_CONFIG.moderate.color,
-                  stroke: '#0a0a0a',
+                  stroke: 'var(--color-bg-base)',
                   strokeWidth: 2,
                 }}
                 connectNulls={false}
@@ -548,7 +548,7 @@ const Forecasting: React.FC = () => {
                 dot={{
                   r: activeScenario === 'aggressive' ? 4 : 2,
                   fill: SCENARIO_CONFIG.aggressive.color,
-                  stroke: '#0a0a0a',
+                  stroke: 'var(--color-bg-base)',
                   strokeWidth: 2,
                 }}
                 connectNulls={false}

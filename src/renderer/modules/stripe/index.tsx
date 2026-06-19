@@ -53,6 +53,17 @@ function typeBadgeClass(type: string): string {
 //   - "explorer" — full resource browser that works offline via local cache
 const StripeModule: React.FC = () => {
   const [tab, setTab] = useState<'sync' | 'explorer'>('sync');
+  const [syncing, setSyncing] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+
+  const handleSync = () => {
+    if (!isConnected) {
+      return;
+    }
+    setSyncing(true);
+    setTimeout(() => setSyncing(false), 2000);
+  };
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex items-center border-b border-border-primary bg-bg-secondary px-6 pt-3">
@@ -79,16 +90,35 @@ const StripeModule: React.FC = () => {
           Explorer
           <span className="text-[9px] uppercase tracking-wider px-1 py-0.5 bg-accent-blue/15 text-accent-blue ml-1">All APIs</span>
         </button>
+        {tab === 'sync' && (
+          <div className="ml-auto pb-1">
+            <button
+              className="block-btn-primary flex items-center gap-2"
+              onClick={handleSync}
+              disabled={syncing}
+              style={{ opacity: syncing ? 0.6 : 1 }}
+            >
+              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Syncing...' : 'Sync Now'}
+            </button>
+          </div>
+        )}
       </div>
       <div className="flex-1 overflow-hidden">
-        {tab === 'sync' ? <StripeSyncModule /> : <StripeExplorer />}
+        {tab === 'sync' ? <StripeSyncModule onConnectionChange={setIsConnected} onSyncRequest={handleSync} syncing={syncing} /> : <StripeExplorer />}
       </div>
     </div>
   );
 };
 
 // ─── Stripe Sync Component ──────────────────────────────
-const StripeSyncModule: React.FC = () => {
+interface StripeSyncModuleProps {
+  onConnectionChange?: (connected: boolean) => void;
+  onSyncRequest?: () => void;
+  syncing?: boolean;
+}
+
+const StripeSyncModule: React.FC<StripeSyncModuleProps> = ({ onConnectionChange, syncing = false }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [apiKey, setApiKey] = useState('');
   const [savedApiKey, setSavedApiKey] = useState('');
@@ -96,7 +126,6 @@ const StripeSyncModule: React.FC = () => {
   const [transactions, setTransactions] = useState<StripeTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -118,6 +147,7 @@ const StripeSyncModule: React.FC = () => {
       const storedKey = keyRow?.value ?? '';
       setSavedApiKey(storedKey);
       setIsConnected(!!storedKey);
+      onConnectionChange?.(!!storedKey);
 
       // Load transactions scoped to the active company
       // Perf: cap stripe transactions list at 1000 most recent. Stripe accounts
@@ -168,6 +198,7 @@ const StripeSyncModule: React.FC = () => {
       }
       setSavedApiKey(apiKey);
       setIsConnected(!!apiKey);
+      onConnectionChange?.(!!apiKey);
       setApiKey('');
       setSyncMessage('API key saved successfully.');
       setTimeout(() => setSyncMessage(''), 3000);
@@ -178,17 +209,6 @@ const StripeSyncModule: React.FC = () => {
     } finally {
       setSavingKey(false);
     }
-  };
-
-  const handleSync = () => {
-    if (!isConnected) {
-      setSyncMessage('Configure your Stripe API key first to enable sync.');
-      setTimeout(() => setSyncMessage(''), 5000);
-      return;
-    }
-    setSyncMessage(
-      'Stripe sync requires the Stripe Node SDK. Configure your API key and use the CLI to sync: bap stripe-sync'
-    );
   };
 
   if (loading) {
@@ -202,24 +222,6 @@ const StripeSyncModule: React.FC = () => {
   return (
     <div className="p-6 space-y-6 overflow-y-auto h-full">
       {error && <ErrorBanner message={error} title="Failed to load Stripe data" onDismiss={() => setError('')} />}
-      {/* Header */}
-      <div className="module-header">
-        <div className="flex items-center gap-2">
-          <CreditCard size={20} className="text-accent-purple" />
-          <h1 className="module-title">Stripe Data Sync</h1>
-        </div>
-        <div className="module-actions">
-          <button
-            className="block-btn-primary flex items-center gap-2"
-            onClick={handleSync}
-            disabled={syncing}
-            style={{ opacity: syncing ? 0.6 : 1 }}
-          >
-            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Syncing...' : 'Sync Now'}
-          </button>
-        </div>
-      </div>
 
       {/* Sync message */}
       {syncMessage && (

@@ -774,7 +774,7 @@ const ProfitAndLoss: React.FC = () => {
               </div>
               <ResponsiveContainer width="100%" height={120}>
                 <LineChart data={monthlyRevenue}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" />
                   <XAxis
                     dataKey="month"
                     tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }}
@@ -793,9 +793,9 @@ const ProfitAndLoss: React.FC = () => {
                     type="monotone"
                     dataKey="revenue"
                     name="Revenue"
-                    stroke="#22c55e"
+                    stroke="var(--color-accent-income)"
                     strokeWidth={2}
-                    dot={{ r: 3, fill: '#22c55e' }}
+                    dot={{ r: 3, fill: 'var(--color-accent-income)' }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -1042,7 +1042,7 @@ const ProfitAndLoss: React.FC = () => {
               </div>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={revExpBarData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" />
                   <XAxis
                     dataKey="name"
                     tick={{ fill: 'var(--color-text-muted)', fontSize: 10 }}
@@ -1060,7 +1060,7 @@ const ProfitAndLoss: React.FC = () => {
                     {revExpBarData.map((_entry, index) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={index === 0 ? '#22c55e' : index === 1 ? '#ef4444' : '#3b82f6'}
+                        fill={index === 0 ? 'var(--color-accent-income)' : index === 1 ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)'}
                       />
                     ))}
                   </Bar>

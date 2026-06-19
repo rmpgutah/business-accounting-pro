@@ -221,7 +221,7 @@ const StripeExplorer: React.FC = () => {
       {/* ── Resource rail ─────────────────────────────────────── */}
       <aside
         className="w-64 shrink-0 border-r border-border-primary overflow-y-auto"
-        style={{ background: 'rgba(14,15,20,0.55)' }}
+        style={{ background: 'var(--color-bg-primary)' }}
       >
         <div className="p-3 border-b border-border-primary">
           <h3 className="text-[11px] font-bold uppercase tracking-wider text-text-muted">Stripe Resources</h3>

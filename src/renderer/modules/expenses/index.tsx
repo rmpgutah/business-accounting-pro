@@ -525,11 +525,11 @@ const ExpensesModule: React.FC = () => {
                   const colorFor = (total: number) => {
                     if (total <= 0) return 'var(--color-bg-tertiary)';
                     const ratio = total / maxDay;
-                    if (ratio < 0.2) return 'rgba(239,68,68,0.25)';
-                    if (ratio < 0.4) return 'rgba(239,68,68,0.45)';
-                    if (ratio < 0.6) return 'rgba(239,68,68,0.65)';
-                    if (ratio < 0.8) return 'rgba(239,68,68,0.82)';
-                    return 'rgba(239,68,68,1)';
+                    if (ratio < 0.2) return 'color-mix(in srgb, var(--color-accent-expense) 25%, transparent)';
+                    if (ratio < 0.4) return 'color-mix(in srgb, var(--color-accent-expense) 45%, transparent)';
+                    if (ratio < 0.6) return 'color-mix(in srgb, var(--color-accent-expense) 65%, transparent)';
+                    if (ratio < 0.8) return 'color-mix(in srgb, var(--color-accent-expense) 82%, transparent)';
+                    return 'var(--color-accent-expense)';
                   };
                   // Start 26 weeks ago, aligned to Sunday.
                   const today = new Date();
@@ -554,7 +554,7 @@ const ExpensesModule: React.FC = () => {
                               const future = day > today;
                               return (
                                 <div key={di} title={future ? '' : `${iso(day)}: ${formatCurrency(total)}${cell ? ` (${cell.count} expense${cell.count !== 1 ? 's' : ''})` : ''}`}
-                                  style={{ width: 13, height: 13, borderRadius: 2, background: future ? 'transparent' : colorFor(total), border: future ? 'none' : '1px solid rgba(255,255,255,0.04)', cursor: future ? 'default' : 'pointer' }} />
+                                  style={{ width: 13, height: 13, borderRadius: 2, background: future ? 'transparent' : colorFor(total), border: future ? 'none' : '1px solid var(--hairline)', cursor: future ? 'default' : 'pointer' }} />
                               );
                             })}
                           </div>
@@ -562,7 +562,7 @@ const ExpensesModule: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-border-primary/40 text-[10px] text-text-muted">
                         <span>Less</span>
-                        {['var(--color-bg-tertiary)', 'rgba(239,68,68,0.25)', 'rgba(239,68,68,0.45)', 'rgba(239,68,68,0.65)', 'rgba(239,68,68,0.82)', 'rgba(239,68,68,1)'].map((c, i) => (
+                        {['var(--color-bg-tertiary)', 'color-mix(in srgb, var(--color-accent-expense) 25%, transparent)', 'color-mix(in srgb, var(--color-accent-expense) 45%, transparent)', 'color-mix(in srgb, var(--color-accent-expense) 65%, transparent)', 'color-mix(in srgb, var(--color-accent-expense) 82%, transparent)', 'var(--color-accent-expense)'].map((c, i) => (
                           <span key={i} style={{ width: 11, height: 11, borderRadius: 2, background: c, display: 'inline-block' }} />
                         ))}
                         <span>More</span>

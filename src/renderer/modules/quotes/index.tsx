@@ -97,11 +97,11 @@ const KpiCard: React.FC<{
   accent?: 'blue' | 'green' | 'red' | 'orange' | 'purple';
 }> = ({ label, value, hint, icon, accent = 'blue' }) => {
   const colors: Record<string, string> = {
-    blue: '#3b82f6',
-    green: '#22c55e',
-    red: '#ef4444',
-    orange: '#f59e0b',
-    purple: '#8b5cf6',
+    blue: 'var(--color-accent-blue)',
+    green: 'var(--color-accent-income)',
+    red: 'var(--color-accent-expense)',
+    orange: 'var(--color-accent-warning)',
+    purple: 'var(--color-accent-purple)',
   };
   return (
     <div className="block-card p-4" style={{ borderRadius: '6px' }}>
@@ -254,10 +254,10 @@ const QuotesModule: React.FC = () => {
     const accepted = stats.accepted_count + stats.converted_count;
     const converted = stats.converted_count;
     return [
-      { label: 'Total Quotes', value: total, color: '#6b7280' },
-      { label: 'Sent', value: sent, color: '#3b82f6' },
-      { label: 'Accepted', value: accepted, color: '#8b5cf6' },
-      { label: 'Converted', value: converted, color: '#22c55e' },
+      { label: 'Total Quotes', value: total, color: 'var(--color-text-muted)' },
+      { label: 'Sent', value: sent, color: 'var(--color-accent-blue)' },
+      { label: 'Accepted', value: accepted, color: 'var(--color-accent-purple)' },
+      { label: 'Converted', value: converted, color: 'var(--color-accent-income)' },
     ];
   }, [stats]);
 
@@ -483,7 +483,7 @@ ${topClients
                         <li
                           key={a.id}
                           className="flex items-start gap-2 text-xs"
-                          style={{ borderLeft: '2px solid rgba(255,255,255,0.08)', paddingLeft: 8 }}
+                          style={{ borderLeft: '2px solid var(--hairline)', paddingLeft: 8 }}
                         >
                           <span className="mt-0.5">{activityIcon(a.activity_type)}</span>
                           <div className="flex-1 min-w-0">
@@ -568,15 +568,15 @@ ${topClients
                   <>
                     <div
                       className="flex w-full overflow-hidden"
-                      style={{ height: '24px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.08)' }}
+                      style={{ height: '24px', borderRadius: '6px', border: '1px solid var(--hairline)' }}
                     >
                       {[
-                        { key: 'draft', count: stats.draft_count, color: '#6b7280', label: 'Draft' },
-                        { key: 'sent', count: stats.sent_count, color: '#3b82f6', label: 'Sent' },
-                        { key: 'accepted', count: stats.accepted_count, color: '#8b5cf6', label: 'Accepted' },
-                        { key: 'converted', count: stats.converted_count, color: '#22c55e', label: 'Converted' },
-                        { key: 'rejected', count: stats.rejected_count, color: '#ef4444', label: 'Rejected' },
-                        { key: 'expired', count: stats.expired_count, color: '#f59e0b', label: 'Expired' },
+                        { key: 'draft', count: stats.draft_count, color: 'var(--color-text-muted)', label: 'Draft' },
+                        { key: 'sent', count: stats.sent_count, color: 'var(--color-accent-blue)', label: 'Sent' },
+                        { key: 'accepted', count: stats.accepted_count, color: 'var(--color-accent-purple)', label: 'Accepted' },
+                        { key: 'converted', count: stats.converted_count, color: 'var(--color-accent-income)', label: 'Converted' },
+                        { key: 'rejected', count: stats.rejected_count, color: 'var(--color-accent-expense)', label: 'Rejected' },
+                        { key: 'expired', count: stats.expired_count, color: 'var(--color-accent-warning)', label: 'Expired' },
                       ]
                         .filter((s) => s.count > 0)
                         .map((s) => {
@@ -603,12 +603,12 @@ ${topClients
                     </div>
                     <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-text-muted">
                       {[
-                        { label: 'Draft', count: stats.draft_count, color: '#6b7280' },
-                        { label: 'Sent', count: stats.sent_count, color: '#3b82f6' },
-                        { label: 'Accepted', count: stats.accepted_count, color: '#8b5cf6' },
-                        { label: 'Converted', count: stats.converted_count, color: '#22c55e' },
-                        { label: 'Rejected', count: stats.rejected_count, color: '#ef4444' },
-                        { label: 'Expired', count: stats.expired_count, color: '#f59e0b' },
+                        { label: 'Draft', count: stats.draft_count, color: 'var(--color-text-muted)' },
+                        { label: 'Sent', count: stats.sent_count, color: 'var(--color-accent-blue)' },
+                        { label: 'Accepted', count: stats.accepted_count, color: 'var(--color-accent-purple)' },
+                        { label: 'Converted', count: stats.converted_count, color: 'var(--color-accent-income)' },
+                        { label: 'Rejected', count: stats.rejected_count, color: 'var(--color-accent-expense)' },
+                        { label: 'Expired', count: stats.expired_count, color: 'var(--color-accent-warning)' },
                       ].map((l) => (
                         <span key={l.label} className="flex items-center gap-1">
                           <span
@@ -659,7 +659,7 @@ ${topClients
                           <div
                             style={{
                               height: '20px',
-                              background: 'rgba(255,255,255,0.04)',
+                              background: 'var(--color-bg-secondary)',
                               borderRadius: '6px',
                               overflow: 'hidden',
                             }}
@@ -744,11 +744,11 @@ interface PipelineBoardProps {
   refreshKey: number;
 }
 const PIPELINE_STAGES: Array<{ status: string; label: string; color: string }> = [
-  { status: 'draft', label: 'Draft', color: '#6b7280' },
-  { status: 'sent', label: 'Sent', color: '#3b82f6' },
-  { status: 'accepted', label: 'Accepted', color: '#8b5cf6' },
-  { status: 'converted', label: 'Won', color: '#22c55e' },
-  { status: 'rejected', label: 'Lost', color: '#ef4444' },
+  { status: 'draft', label: 'Draft', color: 'var(--color-text-muted)' },
+  { status: 'sent', label: 'Sent', color: 'var(--color-accent-blue)' },
+  { status: 'accepted', label: 'Accepted', color: 'var(--color-accent-purple)' },
+  { status: 'converted', label: 'Won', color: 'var(--color-accent-income)' },
+  { status: 'rejected', label: 'Lost', color: 'var(--color-accent-expense)' },
 ];
 
 const PipelineBoard: React.FC<PipelineBoardProps> = ({ onView, onNew, refreshKey }) => {
@@ -875,10 +875,10 @@ const PipelineBoard: React.FC<PipelineBoardProps> = ({ onView, onNew, refreshKey
                             style={{
                               color:
                                 q.probability >= 70
-                                  ? '#22c55e'
+                                  ? 'var(--color-accent-income)'
                                   : q.probability >= 30
-                                  ? '#f59e0b'
-                                  : '#ef4444',
+                                  ? 'var(--color-accent-warning)'
+                                  : 'var(--color-accent-expense)',
                             }}
                           >
                             {q.probability}%
