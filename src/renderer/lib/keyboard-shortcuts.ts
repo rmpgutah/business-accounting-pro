@@ -28,25 +28,30 @@ export function registerKeyboardShortcuts(actions: ShortcutActions): () => void 
     if (!mod) return;
 
     // Ignore when typing in inputs (unless it's a shortcut we specifically want)
-    const target = e.target as HTMLElement;
-    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+    const target = e.target as HTMLElement | null;
+    const isInput = !!target && (
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable
+    );
 
-    // Cmd/Ctrl + N — New item
-    if (e.key === 'n' && !e.shiftKey) {
+    // Cmd/Ctrl + N — New item (skip when typing)
+    if (e.key === 'n' && !e.shiftKey && !isInput) {
       e.preventDefault();
       actions.newItem();
       return;
     }
 
-    // Cmd/Ctrl + E — Export current view
-    if (e.key === 'e' && !e.shiftKey) {
+    // Cmd/Ctrl + E — Export current view (skip when typing)
+    if (e.key === 'e' && !e.shiftKey && !isInput) {
       e.preventDefault();
       actions.exportView();
       return;
     }
 
-    // Cmd/Ctrl + F — Focus search (only override if not already in an input)
-    if (e.key === 'f' && !e.shiftKey) {
+    // Cmd/Ctrl + F — Focus global search (but don't block browser find-in-field in inputs)
+    if (e.key === 'f' && !e.shiftKey && !isInput) {
       e.preventDefault();
       actions.focusSearch();
       return;
@@ -59,12 +64,14 @@ export function registerKeyboardShortcuts(actions: ShortcutActions): () => void 
       return;
     }
 
-    // Cmd/Ctrl + 1-9 — Switch module by position
-    const num = parseInt(e.key, 10);
-    if (num >= 1 && num <= 9) {
-      e.preventDefault();
-      actions.switchModule(num - 1);
-      return;
+    // Cmd/Ctrl + 1-9 — Switch module (skip when typing into a field)
+    if (!isInput) {
+      const num = parseInt(e.key, 10);
+      if (!Number.isNaN(num) && num >= 1 && num <= 9) {
+        e.preventDefault();
+        actions.switchModule(num - 1);
+        return;
+      }
     }
   };
 

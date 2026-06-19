@@ -619,7 +619,7 @@ export default function SettingsModule() {
           </div>
           <div className="flex items-center gap-3">
             {backupMsg && (
-              <span className="text-xs font-medium" style={{ color: '#22c55e' }}>{backupMsg}</span>
+              <span className="text-xs font-medium" style={{ color: 'var(--color-accent-income)' }}>{backupMsg}</span>
             )}
             <button
               className="block-btn-success flex items-center gap-1.5"

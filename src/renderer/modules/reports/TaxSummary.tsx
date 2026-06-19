@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Printer, Download } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { format, startOfYear, endOfYear } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -255,15 +255,9 @@ const TaxSummary: React.FC = () => {
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
             title="Print"
+            onClick={() => window.print()}
           >
             <Printer size={15} />
-          </button>
-          <button
-            className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
-            title="Export"
-          >
-            <Download size={15} />
           </button>
         </div>
       </div>

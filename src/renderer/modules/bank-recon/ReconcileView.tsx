@@ -19,7 +19,8 @@ interface BankAccount {
 
 interface BankTransaction {
   id: string;
-  transaction_date: string;
+  // Schema column is `date`.
+  date: string;
   description: string;
   amount: number;
   status: string;
@@ -357,7 +358,7 @@ const ReconcileView: React.FC = () => {
                         </span>
                       </div>
                       <span className="text-[10px] text-text-muted font-mono">
-                        {txn.transaction_date}
+                        {txn.date}
                       </span>
                     </div>
                   ))
@@ -494,7 +495,7 @@ const ReconcileView: React.FC = () => {
                           <td className="px-4 py-2 text-xs text-text-primary">
                             <div>{pair.bank.description}</div>
                             <div className="text-[10px] text-text-muted font-mono">
-                              {pair.bank.transaction_date}
+                              {pair.bank.date}
                             </div>
                           </td>
                           <td className="px-4 py-2 text-right font-mono text-xs text-text-primary">

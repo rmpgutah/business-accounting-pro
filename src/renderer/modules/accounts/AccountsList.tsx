@@ -18,7 +18,7 @@ interface Account {
   type: AccountType;
   subtype: string;
   description: string;
-  parent_account_id: string | null;
+  parent_id: string | null;
   is_active: boolean;
   balance: number;
 }
@@ -173,7 +173,7 @@ const AccountsList: React.FC<AccountsListProps> = ({
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400">
+          <button onClick={() => setShowImport(true)} className="block-btn flex items-center gap-2 text-xs">
             Import CSV
           </button>
           <button

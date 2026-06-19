@@ -15,24 +15,26 @@ export const Tooltip: React.FC<Props> = ({ content, children, placement = 'top' 
       className="relative inline-flex"
       onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}
+      onFocus={() => setVisible(true)}
+      onBlur={() => setVisible(false)}
     >
       {children}
       {visible && (
         <span
+          role="tooltip"
           className={`
             absolute z-50 left-1/2 -translate-x-1/2 w-max max-w-xs
-            bg-gray-900 text-white text-xs px-2.5 py-1.5 pointer-events-none
+            text-text-primary text-xs px-2.5 py-1.5 pointer-events-none
             whitespace-pre-wrap leading-relaxed
             ${placement === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}
           `}
+          style={{
+            background: 'var(--color-bg-elevated)',
+            border: '1px solid var(--color-border-primary)',
+            borderRadius: '2px',
+          }}
         >
           {content}
-          <span
-            className={`
-              absolute left-1/2 -translate-x-1/2 border-4 border-transparent
-              ${placement === 'top' ? 'top-full border-t-gray-900' : 'bottom-full border-b-gray-900'}
-            `}
-          />
         </span>
       )}
     </span>

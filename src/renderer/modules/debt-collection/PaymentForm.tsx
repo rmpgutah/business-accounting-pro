@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { DollarSign, X } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
+import { debtDb } from './dbHelpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtData {
@@ -113,8 +114,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
 
     setSaving(true);
     try {
-      // 1. Create payment record
-      await api.create('debt_payments', {
+      // 1. Create payment record (debt_payments has no company_id column).
+      await debtDb.createPayment({
         debt_id: debtId,
         amount: parsedAmount,
         method,

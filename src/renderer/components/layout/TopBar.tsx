@@ -20,14 +20,17 @@ const TopBar: React.FC = () => {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [localQuery, setLocalQuery] = useState('');
 
-  // Cmd+K / Ctrl+K shortcut
+  // Cmd+K / Ctrl+K — plain (not shift) opens global search.
+  // ESC only acts when the search modal is open.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setSearchOpen(true);
+        return;
       }
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && searchOpen) {
+        e.preventDefault();
         setSearchOpen(false);
         setLocalQuery('');
         setSearchQuery('');
@@ -36,14 +39,22 @@ const TopBar: React.FC = () => {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setSearchOpen, setSearchQuery, setSearchResults]);
+  }, [setSearchOpen, setSearchQuery, setSearchResults, searchOpen]);
 
   // Focus input when modal opens
   useEffect(() => {
     if (searchOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
+      const t = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
     }
   }, [searchOpen]);
+
+  // Clear pending debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   // Debounced search
   const handleSearchInput = useCallback(
@@ -96,9 +107,10 @@ const TopBar: React.FC = () => {
         }}
       >
         {/* Left — Company */}
-        <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' as any }}>
+        <div className="flex items-center gap-2 min-w-0 shrink" style={{ WebkitAppRegion: 'no-drag' as any }}>
           <button
-            className="flex items-center gap-2 px-2 py-1 text-text-primary hover:bg-bg-hover transition-colors"
+            aria-label={`Switch company (current: ${activeCompany?.name ?? 'None'})`}
+            className="flex items-center gap-2 px-2 py-1 text-text-primary hover:bg-bg-hover transition-colors min-w-0"
             style={{ borderRadius: '2px' }}
           >
             <Building2 size={16} className="text-text-muted shrink-0" />
@@ -112,7 +124,9 @@ const TopBar: React.FC = () => {
         {/* Center — Search trigger */}
         <button
           onClick={() => setSearchOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 w-80 bg-bg-primary border border-border-secondary text-text-muted text-sm hover:border-border-focus transition-colors"
+          aria-label="Open global search (⌘K)"
+          aria-keyshortcuts="Meta+K Control+K"
+          className="flex items-center gap-2 px-3 py-1.5 w-80 max-w-[40vw] bg-bg-primary border border-border-secondary text-text-muted text-sm hover:border-border-focus transition-colors"
           style={{ borderRadius: '2px', WebkitAppRegion: 'no-drag' as any }}
         >
           <Search size={14} />
@@ -128,6 +142,8 @@ const TopBar: React.FC = () => {
         {/* Right — User + Notifications + Logout */}
         <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' as any }}>
           <button
+            type="button"
+            aria-label={`Notifications${notificationCount > 0 ? ` (${notificationCount} unread)` : ''}`}
             className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
           >
@@ -146,7 +162,7 @@ const TopBar: React.FC = () => {
           {authUser && (
             <div
               className="flex items-center gap-2 px-2 py-1 ml-1"
-              style={{ borderLeft: '1px solid #2e2e2e' }}
+              style={{ borderLeft: '1px solid var(--color-border-primary)' }}
             >
               <div
                 className="flex items-center justify-center text-white text-[11px] font-bold shrink-0"
@@ -161,10 +177,12 @@ const TopBar: React.FC = () => {
                 {authUser.display_name}
               </span>
               <button
-                onClick={logout}
+                type="button"
+                onClick={() => { void logout(); }}
                 className="p-1 text-text-muted hover:text-accent-expense transition-colors"
                 style={{ borderRadius: '2px' }}
                 title="Sign Out"
+                aria-label="Sign out"
               >
                 <LogOut size={14} />
               </button>
@@ -178,11 +196,15 @@ const TopBar: React.FC = () => {
         <div
           className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/60"
           onClick={closeSearch}
+          role="presentation"
         >
           <div
             className="w-full max-w-xl bg-bg-elevated border border-border-primary shadow-2xl"
             style={{ borderRadius: '2px' }}
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Global search"
           >
             {/* Search Input */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border-primary">
@@ -194,11 +216,17 @@ const TopBar: React.FC = () => {
                 className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted outline-none"
                 value={localQuery}
                 onChange={(e) => handleSearchInput(e.target.value)}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-label="Search query"
               />
               <button
                 onClick={closeSearch}
                 className="p-1 text-text-muted hover:text-text-primary"
                 style={{ borderRadius: '2px' }}
+                aria-label="Close search"
+                type="button"
               >
                 <X size={14} />
               </button>

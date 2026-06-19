@@ -23,6 +23,9 @@ const baseStyles = `
   @page { margin: 0.4in; }
   .page { padding: 48px; }
   table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr, td, th { page-break-inside: avoid; break-inside: avoid; }
   th, td { padding: 8px 12px; text-align: left; }
   th {
     font-size: 10px;
@@ -34,7 +37,8 @@ const baseStyles = `
   }
   td { border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 12px; }
   .text-right { text-align: right; }
-  .font-mono { font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Fira Code', monospace, system-ui; }
+  .font-mono { font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace; }
+  td.text-right, th.text-right { font-variant-numeric: tabular-nums; }
   .font-bold { font-weight: 700; }
   .text-muted { color: #94a3b8; }
   .text-dark { color: #0f172a; }
@@ -85,7 +89,7 @@ ${baseStyles}
 .company-detail { font-size: 11px; color: #64748b; margin-top: 6px; line-height: 1.6; }
 .inv-title { font-size: 28px; font-weight: 800; color: #0f172a; text-transform: uppercase; text-align: right; }
 .inv-number { font-size: 13px; color: #64748b; text-align: right; margin-top: 4px; }
-.addresses { display: flex; justify-content: space-between; margin-bottom: 28px; }
+.addresses { display: flex; justify-content: flex-start; gap: 48px; margin-bottom: 28px; }
 .addr-block { max-width: 48%; }
 .addr-name { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 2px; }
 .addr-detail { font-size: 12px; color: #64748b; line-height: 1.5; }

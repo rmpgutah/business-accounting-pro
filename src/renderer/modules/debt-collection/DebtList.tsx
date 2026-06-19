@@ -117,8 +117,8 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       if (statusFilter && d.status !== statusFilter) return false;
       if (stageFilter && d.current_stage !== stageFilter) return false;
       if (priorityFilter && d.priority !== priorityFilter) return false;
-      if (dateFrom && d.delinquent_date < dateFrom) return false;
-      if (dateTo && d.delinquent_date > dateTo) return false;
+      if (dateFrom && (!d.delinquent_date || d.delinquent_date < dateFrom)) return false;
+      if (dateTo && (!d.delinquent_date || d.delinquent_date > dateTo)) return false;
       return true;
     });
   }, [debts, search, statusFilter, stageFilter, priorityFilter, dateFrom, dateTo]);
@@ -177,8 +177,11 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
   }, [filtered, type]);
 
   // ─── Age Calculation ────────────────────────────────────
-  const ageDays = (delinquentDate: string): number => {
-    return Math.floor((Date.now() - new Date(delinquentDate).getTime()) / 86400000);
+  const ageDays = (delinquentDate: string | null | undefined): number => {
+    if (!delinquentDate) return 0;
+    const t = new Date(delinquentDate).getTime();
+    if (isNaN(t)) return 0;
+    return Math.max(0, Math.floor((Date.now() - t) / 86400000));
   };
 
   if (loading) {
@@ -304,6 +307,8 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <input
               type="text"
               placeholder={`Search ${isReceivable ? 'debtors' : 'creditors'}...`}
+              aria-label={`Search ${isReceivable ? 'debtors' : 'creditors'}`}
+              autoComplete="off"
               className="block-input pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -515,7 +520,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             <tfoot>
               <tr>
                 <td
-                  colSpan={isReceivable ? 3 : 3}
+                  colSpan={3}
                   className="text-right text-xs font-semibold text-text-muted uppercase tracking-wider"
                 >
                   Total

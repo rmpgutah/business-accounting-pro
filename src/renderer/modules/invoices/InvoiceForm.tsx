@@ -360,9 +360,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
       }
 
       onSaved(savedId);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save invoice:', err);
-      alert('Failed to save invoice. Please try again.');
+      setErrors([`Failed to save invoice: ${err?.message || 'Please try again.'}`]);
     } finally {
       setSaving(false);
     }
@@ -411,14 +411,14 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
         <div
           style={{
             background: '#2a1215',
-            border: '1px solid #ef4444',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: '2px',
             padding: '12px 16px',
           }}
         >
           <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
             {errors.map((err, i) => (
-              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
+              <li key={i} style={{ color: 'var(--color-accent-expense)', fontSize: '13px', lineHeight: '1.6' }}>
                 {err}
               </li>
             ))}

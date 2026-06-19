@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { debtDb } from './dbHelpers';
 import api from '../../lib/api';
 
 // ─── Types ──────────────────────────────────────────────
@@ -76,7 +77,8 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
     setSaving(true);
 
     try {
-      await api.create('debt_communications', {
+      // debt_communications has no company_id column.
+      await debtDb.createCommunication({
         debt_id: debtId,
         type: form.type,
         direction: form.direction,

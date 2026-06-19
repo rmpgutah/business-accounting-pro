@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { FileText, Check, AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
+import { debtDb } from './dbHelpers';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 interface DemandLetterGeneratorProps {
@@ -12,10 +13,10 @@ interface DemandLetterGeneratorProps {
 interface Template {
   id: string;
   name: string;
+  type: string;
   severity: string;
-  description: string;
-  subject_template: string;
-  body_template: string;
+  subject: string;
+  body: string;
 }
 
 interface Debt {
@@ -38,18 +39,33 @@ function mergeFields(
   debt: Debt,
   companyName: string
 ): string {
+  const total =
+    (debt.original_amount || 0) +
+    (debt.interest_accrued || 0) +
+    (debt.fees_accrued || 0) -
+    ((debt as any).payments_made || 0);
+  const daysOverdue = debt.delinquent_date
+    ? Math.max(0, Math.floor((Date.now() - new Date(debt.delinquent_date).getTime()) / 86400000))
+    : 0;
+  const demandDeadline = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
   return text
     .replace(/\{\{debtor_name\}\}/g, debt.debtor_name || '')
     .replace(/\{\{debtor_email\}\}/g, debt.debtor_email || '')
     .replace(/\{\{debtor_address\}\}/g, debt.debtor_address || '')
     .replace(/\{\{original_amount\}\}/g, formatCurrency(debt.original_amount))
     .replace(/\{\{balance_due\}\}/g, formatCurrency(debt.balance_due))
+    .replace(/\{\{total_due\}\}/g, formatCurrency(total))
     .replace(/\{\{interest_accrued\}\}/g, formatCurrency(debt.interest_accrued))
     .replace(/\{\{fees_accrued\}\}/g, formatCurrency(debt.fees_accrued))
     .replace(/\{\{due_date\}\}/g, formatDate(debt.due_date))
     .replace(/\{\{delinquent_date\}\}/g, formatDate(debt.delinquent_date))
+    .replace(/\{\{days_overdue\}\}/g, String(daysOverdue))
+    .replace(/\{\{demand_deadline\}\}/g, formatDate(demandDeadline))
     .replace(/\{\{jurisdiction\}\}/g, debt.jurisdiction || '')
     .replace(/\{\{company_name\}\}/g, companyName)
+    .replace(/\{\{company_address\}\}/g, '')
+    .replace(/\{\{company_phone\}\}/g, '')
+    .replace(/\{\{company_email\}\}/g, '')
     .replace(/\{\{current_date\}\}/g, formatDate(new Date().toISOString()));
 }
 
@@ -118,12 +134,12 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
   // ── Preview text ──
   const previewSubject = useMemo(() => {
     if (!selectedTemplate || !debt) return '';
-    return mergeFields(selectedTemplate.subject_template || '', debt, companyName);
+    return mergeFields(selectedTemplate.subject || '', debt, companyName);
   }, [selectedTemplate, debt, companyName]);
 
   const previewBody = useMemo(() => {
     if (!selectedTemplate || !debt) return '';
-    return mergeFields(selectedTemplate.body_template || '', debt, companyName);
+    return mergeFields(selectedTemplate.body || '', debt, companyName);
   }, [selectedTemplate, debt, companyName]);
 
   // ── Generate & Log ──
@@ -136,8 +152,8 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
       const html = result?.html || '';
       setGeneratedHtml(html);
 
-      // Auto-create communication record
-      await api.create('debt_communications', {
+      // Auto-create communication record (no company_id column on this table).
+      await debtDb.createCommunication({
         debt_id: debtId,
         type: 'letter',
         direction: 'outbound',
@@ -146,8 +162,8 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
         template_used: selectedTemplate.name,
       });
 
-      // Auto-create evidence record
-      await api.create('debt_evidence', {
+      // Auto-create evidence record (no company_id column on this table).
+      await debtDb.createEvidence({
         debt_id: debtId,
         type: 'communication',
         title: 'Demand Letter - ' + selectedTemplate.name,
@@ -235,9 +251,9 @@ const DemandLetterGenerator: React.FC<DemandLetterGeneratorProps> = ({ debtId })
                 >
                   {tpl.severity}
                 </span>
-                {tpl.description && (
+                {tpl.subject && (
                   <p className="text-xs text-text-muted mt-2 line-clamp-2">
-                    {tpl.description}
+                    {tpl.subject}
                   </p>
                 )}
               </button>

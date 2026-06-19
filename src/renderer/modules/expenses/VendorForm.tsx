@@ -53,7 +53,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
             phone: data.phone || '',
             address: data.address || '',
             tax_id: data.tax_id || '',
-            payment_terms: data.payment_terms || '',
+            payment_terms: data.payment_terms != null ? String(data.payment_terms) : '',
             notes: data.notes || '',
             status: data.status || 'active',
           });
@@ -93,7 +93,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
         phone: form.phone || null,
         address: form.address || null,
         tax_id: form.tax_id || null,
-        payment_terms: form.payment_terms || null,
+        payment_terms: form.payment_terms ? parseInt(form.payment_terms, 10) || 0 : 0,
         notes: form.notes || null,
         status: form.status,
       };
@@ -232,10 +232,12 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                     Payment Terms
                   </label>
                   <input
-                    type="text"
+                    type="number"
+                    min={0}
+                    step={1}
                     name="payment_terms"
-                    className="block-input"
-                    placeholder="e.g. Net 30"
+                    className="block-input font-mono"
+                    placeholder="e.g. 30"
                     value={form.payment_terms}
                     onChange={handleChange}
                   />
@@ -271,7 +273,6 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
-                  <option value="blocked">Blocked</option>
                 </select>
               </div>
 

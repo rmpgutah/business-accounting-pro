@@ -48,10 +48,15 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({
       if (!activeCompany) return;
       setLoading(true);
       try {
-        const data = await api.query(
-          'journal_entries',
-          { company_id: activeCompany.id },
-          { field: 'date', dir: 'desc' }
+        // journal_entries has no total_debit/total_credit columns — aggregate from lines.
+        const data = await api.rawQuery(
+          `SELECT je.*,
+                  COALESCE((SELECT SUM(debit) FROM journal_entry_lines jel WHERE jel.journal_entry_id = je.id), 0) AS total_debit,
+                  COALESCE((SELECT SUM(credit) FROM journal_entry_lines jel WHERE jel.journal_entry_id = je.id), 0) AS total_credit
+           FROM journal_entries je
+           WHERE je.company_id = ?
+           ORDER BY je.date DESC`,
+          [activeCompany.id]
         );
         if (!cancelled && Array.isArray(data)) {
           setEntries(data);

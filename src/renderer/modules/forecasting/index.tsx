@@ -629,8 +629,8 @@ const Forecasting: React.FC = () => {
           <div
             className="mt-4 p-3"
             style={{
-              backgroundColor: '#a855f710',
-              border: '1px solid #a855f730',
+              backgroundColor: 'color-mix(in srgb, var(--color-accent-purple) 6%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-accent-purple) 18%, transparent)',
               borderRadius: '2px',
             }}
           >

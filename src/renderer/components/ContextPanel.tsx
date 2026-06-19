@@ -13,29 +13,38 @@ export const ClientContext: React.FC<ClientContextProps> = ({ clientId, companyI
       api.rawQuery(`SELECT COALESCE(SUM(total - amount_paid), 0) as outstanding FROM invoices WHERE client_id = ? AND company_id = ? AND status NOT IN ('paid','cancelled')`, [clientId, companyId]),
       api.rawQuery(`SELECT MAX(paid_date) as last_payment FROM invoices WHERE client_id = ? AND company_id = ? AND status = 'paid'`, [clientId, companyId]),
       api.rawQuery(`SELECT COALESCE(SUM(total), 0) as ytd FROM invoices WHERE client_id = ? AND company_id = ? AND strftime('%Y', issue_date) = strftime('%Y', 'now')`, [clientId, companyId]),
-    ]).then(([outRow, payRow, ytdRow]) => setData({
-      outstanding: outRow?.outstanding ?? 0,
-      lastPayment: payRow?.last_payment ?? null,
-      ytd: ytdRow?.ytd ?? 0,
-    }));
+    ])
+      .then(([outRow, payRow, ytdRow]) => setData({
+        outstanding: outRow?.outstanding ?? 0,
+        lastPayment: payRow?.last_payment ?? null,
+        ytd: ytdRow?.ytd ?? 0,
+      }))
+      .catch((err) => { console.error('[ClientContext] load failed:', err); setData(null); });
   }, [clientId, companyId]);
 
   if (!clientId || !data) return null;
 
   return (
-    <div className="border border-indigo-100 bg-indigo-50 p-3 text-xs space-y-1.5 mt-2">
-      <div className="font-black uppercase tracking-wider text-indigo-600 text-[10px] mb-2">Client Overview</div>
+    <div
+      className="p-3 text-xs space-y-1.5 mt-2"
+      style={{
+        background: 'var(--color-accent-blue-bg)',
+        border: '1px solid var(--color-accent-blue)',
+        borderRadius: '2px',
+      }}
+    >
+      <div className="font-black uppercase tracking-wider text-accent-blue text-[10px] mb-2">Client Overview</div>
       <div className="flex justify-between">
-        <span className="text-gray-500">Outstanding</span>
-        <span className={`font-bold ${Number(data.outstanding) > 0 ? 'text-orange-600' : 'text-gray-700'}`}>${Number(data.outstanding).toFixed(2)}</span>
+        <span className="text-text-muted">Outstanding</span>
+        <span className={`font-bold font-mono ${Number(data.outstanding) > 0 ? 'text-accent-warning' : 'text-text-secondary'}`} style={{ fontVariantNumeric: 'tabular-nums' }}>${Number(data.outstanding).toFixed(2)}</span>
       </div>
       <div className="flex justify-between">
-        <span className="text-gray-500">Last Payment</span>
-        <span className="font-bold">{data.lastPayment ? new Date(data.lastPayment).toLocaleDateString() : '—'}</span>
+        <span className="text-text-muted">Last Payment</span>
+        <span className="font-bold text-text-secondary">{data.lastPayment ? new Date(data.lastPayment).toLocaleDateString() : '—'}</span>
       </div>
       <div className="flex justify-between">
-        <span className="text-gray-500">Invoiced YTD</span>
-        <span className="font-bold">${Number(data.ytd).toFixed(2)}</span>
+        <span className="text-text-muted">Invoiced YTD</span>
+        <span className="font-bold font-mono text-text-secondary" style={{ fontVariantNumeric: 'tabular-nums' }}>${Number(data.ytd).toFixed(2)}</span>
       </div>
     </div>
   );
@@ -54,26 +63,35 @@ export const CategoryContext: React.FC<CategoryContextProps> = ({ categoryId, co
         COALESCE((SELECT bl.amount FROM budget_lines bl WHERE bl.category_id = ? LIMIT 1), 0) as budget
       FROM expenses WHERE company_id = ? AND category_id = ?`,
       [categoryId, companyId, categoryId]
-    ).then(row => setData(row));
+    )
+      .then(row => setData(row ?? { month_spend: 0, budget: 0 }))
+      .catch((err) => { console.error('[CategoryContext] load failed:', err); setData(null); });
   }, [categoryId, companyId]);
 
   if (!categoryId || !data) return null;
   const over = Number(data.month_spend) > Number(data.budget) && Number(data.budget) > 0;
 
   return (
-    <div className={`border p-3 text-xs space-y-1.5 mt-2 ${over ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-gray-50'}`}>
-      <div className="font-black uppercase tracking-wider text-[10px] mb-2 text-gray-500">Category This Month</div>
+    <div
+      className="p-3 text-xs space-y-1.5 mt-2"
+      style={{
+        background: over ? 'var(--color-accent-expense-bg)' : 'var(--color-bg-secondary)',
+        border: `1px solid ${over ? 'var(--color-accent-expense)' : 'var(--color-border-primary)'}`,
+        borderRadius: '2px',
+      }}
+    >
+      <div className="font-black uppercase tracking-wider text-[10px] mb-2 text-text-muted">Category This Month</div>
       <div className="flex justify-between">
-        <span className="text-gray-500">Spent</span>
-        <span className={`font-bold ${over ? 'text-red-600' : ''}`}>${Number(data.month_spend).toFixed(2)}</span>
+        <span className="text-text-muted">Spent</span>
+        <span className={`font-bold font-mono ${over ? 'text-accent-expense' : 'text-text-secondary'}`} style={{ fontVariantNumeric: 'tabular-nums' }}>${Number(data.month_spend).toFixed(2)}</span>
       </div>
       {Number(data.budget) > 0 && (
         <div className="flex justify-between">
-          <span className="text-gray-500">Budget</span>
-          <span className="font-bold">${Number(data.budget).toFixed(2)}</span>
+          <span className="text-text-muted">Budget</span>
+          <span className="font-bold font-mono text-text-secondary" style={{ fontVariantNumeric: 'tabular-nums' }}>${Number(data.budget).toFixed(2)}</span>
         </div>
       )}
-      {over && <div className="text-red-600 font-bold text-[10px] uppercase tracking-wider">Over budget</div>}
+      {over && <div className="text-accent-expense font-bold text-[10px] uppercase tracking-wider">Over budget</div>}
     </div>
   );
 };

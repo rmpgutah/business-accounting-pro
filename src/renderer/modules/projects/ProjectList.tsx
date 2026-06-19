@@ -69,7 +69,7 @@ const BudgetBar: React.FC<{ spent: number; budget: number }> = ({ spent, budget 
 
   const pct = Math.min((spent / budget) * 100, 100);
   const barColor =
-    pct > 90 ? '#ef4444' : pct > 75 ? '#eab308' : '#22c55e';
+    pct > 90 ? 'var(--color-accent-expense)' : pct > 75 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)';
 
   return (
     <div className="space-y-1">

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Tag, Plus, X } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface TaxCategory {
@@ -27,6 +28,7 @@ const DEFAULT_CATEGORIES: Omit<TaxCategory, 'id'>[] = [
 
 // ─── Component ──────────────────────────────────────────
 const TaxCategories: React.FC = () => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [categories, setCategories] = useState<TaxCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -40,8 +42,14 @@ const TaxCategories: React.FC = () => {
   const [formError, setFormError] = useState('');
 
   const loadCategories = async () => {
+    if (!activeCompany) {
+      setCategories([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
-      const data = await api.query('tax_categories');
+      const data = await api.query('tax_categories', { company_id: activeCompany.id });
       setCategories(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load tax categories:', err);
@@ -52,12 +60,14 @@ const TaxCategories: React.FC = () => {
 
   useEffect(() => {
     loadCategories();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompany]);
 
   const seedDefaults = async () => {
+    if (!activeCompany) return;
     try {
       for (const cat of DEFAULT_CATEGORIES) {
-        await api.create('tax_categories', cat);
+        await api.create('tax_categories', { ...cat, company_id: activeCompany.id });
       }
       await loadCategories();
     } catch (err) {
@@ -71,10 +81,14 @@ const TaxCategories: React.FC = () => {
       setFormError('Category name is required.');
       return;
     }
+    if (!activeCompany) {
+      setFormError('Select an active company first.');
+      return;
+    }
     setFormError('');
     setSaving(true);
     try {
-      await api.create('tax_categories', formData);
+      await api.create('tax_categories', { ...formData, company_id: activeCompany.id });
       setFormData({ name: '', description: '', schedule_c_line: '', is_deductible: true });
       setFormError('');
       setShowForm(false);

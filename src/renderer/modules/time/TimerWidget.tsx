@@ -121,7 +121,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
     <div
       className="block-card p-4"
       style={{
-        borderLeft: `3px solid ${running ? '#22c55e' : '#2e2e2e'}`,
+        borderLeft: `3px solid ${running ? 'var(--color-accent-income)' : 'var(--color-border-primary)'}`,
         transition: 'border-color 0.2s',
       }}
     >

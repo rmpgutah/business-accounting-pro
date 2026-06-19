@@ -13,7 +13,9 @@ const StatusBar: React.FC = () => {
       setUpdateVersion(version || '');
     };
     const onProgress = (_e: any, percent: number) => {
-      setDownloadPercent(percent);
+      const n = Number(percent);
+      if (!Number.isFinite(n)) return;
+      setDownloadPercent(Math.max(0, Math.min(100, Math.round(n))));
     };
     const onReady = (_e: any, version: string) => {
       setUpdateStatus('ready');
@@ -31,7 +33,9 @@ const StatusBar: React.FC = () => {
     }
 
     return () => {
-      cleanups.forEach((fn) => fn());
+      cleanups.forEach((fn) => {
+        try { if (typeof fn === 'function') fn(); } catch { /* ignore */ }
+      });
     };
   }, []);
 

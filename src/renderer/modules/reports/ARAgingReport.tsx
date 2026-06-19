@@ -3,6 +3,7 @@ import { Printer, Download } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { downloadCSVBlob } from '../../lib/csv-export';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -147,13 +148,26 @@ const ARAgingReport: React.FC = () => {
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
             title="Print"
+            onClick={() => window.print()}
           >
             <Printer size={15} />
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
-            title="Export"
+            title="Export CSV"
+            onClick={() => {
+              downloadCSVBlob(
+                entries.map((e) => ({
+                  invoice_number: e.invoiceNumber,
+                  client: e.clientName,
+                  amount_due: e.amountDue.toFixed(2),
+                  days_outstanding: e.daysOutstanding,
+                  bucket: BUCKET_LABELS[e.bucket as BucketKey],
+                })),
+                `ar-aging-${format(new Date(), 'yyyy-MM-dd')}.csv`
+              );
+            }}
           >
             <Download size={15} />
           </button>

@@ -279,3 +279,27 @@ body {
   margin-bottom: 1rem;
   border-radius: 2px;
 }
+
+/* ─── Print ─────────────────────────────────────────────── */
+@media print {
+  /* Hide app chrome when printing a module view */
+  aside, header, footer, nav {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    overflow: visible !important;
+  }
+  main {
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .no-print { display: none !important; }
+  tr, td, th { page-break-inside: avoid; break-inside: avoid; }
+  thead { display: table-header-group; }
+}

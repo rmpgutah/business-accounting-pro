@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Wallet, Plus } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // ─── Types ──────────────────────────────────────────────
 interface Budget {
@@ -9,7 +10,7 @@ interface Budget {
   period: 'monthly' | 'quarterly' | 'annual';
   start_date: string;
   end_date: string;
-  status: 'draft' | 'active' | 'closed';
+  status: 'active' | 'closed';
 }
 
 interface BudgetListProps {
@@ -18,7 +19,6 @@ interface BudgetListProps {
 }
 
 const statusBadge: Record<string, string> = {
-  draft: 'block-badge block-badge-warning',
   active: 'block-badge block-badge-income',
   closed: 'block-badge',
 };
@@ -31,14 +31,27 @@ const periodLabel: Record<string, string> = {
 
 // ─── Component ──────────────────────────────────────────
 const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeCompany) {
+        if (!cancelled) {
+          setBudgets([]);
+          setLoading(false);
+        }
+        return;
+      }
+      setLoading(true);
       try {
-        const data = await api.query('budgets', undefined, { field: 'start_date', dir: 'desc' });
+        const data = await api.query(
+          'budgets',
+          { company_id: activeCompany.id },
+          { field: 'start_date', dir: 'desc' }
+        );
         if (!cancelled) setBudgets(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error('Failed to load budgets:', err);
@@ -48,7 +61,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
     };
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeCompany]);
 
   if (loading) {
     return (

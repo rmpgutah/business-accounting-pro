@@ -84,7 +84,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         // showed cross-company data in dropdowns.
         const cid = activeCompany.id;
         const [catData, accData, venData, projData, cliData] = await Promise.all([
-          api.query('categories', { company_id: cid }),
+          api.query('categories', { company_id: cid, type: 'expense' }),
           api.query('accounts', { company_id: cid, type: 'expense' }),
           api.query('vendors', { company_id: cid }),
           api.query('projects', { company_id: cid }),
@@ -224,14 +224,14 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
         <div
           style={{
             background: '#2a1215',
-            border: '1px solid #ef4444',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: '2px',
             padding: '12px 16px',
           }}
         >
           <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
             {errors.map((err, i) => (
-              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
+              <li key={i} style={{ color: 'var(--color-accent-expense)', fontSize: '13px', lineHeight: '1.6' }}>
                 {err}
               </li>
             ))}

@@ -160,15 +160,19 @@ const App: React.FC = () => {
   const setCompanies = useCompanyStore((s) => s.setCompanies);
   const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const authUser = useAuthStore((s) => s.user);
 
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
+  // Cmd/Ctrl + Shift + K opens the Quick Create palette.
+  // Plain Cmd+K is reserved for global search (handled in TopBar).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setQuickCreateOpen(prev => !prev);
+      }
+      if (e.key === 'Escape') {
+        setQuickCreateOpen(false);
       }
     };
     window.addEventListener('keydown', handler);
@@ -176,34 +180,34 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const init = async () => {
       try {
-        // If user just logged in, companies are already set by AuthScreen
-        if (companies.length === 0) {
-          const list = await api.listCompanies();
-          setCompanies(list ?? []);
-          if (list && list.length > 0) {
-            setActiveCompany(list[0]);
-            // Seed default categories for all companies (safe — no-op if already seeded)
-            for (const company of list) {
-              api.categoriesSeedDefaults(company.id).catch(() => {});
-            }
-          }
-        } else {
-          // Companies already loaded — still ensure categories are seeded
-          for (const company of companies) {
+        if (!isAuthenticated) {
+          if (!cancelled) setLoading(false);
+          return;
+        }
+        // Always re-fetch from DB on auth change — never trust stale state
+        const list = await api.listCompanies();
+        if (cancelled) return;
+        const validList = Array.isArray(list) ? list : [];
+        setCompanies(validList);
+        if (validList.length > 0) {
+          setActiveCompany(validList[0]);
+          for (const company of validList) {
             api.categoriesSeedDefaults(company.id).catch(() => {});
           }
         }
       } catch (err) {
         console.error('Failed to load companies:', err);
-        setCompanies([]);
+        if (!cancelled) setCompanies([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     init();
-  }, [isAuthenticated]);
+    return () => { cancelled = true; };
+  }, [isAuthenticated, setCompanies, setActiveCompany, setLoading]);
 
   // ─── Global Keyboard Shortcuts ──────────────────────────
   useEffect(() => {

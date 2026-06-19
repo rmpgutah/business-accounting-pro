@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Gavel, Plus, Check, AlertTriangle, Clock } from 'lucide-react';
 import api from '../../lib/api';
+import { debtDb } from './dbHelpers';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
@@ -101,14 +102,15 @@ const ACTION_TYPES = [
   { value: 'lien', label: 'Lien' },
 ];
 
+// NOTE: values must match the CHECK constraint on debt_legal_actions.status.
 const STATUS_OPTIONS = [
   'preparing',
   'filed',
   'served',
   'hearing_scheduled',
+  'in_progress',
   'judgment',
   'appeal',
-  'settled',
   'closed',
 ];
 
@@ -198,7 +200,8 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
     setSaving(true);
     try {
       const checklist = getDefaultChecklist(form.action_type);
-      await api.create('debt_legal_actions', {
+      // debt_legal_actions has no company_id column.
+      await debtDb.createLegalAction({
         debt_id: debtId,
         action_type: form.action_type,
         status: 'preparing',
@@ -229,7 +232,7 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
       items[itemIdx].completed = !items[itemIdx].completed;
       items[itemIdx].completed_date = items[itemIdx].completed ? todayISO() : null;
       try {
-        await api.update('debt_legal_actions', action.id, {
+        await debtDb.updateLegalAction(action.id, {
           checklist_json: JSON.stringify(items),
         });
         setRefreshKey((k) => k + 1);
@@ -248,7 +251,7 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
       const items = parseChecklist(action.checklist_json);
       items.push({ title: text, completed: false, completed_date: null, notes: '' });
       try {
-        await api.update('debt_legal_actions', action.id, {
+        await debtDb.updateLegalAction(action.id, {
           checklist_json: JSON.stringify(items),
         });
         setNewItemInputs((prev) => ({ ...prev, [action.id]: '' }));
@@ -264,7 +267,7 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
   const handleStatusChange = useCallback(
     async (actionId: string, newStatus: string) => {
       try {
-        await api.update('debt_legal_actions', actionId, { status: newStatus });
+        await debtDb.updateLegalAction(actionId, { status: newStatus });
         setRefreshKey((k) => k + 1);
       } catch (err) {
         console.error('Failed to update filing status:', err);
@@ -460,7 +463,9 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
         const totalCount = items.length;
         const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-        const typeInfo = formatStatus(action.action_type);
+        const typeInfo = ACTION_TYPES.find((t) => t.value === action.action_type);
+        const typeLabel = typeInfo?.label
+          ?? (action.action_type || '—').replace(/_/g, ' ');
         const statusInfo = formatStatus(action.status);
 
         const days = daysUntil(action.hearing_date);
@@ -470,7 +475,7 @@ const CourtFilingTracker: React.FC<CourtFilingTrackerProps> = ({ debtId }) => {
           <div key={action.id} className="block-card space-y-3">
             {/* Header row */}
             <div className="flex items-center flex-wrap gap-2">
-              <span className={typeInfo.className}>{typeInfo.label}</span>
+              <span className="block-badge">{typeLabel}</span>
               <span className={statusInfo.className}>{statusInfo.label}</span>
               {action.case_number && (
                 <span className="text-xs text-text-secondary font-mono">

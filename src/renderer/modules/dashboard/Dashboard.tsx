@@ -153,11 +153,11 @@ function dateRange(period: Period): { start: string; end: string } {
 function actionBadgeStyle(action: string): { bg: string; text: string } {
   switch (action) {
     case 'create':
-      return { bg: '#16a34a20', text: '#22c55e' };
+      return { bg: '#16a34a20', text: 'var(--color-accent-income)' };
     case 'update':
-      return { bg: '#2563eb20', text: '#3b82f6' };
+      return { bg: '#2563eb20', text: 'var(--color-accent-blue)' };
     case 'delete':
-      return { bg: '#dc262620', text: '#ef4444' };
+      return { bg: '#dc262620', text: 'var(--color-accent-expense)' };
     default:
       return { bg: '#6b6b6b20', text: '#6b6b6b' };
   }
@@ -170,9 +170,9 @@ function urgencyColor(dueDate: string): string {
   const daysLeft = Math.ceil(
     (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
   );
-  if (daysLeft <= 1) return '#ef4444';
-  if (daysLeft <= 3) return '#f59e0b';
-  return '#22c55e';
+  if (daysLeft <= 1) return 'var(--color-accent-expense)';
+  if (daysLeft <= 3) return 'var(--color-accent-warning)';
+  return 'var(--color-accent-income)';
 }
 
 // ─── Chart Colors ───────────────────────────────────────
@@ -670,8 +670,10 @@ const Dashboard: React.FC = () => {
         const lastRev = Array.isArray(lastMonthRevData) ? lastMonthRevData[0]?.rev : lastMonthRevData?.rev;
         const topClient = Array.isArray(topClientMonthData) ? topClientMonthData[0] : topClientMonthData;
 
+        const lastRevNum = Number(lastRev) || 0;
+        const thisRevNum = Number(thisRev) || 0;
         const growthPct =
-          lastRev && lastRev > 0 ? ((thisRev - lastRev) / lastRev) * 100 : 0;
+          lastRevNum > 0 ? ((thisRevNum - lastRevNum) / lastRevNum) * 100 : 0;
 
         setQuickMetrics({
           invoicesSentThisMonth: invoicesSent || 0,
@@ -1303,7 +1305,7 @@ const Dashboard: React.FC = () => {
                           style={{
                             width: `${pct}%`,
                             height: '100%',
-                            backgroundColor: '#3b82f6',
+                            backgroundColor: 'var(--color-accent-blue)',
                             borderRadius: '1px',
                             transition: 'width 0.3s ease',
                           }}

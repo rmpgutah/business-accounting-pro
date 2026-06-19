@@ -130,8 +130,8 @@ const TaxDashboard: React.FC = () => {
           api.query('tax_payments', { company_id: activeCompany.id, year: currentYear }),
         ]);
         if (cancelled) return;
-        setYtdIncome(incomeData?.[0]?.total ?? 0);
-        setYtdExpenses(expenseData?.[0]?.total ?? 0);
+        setYtdIncome(Number(incomeData?.[0]?.total) || 0);
+        setYtdExpenses(Number(expenseData?.[0]?.total) || 0);
         setTaxPayments(Array.isArray(payments) ? payments : []);
       } catch (err) {
         console.error('Failed to load tax data:', err);
@@ -159,13 +159,18 @@ const TaxDashboard: React.FC = () => {
       return {
         ...q,
         amount: quarterlyAmount,
-        paid: paidAmount >= quarterlyAmount,
+        // Only consider a quarter "paid" when there's actually a liability AND
+        // paid >= owed. When quarterlyAmount is 0 every quarter would otherwise
+        // be flagged as paid, hiding the pending state entirely.
+        paid: quarterlyAmount > 0 && paidAmount >= quarterlyAmount,
         paidAmount,
       } as QuarterPayment;
     });
   }, [currentYear, taxPayments, quarterlyAmount]);
 
-  const nextDue = quarters.find((q) => !q.paid && q.dueDate >= today);
+  // Prefer the earliest unpaid quarter — including overdue ones — so the user
+  // isn't silently skipped past a missed deadline.
+  const nextDue = quarters.find((q) => !q.paid);
 
   const effectiveRate = netIncome > 0 ? (totalEstimatedTax / netIncome) * 100 : 0;
 

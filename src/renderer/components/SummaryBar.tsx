@@ -5,13 +5,19 @@ export interface SummaryItem { label: string; value: string; accent?: 'red' | 'o
 
 export const SummaryBar: React.FC<{ items: SummaryItem[] }> = ({ items }) => {
   const accentCls: Record<string, string> = {
-    red: 'text-red-600', orange: 'text-orange-600', green: 'text-green-600', default: 'text-gray-900',
+    red: 'text-accent-expense',
+    orange: 'text-accent-warning',
+    green: 'text-accent-income',
+    default: 'text-text-primary',
   };
   return (
-    <div className="flex gap-6 bg-white border-b border-gray-200 px-6 py-2.5 flex-wrap">
+    <div
+      className="flex gap-6 px-6 py-2.5 flex-wrap bg-bg-secondary"
+      style={{ borderBottom: '1px solid var(--color-border-primary)', borderRadius: '0' }}
+    >
       {items.map((item, i) => (
-        <div key={i} className="flex flex-col">
-          <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400">{item.label}</span>
+        <div key={i} className="flex flex-col font-mono" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          <span className="text-[10px] uppercase tracking-widest font-bold text-text-muted">{item.label}</span>
           <span className={`text-sm font-black ${accentCls[item.accent ?? 'default']}`}>{item.value}</span>
         </div>
       ))}

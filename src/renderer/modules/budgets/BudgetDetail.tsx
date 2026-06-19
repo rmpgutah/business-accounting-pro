@@ -41,9 +41,9 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Progress Bar Color ─────────────────────────────────
 function progressColor(pct: number): string {
-  if (pct > 90) return '#ef4444';   // red
-  if (pct > 75) return '#eab308';   // yellow
-  return '#22c55e';                  // green
+  if (pct > 90) return 'var(--color-accent-expense)';   // red
+  if (pct > 75) return 'var(--color-accent-warning)';   // yellow
+  return 'var(--color-accent-income)';                  // green
 }
 
 // ─── Component ──────────────────────────────────────────
@@ -84,7 +84,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
           if (Array.isArray(expenseData)) {
             for (const row of expenseData) {
               if (row.category) {
-                map[row.category.toLowerCase()] = row.total || 0;
+                map[row.category.toLowerCase()] = Number(row.total) || 0;
               }
             }
           }
@@ -98,11 +98,11 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack }) => {
     };
     load();
     return () => { cancelled = true; };
-  }, [budgetId]);
+  }, [budgetId, activeCompany]);
 
   const linesWithActual: LineWithActual[] = useMemo(() => {
     return lines.map((line) => {
-      const actual = actuals[line.category.toLowerCase()] || 0;
+      const actual = actuals[(line.category || '').toLowerCase()] || 0;
       const remaining = line.amount - actual;
       const percentUsed = line.amount > 0 ? (actual / line.amount) * 100 : 0;
       return { ...line, actual, remaining, percentUsed };

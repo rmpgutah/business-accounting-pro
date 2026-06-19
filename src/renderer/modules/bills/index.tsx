@@ -603,9 +603,9 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
       }
 
       onSaved(savedId);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save bill:', err);
-      alert('Failed to save bill. Please try again.');
+      setErrors([`Failed to save bill: ${err?.message || 'Please try again.'}`]);
     } finally {
       setSaving(false);
     }
@@ -646,14 +646,14 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
         <div
           style={{
             background: '#2a1215',
-            border: '1px solid #ef4444',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: '2px',
             padding: '12px 16px',
           }}
         >
           <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
             {errors.map((e, i) => (
-              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
+              <li key={i} style={{ color: 'var(--color-accent-expense)', fontSize: '13px', lineHeight: '1.6' }}>
                 {e}
               </li>
             ))}
@@ -1024,7 +1024,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
         <div className="module-actions">
           <button
             onClick={handleDuplicate}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400 hover:text-indigo-600"
+            className="block-btn flex items-center gap-2"
           >
             <Copy size={14} /> Duplicate
           </button>
@@ -1216,7 +1216,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
             <div
               style={{
                 background: '#2a1215',
-                border: '1px solid #ef4444',
+                border: '1px solid var(--color-accent-expense)',
                 borderRadius: '2px',
                 padding: '10px 14px',
                 marginBottom: '14px',
@@ -1224,7 +1224,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
             >
               <ul style={{ margin: 0, padding: '0 0 0 14px', listStyle: 'disc' }}>
                 {payErrors.map((e, i) => (
-                  <li key={i} style={{ color: '#ef4444', fontSize: '12px', lineHeight: '1.6' }}>
+                  <li key={i} style={{ color: 'var(--color-accent-expense)', fontSize: '12px', lineHeight: '1.6' }}>
                     {e}
                   </li>
                 ))}

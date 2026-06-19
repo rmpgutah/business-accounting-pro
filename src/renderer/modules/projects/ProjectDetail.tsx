@@ -330,9 +330,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
           className="text-xs px-3 py-2 font-mono"
           style={{
             background: '#2a1215',
-            border: '1px solid #ef4444',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: '2px',
-            color: '#ef4444',
+            color: 'var(--color-accent-expense)',
           }}
         >
           {invoiceError}

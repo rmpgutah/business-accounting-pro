@@ -39,8 +39,13 @@ interface Client {
   id: string;
   name: string;
   email?: string;
-  address?: string;
   phone?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
 }
 
 interface Payment {
@@ -48,7 +53,7 @@ interface Payment {
   invoice_id: string;
   amount: number;
   date: string;
-  method: string;
+  payment_method: string;
   reference: string;
 }
 
@@ -238,13 +243,13 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </button>
           <button
             onClick={handleCopyPortalLink}
-            className="px-3 py-1.5 border-2 border-gray-900 text-xs font-bold uppercase tracking-wider hover:bg-gray-900 hover:text-white transition-colors"
+            className="block-btn text-xs"
           >
             {copied ? 'Copied!' : 'Copy Portal Link'}
           </button>
           <button
             onClick={handleDuplicate}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400 hover:text-indigo-600"
+            className="block-btn flex items-center gap-2"
           >
             <Copy size={14} /> Duplicate
           </button>
@@ -335,8 +340,15 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               <div className="space-y-1 text-sm">
                 <p className="text-text-primary font-semibold text-base">{client.name}</p>
                 {client.email && <p className="text-text-secondary">{client.email}</p>}
-                {client.address && (
-                  <p className="text-text-muted whitespace-pre-line">{client.address}</p>
+                {(client.address_line1 || client.city) && (
+                  <p className="text-text-muted whitespace-pre-line">
+                    {[
+                      client.address_line1,
+                      client.address_line2,
+                      [client.city, client.state, client.zip].filter(Boolean).join(', '),
+                      client.country,
+                    ].filter(Boolean).join('\n')}
+                  </p>
                 )}
                 {client.phone && <p className="text-text-muted">{client.phone}</p>}
               </div>
@@ -383,17 +395,17 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               <span className="text-text-secondary">Subtotal</span>
               <span className="font-mono text-text-primary">{fmt.format(invoice.subtotal)}</span>
             </div>
-            {invoice.tax > 0 && (
+            {invoice.tax_amount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-text-secondary">Tax</span>
-                <span className="font-mono text-text-primary">{fmt.format(invoice.tax)}</span>
+                <span className="font-mono text-text-primary">{fmt.format(invoice.tax_amount)}</span>
               </div>
             )}
-            {invoice.discount > 0 && (
+            {invoice.discount_amount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-text-secondary">Discount</span>
                 <span className="font-mono text-accent-income">
-                  -{fmt.format(invoice.discount)}
+                  -{fmt.format(invoice.discount_amount)}
                 </span>
               </div>
             )}
@@ -428,30 +440,16 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </div>
         </div>
 
-        {/* Notes & Terms */}
-        {(invoice.notes || invoice.terms_text) && (
+        {/* Notes */}
+        {invoice.notes && (
           <div
-            className="grid grid-cols-2 gap-6 mt-8 pt-6"
+            className="mt-8 pt-6"
             style={{ borderTop: '1px solid var(--color-border-primary)' }}
           >
-            {invoice.notes && (
-              <div>
-                <span className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">
-                  Notes
-                </span>
-                <p className="text-sm text-text-secondary whitespace-pre-line">{invoice.notes}</p>
-              </div>
-            )}
-            {invoice.terms_text && (
-              <div>
-                <span className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">
-                  Terms & Conditions
-                </span>
-                <p className="text-sm text-text-secondary whitespace-pre-line">
-                  {invoice.terms_text}
-                </p>
-              </div>
-            )}
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">
+              Notes
+            </span>
+            <p className="text-sm text-text-secondary whitespace-pre-line">{invoice.notes}</p>
           </div>
         )}
       </div>
@@ -481,7 +479,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
               {payments.map((p) => (
                 <tr key={p.id}>
                   <td className="text-text-secondary">{p.date}</td>
-                  <td className="text-text-secondary capitalize">{p.method}</td>
+                  <td className="text-text-secondary capitalize">{p.payment_method}</td>
                   <td className="text-text-muted font-mono">{p.reference || '--'}</td>
                   <td className="text-right font-mono text-accent-income">
                     {fmt.format(p.amount)}

@@ -74,7 +74,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
           api.rawQuery(
             `SELECT
               COALESCE(SUM(CASE WHEN strftime('%Y-%m', date) = strftime('%Y-%m', 'now') THEN amount ELSE 0 END), 0) as month_total,
-              (SELECT ec.name FROM expense_categories ec JOIN expenses e2 ON e2.category_id = ec.id WHERE e2.company_id = ? GROUP BY e2.category_id ORDER BY SUM(e2.amount) DESC LIMIT 1) as top_category,
+              (SELECT c.name FROM categories c JOIN expenses e2 ON e2.category_id = c.id WHERE e2.company_id = ? GROUP BY e2.category_id ORDER BY SUM(e2.amount) DESC LIMIT 1) as top_category,
               (SELECT COUNT(DISTINCT e2.category_id) FROM expenses e2 JOIN budget_lines bl ON bl.category_id = e2.category_id WHERE e2.company_id = ? AND strftime('%Y-%m', e2.date) = strftime('%Y-%m', 'now') GROUP BY e2.category_id HAVING SUM(e2.amount) > bl.amount) as over_budget_count
             FROM expenses WHERE company_id = ?`,
             [activeCompany.id, activeCompany.id, activeCompany.id]
@@ -143,10 +143,11 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
 
   // ─── Batch Actions ──────────────────────────────────────
   const reload = useCallback(async () => {
-    const expData = await api.query('expenses');
+    if (!activeCompany) return;
+    const expData = await api.query('expenses', { company_id: activeCompany.id });
     setExpenses(Array.isArray(expData) ? expData : []);
     setSelectedIds(new Set());
-  }, []);
+  }, [activeCompany]);
 
   const handleBatchApprove = useCallback(async () => {
     setBatchLoading(true);
@@ -220,7 +221,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400">
+          <button onClick={() => setShowImport(true)} className="block-btn flex items-center gap-2 text-xs">
             Import CSV
           </button>
           <button className="block-btn-primary flex items-center gap-2" onClick={onNew}>
@@ -368,7 +369,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                     <td onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={(e) => handleDuplicate(exp.id, e)}
-                        className="flex items-center gap-1 px-2 py-1 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400 hover:text-indigo-600"
+                        className="block-btn flex items-center gap-1 text-xs"
                         title="Duplicate"
                       >
                         <Copy size={12} /> Dup
@@ -443,7 +444,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -455,7 +456,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit }) => {
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>

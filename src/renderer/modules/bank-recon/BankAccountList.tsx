@@ -12,7 +12,7 @@ export interface BankAccount {
   account_id: string;
   account_name?: string;
   current_balance: number;
-  last_reconciled?: string;
+  last_reconciled_date?: string;
   created_at?: string;
 }
 
@@ -174,7 +174,7 @@ const BankAccountList: React.FC<BankAccountListProps> = ({ onAdd, onEdit }) => {
                     {fmt.format(acct.current_balance ?? 0)}
                   </td>
                   <td className="px-4 py-2.5 text-xs text-text-muted">
-                    {acct.last_reconciled || 'Never'}
+                    {acct.last_reconciled_date || 'Never'}
                   </td>
                 </tr>
               ))}

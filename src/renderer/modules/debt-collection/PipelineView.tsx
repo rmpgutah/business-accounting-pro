@@ -61,8 +61,26 @@ const PipelineView: React.FC<PipelineViewProps> = ({ onViewDebt }) => {
       if (!activeCompany) return;
       setLoading(true);
       try {
+        // Sort priority by semantic order (critical > high > medium > low),
+        // not the default alphabetic sort which would mis-order "medium".
         const data = await api.rawQuery(
-          'SELECT d.*, dps.entered_at as stage_entered_at FROM debts d LEFT JOIN debt_pipeline_stages dps ON dps.debt_id = d.id AND dps.stage = d.current_stage AND dps.exited_at IS NULL WHERE d.company_id = ? AND d.status NOT IN (?, ?) ORDER BY d.priority DESC, d.created_at',
+          `SELECT d.*, dps.entered_at as stage_entered_at
+             FROM debts d
+             LEFT JOIN debt_pipeline_stages dps
+               ON dps.debt_id = d.id
+              AND dps.stage = d.current_stage
+              AND dps.exited_at IS NULL
+            WHERE d.company_id = ?
+              AND d.status NOT IN (?, ?)
+            ORDER BY
+              CASE d.priority
+                WHEN 'critical' THEN 0
+                WHEN 'high'     THEN 1
+                WHEN 'medium'   THEN 2
+                WHEN 'low'      THEN 3
+                ELSE 4
+              END,
+              d.created_at`,
           [activeCompany.id, 'settled', 'written_off']
         );
         if (cancelled) return;

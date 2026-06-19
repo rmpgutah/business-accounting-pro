@@ -818,7 +818,12 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       : e.court_relevance === 'medium'
                         ? 'block-badge block-badge-warning'
                         : 'block-badge block-badge-blue';
-                  const typeBadge = formatStatus(e.type);
+                  // Evidence types aren't in the global status map — derive a
+                  // friendly title-case label so badges don't render as "—".
+                  const typeLabel = (e.type || '')
+                    .split('_')
+                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(' ') || '—';
                   return (
                     <div
                       key={e.id}
@@ -826,7 +831,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className={typeBadge.className}>{typeBadge.label}</span>
+                        <span className="block-badge">{typeLabel}</span>
                         <span className="text-xs text-text-primary font-medium truncate">
                           {e.title}
                         </span>
@@ -852,7 +857,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             ) : (
               <div className="space-y-3">
                 {legalActions.map((la) => {
-                  const typeBadge = formatStatus(la.action_type);
+                  const actionTypeLabel = (la.action_type || '')
+                    .split('_')
+                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(' ') || '—';
                   const legalStatusBadge = formatStatus(la.status);
                   const checklist = parseChecklist(la.checklist_json);
                   const checklistPct =
@@ -866,7 +874,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       style={{ borderRadius: '2px', background: 'var(--bg-secondary, #1e1e2e)' }}
                     >
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className={typeBadge.className}>{typeBadge.label}</span>
+                        <span className="block-badge">{actionTypeLabel}</span>
                         <span className={legalStatusBadge.className}>{legalStatusBadge.label}</span>
                         {la.case_number && (
                           <span className="text-xs font-mono text-text-muted">

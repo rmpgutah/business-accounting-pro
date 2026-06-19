@@ -99,7 +99,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             `SELECT
               COALESCE(SUM(CASE WHEN status NOT IN ('paid','cancelled') THEN total - amount_paid ELSE 0 END), 0) as outstanding,
               COALESCE(SUM(CASE WHEN status = 'overdue' THEN total - amount_paid ELSE 0 END), 0) as overdue,
-              COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', paid_date) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as collected_month
+              COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', updated_at) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as collected_month
             FROM invoices WHERE company_id = ?`,
             [activeCompany.id]
           ),
@@ -173,10 +173,11 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
 
   // ─── Batch Actions ──────────────────────────────────────
   const reload = useCallback(async () => {
-    const invoiceData = await api.query('invoices');
+    if (!activeCompany) return;
+    const invoiceData = await api.query('invoices', { company_id: activeCompany.id });
     setInvoices(invoiceData ?? []);
     setSelectedIds(new Set());
-  }, []);
+  }, [activeCompany]);
 
   const handleBatchMarkSent = useCallback(async () => {
     setBatchLoading(true);
@@ -424,7 +425,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             className="block-btn-success flex items-center gap-1.5 text-xs"
             onClick={handleBatchMarkPaid}
             disabled={batchLoading}
-            style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '2px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
+            style={{ background: 'var(--color-accent-income)', color: '#fff', border: 'none', borderRadius: '2px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
           >
             <CheckCircle size={13} />
             Mark as Paid
@@ -443,7 +444,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -455,7 +456,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>

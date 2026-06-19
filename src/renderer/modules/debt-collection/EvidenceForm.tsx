@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, Paperclip } from 'lucide-react';
+import { debtDb } from './dbHelpers';
 import api from '../../lib/api';
 
 // ─── Types ──────────────────────────────────────────────
@@ -111,10 +112,11 @@ const EvidenceForm: React.FC<EvidenceFormProps> = ({ debtId, evidenceId, onClose
     };
 
     try {
+      // debt_evidence has no company_id column.
       if (evidenceId) {
-        await api.update('debt_evidence', evidenceId, payload);
+        await debtDb.updateEvidence(evidenceId, payload);
       } else {
-        await api.create('debt_evidence', payload);
+        await debtDb.createEvidence(payload);
       }
       onSaved();
     } catch (err) {

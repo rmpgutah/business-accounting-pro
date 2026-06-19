@@ -3,6 +3,7 @@ import { ArrowLeft, Scale, Save, DollarSign } from 'lucide-react';
 import api from '../../lib/api';
 import { required, validateForm, minValue } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
+import { debtDb } from './dbHelpers';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtFormData {
@@ -331,12 +332,12 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         payload.status = 'active';
         payload.current_stage = 'reminder';
         const newDebt = await api.create('debts', payload);
-        // Create initial pipeline stage
+        // Create initial pipeline stage. debt_pipeline_stages has no company_id
+        // column in the schema, so use rawQuery INSERT via debtDb helper.
         if (newDebt?.id) {
-          await api.create('debt_pipeline_stages', {
+          await debtDb.createPipelineStage({
             debt_id: newDebt.id,
             stage: 'reminder',
-            company_id: activeCompany.id,
           });
         }
       }
@@ -396,14 +397,14 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
         <div
           style={{
             background: '#2a1215',
-            border: '1px solid #ef4444',
+            border: '1px solid var(--color-accent-expense)',
             borderRadius: '2px',
             padding: '12px 16px',
           }}
         >
           <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
             {errors.map((err, i) => (
-              <li key={i} style={{ color: '#ef4444', fontSize: '13px', lineHeight: '1.6' }}>
+              <li key={i} style={{ color: 'var(--color-accent-expense)', fontSize: '13px', lineHeight: '1.6' }}>
                 {err}
               </li>
             ))}

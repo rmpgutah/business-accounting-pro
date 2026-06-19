@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Printer, Download } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { format, startOfYear, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -112,11 +112,12 @@ const CashFlowStatement: React.FC = () => {
       setLoading(true);
 
       try {
-        // Operating: revenue received (invoices amount_paid)
+        // Operating: revenue received — use actual payments (cash basis)
+        // filtered by the payment date rather than invoice issue date.
         const revenueRows: any[] = await api.rawQuery(
-          `SELECT COALESCE(SUM(amount_paid), 0) as total
-           FROM invoices
-           WHERE company_id = ? AND issue_date BETWEEN ? AND ?`,
+          `SELECT COALESCE(SUM(amount), 0) as total
+           FROM payments
+           WHERE company_id = ? AND date BETWEEN ? AND ?`,
           [activeCompany.id, startDate, endDate]
         );
         const operatingInflows = Number(revenueRows?.[0]?.total) || 0;
@@ -134,7 +135,8 @@ const CashFlowStatement: React.FC = () => {
         const investRows: any[] = await api.rawQuery(
           `SELECT COALESCE(SUM(unit_cost * quantity), 0) as total
            FROM inventory_items
-           WHERE company_id = ? AND is_asset = 1 AND created_at BETWEEN ? AND ?`,
+           WHERE company_id = ? AND is_asset = 1
+             AND date(created_at) BETWEEN ? AND ?`,
           [activeCompany.id, startDate, endDate]
         );
         const investingOutflows = Number(investRows?.[0]?.total) || 0;
@@ -266,15 +268,9 @@ const CashFlowStatement: React.FC = () => {
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
             title="Print"
+            onClick={() => window.print()}
           >
             <Printer size={15} />
-          </button>
-          <button
-            className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
-            title="Export"
-          >
-            <Download size={15} />
           </button>
         </div>
       </div>

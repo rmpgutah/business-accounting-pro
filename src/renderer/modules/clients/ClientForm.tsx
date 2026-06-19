@@ -220,6 +220,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                 <input
                   className="block-input"
                   type="email"
+                  autoComplete="email"
                   placeholder="email@example.com"
                   value={data.email}
                   onChange={(e) => set('email', e.target.value)}
@@ -230,6 +231,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                 <input
                   className="block-input"
                   type="tel"
+                  autoComplete="tel"
                   placeholder="(555) 000-0000"
                   value={data.phone}
                   onChange={(e) => set('phone', e.target.value)}

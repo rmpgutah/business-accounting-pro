@@ -172,10 +172,11 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
 
   // ─── Batch Actions ──────────────────────────────────
   const reload = useCallback(async () => {
-    const rows = await api.query('clients');
+    if (!activeCompany) return;
+    const rows = await api.query('clients', { company_id: activeCompany.id });
     setClients(Array.isArray(rows) ? rows : []);
     setSelectedIds(new Set());
-  }, []);
+  }, [activeCompany]);
 
   const handleBatchSetActive = useCallback(async () => {
     setBatchLoading(true);
@@ -225,7 +226,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       <div className="module-header">
         <h1 className="module-title text-text-primary">Clients</h1>
         <div className="module-actions">
-          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-xs font-bold uppercase hover:border-indigo-400">
+          <button onClick={() => setShowImport(true)} className="block-btn flex items-center gap-2 text-xs">
             Import CSV
           </button>
           <button className="block-btn-primary inline-flex items-center gap-1.5" onClick={onNewClient}>
@@ -436,7 +437,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -448,7 +449,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>

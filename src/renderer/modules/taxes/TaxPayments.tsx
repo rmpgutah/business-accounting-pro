@@ -85,7 +85,8 @@ const TaxPayments: React.FC = () => {
 
   useEffect(() => {
     loadPayments();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCompany]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,10 +100,15 @@ const TaxPayments: React.FC = () => {
       setFormError('Tax year must be a valid 4-digit year.');
       return;
     }
+    if (!activeCompany) {
+      setFormError('Select an active company before recording a payment.');
+      return;
+    }
     setFormError('');
     setSaving(true);
     try {
       await api.create('tax_payments', {
+        company_id: activeCompany.id,
         type: formData.type,
         amount,
         date: formData.date,

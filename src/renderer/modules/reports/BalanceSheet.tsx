@@ -3,6 +3,7 @@ import { Printer, Download, AlertTriangle } from 'lucide-react';
 import { format, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { downloadCSVBlob } from '../../lib/csv-export';
 
 // ─── Types ──────────────────────────────────────────────
 interface AccountLine {
@@ -301,13 +302,31 @@ const BalanceSheet: React.FC = () => {
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
             title="Print"
+            onClick={() => window.print()}
           >
             <Printer size={15} />
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
-            title="Export"
+            title="Export CSV"
+            onClick={() => {
+              const rows: any[] = [];
+              const push = (section: string, items: AccountLine[]) => {
+                for (const a of items) rows.push({
+                  section,
+                  account_code: a.account_code,
+                  account_name: a.account_name,
+                  balance: a.balance.toFixed(2),
+                });
+              };
+              push('Current Assets', data.currentAssets);
+              push('Fixed Assets', data.fixedAssets);
+              push('Current Liabilities', data.currentLiabilities);
+              push('Long-Term Liabilities', data.longTermLiabilities);
+              push('Equity', data.equity);
+              downloadCSVBlob(rows, `balance-sheet-${asOfDate}.csv`);
+            }}
           >
             <Download size={15} />
           </button>

@@ -69,10 +69,19 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
       setBudgetError('Start date and end date are required.');
       return;
     }
+    if (new Date(endDate) < new Date(startDate)) {
+      setBudgetError('End date must be on or after start date.');
+      return;
+    }
+    if (!activeCompany) {
+      setBudgetError('Select an active company before creating a budget.');
+      return;
+    }
     setBudgetError('');
     setSaving(true);
     try {
       const result = await api.create('budgets', {
+        company_id: activeCompany.id,
         name: name.trim(),
         period,
         start_date: startDate,
