@@ -3,6 +3,7 @@ import { Printer } from 'lucide-react';
 import { format, startOfYear, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { generateCashFlowHTML } from '../../lib/financial-statement-templates';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -207,6 +208,17 @@ const CashFlowStatement: React.FC = () => {
   const netChange = netOperating + netInvesting + netFinancing;
   const endingCash = data.beginningCash + netChange;
 
+  const handlePrint = async () => {
+    if (!activeCompany) return;
+    const html = generateCashFlowHTML(
+      data,
+      { netIncome: 0, depreciation: 0, amortization: 0, arChange: 0, apChange: 0, inventoryChange: 0, prepaidChange: 0 },
+      activeCompany,
+      { startDate, endDate, method: 'direct', netOperating, netInvesting, netFinancing, netChange, endingCash, indirectOperatingCF: 0 },
+    );
+    await api.printPreview(html, `Cash Flow Statement — ${startDate} to ${endDate}`);
+  };
+
   // ─── Quick date presets ─────────────────────────────────
   const setPreset = (label: string) => {
     const now = new Date();
@@ -268,7 +280,7 @@ const CashFlowStatement: React.FC = () => {
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
             title="Print"
-            onClick={() => window.print()}
+            onClick={handlePrint}
           >
             <Printer size={15} />
           </button>

@@ -4,6 +4,7 @@ import { format, differenceInDays, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import { generateReportHTML } from '../../lib/print-templates';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -148,7 +149,36 @@ const ARAgingReport: React.FC = () => {
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
             title="Print"
-            onClick={() => window.print()}
+            onClick={async () => {
+              const asOf = format(new Date(), 'MMMM d, yyyy');
+              const html = generateReportHTML(
+                'A/R Aging Report',
+                activeCompany?.name || 'Company',
+                `As of ${asOf}`,
+                [
+                  { key: 'invoice', label: 'Invoice #', align: 'left' },
+                  { key: 'client',  label: 'Client',    align: 'left' },
+                  { key: 'age',     label: 'Age Bucket', align: 'left' },
+                  { key: 'days',    label: 'Days',       align: 'right' },
+                  { key: 'amount',  label: 'Amount Due', align: 'right', format: 'currency' },
+                ],
+                entries.map((e) => ({
+                  invoice: e.invoiceNumber,
+                  client:  e.clientName,
+                  age:     BUCKET_LABELS[e.bucket as BucketKey],
+                  days:    e.daysOutstanding,
+                  amount:  e.amountDue,
+                })),
+                [
+                  { label: 'Current (0–30)',  value: fmt.format(bucketTotals.current) },
+                  { label: '31–60 Days',      value: fmt.format(bucketTotals['31-60']) },
+                  { label: '61–90 Days',      value: fmt.format(bucketTotals['61-90']) },
+                  { label: '90+ Days',        value: fmt.format(bucketTotals['90+']) },
+                  { label: 'Total Outstanding', value: fmt.format(grandTotal) },
+                ],
+              );
+              await api.printPreview(html, 'A/R Aging Report');
+            }}
           >
             <Printer size={15} />
           </button>

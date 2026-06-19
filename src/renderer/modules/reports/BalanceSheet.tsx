@@ -4,6 +4,7 @@ import { format, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import { downloadCSVBlob } from '../../lib/csv-export';
+import { generateBalanceSheetHTML } from '../../lib/financial-statement-templates';
 
 // ─── Types ──────────────────────────────────────────────
 interface AccountLine {
@@ -263,6 +264,28 @@ const BalanceSheet: React.FC = () => {
   const isBalanced =
     Math.abs(totalAssets - totalLiabilitiesAndEquity) < 0.01;
 
+  const handlePrint = async () => {
+    if (!activeCompany) return;
+    const html = generateBalanceSheetHTML(
+      { ...data, otherAssets: [] },
+      activeCompany,
+      {
+        asOfDate,
+        isBalanced,
+        totalCurrentAssets,
+        totalFixedAssets,
+        totalOtherAssets: 0,
+        totalAssets,
+        totalCurrentLiabilities,
+        totalLongTermLiabilities,
+        totalLiabilities,
+        totalEquity,
+        totalLiabilitiesAndEquity,
+      },
+    );
+    await api.printPreview(html, `Balance Sheet — As of ${asOfDate}`);
+  };
+
   return (
     <div className="space-y-4">
       {/* Controls */}
@@ -302,7 +325,7 @@ const BalanceSheet: React.FC = () => {
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
             title="Print"
-            onClick={() => window.print()}
+            onClick={handlePrint}
           >
             <Printer size={15} />
           </button>

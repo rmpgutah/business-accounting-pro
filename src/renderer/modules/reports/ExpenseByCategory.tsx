@@ -3,6 +3,7 @@ import { Printer } from 'lucide-react';
 import { format, startOfYear, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { generateExpenseByCategoryHTML } from '../../lib/financial-statement-templates';
 
 // ─── Types ──────────────────────────────────────────────
 interface CategoryRow {
@@ -134,7 +135,15 @@ const ExpenseByCategory: React.FC = () => {
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
             title="Print"
-            onClick={() => window.print()}
+            onClick={async () => {
+              if (!activeCompany) return;
+              const html = generateExpenseByCategoryHTML(
+                categories,
+                activeCompany,
+                { startDate, endDate, totalExpenses },
+              );
+              await api.printPreview(html, `Expenses by Category — ${startDate} to ${endDate}`);
+            }}
           >
             <Printer size={15} />
           </button>

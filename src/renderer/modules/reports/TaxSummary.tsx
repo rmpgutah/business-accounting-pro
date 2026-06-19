@@ -3,6 +3,7 @@ import { Printer } from 'lucide-react';
 import { format, startOfYear, endOfYear } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import { generateReportHTML } from '../../lib/print-templates';
 
 // ─── Currency Formatter ─────────────────────────────────
 const fmt = new Intl.NumberFormat('en-US', {
@@ -255,7 +256,43 @@ const TaxSummary: React.FC = () => {
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
             style={{ borderRadius: '2px' }}
             title="Print"
-            onClick={() => window.print()}
+            onClick={async () => {
+              if (!activeCompany) return;
+              const period = `${startDate} to ${endDate}`;
+              // Deductions section rows
+              const rows = [
+                ...data.deductions.map((d) => ({
+                  category: d.category,
+                  amount: d.total,
+                  type: 'Deduction',
+                })),
+                { category: 'TOTAL DEDUCTIONS', amount: totalDeductions, type: '', _bold: true },
+                { category: '', amount: 0, type: '' },
+                { category: 'Total Revenue', amount: data.totalRevenue, type: '' },
+                { category: 'Taxable Income', amount: taxableIncome, type: '', _bold: true },
+                { category: `Estimated Tax (${(estimatedTaxRate * 100).toFixed(0)}%)`, amount: estimatedTax, type: '' },
+                { category: 'Total Payments Made', amount: totalPayments, type: '' },
+                { category: 'Balance Due', amount: balanceDue, type: '', _bold: true },
+              ];
+              const html = generateReportHTML(
+                'Tax Summary',
+                activeCompany.name || 'Company',
+                period,
+                [
+                  { key: 'category', label: 'Category / Item', align: 'left' },
+                  { key: 'amount',   label: 'Amount',          align: 'right', format: 'currency' },
+                ],
+                rows,
+                [
+                  { label: 'Total Revenue',   value: fmt.format(data.totalRevenue) },
+                  { label: 'Total Deductions', value: fmt.format(totalDeductions) },
+                  { label: 'Taxable Income',  value: fmt.format(taxableIncome) },
+                  { label: 'Estimated Tax',   value: fmt.format(estimatedTax) },
+                  { label: 'Balance Due',     value: fmt.format(balanceDue) },
+                ],
+              );
+              await api.printPreview(html, `Tax Summary — ${period}`);
+            }}
           >
             <Printer size={15} />
           </button>
