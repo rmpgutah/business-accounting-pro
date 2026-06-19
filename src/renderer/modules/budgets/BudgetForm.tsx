@@ -7,6 +7,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 interface BudgetLineInput {
   category: string;
   amount: string;
+  account_id?: string;
 }
 
 interface Account {
@@ -15,6 +16,7 @@ interface Account {
 }
 
 interface BudgetFormProps {
+  editBudgetId?: string | null;
   onBack: () => void;
   onCreated: (id: string) => void;
 }
@@ -28,14 +30,15 @@ const fmt = new Intl.NumberFormat('en-US', {
 });
 
 // ─── Component ──────────────────────────────────────────
-const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
+const BudgetForm: React.FC<BudgetFormProps> = ({ editBudgetId, onBack, onCreated }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
-  const [step, setStep] = useState<'budget' | 'lines'>('budget');
+  const [step, setStep] = useState<'budget' | 'lines'>(editBudgetId ? 'lines' : 'budget');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [saving, setSaving] = useState(false);
-  const [budgetId, setBudgetId] = useState<string | null>(null);
+  const [budgetId, setBudgetId] = useState<string | null>(editBudgetId || null);
   const [budgetError, setBudgetError] = useState('');
   const [linesError, setLinesError] = useState('');
+  const isEditing = !!editBudgetId;
 
   // Budget fields
   const [name, setName] = useState('');
@@ -59,6 +62,29 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
     loadAccounts();
   }, [activeCompany]);
 
+  // Load existing budget for editing
+  useEffect(() => {
+    if (!editBudgetId) return;
+    const load = async () => {
+      try {
+        const budget = await api.get('budgets', editBudgetId);
+        if (budget) {
+          setName(budget.name || '');
+          setPeriod(budget.period || 'monthly');
+          setStartDate(budget.start_date || '');
+          setEndDate(budget.end_date || '');
+        }
+        const existingLines = await api.query('budget_lines', { budget_id: editBudgetId });
+        if (Array.isArray(existingLines) && existingLines.length > 0) {
+          setLines(existingLines.map((l: any) => ({ category: l.category || '', amount: String(l.amount || ''), account_id: l.account_id || '' })));
+        }
+      } catch (err) {
+        console.error('Failed to load budget for editing:', err);
+      }
+    };
+    load();
+  }, [editBudgetId]);
+
   const handleCreateBudget = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -69,30 +95,40 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
       setBudgetError('Start date and end date are required.');
       return;
     }
-    if (new Date(endDate) < new Date(startDate)) {
+    if (startDate > endDate) {
       setBudgetError('End date must be on or after start date.');
       return;
     }
-    if (!activeCompany) {
-      setBudgetError('Select an active company before creating a budget.');
-      return;
-    }
+    if (saving) return;
     setBudgetError('');
     setSaving(true);
     try {
-      const result = await api.create('budgets', {
-        company_id: activeCompany.id,
-        name: name.trim(),
-        period,
-        start_date: startDate,
-        end_date: endDate,
-        status: 'active',
-      });
-      const id = result?.id || result;
+      let id: string;
+      if (isEditing && editBudgetId) {
+        await api.update('budgets', editBudgetId, {
+          name: name.trim(),
+          period,
+          start_date: startDate,
+          end_date: endDate,
+        });
+        id = editBudgetId;
+      } else {
+        const result = await api.create('budgets', {
+          company_id: activeCompany?.id,
+          name: name.trim(),
+          period,
+          start_date: startDate,
+          end_date: endDate,
+          status: 'active',
+        });
+        id = result?.id || result;
+      }
       setBudgetId(id);
       setStep('lines');
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface create-budget errors instead of swallowing
       console.error('Failed to create budget:', err);
+      setBudgetError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -132,16 +168,26 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
 
     setSaving(true);
     try {
+      // In edit mode, delete old lines before inserting new ones
+      if (isEditing && budgetId) {
+        const oldLines = await api.query('budget_lines', { budget_id: budgetId });
+        if (Array.isArray(oldLines)) {
+          for (const ol of oldLines) await api.remove('budget_lines', ol.id);
+        }
+      }
       for (const line of validLines) {
         await api.create('budget_lines', {
           budget_id: budgetId,
           category: line.category.trim(),
           amount: parseFloat(line.amount),
+          account_id: line.account_id || null,
         });
       }
       onCreated(budgetId);
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-budget-lines errors instead of swallowing
       console.error('Failed to save budget lines:', err);
+      setLinesError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -167,12 +213,12 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
 
       {step === 'budget' ? (
         /* ─── Step 1: Budget Details ─────────────────── */
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
           <form onSubmit={handleCreateBudget} className="space-y-4">
             {budgetError && (
               <div
                 className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {budgetError}
               </div>
@@ -200,9 +246,10 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
                   value={period}
                   onChange={(e) => setPeriod(e.target.value as any)}
                 >
+                  {/* Alphabetical A→Z */}
+                  <option value="annual">Annual</option>
                   <option value="monthly">Monthly</option>
                   <option value="quarterly">Quarterly</option>
-                  <option value="annual">Annual</option>
                 </select>
               </div>
               <div>
@@ -240,7 +287,7 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
       ) : (
         /* ─── Step 2: Line Items Editor ──────────────── */
         <div className="space-y-4">
-          <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+          <div className="block-card p-5" style={{ borderRadius: '6px' }}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-text-primary">
                 Budget Line Items
@@ -282,7 +329,6 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
                     <input
                       type="number"
                       step="0.01"
-                      min="0"
                       className="block-input"
                       value={line.amount}
                       onChange={(e) => updateLine(idx, 'amount', e.target.value)}
@@ -293,7 +339,7 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
                     {lines.length > 1 && (
                       <button
                         type="button"
-                        className="text-text-muted hover:text-accent-expense p-1"
+                        className="text-text-muted hover:text-accent-expense p-1 transition-colors"
                         onClick={() => removeLine(idx)}
                       >
                         <Trash2 size={14} />
@@ -314,7 +360,7 @@ const BudgetForm: React.FC<BudgetFormProps> = ({ onBack, onCreated }) => {
             {linesError && (
               <div
                 className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {linesError}
               </div>

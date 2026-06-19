@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { debtDb } from './dbHelpers';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
 
 // ─── Types ──────────────────────────────────────────────
 interface CommunicationFormData {
@@ -10,6 +11,8 @@ interface CommunicationFormData {
   subject: string;
   body: string;
   outcome: string;
+  next_action: string;
+  next_action_date: string;
   contact_id: string;
   logged_at: string;
 }
@@ -22,6 +25,7 @@ interface Contact {
 
 interface CommunicationFormProps {
   debtId: string;
+  editId?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -38,15 +42,20 @@ const emptyForm: CommunicationFormData = {
   subject: '',
   body: '',
   outcome: '',
+  next_action: '',
+  next_action_date: '',
   contact_id: '',
   logged_at: currentDatetimeLocal(),
 };
 
 // ─── Component ──────────────────────────────────────────
-const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, onSaved }) => {
+const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, onClose, onSaved }) => {
   const [form, setForm] = useState<CommunicationFormData>({ ...emptyForm });
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(!!editId);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -56,13 +65,52 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
         if (!cancelled && Array.isArray(rows)) {
           setContacts(rows as Contact[]);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load contacts:', err);
+        alert('Failed to load contacts: ' + (err?.message || 'Unknown error'));
       }
     };
     loadContacts();
+    // Feature 14: Load communication templates
+    api.rawQuery('SELECT * FROM debt_templates ORDER BY name', []).then(r => {
+      if (Array.isArray(r)) setTemplates(r);
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [debtId]);
+
+  // Load existing record for edit
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const row = await api.get('debt_communications', editId);
+        if (row && !cancelled) {
+          const loggedAt = row.logged_at
+            ? row.logged_at.replace(' ', 'T').slice(0, 16)
+            : currentDatetimeLocal();
+          setForm({
+            type: row.type || 'phone',
+            direction: row.direction || 'outbound',
+            subject: row.subject || '',
+            body: row.body || '',
+            outcome: row.outcome || '',
+            next_action: row.next_action || '',
+            next_action_date: row.next_action_date ? row.next_action_date.slice(0, 10) : '',
+            contact_id: row.contact_id || '',
+            logged_at: loggedAt,
+          });
+        }
+      } catch (err: any) {
+        console.error('Failed to load communication:', err);
+        alert('Failed to load communication: ' + (err?.message || 'Unknown error'));
+      } finally {
+        if (!cancelled) setLoadingEdit(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [editId]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -75,60 +123,86 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
     e.preventDefault();
     if (saving) return;
     setSaving(true);
+    setSaveError('');
+
+    const payload = {
+      debt_id: debtId,
+      type: form.type,
+      direction: form.direction,
+      subject: form.subject || null,
+      body: form.body || null,
+      outcome: form.outcome || null,
+      next_action: form.next_action || null,
+      next_action_date: form.next_action_date || null,
+      contact_id: form.contact_id || null,
+      logged_at: form.logged_at
+        ? new Date(form.logged_at).toISOString()
+        : new Date().toISOString(),
+      logged_by: '',
+    };
 
     try {
-      // debt_communications has no company_id column.
-      await debtDb.createCommunication({
-        debt_id: debtId,
-        type: form.type,
-        direction: form.direction,
-        subject: form.subject || null,
-        body: form.body || null,
-        outcome: form.outcome || null,
-        contact_id: form.contact_id || null,
-        logged_at: form.logged_at
-          ? new Date(form.logged_at).toISOString()
-          : new Date().toISOString(),
-        logged_by: '',
-      });
+      if (editId) {
+        await api.update('debt_communications', editId, payload);
+      } else {
+        await api.create('debt_communications', payload);
+      }
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-communication errors instead of swallowing
       console.error('Failed to save communication:', err);
+      setSaveError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
   };
 
+  // A11Y: ESC close, body scroll lock, focus trap, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
     <>
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black/60 z-40"
         onClick={onClose}
+        role="presentation"
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="block-card-elevated w-full max-w-[600px] max-h-[90vh] overflow-y-auto"
+          ref={containerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="comm-form-title"
+          tabIndex={-1}
+          onKeyDown={trapFocusOnKeyDown(containerRef)}
+          className="block-card-elevated w-full max-w-[600px] max-h-[90vh] overflow-y-auto cursor-pointer"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-5 pb-4 border-b border-border-primary">
-            <h3 className="text-base font-bold text-text-primary">
-              Log Communication
+            <h3 id="comm-form-title" className="text-base font-bold text-text-primary">
+              {editId ? 'Edit Communication' : 'Log Communication'}
             </h3>
             <button
               type="button"
               onClick={onClose}
               className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               <X size={16} />
             </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {saveError && (
+              <ErrorBanner
+                message={saveError}
+                title="Failed to save communication"
+                onDismiss={() => setSaveError('')}
+              />
+            )}
             {/* Type & Direction — 2-column */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -141,13 +215,17 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
                   value={form.type}
                   onChange={handleChange}
                 >
-                  <option value="email">Email</option>
-                  <option value="phone">Phone</option>
-                  <option value="letter">Letter</option>
-                  <option value="in_person">In Person</option>
-                  <option value="legal_filing">Legal Filing</option>
-                  <option value="text">Text</option>
-                  <option value="fax">Fax</option>
+                  <optgroup label="Digital">
+                    <option value="email">Email</option>
+                    <option value="fax">Fax</option>
+                    <option value="text">Text</option>
+                  </optgroup>
+                  <optgroup label="Physical">
+                    <option value="in_person">In Person</option>
+                    <option value="legal_filing">Legal Filing</option>
+                    <option value="letter">Letter</option>
+                    <option value="phone">Phone</option>
+                  </optgroup>
                 </select>
               </div>
               <div>
@@ -165,6 +243,36 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
                 </select>
               </div>
             </div>
+
+            {/* Feature 14: Template Selector */}
+            {templates.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                  Use Template
+                </label>
+                <select
+                  className="block-select"
+                  value=""
+                  onChange={(e) => {
+                    const t = templates.find((t: any) => t.id === e.target.value);
+                    if (t) {
+                      setForm(prev => ({
+                        ...prev,
+                        subject: t.subject || t.name || prev.subject,
+                        body: t.body || t.content || prev.body,
+                      }));
+                    }
+                  }}
+                >
+                  <option value="">-- Select Template --</option>
+                  {[...templates]
+                    .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                    .map((t: any) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Subject — full-width */}
             <div>
@@ -197,17 +305,49 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
               />
             </div>
 
-            {/* Outcome — full-width */}
+            {/* Outcome, Next Action, Next Action Date — 3 fields */}
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-                Result/Outcome
+                Outcome
+              </label>
+              <select
+                name="outcome"
+                className="block-select w-full"
+                value={form.outcome}
+                onChange={handleChange}
+              >
+                <option value="">— None —</option>
+                <option value="answered">Answered</option>
+                <option value="disputed">Disputed</option>
+                <option value="voicemail">Left Voicemail</option>
+                <option value="no_answer">No Answer</option>
+                <option value="payment_received">Payment Received</option>
+                <option value="promise_to_pay">Promise to Pay</option>
+                <option value="refused">Refused to Pay</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                Next Action
               </label>
               <input
                 type="text"
-                name="outcome"
+                name="next_action"
                 className="block-input"
-                placeholder="e.g. Left voicemail, Payment promised by Friday"
-                value={form.outcome}
+                placeholder="e.g. Follow up call"
+                value={form.next_action}
+                onChange={handleChange}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                Next Action Date
+              </label>
+              <input
+                type="date"
+                name="next_action_date"
+                className="block-input"
+                value={form.next_action_date}
                 onChange={handleChange}
               />
             </div>
@@ -225,9 +365,11 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
                   onChange={handleChange}
                 >
                   <option value="">-- Select Contact --</option>
-                  {contacts.map((c) => (
+                  {[...contacts]
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }))
+                    .map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}{c.role ? ` (${c.role})` : ''}
+                      {c.name}{c.role ? ` (${c.role.charAt(0).toUpperCase() + c.role.slice(1)})` : ''}
                     </option>
                   ))}
                 </select>
@@ -256,7 +398,7 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, onClose, 
                 className="block-btn-primary"
                 disabled={saving}
               >
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? 'Saving...' : editId ? 'Update' : 'Save'}
               </button>
             </div>
           </form>

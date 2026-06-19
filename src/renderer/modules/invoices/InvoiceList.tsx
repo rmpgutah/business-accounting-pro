@@ -1,13 +1,28 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale } from 'lucide-react';
+import { FileText, Plus, Search, Send, CheckCircle, Trash2, Download, Scale, Settings, DollarSign, AlertTriangle, Package, Tag as TagIcon, Bell } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
+import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { batchDeleteWithUndo } from '../../lib/toastUndo';
+import { useToast } from '../../components/ToastProvider';
 import { useNavigation } from '../../lib/navigation';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { SummaryBar } from '../../components/SummaryBar';
+import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
+import EntityChip from '../../components/EntityChip';
+import { InvoiceBulkActionBar, OverdueAlertBanner, TopClientsWidget, DSOMiniCard, AgingBucketBar } from './InvoiceUpgradesUI';
+import { useCustomizationStore } from '../../stores/customizationStore';
+import {
+  useInvoicingPrefs,
+  getInvoicingPrefs,
+  formatInvoiceAmount,
+  formatInvoiceDate,
+} from '../../customization/invoicing-prefs';
 
-// ─── Types ─────��────────────���───────────────────────────
+// ─── Types ─────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
 
 interface Invoice {
@@ -20,7 +35,23 @@ interface Invoice {
   amount_paid: number;
   status: InvoiceStatus;
   notes?: string;
+  invoice_type?: string;
+  currency?: string;
+  tags?: string;
+  sales_rep_id?: string;
 }
+
+type AgingFilter = 'all' | 'current' | '1-30' | '31-60' | '61-90' | '90+';
+type SortKey = 'issue_date' | 'due_date' | 'total' | 'days_outstanding';
+
+const TYPE_BADGE_COLORS: Record<string, string> = {
+  standard:    '',
+  service:     '#3b82f6',
+  product:     '#8b5cf6',
+  retainer:    '#d97706',
+  credit_note: '#22c55e',
+  proforma:    '#6b7280',
+};
 
 interface Client {
   id: string;
@@ -28,23 +59,6 @@ interface Client {
 }
 
 type StatusTab = 'all' | InvoiceStatus;
-
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-// ─── Status Badge Map ──────────────���────────────────────
-const STATUS_BADGE: Record<InvoiceStatus, { label: string; className: string }> = {
-  draft: { label: 'Draft', className: 'block-badge block-badge-blue' },
-  sent: { label: 'Sent', className: 'block-badge block-badge-warning' },
-  paid: { label: 'Paid', className: 'block-badge block-badge-income' },
-  overdue: { label: 'Overdue', className: 'block-badge block-badge-expense' },
-  partial: { label: 'Partial', className: 'block-badge block-badge-purple' },
-};
 
 // ─── Status Tabs ──────────────��─────────────────────────
 const TABS: { key: StatusTab; label: string }[] = [
@@ -60,12 +74,16 @@ interface InvoiceListProps {
   onNewInvoice: () => void;
   onViewInvoice: (id: string) => void;
   onEditInvoice: (id: string) => void;
+  onSettings?: () => void;
+  onCatalog?: () => void;
 }
 
 const InvoiceList: React.FC<InvoiceListProps> = ({
   onNewInvoice,
   onViewInvoice,
   onEditInvoice,
+  onSettings,
+  onCatalog,
 }) => {
   const nav = useNavigation();
   const activeCompany = useCompanyStore((s) => s.activeCompany);
@@ -77,13 +95,131 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   }, [setModule]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [activeTab, setActiveTab] = useState<StatusTab>('all');
+  const [activeTab, setActiveTab] = useState<StatusTab>(() => {
+    // Consume nav:invoiceFilter from sessionStorage on mount
+    const filterFlag = sessionStorage.getItem('nav:invoiceFilter');
+    if (filterFlag) {
+      sessionStorage.removeItem('nav:invoiceFilter');
+      try {
+        const filter = JSON.parse(filterFlag);
+        if (filter.status && ['all', 'draft', 'sent', 'paid', 'overdue', 'partial'].includes(filter.status)) {
+          return filter.status as StatusTab;
+        }
+      } catch (_) { /* ignore */ }
+    }
+    return 'all';
+  });
   const [search, setSearch] = useState('');
+  // P2.24: debounce the search-driven filter so we don't re-filter
+  // 1000+ invoices on every keystroke.
+  const debouncedSearch = useDebouncedValue(search, 200);
+  // P3.25 Phase 2: toast-undo on delete
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [invoiceSummary, setInvoiceSummary] = useState<any>(null);
+  const [feedback, setFeedback] = useState<{ type: string; message: string } | null>(null);
+  const [loadError, setLoadError] = useState('');
+
+  // Advanced filters / sorting / extra columns
+  const [showFilters, setShowFilters] = useState(false);
+  const [agingFilter, setAgingFilter] = useState<AgingFilter>('all');
+  const [amountMin, setAmountMin] = useState<string>('');
+  const [amountMax, setAmountMax] = useState<string>('');
+  const [tagFilter, setTagFilter] = useState<string>('');
+  const [salesRepFilter, setSalesRepFilter] = useState<string>('');
+  // Initial sort honors Customization › Invoicing › Sorting & Filtering.
+  // The pref's enum includes values (invoice_number, client, status) that
+  // don't map to the existing SortKey type — fall back to issue_date when
+  // the user's choice isn't supported by the current sort engine. Lazy
+  // initializer so the prefs are read once on mount, not every render.
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    const p = getInvoicingPrefs();
+    const allowed: SortKey[] = ['issue_date', 'due_date', 'total', 'days_outstanding'];
+    return (allowed as string[]).includes(p.sortField) ? (p.sortField as SortKey) : 'issue_date';
+  });
+  const [showPredictedColumn, setShowPredictedColumn] = useState(false);
+  const [predictedDates, setPredictedDates] = useState<Record<string, string>>({});
+  const [bulkTagText, setBulkTagText] = useState<string>('');
+  const [showBulkTag, setShowBulkTag] = useState(false);
+
+  // Helper: parse stored tags (JSON array)
+  const parseTags = (raw: any): string[] => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.map(String);
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (!trimmed) return [];
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.map(String);
+      } catch (_) { /* fall through */ }
+      return trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
+  // Live customization preferences (Customization Center → Invoicing).
+  // All column/display toggles + formatting prefs come through here. The
+  // hook subscribes to the whole `values` map so changes apply instantly.
+  const prefs = useInvoicingPrefs();
+  const cShowIssueDate = prefs.cols.issueDate;
+  const cShowDueDate = prefs.cols.dueDate;
+  const cShowDaysCol = prefs.cols.daysOverdue;
+  const cShowTotalCol = prefs.cols.amount;
+  const cShowBalanceCol = prefs.cols.balanceDue;
+  const cShowStatusCol = prefs.cols.status;
+  const cDensity = prefs.density;
+  const cTableFontSize = cDensity === 'compact' ? 11 : cDensity === 'spacious' ? 13 : undefined;
+  const rowPadStyle: React.CSSProperties = prefs.compactRows
+    ? { lineHeight: 1.2 }
+    : cDensity === 'spacious'
+      ? { lineHeight: 1.7 }
+      : {};
+  const amountAlignClass = prefs.amountAlign === 'left'
+    ? 'text-left'
+    : prefs.amountAlign === 'center'
+      ? 'text-center'
+      : 'text-right';
+
+  // Helper: days outstanding (positive = overdue, negative = due in N days)
+  const daysOutstanding = (inv: Invoice): number => {
+    if (inv.status === 'paid' || (inv as any).status === 'void' || (inv as any).status === 'cancelled') return 0;
+    // A settled balance is never "outstanding", regardless of a stale status string.
+    if (((inv.total || 0) - ((inv as any).amount_paid || 0)) <= 0.005) return 0;
+    if (!inv.due_date) return 0;
+    const ms = Date.now() - new Date(inv.due_date).getTime();
+    return Math.floor(ms / (1000 * 60 * 60 * 24));
+  };
+
+  // Helper: aging bucket for an unpaid invoice
+  const agingBucket = (inv: Invoice): AgingFilter => {
+    if (inv.status === 'paid') return 'current';
+    const d = daysOutstanding(inv);
+    if (d <= 0) return 'current';
+    if (d <= 30) return '1-30';
+    if (d <= 60) return '31-60';
+    if (d <= 90) return '61-90';
+    return '90+';
+  };
+
+  // Helper: risk dot color based on aging
+  const riskColor = (inv: Invoice): string => {
+    if (inv.status === 'paid') return '#22c55e';
+    const d = daysOutstanding(inv);
+    if (d <= 0) return '#22c55e';
+    if (d <= 30) return '#facc15';
+    if (d <= 60) return '#f97316';
+    return '#ef4444';
+  };
+
+  // Overdue → debt conversion
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [converting, setConverting] = useState<Set<string>>(new Set());
 
   // Fetch data
   useEffect(() => {
@@ -92,25 +228,38 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     const load = async () => {
       if (!activeCompany) return;
       try {
-        const [invoiceData, clientData, summaryResult] = await Promise.all([
-          api.query('invoices', { company_id: activeCompany.id }),
+        setLoadError('');
+        // Load invoices and clients first (critical), summary and candidates are non-blocking
+        // Perf: cap invoice list at 2000 most-recent; older are searchable.
+        // Aggregate stats below still scan the full table.
+        const [invoiceData, clientData] = await Promise.all([
+          api.query('invoices', { company_id: activeCompany.id }, { field: 'issue_date', dir: 'desc' }, 2000),
           api.query('clients', { company_id: activeCompany.id }),
-          api.rawQuery(
-            `SELECT
-              COALESCE(SUM(CASE WHEN status NOT IN ('paid','cancelled') THEN total - amount_paid ELSE 0 END), 0) as outstanding,
-              COALESCE(SUM(CASE WHEN status = 'overdue' THEN total - amount_paid ELSE 0 END), 0) as overdue,
-              COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', updated_at) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as collected_month
-            FROM invoices WHERE company_id = ?`,
-            [activeCompany.id]
-          ),
         ]);
         if (cancelled) return;
-        setInvoices(invoiceData ?? []);
-        setClients(clientData ?? []);
-        const summaryRow = Array.isArray(summaryResult) ? summaryResult[0] : summaryResult;
-        setInvoiceSummary(summaryRow ?? null);
-      } catch (err) {
+        setInvoices(Array.isArray(invoiceData) ? invoiceData : []);
+        setClients(Array.isArray(clientData) ? clientData : []);
+
+        // Non-critical secondary data — failures don't hide invoices
+        api.rawQuery(
+          `SELECT
+            COALESCE(SUM(CASE WHEN status NOT IN ('paid','cancelled') THEN total - amount_paid ELSE 0 END), 0) as outstanding,
+            COALESCE(SUM(CASE WHEN status = 'overdue' THEN total - amount_paid ELSE 0 END), 0) as overdue,
+            COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', updated_at) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as collected_month
+          FROM invoices WHERE company_id = ?`,
+          [activeCompany.id]
+        ).then(r => {
+          if (cancelled) return;
+          const row = Array.isArray(r) ? r[0] : r;
+          setInvoiceSummary(row ?? null);
+        }).catch(() => {});
+        api.getOverdueCandidates(activeCompany.id, 30).then(r => {
+          if (cancelled) return;
+          setCandidates(Array.isArray(r) ? r : []);
+        }).catch(() => {});
+      } catch (err: any) {
         console.error('Failed to load invoices:', err);
+        if (!cancelled) setLoadError(err?.message || 'Failed to load invoices');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -127,7 +276,20 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     return map;
   }, [clients]);
 
-  // Filter + search
+  // Build the unique tags / sales reps lists for filter dropdowns
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    invoices.forEach((inv) => parseTags(inv.tags).forEach((t) => set.add(t)));
+    return Array.from(set).sort();
+  }, [invoices]);
+
+  const allSalesReps = useMemo(() => {
+    const set = new Set<string>();
+    invoices.forEach((inv) => { if (inv.sales_rep_id) set.add(inv.sales_rep_id); });
+    return Array.from(set).sort();
+  }, [invoices]);
+
+  // Filter + search + advanced filters
   const filtered = useMemo(() => {
     let list = invoices;
 
@@ -135,8 +297,10 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       list = list.filter((inv) => inv.status === activeTab);
     }
 
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    // P2.24: filter against the debounced value so re-filters don't
+    // fire on every keystroke for large invoice lists.
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
       list = list.filter(
         (inv) =>
           inv.invoice_number.toLowerCase().includes(q) ||
@@ -144,8 +308,95 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       );
     }
 
-    return list;
-  }, [invoices, activeTab, search, clientMap]);
+    // Aging filter
+    if (agingFilter !== 'all') {
+      list = list.filter((inv) => agingBucket(inv) === agingFilter);
+    }
+
+    // Amount range
+    const min = amountMin === '' ? null : Number(amountMin);
+    const max = amountMax === '' ? null : Number(amountMax);
+    if (min !== null && !Number.isNaN(min)) list = list.filter((inv) => inv.total >= min);
+    if (max !== null && !Number.isNaN(max)) list = list.filter((inv) => inv.total <= max);
+
+    // Tag filter
+    if (tagFilter) {
+      list = list.filter((inv) => parseTags(inv.tags).includes(tagFilter));
+    }
+
+    // Sales rep filter
+    if (salesRepFilter) {
+      list = list.filter((inv) => inv.sales_rep_id === salesRepFilter);
+    }
+
+    // Sort
+    const sorted = [...list];
+    if (sortKey === 'days_outstanding') {
+      sorted.sort((a, b) => daysOutstanding(b) - daysOutstanding(a));
+    } else if (sortKey === 'total') {
+      sorted.sort((a, b) => (b.total || 0) - (a.total || 0));
+    } else if (sortKey === 'due_date') {
+      sorted.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
+    } else {
+      sorted.sort((a, b) => (b.issue_date || '').localeCompare(a.issue_date || ''));
+    }
+
+    return sorted;
+    // P2.24: depend on debouncedSearch (not search) so the filter
+    // re-runs only after the user pauses typing.
+  }, [invoices, activeTab, debouncedSearch, clientMap, agingFilter, amountMin, amountMax, tagFilter, salesRepFilter, sortKey]);
+
+  // Inline KPI stats — computed from filtered list
+  const kpiStats = useMemo(() => {
+    const totalInvoiced = filtered.reduce((s, i) => s + (i.total || 0), 0);
+    const collected = filtered.reduce((s, i) => s + (i.amount_paid || 0), 0);
+    const outstanding = filtered.reduce((s, i) => {
+      if (i.status === 'paid') return s;
+      return s + ((i.total || 0) - (i.amount_paid || 0));
+    }, 0);
+    const overdue = filtered
+      .filter((i) => i.status === 'overdue' && ((i.total || 0) - (i.amount_paid || 0)) > 0.005)
+      .reduce((s, i) => s + ((i.total || 0) - (i.amount_paid || 0)), 0);
+    const largest = filtered.reduce((m, i) => Math.max(m, i.total || 0), 0);
+    // Avg days to pay — only for paid invoices in filtered
+    const paidWithDays = filtered.filter((i) => i.status === 'paid' && i.issue_date && i.due_date);
+    const avgDays = paidWithDays.length > 0
+      ? paidWithDays.reduce((s, i) => {
+          const start = new Date(i.issue_date).getTime();
+          const end = new Date(i.due_date).getTime();
+          return s + Math.max(0, (end - start) / (1000 * 60 * 60 * 24));
+        }, 0) / paidWithDays.length
+      : 0;
+    return { totalInvoiced, collected, outstanding, overdue, largest, avgDays };
+  }, [filtered]);
+
+  // Lazy-load predicted payment dates when column toggled on
+  useEffect(() => {
+    if (!showPredictedColumn) return;
+    let cancelled = false;
+    (async () => {
+      // Only predict for unpaid invoices visible in current filter
+      const targets = filtered.filter((inv) => inv.status !== 'paid').slice(0, 50);
+      const next: Record<string, string> = { ...predictedDates };
+      for (const inv of targets) {
+        if (next[inv.id] !== undefined) continue;
+        try {
+          const r: any = await api.intelPredictPayment(inv.id);
+          if (cancelled) return;
+          if (r && (r.predicted_date || r.predictedDate)) {
+            next[inv.id] = String(r.predicted_date || r.predictedDate);
+          } else {
+            next[inv.id] = '';
+          }
+        } catch (_) {
+          next[inv.id] = '';
+        }
+      }
+      if (!cancelled) setPredictedDates(next);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPredictedColumn, filtered]);
 
   // ─── Selection Helpers ──────────────────────────────────
   const allSelected = filtered.length > 0 && filtered.every(inv => selectedIds.has(inv.id));
@@ -174,7 +425,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   // ─── Batch Actions ──────────────────────────────────────
   const reload = useCallback(async () => {
     if (!activeCompany) return;
-    const invoiceData = await api.query('invoices', { company_id: activeCompany.id });
+    // Perf: keep cap consistent with initial load
+    const invoiceData = await api.query('invoices', { company_id: activeCompany.id }, { field: 'issue_date', dir: 'desc' }, 2000);
     setInvoices(invoiceData ?? []);
     setSelectedIds(new Set());
   }, [activeCompany]);
@@ -184,7 +436,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     try {
       await api.batchUpdate('invoices', Array.from(selectedIds), { status: 'sent' });
       await reload();
-    } catch (err) { console.error('Batch mark sent failed:', err); }
+    } catch (err: any) { console.error('Batch mark sent failed:', err); alert('Failed to mark invoices as sent: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); }
   }, [selectedIds, reload]);
 
@@ -192,26 +444,156 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     setBatchLoading(true);
     try {
       const ids = Array.from(selectedIds);
-      // For "Mark as Paid", set status and amount_paid = total for each
-      for (const id of ids) {
-        const inv = invoices.find(i => i.id === id);
-        if (inv) {
-          await api.update('invoices', id, { status: 'paid', amount_paid: inv.total });
-        }
-      }
+      // NOTE: This updates invoice totals directly without creating payment
+      // records or activity log entries. For full audit trail, use the
+      // PaymentRecorder modal on individual invoices instead.
+      await Promise.all(
+        ids.map((id) => {
+          const inv = invoices.find((i) => i.id === id);
+          if (!inv) return Promise.resolve();
+          const newPaid = Math.max(Number(inv.amount_paid) || 0, Number(inv.total) || 0);
+          return api.update('invoices', id, { status: 'paid', amount_paid: newPaid });
+        })
+      );
       await reload();
-    } catch (err) { console.error('Batch mark paid failed:', err); }
+    } catch (err: any) { console.error('Batch mark paid failed:', err); alert('Failed to mark invoices as paid: ' + (err?.message || 'Unknown error')); }
     finally { setBatchLoading(false); }
   }, [selectedIds, invoices, reload]);
 
   const handleBatchDelete = useCallback(async () => {
     setBatchLoading(true);
     try {
-      await api.batchDelete('invoices', Array.from(selectedIds));
+      // P3.25 Phase 2: route through the toast-undo helper so the
+      // user gets an 8-second window to undo via ⌘Z. Soft-delete
+      // tables (invoices ARE one) restore from Trash on undo.
+      await batchDeleteWithUndo(toast, 'invoices', Array.from(selectedIds), {
+        onSuccess: () => reload(),
+      });
+    } catch (err: any) {
+      console.error('Batch delete failed:', err);
+      toast.error('Failed to delete invoices: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  }, [selectedIds, reload, toast]);
+
+  // P1.8 — Bulk export selected invoices to a ZIP archive (one PDF
+  // per invoice, streamed via archiver to avoid holding all PDF
+  // buffers in memory at once for large batches).
+  const handleBatchExportZip = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const result = await api.batchExportPDF(ids, 'zip');
+      if (result.cancelled) return;
+      if (result.error) {
+        alert(`Failed to export ZIP: ${result.error}`);
+        return;
+      }
+      const skippedNote = result.skipped && result.skipped > 0
+        ? ` (${result.skipped} skipped due to render error)`
+        : '';
+      alert(`Exported ${result.count} invoice${result.count === 1 ? '' : 's'} to:\n${result.path}${skippedNote}`);
+    } catch (err: any) {
+      console.error('Batch ZIP export failed:', err);
+      alert('Failed to export ZIP: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [selectedIds]);
+
+  const handleConvertToDebt = useCallback(async (invoiceId: string) => {
+    if (!activeCompany) return;
+    setConverting(prev => new Set(prev).add(invoiceId));
+    try {
+      const result = await api.convertInvoiceToDebt(invoiceId, activeCompany.id);
+      if (result.error) { console.error('Convert failed:', result.error); return; }
+      setCandidates(prev => prev.filter(c => c.id !== invoiceId));
       await reload();
-    } catch (err) { console.error('Batch delete failed:', err); }
-    finally { setBatchLoading(false); setShowDeleteConfirm(false); }
+    } catch (err) {
+      console.error('Failed to convert invoice to debt:', err);
+    } finally {
+      setConverting(prev => { const next = new Set(prev); next.delete(invoiceId); return next; });
+    }
+  }, [activeCompany, reload]);
+
+  const handleBulkSendReminders = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      let scheduled = 0;
+      for (const id of ids) {
+        try {
+          await api.invoiceScheduleReminders(id);
+          await api.create('invoice_activity_log', {
+            invoice_id: id,
+            activity_type: 'reminder_scheduled',
+            description: 'Reminder scheduled (bulk)',
+          });
+          scheduled++;
+        } catch (_) { /* skip individual failures */ }
+      }
+      setFeedback({ type: 'success', message: `Scheduled reminders for ${scheduled} invoice(s)` });
+      setTimeout(() => setFeedback(null), 4000);
+      await reload();
+    } catch (err: any) {
+      console.error('Bulk send reminders failed:', err);
+      alert('Failed to send reminders: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+    }
   }, [selectedIds, reload]);
+
+  const handleBulkApplyLateFee = useCallback(async () => {
+    setBatchLoading(true);
+    try {
+      const result = await api.applyLateFees();
+      if (result?.applied != null) {
+        setFeedback({
+          type: 'success',
+          message: `Applied late fees to ${result.applied} eligible invoice(s)`,
+        });
+      }
+      setTimeout(() => setFeedback(null), 4000);
+      await reload();
+    } catch (err: any) {
+      console.error('Bulk apply late fee failed:', err);
+      alert('Failed to apply late fees: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [reload]);
+
+  const handleBulkTag = useCallback(async () => {
+    if (!bulkTagText.trim()) {
+      setShowBulkTag(false);
+      return;
+    }
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const newTags = bulkTagText.split(',').map((t) => t.trim()).filter(Boolean);
+      for (const id of ids) {
+        const inv = invoices.find((i) => i.id === id);
+        if (!inv) continue;
+        const existing = parseTags(inv.tags);
+        const merged = Array.from(new Set([...existing, ...newTags]));
+        await api.update('invoices', id, { tags: JSON.stringify(merged) });
+      }
+      setFeedback({ type: 'success', message: `Tagged ${ids.length} invoice(s)` });
+      setTimeout(() => setFeedback(null), 4000);
+      setBulkTagText('');
+      setShowBulkTag(false);
+      await reload();
+    } catch (err: any) {
+      console.error('Bulk tag failed:', err);
+      alert('Failed to tag invoices: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setBatchLoading(false);
+    }
+  }, [bulkTagText, selectedIds, invoices, reload]);
 
   const handleExportSelected = useCallback(() => {
     const selected = filtered.filter(inv => selectedIds.has(inv.id));
@@ -238,10 +620,55 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
 
   return (
     <div className="p-6 space-y-5 overflow-y-auto h-full" style={{ paddingBottom: someSelected ? '80px' : undefined }}>
+      {loadError && <ErrorBanner message={loadError} title="Failed to load invoices" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <h1 className="module-title text-text-primary">Invoices</h1>
         <div className="module-actions">
+          {onCatalog && (
+            <button className="block-btn flex items-center gap-2" onClick={onCatalog} title="Manage catalog items">
+              <Package size={16} />
+              Catalog
+            </button>
+          )}
+          {onSettings && (
+            <button className="block-btn flex items-center gap-2" onClick={onSettings} title="Invoice template settings">
+              <Settings size={16} />
+              Customize
+            </button>
+          )}
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={async () => {
+              const result = await api.applyLateFees();
+              if (result?.applied > 0) {
+                setFeedback({ type: 'success', message: `Applied late fees to ${result.applied} invoice(s)` });
+                reload();
+              } else {
+                setFeedback({ type: 'info', message: 'No invoices eligible for late fees' });
+              }
+              setTimeout(() => setFeedback(null), 4000);
+            }}
+          >
+            <DollarSign size={14} />
+            Apply Late Fees
+          </button>
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={async () => {
+              const result = await api.runDunning();
+              if (result?.advanced > 0) {
+                setFeedback({ type: 'success', message: `Advanced dunning on ${result.advanced} invoice(s)` });
+                reload();
+              } else {
+                setFeedback({ type: 'info', message: 'No invoices need dunning advancement' });
+              }
+              setTimeout(() => setFeedback(null), 4000);
+            }}
+          >
+            <AlertTriangle size={14} />
+            Run Dunning
+          </button>
           <button className="block-btn-primary flex items-center gap-2" onClick={onNewInvoice}>
             <Plus size={16} />
             New Invoice
@@ -249,28 +676,250 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         </div>
       </div>
 
-      {/* Summary Bar */}
-      {invoiceSummary && (
+      {/* Feedback */}
+      {feedback && (
+        <div className={`text-xs px-3 py-2 border ${feedback.type === 'success' ? 'text-accent-income bg-accent-income/10 border-accent-income/20' : 'text-accent-blue bg-accent-blue/10 border-accent-blue/20'}`} style={{ borderRadius: '6px' }}>
+          {feedback.message}
+        </div>
+      )}
+
+      {/* Summary Bar — togglable via Customization › Invoicing › Display ›
+          Show totals bar. */}
+      {prefs.showTotalsBar && invoiceSummary && (
         <SummaryBar items={[
-          { label: 'Outstanding', value: `$${Number(invoiceSummary.outstanding).toFixed(2)}`, accent: 'orange' },
-          { label: 'Overdue', value: `$${Number(invoiceSummary.overdue).toFixed(2)}`, accent: 'red' },
-          { label: 'Collected This Month', value: `$${Number(invoiceSummary.collected_month).toFixed(2)}`, accent: 'green' },
+          { label: 'Outstanding', value: formatInvoiceAmount(invoiceSummary.outstanding), accent: 'orange', tooltip: 'Total unpaid invoices not yet overdue' },
+          { label: 'Overdue', value: formatInvoiceAmount(invoiceSummary.overdue), accent: 'red', tooltip: 'Invoices past their due date with remaining balance' },
+          { label: 'Collected This Month', value: formatInvoiceAmount(invoiceSummary.collected_month), accent: 'green', tooltip: 'Payments received in the current calendar month' },
         ]} />
       )}
 
-      {/* Tabs + Search */}
+      {/* Invoice Upgrades Wave (F893-F922) — insights row + overdue alert.
+          AgingBucketBar is gated by Display › Show aging buckets. */}
+      <OverdueAlertBanner />
+      <div className="grid grid-cols-3 gap-3" style={{ marginBottom: 8 }}>
+        <DSOMiniCard periodDays={90} />
+        {prefs.showAgingBuckets ? <AgingBucketBar /> : <div />}
+        <TopClientsWidget limit={5} />
+      </div>
+
+      {/* Bulk action bar — only visible when invoice rows are selected. */}
+      <InvoiceBulkActionBar
+        selectedIds={Array.from(selectedIds)}
+        onCleared={() => setSelectedIds(new Set())}
+        onRefresh={() => { setSelectedIds(new Set()); reload(); }}
+      />
+
+      {/* Inline KPI row — based on currently filtered list */}
+      <div className="grid grid-cols-6 gap-2">
+        {[
+          { label: 'Total Invoiced', value: formatCurrency(kpiStats.totalInvoiced), color: 'text-text-primary' },
+          { label: 'Outstanding', value: formatCurrency(kpiStats.outstanding), color: 'text-accent-warning' },
+          { label: 'Collected', value: formatCurrency(kpiStats.collected), color: 'text-accent-income' },
+          { label: 'Overdue', value: formatCurrency(kpiStats.overdue), color: 'text-accent-expense' },
+          { label: 'Avg Days to Pay', value: `${kpiStats.avgDays.toFixed(1)}d`, color: 'text-text-primary' },
+          { label: 'Largest', value: formatCurrency(kpiStats.largest), color: 'text-text-primary' },
+        ].map((kpi) => (
+          <div key={kpi.label} className="block-card p-3">
+            <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
+              {kpi.label}
+            </div>
+            <div className={`text-sm font-bold font-mono ${kpi.color}`}>{kpi.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Advanced Filters */}
+      <div className="block-card p-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <button
+            className="block-btn text-xs flex items-center gap-2"
+            onClick={() => setShowFilters((v) => !v)}
+          >
+            <Search size={12} />
+            {showFilters ? 'Hide Filters' : 'Advanced Filters'}
+          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Sort</label>
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              className="block-select text-xs"
+            >
+              <option value="issue_date">Issue Date</option>
+              <option value="due_date">Due Date</option>
+              <option value="total">Total</option>
+              <option value="days_outstanding">Days Outstanding</option>
+            </select>
+            <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider ml-3 flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={showPredictedColumn}
+                onChange={(e) => setShowPredictedColumn(e.target.checked)}
+                style={{ accentColor: 'var(--accent-primary)' }}
+              />
+              Predicted Pay Date
+            </label>
+          </div>
+        </div>
+        {showFilters && (
+          <div className="grid grid-cols-4 gap-3 mt-3">
+            <div>
+              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Aging</label>
+              <select
+                value={agingFilter}
+                onChange={(e) => setAgingFilter(e.target.value as AgingFilter)}
+                className="block-select w-full text-xs"
+              >
+                <option value="all">All</option>
+                <option value="current">Current</option>
+                <option value="1-30">1-30 days overdue</option>
+                <option value="31-60">31-60 days</option>
+                <option value="61-90">61-90 days</option>
+                <option value="90+">90+ days</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Amount Range</label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={amountMin}
+                  onChange={(e) => setAmountMin(e.target.value)}
+                  placeholder="Min"
+                  className="block-input text-xs flex-1"
+                />
+                <span className="text-text-muted text-xs">—</span>
+                <input
+                  type="number"
+                  value={amountMax}
+                  onChange={(e) => setAmountMax(e.target.value)}
+                  placeholder="Max"
+                  className="block-input text-xs flex-1"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Tag</label>
+              <select
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                className="block-select w-full text-xs"
+              >
+                <option value="">All Tags</option>
+                {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Sales Rep</label>
+              <select
+                value={salesRepFilter}
+                onChange={(e) => setSalesRepFilter(e.target.value)}
+                className="block-select w-full text-xs"
+              >
+                <option value="">All Sales Reps</option>
+                {allSalesReps.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Overdue → Collections Banner */}
+      {candidates.length > 0 && !bannerDismissed && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 16px', background: 'rgba(239,68,68,0.08)',
+          border: '1px solid #ef4444', borderRadius: 6,
+        }}>
+          <span style={{ fontSize: 13, color: '#ef4444', fontWeight: 600 }}>
+            {candidates.length} overdue invoice{candidates.length !== 1 ? 's' : ''} eligible for debt collection
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="block-btn text-xs py-1 px-3"
+              style={{ color: '#ef4444', borderColor: '#ef4444' }}
+              onClick={() => setShowConvertModal(true)}
+            >
+              Review
+            </button>
+            <button
+              style={{ fontSize: 12, color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => setBannerDismissed(true)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Convert Modal */}
+      {showConvertModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="block-card p-6" style={{ width: 560, maxHeight: '80vh', overflowY: 'auto', borderRadius: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 className="text-sm font-bold text-text-primary">Overdue Invoices — Send to Collections</h3>
+              <button className="block-btn text-xs py-1 px-2" onClick={() => setShowConvertModal(false)}>Close</button>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+              These invoices are 30+ days overdue and not yet in debt collection. Converting creates a new receivable debt linked to the invoice.
+            </p>
+            <table className="block-table w-full text-xs">
+              <thead>
+                <tr>
+                  <th className="text-left">Invoice</th>
+                  <th className="text-left">Client</th>
+                  <th className="text-right">Balance Due</th>
+                  <th className="text-right">Due Date</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map(inv => (
+                  <tr key={inv.id}>
+                    <td className="font-mono"><EntityChip type="invoice" id={inv.id} label={inv.invoice_number} variant="inline" /></td>
+                    <td><EntityChip type="client" id={inv.client_id} label={inv.client_name || '—'} variant="inline" /></td>
+                    <td className="text-right font-mono text-accent-expense">
+                      {formatCurrency((inv.total || 0) - (inv.amount_paid || 0))}
+                    </td>
+                    <td className="text-right text-text-muted">{formatDate(inv.due_date)}</td>
+                    <td className="text-right">
+                      <button
+                        className="block-btn-primary text-xs py-1 px-3"
+                        disabled={converting.has(inv.id)}
+                        onClick={() => handleConvertToDebt(inv.id)}
+                      >
+                        {converting.has(inv.id) ? 'Converting...' : 'Convert'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {candidates.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: 16 }}>
+                      All candidates have been converted.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tabs + Search — quick-filter chip row hidden via
+          Customization › Invoicing › Display › Show quick filter chips. */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex gap-1">
-          {TABS.map((tab) => (
+          {prefs.showQuickFilters && TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
                 activeTab === tab.key
                   ? 'bg-accent-blue text-white'
-                  : 'bg-bg-secondary text-text-muted hover:text-text-primary'
+                  : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
               }`}
-              style={{ borderRadius: '2px' }}
+              style={{ borderRadius: '6px' }}
             >
               {tab.label}
             </button>
@@ -295,23 +944,53 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <FileText size={24} className="text-text-muted" />
-          </div>
-          <p className="text-sm text-text-muted">No invoices found.</p>
-          <button
-            className="block-btn-primary mt-4 flex items-center gap-2"
-            onClick={onNewInvoice}
-          >
-            <Plus size={16} />
-            Create your first invoice
-          </button>
+        <div className="flex flex-col items-center gap-3">
+          <EmptyState
+            icon={FileText}
+            message={
+              invoices.length === 0
+                ? 'No invoices yet'
+                : 'No invoices match your search or filter'
+            }
+          />
+          {invoices.length === 0 ? (
+            <button
+              className="block-btn-primary mt-4 flex items-center gap-2"
+              onClick={onNewInvoice}
+            >
+              <Plus size={16} />
+              Create your first invoice
+            </button>
+          ) : (
+            <button
+              className="block-btn mt-2 text-xs"
+              onClick={() => { setSearch(''); setActiveTab('all'); }}
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="block-card p-0 overflow-hidden">
-          <table className="block-table">
-            <thead>
+          {/* Sticky header is gated on `display-sticky-header`. When on, the
+              scroll container caps height so the thead can pin at the top. */}
+          <div
+            className="overflow-x-auto"
+            style={prefs.stickyHeader ? { maxHeight: '70vh', overflowY: 'auto' } : undefined}
+          >
+          <table
+            className="block-table"
+            style={{ fontSize: cTableFontSize }}
+            data-zebra={prefs.zebra ? 'on' : 'off'}
+            data-compact={prefs.compactRows ? 'on' : 'off'}
+          >
+            <thead
+              style={
+                prefs.stickyHeader
+                  ? { position: 'sticky', top: 0, zIndex: 2, background: 'var(--color-bg-secondary)' }
+                  : undefined
+              }
+            >
               <tr>
                 <th style={{ width: '40px' }}>
                   <input
@@ -319,72 +998,152 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                     checked={allSelected}
                     onChange={toggleSelectAll}
                     className="cursor-pointer"
-                    style={{ accentColor: '#3b82f6' }}
+                    style={{ accentColor: 'var(--accent-primary)' }}
                   />
                 </th>
+                <th style={{ width: '24px' }} title="Risk indicator"></th>
                 <th>Invoice #</th>
                 <th>Client Name</th>
-                <th>Issue Date</th>
-                <th>Due Date</th>
-                <th className="text-right">Total</th>
-                <th className="text-right">Amount Paid</th>
-                <th className="text-right">Balance Due</th>
-                <th>Status</th>
+                {cShowIssueDate && <th>Issue Date</th>}
+                {cShowDueDate && <th>Due Date</th>}
+                {cShowDaysCol && <th>Days</th>}
+                {showPredictedColumn && <th>Predicted Pay</th>}
+                {cShowTotalCol && <th className={amountAlignClass}>Total</th>}
+                <th className={amountAlignClass}>Amount Paid</th>
+                {cShowBalanceCol && <th className={amountAlignClass}>Balance Due</th>}
+                {cShowStatusCol && <th>Status</th>}
                 <th style={{ width: '60px' }}></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((inv) => {
+              {/* Pagination is honored via `rowsPerPage` from the customization
+                  preferences. The "All" tab still shows everything when the
+                  user has set a value of 0 by overriding the descriptor's
+                  min (which we clamp on input). */}
+              {filtered.slice(0, prefs.rowsPerPage || filtered.length).map((inv, rowIdx) => {
                 const balance = inv.total - inv.amount_paid;
-                const badge = STATUS_BADGE[inv.status] ?? STATUS_BADGE.draft;
+                const badge = formatStatus(inv.status);
                 const isSelected = selectedIds.has(inv.id);
+                const days = daysOutstanding(inv);
+                const isOverdue = inv.status !== 'paid' && days > prefs.overdueGraceDays;
+                const daysLabel = inv.status === 'paid'
+                  ? '—'
+                  : days > 0
+                    ? `${days}d overdue`
+                    : days === 0
+                      ? 'Due today'
+                      : `Due in ${Math.abs(days)}d`;
+                const daysColor = inv.status === 'paid'
+                  ? 'text-text-muted'
+                  : days > 60
+                    ? 'text-accent-expense'
+                    : days > 30
+                      ? 'text-orange-400'
+                      : days > 0
+                        ? 'text-accent-warning'
+                        : 'text-text-secondary';
+                // Row tint precedence: selected > overdue highlight > zebra.
+                // Inline background wins because Tailwind's bg classes would
+                // be overridden by the higher-specificity inline value anyway.
+                const rowBg = isSelected
+                  ? undefined // handled via Tailwind class below
+                  : prefs.overdueHighlight && isOverdue
+                    ? 'rgba(239, 68, 68, 0.06)'
+                    : prefs.zebra && rowIdx % 2 === 1
+                      ? 'rgba(255, 255, 255, 0.02)'
+                      : undefined;
                 return (
                   <tr
                     key={inv.id}
                     className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`}
                     onClick={() => onViewInvoice(inv.id)}
+                    style={{ ...rowPadStyle, background: rowBg }}
                   >
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleSelect(inv.id)}
                         className="cursor-pointer"
-                        style={{ accentColor: '#3b82f6' }}
+                        style={{ accentColor: 'var(--accent-primary)' }}
                       />
                     </td>
-                    <td className="font-mono text-accent-blue">{inv.invoice_number}</td>
                     <td>
-                      <button
-                        className="text-accent-blue hover:underline text-left"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          nav.goToClient(inv.client_id);
+                      <span
+                        title={inv.status === 'paid' ? 'Paid' : `${days > 0 ? days : 0} days overdue`}
+                        style={{
+                          display: 'inline-block',
+                          width: 8,
+                          height: 8,
+                          borderRadius: 6,
+                          background: riskColor(inv),
                         }}
-                      >
-                        {clientMap.get(inv.client_id) ?? 'Unknown'}
-                      </button>
+                      />
                     </td>
-                    <td className="text-text-secondary">{inv.issue_date}</td>
-                    <td className="text-text-secondary">{inv.due_date}</td>
-                    <td className="text-right font-mono text-text-primary">
-                      {fmt.format(inv.total)}
-                    </td>
-                    <td className="text-right font-mono text-text-secondary">
-                      {fmt.format(inv.amount_paid)}
-                    </td>
-                    <td className="text-right font-mono text-text-primary">
-                      {fmt.format(balance)}
-                    </td>
-                    <td>
-                      <span className={badge.className}>{badge.label}</span>
+                    <td className="font-mono text-accent-blue">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {inv.invoice_number}
+                        {inv.invoice_type && inv.invoice_type !== 'standard' && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, textTransform: 'uppercase',
+                            background: (TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280') + '22',
+                            color: TYPE_BADGE_COLORS[inv.invoice_type] || '#6b7280',
+                          }}>
+                            {humanizeLabel(inv.invoice_type)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      {inv.status === 'overdue' && (
+                      <EntityChip type="client" id={inv.client_id} label={clientMap.get(inv.client_id) ?? 'Unknown'} variant="inline" />
+                    </td>
+                    {cShowIssueDate && <td className="text-text-secondary">{formatInvoiceDate(inv.issue_date)}</td>}
+                    {cShowDueDate && <td className="text-text-secondary">{formatInvoiceDate(inv.due_date)}</td>}
+                    {cShowDaysCol && <td className={`text-xs font-semibold ${daysColor}`}>{daysLabel}</td>}
+                    {showPredictedColumn && (
+                      <td className="text-text-muted text-xs">
+                        {predictedDates[inv.id] === undefined
+                          ? '…'
+                          : predictedDates[inv.id]
+                            ? formatInvoiceDate(predictedDates[inv.id])
+                            : '—'}
+                      </td>
+                    )}
+                    {cShowTotalCol && (
+                    <td className={`${amountAlignClass} font-mono text-text-primary`}>
+                      {formatInvoiceAmount(inv.total)}
+                    </td>
+                    )}
+                    <td className={`${amountAlignClass} font-mono text-text-secondary`}>
+                      {formatInvoiceAmount(inv.amount_paid)}
+                    </td>
+                    {cShowBalanceCol && (
+                    <td className={`${amountAlignClass} font-mono text-text-primary`}>
+                      {formatInvoiceAmount(balance)}
+                    </td>
+                    )}
+                    {cShowStatusCol && (
+                    <td>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={badge.className}>{badge.label}</span>
+                        {(inv as any).dunning_stage > 0 && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>
+                            {['', 'REMIND', 'FIRM', 'FINAL', 'COLLECT'][(inv as any).dunning_stage] || `D${(inv as any).dunning_stage}`}
+                          </span>
+                        )}
+                        {(inv as any).late_fee_applied === 1 && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef444422', color: '#f87171' }}>FEE</span>
+                        )}
+                      </div>
+                    </td>
+                    )}
+                    <td className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                      {inv.status === 'overdue' && ((inv.total || 0) - ((inv as any).amount_paid || 0)) > 0.005 && (
                         <button
                           onClick={() => sendToCollections(inv.id)}
                           className="block-btn text-xs"
                           title="Send to Collections"
+                          aria-label="Send to Collections"
                         >
                           <Scale size={14} />
                         </button>
@@ -395,6 +1154,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -403,8 +1163,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
-            background: 'var(--bg-secondary, #1e1e2e)',
-            borderRadius: '2px',
+            background: 'rgba(18,20,28,0.80)',
+            borderRadius: '6px',
             minWidth: '500px',
           }}
         >
@@ -425,7 +1185,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             className="block-btn-success flex items-center gap-1.5 text-xs"
             onClick={handleBatchMarkPaid}
             disabled={batchLoading}
-            style={{ background: 'var(--color-accent-income)', color: '#fff', border: 'none', borderRadius: '2px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
+            style={{ background: 'var(--color-accent-income)', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
           >
             <CheckCircle size={13} />
             Mark as Paid
@@ -434,17 +1194,110 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleExportSelected}
-            style={{ background: 'var(--bg-tertiary, #2a2a3e)', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export CSV
+          </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={async () => {
+              const ids = Array.from(selectedIds);
+              if (ids.length === 0) return;
+              const result = await api.batchExportPDF(ids);
+              if (result?.cancelled) return;
+              if (result?.error) {
+                setFeedback({ type: 'error', message: 'PDF export failed: ' + result.error });
+              } else {
+                setFeedback({ type: 'success', message: `Exported ${result?.count || ids.length} invoices to PDF` });
+              }
+              setTimeout(() => setFeedback(null), 4000);
+            }}
+            disabled={batchLoading}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <FileText size={13} />
+            Export PDF
+          </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleBulkSendReminders}
+            disabled={batchLoading}
+            title="Schedule reminders for selected invoices"
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <Bell size={13} />
+            Send Reminders
+          </button>
+
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+            onClick={handleBulkApplyLateFee}
+            disabled={batchLoading}
+            title="Apply late fees to all eligible invoices"
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+          >
+            <DollarSign size={13} />
+            Apply Late Fee
+          </button>
+
+          {!showBulkTag ? (
+            <button
+              className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
+              onClick={() => setShowBulkTag(true)}
+              style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            >
+              <TagIcon size={13} />
+              Tag
+            </button>
+          ) : (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={bulkTagText}
+                onChange={(e) => setBulkTagText(e.target.value)}
+                placeholder="tag1, tag2"
+                className="block-input text-xs"
+                style={{ width: 130 }}
+                autoFocus
+              />
+              <button
+                className="text-xs font-semibold"
+                onClick={handleBulkTag}
+                disabled={batchLoading || !bulkTagText.trim()}
+                style={{ background: 'var(--color-accent-blue)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Apply
+              </button>
+              <button
+                className="text-xs font-semibold text-text-muted"
+                onClick={() => { setShowBulkTag(false); setBulkTagText(''); }}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {/* P1.8 — Bulk export selected invoices to ZIP */}
+          <button
+            className="flex items-center gap-1.5 text-xs font-semibold"
+            onClick={handleBatchExportZip}
+            disabled={batchLoading || selectedIds.size === 0}
+            title={`Export ${selectedIds.size} invoice${selectedIds.size === 1 ? '' : 's'} as a ZIP archive (one PDF per invoice)`}
+            style={{ background: 'transparent', border: '1px solid var(--color-accent-blue)', color: 'var(--color-accent-blue)', borderRadius: '6px', padding: '6px 12px', cursor: batchLoading ? 'wait' : 'pointer', opacity: batchLoading ? 0.6 : 1 }}
+          >
+            <Download size={13} />
+            Export ZIP
           </button>
 
           {!showDeleteConfirm ? (
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '2px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -456,14 +1309,14 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => setShowDeleteConfirm(false)}
-                style={{ background: 'transparent', border: '1px solid var(--border-primary, #333)', borderRadius: '2px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

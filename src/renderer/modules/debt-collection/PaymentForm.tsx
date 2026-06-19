@@ -1,18 +1,23 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { DollarSign, X } from 'lucide-react';
 import api from '../../lib/api';
-import { formatCurrency } from '../../lib/format';
-import { debtDb } from './dbHelpers';
+import { formatCurrency, roundCents } from '../../lib/format';
+import ErrorBanner from '../../components/ErrorBanner';
+import { useModalBehavior, trapFocusOnKeyDown } from '../../lib/use-modal-behavior';
+import { applyDebtPaymentDelta } from '../../../shared/payment-math';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtData {
   balance_due: number;
   interest_accrued: number;
   fees_accrued: number;
+  payments_made: number;
+  status: string;
 }
 
 interface PaymentFormProps {
   debtId: string;
+  editId?: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -24,7 +29,7 @@ function todayISO(): string {
 }
 
 // ─── Component ──────────────────────────────────────────
-const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) => {
+const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSaved }) => {
   // Debt data loaded on mount
   const [debt, setDebt] = useState<DebtData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,6 +44,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
   const [saving, setSaving] = useState(false);
   const [amountError, setAmountError] = useState('');
   const [amountWarning, setAmountWarning] = useState('');
+  const [saveError, setSaveError] = useState('');
+  // Original amount of the payment being edited, for the balance delta.
+  const [originalAmount, setOriginalAmount] = useState(0);
 
   // ── Load debt data ──
   useEffect(() => {
@@ -51,6 +59,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
             balance_due: Number(data.balance_due) || 0,
             interest_accrued: Number(data.interest_accrued) || 0,
             fees_accrued: Number(data.fees_accrued) || 0,
+            payments_made: Number(data.payments_made) || 0,
+            status: data.status || 'active',
           });
         }
       } catch (err) {
@@ -63,6 +73,29 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
     return () => { cancelled = true; };
   }, [debtId]);
 
+  // ── Load existing payment for edit ──
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const row = await api.get('debt_payments', editId);
+        if (row && !cancelled) {
+          setAmount(String(row.amount || ''));
+          setOriginalAmount(Number(row.amount) || 0);
+          setMethod(row.method || 'check');
+          setReferenceNumber(row.reference_number || '');
+          setReceivedDate(row.received_date ? row.received_date.slice(0, 10) : todayISO());
+          setNotes(row.notes || '');
+        }
+      } catch (err) {
+        console.error('Failed to load payment:', err);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [editId]);
+
   // ── Parsed amount ──
   const parsedAmount = useMemo(() => {
     const n = parseFloat(amount);
@@ -72,9 +105,12 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
   // ── Auto-allocation: fees -> interest -> principal ──
   const allocation = useMemo(() => {
     if (!debt) return { fees: 0, interest: 0, principal: 0 };
-    const fees = Math.min(parsedAmount, debt.fees_accrued);
-    const interest = Math.min(parsedAmount - fees, debt.interest_accrued);
-    const principal = Math.max(parsedAmount - fees - interest, 0);
+    // Round each step so the three buckets sum exactly to the entered amount.
+    // Floor each accrued column at 0 — a negative fees/interest column would
+    // otherwise feed a NEGATIVE allocation amount into the DB.
+    const fees = roundCents(Math.min(parsedAmount, Math.max(0, debt.fees_accrued)));
+    const interest = roundCents(Math.min(parsedAmount - fees, Math.max(0, debt.interest_accrued)));
+    const principal = roundCents(Math.max(parsedAmount - fees - interest, 0));
     return { fees, interest, principal };
   }, [parsedAmount, debt]);
 
@@ -96,7 +132,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
   // ── Pay Full Balance ──
   const handlePayFull = () => {
     if (!debt) return;
-    setAmount(debt.balance_due.toFixed(2));
+    // Floor at 0 so an over-paid debt (negative balance_due) doesn't
+    // pre-fill the amount field with a negative number.
+    setAmount(Math.max(0, roundCents(debt.balance_due)).toFixed(2));
   };
 
   // ── Submit ──
@@ -113,51 +151,92 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
     }
 
     setSaving(true);
-    try {
-      // 1. Create payment record (debt_payments has no company_id column).
-      await debtDb.createPayment({
-        debt_id: debtId,
-        amount: parsedAmount,
-        method,
-        reference_number: referenceNumber || null,
-        received_date: receivedDate,
-        applied_to_principal: allocation.principal,
-        applied_to_interest: allocation.interest,
-        applied_to_fees: allocation.fees,
-        notes: notes || null,
-      });
+    setSaveError('');
+    const roundedAmount = roundCents(parsedAmount);
+    const paymentPayload = {
+      debt_id: debtId,
+      amount: roundedAmount,
+      method,
+      reference_number: referenceNumber || null,
+      received_date: receivedDate,
+      applied_to_principal: allocation.principal,
+      applied_to_interest: allocation.interest,
+      applied_to_fees: allocation.fees,
+      notes: notes || null,
+    };
 
-      // 2. Update debt running totals & auto-settle if fully paid
-      await api.rawQuery(
-        `UPDATE debts SET
-          payments_made = payments_made + ?,
-          balance_due = original_amount + interest_accrued + fees_accrued - payments_made - ?,
-          status = CASE WHEN original_amount + interest_accrued + fees_accrued - payments_made - ? <= 0 THEN 'settled' ELSE status END,
-          updated_at = datetime('now')
-        WHERE id = ?`,
-        [parsedAmount, parsedAmount, parsedAmount, debtId]
-      );
+    try {
+      if (editId) {
+        // Update existing payment record
+        await api.update('debt_payments', editId, paymentPayload);
+        // Editing the amount used to leave the debt's balance_due/payments_made
+        // untouched (only the NEW-payment path adjusted them). Apply the change
+        // as a delta so accrued interest/fees folded into balance_due survive.
+        const delta = roundCents(roundedAmount - originalAmount);
+        if (delta !== 0 && debt) {
+          const next = applyDebtPaymentDelta(
+            { balance_due: debt.balance_due, payments_made: debt.payments_made, status: debt.status },
+            delta,
+          );
+          await api.update('debts', debtId, {
+            balance_due: next.balance_due,
+            payments_made: next.payments_made,
+            status: next.status,
+          });
+        }
+      } else {
+        // 1. Create payment record
+        await api.create('debt_payments', paymentPayload);
+
+        // 2. Update debt running totals & auto-settle if fully paid.
+        // Compute new balance in JS to remove the dependency on column-update
+        // ordering inside the same UPDATE statement (the previous form mixed
+        // `payments_made = payments_made + ?` with another expression that also
+        // referenced `payments_made` — order-of-eval was implementation-defined).
+        const newBalanceDue = roundCents((debt?.balance_due ?? 0) - roundedAmount);
+        const newStatus = newBalanceDue <= 0 ? 'settled' : null;
+        await api.rawQuery(
+          `UPDATE debts SET
+            payments_made = payments_made + ?,
+            balance_due = ?,
+            status = CASE WHEN ? IS NOT NULL THEN ? ELSE status END,
+            updated_at = datetime('now')
+          WHERE id = ?`,
+          [roundedAmount, newBalanceDue, newStatus, newStatus, debtId]
+        );
+      }
 
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface record-payment errors instead of swallowing
       console.error('Failed to record payment:', err);
+      setSaveError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
   };
 
+  // A11Y: ESC close, body scroll lock, focus trap, role=dialog
+  const { containerRef } = useModalBehavior({ onClose });
   return (
     <>
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black/60 z-40"
         onClick={onClose}
+        role="presentation"
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="block-card-elevated w-full max-w-[500px] max-h-[90vh] overflow-y-auto"
+          ref={containerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={editId ? 'Edit payment' : 'Record payment'}
+          tabIndex={-1}
+          onKeyDown={trapFocusOnKeyDown(containerRef)}
+          className="block-card-elevated w-full max-w-[500px] max-h-[90vh] overflow-y-auto cursor-pointer"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -165,12 +244,12 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
             <div className="flex items-center gap-3">
               <div
                 className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 <DollarSign size={16} className="text-accent-income" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-text-primary">Record Payment</h3>
+                <h3 className="text-base font-bold text-text-primary">{editId ? 'Edit Payment' : 'Record Payment'}</h3>
                 {debt && (
                   <p className="text-xs text-text-muted mt-0.5">
                     Balance Due: <span className="text-text-primary font-semibold">{formatCurrency(debt.balance_due)}</span>
@@ -192,6 +271,13 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {saveError && (
+                <ErrorBanner
+                  message={saveError}
+                  title="Failed to record payment"
+                  onDismiss={() => setSaveError('')}
+                />
+              )}
               {/* Amount + Pay Full */}
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
@@ -201,7 +287,6 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
                   <input
                     type="number"
                     step="0.01"
-                    min="0"
                     className="block-input flex-1"
                     placeholder="0.00"
                     value={amount}
@@ -234,14 +319,14 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
                   value={method}
                   onChange={(e) => setMethod(e.target.value)}
                 >
+                  <option value="ach">ACH</option>
+                  <option value="card">Card</option>
                   <option value="cash">Cash</option>
                   <option value="check">Check</option>
-                  <option value="card">Card</option>
-                  <option value="wire">Wire</option>
-                  <option value="ach">ACH</option>
                   <option value="garnishment">Garnishment</option>
-                  <option value="settlement">Settlement</option>
                   <option value="other">Other</option>
+                  <option value="settlement">Settlement</option>
+                  <option value="wire">Wire</option>
                 </select>
               </div>
 
@@ -276,7 +361,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
               {parsedAmount > 0 && debt && (
                 <div
                   className="bg-bg-tertiary border border-border-primary p-4 space-y-2"
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: '6px' }}
                 >
                   <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
                     Payment Allocation
@@ -326,7 +411,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, onClose, onSaved }) =
                   disabled={saving || parsedAmount <= 0}
                 >
                   <DollarSign size={14} />
-                  {saving ? 'Recording...' : 'Record Payment'}
+                  {saving ? 'Saving...' : editId ? 'Update Payment' : 'Record Payment'}
                 </button>
               </div>
             </form>

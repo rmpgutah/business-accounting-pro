@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Building2, Plus, Search } from 'lucide-react';
 import api from '../../lib/api';
+import ErrorBanner from '../../components/ErrorBanner';
+import { formatStatus } from '../../lib/format';
 import { useCompanyStore } from '../../stores/companyStore';
+import {
+  VENDOR_TYPE, VENDOR_APPROVAL, VENDOR_LOCATION, VENDOR_DIVERSITY,
+  ClassificationBadge, ClassificationBadges,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface Vendor {
@@ -11,27 +17,35 @@ interface Vendor {
   phone?: string;
   status?: string;
   payment_terms?: number;
+  vendor_type?: string;
+  approval_status?: string;
+  location_type?: string;
+  diversity?: string;
 }
 
 interface VendorListProps {
   onNew: () => void;
   onEdit: (id: string) => void;
+  onView?: (id: string) => void;
 }
 
 // ─── Component ──────────────────────────────────────────
-const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
+const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit, onView }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const loadVendors = async () => {
     if (!activeCompany) return;
     try {
+      setLoadError('');
       const data = await api.query('vendors', { company_id: activeCompany.id });
       setVendors(Array.isArray(data) ? data : []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load vendors:', err);
+      setLoadError(err?.message || 'Failed to load vendors');
     } finally {
       setLoading(false);
     }
@@ -53,23 +67,34 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
     : vendors;
 
   const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Delete vendor "${name}"? This cannot be undone.`)) return;
+    if (!window.confirm(
+      `Delete vendor "${name}"?\n\n` +
+      `It will move to Trash (recoverable for 30 days). Any expenses, bills, ` +
+      `purchase orders, or bank rules pointing to it will be unlinked.`
+    )) return;
     try {
-      await api.remove('vendors', id);
+      const res = await api.vendorDelete(id, false);
+      // IPC handlers resolve with {error} on failure (they don't throw),
+      // so we must inspect the result rather than rely on try/catch.
+      if (res?.error) {
+        alert('Failed to delete vendor: ' + res.error);
+        return;
+      }
+      const u = res?.unlinked;
+      const unlinkedTotal = u ? (u.expenses + u.bills + u.purchase_orders + u.bank_rules) : 0;
       setVendors((prev) => prev.filter((v) => v.id !== id));
-    } catch (err) {
+      if (unlinkedTotal > 0) {
+        const parts = [];
+        if (u!.expenses) parts.push(`${u!.expenses} expense${u!.expenses === 1 ? '' : 's'}`);
+        if (u!.bills) parts.push(`${u!.bills} bill${u!.bills === 1 ? '' : 's'}`);
+        if (u!.purchase_orders) parts.push(`${u!.purchase_orders} PO${u!.purchase_orders === 1 ? '' : 's'}`);
+        if (u!.bank_rules) parts.push(`${u!.bank_rules} bank rule${u!.bank_rules === 1 ? '' : 's'}`);
+        // Non-blocking info via console; the row is already gone from the UI.
+        console.info(`Vendor "${name}" deleted · unlinked ${parts.join(', ')}.`);
+      }
+    } catch (err: any) {
       console.error('Failed to delete vendor:', err);
-    }
-  };
-
-  const statusBadge = (status?: string) => {
-    switch (status) {
-      case 'active':
-        return 'block-badge block-badge-income';
-      case 'inactive':
-        return 'block-badge block-badge-warning';
-      default:
-        return 'block-badge block-badge-blue';
+      alert('Failed to delete vendor: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -83,12 +108,13 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
 
   return (
     <div className="space-y-4">
+      {loadError && <ErrorBanner message={loadError} title="Failed to load vendors" onDismiss={() => setLoadError('')} />}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: '6px' }}
           >
             <Building2 size={18} className="text-accent-purple" />
           </div>
@@ -125,9 +151,13 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
           <div className="empty-state-icon">
             <Building2 size={24} className="text-text-muted" />
           </div>
-          <p className="text-sm text-text-secondary font-medium">No vendors found</p>
+          <p className="text-sm text-text-secondary font-medium">
+            {vendors.length === 0 ? 'No vendors yet' : 'No vendors match your search'}
+          </p>
           <p className="text-xs text-text-muted mt-1">
-            Add your first vendor to get started.
+            {vendors.length === 0
+              ? 'Add your first vendor to get started.'
+              : 'Try a different search term.'}
           </p>
         </div>
       ) : (
@@ -139,6 +169,10 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
                 <th>Email</th>
                 <th>Phone</th>
                 <th>Status</th>
+                <th>Type</th>
+                <th>Approval</th>
+                <th>Location</th>
+                <th>Diversity</th>
                 <th>Payment Terms</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -146,15 +180,28 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit }) => {
             <tbody>
               {filtered.map((v) => (
                 <tr key={v.id}>
-                  <td className="text-text-primary font-medium">{v.name}</td>
-                  <td className="text-text-secondary">{v.email || '-'}</td>
+                  <td className="text-text-primary font-medium truncate max-w-[200px]">
+                    {onView ? (
+                      <button
+                        className="hover:text-accent-blue transition-colors text-left"
+                        onClick={() => onView(v.id)}
+                      >
+                        {v.name}
+                      </button>
+                    ) : v.name}
+                  </td>
+                  <td className="text-text-secondary truncate max-w-[200px]">{v.email || '-'}</td>
                   <td className="text-text-secondary font-mono text-xs">{v.phone || '-'}</td>
                   <td>
-                    <span className={statusBadge(v.status)}>
-                      {v.status || 'active'}
+                    <span className={formatStatus(v.status).className}>
+                      {formatStatus(v.status).label}
                     </span>
                   </td>
-                  <td className="text-text-secondary font-mono">{v.payment_terms ? `Net ${v.payment_terms}` : '-'}</td>
+                  <td><ClassificationBadge def={VENDOR_TYPE} value={v.vendor_type} /></td>
+                  <td><ClassificationBadge def={VENDOR_APPROVAL} value={v.approval_status} /></td>
+                  <td><ClassificationBadge def={VENDOR_LOCATION} value={v.location_type} /></td>
+                  <td><ClassificationBadges def={VENDOR_DIVERSITY} values={v.diversity} /></td>
+                  <td className="text-text-secondary">{v.payment_terms ? `Net ${v.payment_terms}` : '-'}</td>
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
