@@ -3344,13 +3344,6 @@ export function generateExpenseReceiptHTML(
   const total = Math.max(0, grossWithTax - expDiscountTotal);
 
   const reimbStatus = expense.reimbursement_status || expense.status || 'pending';
-  const reimbColor =
-    reimbStatus === 'reimbursed' || reimbStatus === 'paid' ? '#16a34a' :
-    reimbStatus === 'approved' ? '#2563eb' :
-    reimbStatus === 'rejected' ? '#dc2626' : '#d97706';
-
-  const receiptHTML = safeImg(expense.receipt_path || expense.receipt_data || null, 'Receipt',
-    'max-width:100%;max-height:380px;object-fit:contain;border:1px solid #e2e8f0;padding:6px;background:#fff;');
 
   // Line items table — surface per-line notations (tags + notes) directly
   // beneath the description so the printed record is auditable: each purchase
@@ -3373,11 +3366,11 @@ export function generateExpenseReceiptHTML(
     if (tags.length === 0 && !notes) return '';
     const tagsHTML = tags.length > 0
       ? `<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px;">${tags.map(t =>
-          `<span style="display:inline-block;padding:1px 6px;font-size:9px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:3px;">${esc(t)}</span>`
+          `<span style="display:inline-block;padding:1px 5px;font-size:9px;background:#f0f0f0;color:#000;border:1px solid #888;border-radius:0;">${esc(t)}</span>`
         ).join('')}</div>`
       : '';
     const notesHTML = notes
-      ? `<div style="margin-top:3px;font-size:10px;color:#64748b;font-style:italic;white-space:pre-line;">${esc(notes)}</div>`
+      ? `<div style="margin-top:3px;font-size:10px;color:#333;font-style:italic;white-space:pre-line;">${esc(notes)}</div>`
       : '';
     return tagsHTML + notesHTML;
   };
@@ -3448,8 +3441,8 @@ export function generateExpenseReceiptHTML(
   ];
   const detailsHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px 14px;">
     ${detailRows.map(([k, v]) => `<div>
-      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#94a3b8;font-weight:600;">${esc(k)}</div>
-      <div style="font-size:11px;color:#0f172a;font-weight:600;margin-top:1px;">${esc(v)}</div>
+      <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:0.04em;color:#555;font-weight:600;">${esc(k)}</div>
+      <div style="font-size:11px;color:#000;font-weight:600;margin-top:1px;">${esc(v)}</div>
     </div>`).join('')}
   </div>`;
 
