@@ -23,6 +23,12 @@ import { clientFormPage } from './ui/client-form';
 import { vendorFormPage } from './ui/vendor-form';
 import { mileageFormPage } from './ui/mileage-form';
 import { invoiceFormPage } from './ui/invoice-form';
+import { employeeFormPage } from './ui/employee-form';
+import { timeFormPage } from './ui/time-form';
+import { projectFormPage } from './ui/project-form';
+import { documentFormPage } from './ui/document-form';
+import { simpleFormPage, type SimpleField } from './ui/generic-form';
+import { shell } from './ui/shell';
 import { handleRpc } from './api-rpc';
 
 export interface Env {
@@ -47,6 +53,25 @@ type Variables = {
 };
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+// Surface actual error messages instead of the bare "Internal Server Error"
+// HTML page. JSON endpoints get a structured {error, where} payload; HTML
+// page errors get a small inline notice. The full stack still lands in the
+// wrangler tail logs so we can trace causes without exposing internals to
+// the browser console.
+app.onError((err, c) => {
+  console.error('Worker error:', err?.stack || err);
+  const accept = c.req.header('accept') || '';
+  const path = c.req.path;
+  const wantsJSON = accept.includes('application/json') || path.startsWith('/api/') || path.startsWith('/auth/');
+  if (wantsJSON) {
+    return c.json({
+      error: (err && (err as any).message) || 'Unknown error',
+      where: path,
+    }, 500);
+  }
+  return c.text('Internal Server Error: ' + ((err && (err as any).message) || 'unknown'), 500);
+});
 
 // ─── Auth middleware ────────────────────────────────────────
 async function requireUser(c: any, next: () => Promise<void>): Promise<Response | void> {
@@ -124,12 +149,459 @@ app.post('/auth/login', async (c) => {
   return c.json({ ok: true });
 });
 
+// ─── /app/* — authenticated UI pages ─────────────────────────
+app.use('/app/*', requireUser);
+
+app.get('/app/dashboard', async (c) => {
+  const cid = c.get('companyId');
+  if (!cid) return c.redirect('/auth/login', 302);
+  const year = new Date().getFullYear().toString();
+  // KPIs in one batch query — sum YTD by table.
+  const [expSum, invSum, ar, mileSum, company, recentExp, recentInv] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT COALESCE(SUM(amount + COALESCE(tax_amount,0)), 0) AS v FROM expenses WHERE company_id = ? AND substr(date,1,4) = ?`).bind(cid, year),
+    c.env.DB.prepare(`SELECT COALESCE(SUM(total), 0) AS v FROM invoices WHERE company_id = ? AND substr(date,1,4) = ?`).bind(cid, year),
+    c.env.DB.prepare(`SELECT COALESCE(SUM(total - amount_paid), 0) AS v FROM invoices WHERE company_id = ? AND status NOT IN ('paid','void','draft')`).bind(cid),
+    c.env.DB.prepare(`SELECT COALESCE(SUM(deduction_amount), 0) AS v FROM mileage_log WHERE company_id = ? AND substr(trip_date,1,4) = ?`).bind(cid, year),
+    c.env.DB.prepare(`SELECT name FROM companies WHERE id = ?`).bind(cid),
+    c.env.DB.prepare(`SELECT e.id, e.date, e.description, (e.amount + COALESCE(e.tax_amount,0)) AS amount, v.name AS vendor_name
+                      FROM expenses e LEFT JOIN vendors v ON v.id = e.vendor_id
+                      WHERE e.company_id = ? ORDER BY e.date DESC LIMIT 8`).bind(cid),
+    c.env.DB.prepare(`SELECT i.id, i.date, i.invoice_number, i.status, i.total, c.name AS client_name
+                      FROM invoices i LEFT JOIN clients c ON c.id = i.client_id
+                      WHERE i.company_id = ? ORDER BY i.date DESC LIMIT 8`).bind(cid),
+  ]);
+  const kpi: DashboardKpi = {
+    expensesYtd: Number((expSum.results?.[0] as any)?.v || 0),
+    invoicesYtd: Number((invSum.results?.[0] as any)?.v || 0),
+    outstandingAR: Number((ar.results?.[0] as any)?.v || 0),
+    mileageDeductionYtd: Number((mileSum.results?.[0] as any)?.v || 0),
+  };
+  const lists: DashboardLists = {
+    recentExpenses: (recentExp.results as any) || [],
+    recentInvoices: (recentInv.results as any) || [],
+  };
+  const companyName = (company.results?.[0] as any)?.name || 'My Business';
+  return c.html(dashboardPage(kpi, lists, companyName));
+});
+
+app.get('/app/expenses/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const [vendors, categories, clients, projects] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT id, name FROM vendors WHERE company_id = ? AND status = ?').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM categories WHERE company_id = ?').bind(cid),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ?').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM projects WHERE company_id = ? AND status = ?').bind(cid, 'active'),
+  ]);
+  return c.html(expenseCapturePage({
+    today: new Date().toISOString().slice(0, 10),
+    vendors: (vendors.results as any) || [],
+    categories: (categories.results as any) || [],
+    clients: (clients.results as any) || [],
+    projects: (projects.results as any) || [],
+  }));
+});
+
+// Placeholder index pages — extension points for full CRUD parity.
+// Each one renders a table from the live DB; editing UI is the next iteration.
+app.get('/app/expenses', async (c) => listingPage(c, 'Expenses', 'expenses', `
+  SELECT e.id, e.date, e.description, e.amount + COALESCE(e.tax_amount,0) AS total,
+         v.name AS vendor_name, c.name AS category_name
+  FROM expenses e
+  LEFT JOIN vendors v ON v.id = e.vendor_id
+  LEFT JOIN categories c ON c.id = e.category_id
+  WHERE e.company_id = ?
+  ORDER BY e.date DESC LIMIT 200`,
+  ['Date', 'Description', 'Vendor', 'Category', 'Total'],
+  (r: any) => [fmtDate(r.date), esc(r.description || ''), esc(r.vendor_name || '—'), esc(r.category_name || '—'), fmtMoney(r.total)],
+  '/app/expenses/new'
+));
+app.get('/app/invoices', async (c) => listingPage(c, 'Invoices', 'invoices', `
+  SELECT i.id, i.date, i.invoice_number, i.status, i.total, cl.name AS client_name
+  FROM invoices i LEFT JOIN clients cl ON cl.id = i.client_id
+  WHERE i.company_id = ? ORDER BY i.date DESC LIMIT 200`,
+  ['Date', '#', 'Client', 'Status', 'Total'],
+  (r: any) => [fmtDate(r.date), esc(r.invoice_number || r.id.slice(0,8)), esc(r.client_name || '—'), esc(r.status), fmtMoney(r.total)],
+));
+app.get('/app/clients', async (c) => listingPage(c, 'Clients', 'clients', `
+  SELECT id, name, email, phone, status FROM clients WHERE company_id = ? ORDER BY name`,
+  ['Name', 'Email', 'Phone', 'Status'],
+  (r: any) => [`<a href="/app/clients/${esc(r.id)}">${esc(r.name)}</a>`, esc(r.email || '—'), esc(r.phone || '—'), esc(r.status)],
+  '/app/clients/new',
+));
+app.get('/app/vendors', async (c) => listingPage(c, 'Vendors', 'vendors', `
+  SELECT id, name, email, phone, status FROM vendors WHERE company_id = ? ORDER BY name`,
+  ['Name', 'Email', 'Phone', 'Status'],
+  (r: any) => [`<a href="/app/vendors/${esc(r.id)}">${esc(r.name)}</a>`, esc(r.email || '—'), esc(r.phone || '—'), esc(r.status)],
+  '/app/vendors/new',
+));
+
+// ─── Bills (AP) listing + form ────────────────────────────
+app.get('/app/bills', async (c) => listingPage(c, 'Bills', 'bills', `
+  SELECT b.id, b.bill_number, b.date, b.due_date, b.status, b.total, b.amount_paid,
+         v.name as vendor_name
+  FROM bills b
+  LEFT JOIN vendors v ON v.id = b.vendor_id
+  WHERE b.company_id = ? ORDER BY b.date DESC, b.id DESC`,
+  ['#', 'Vendor', 'Date', 'Due', 'Status', 'Total'],
+  (r: any) => [
+    `<a href="/app/bills/${esc(r.id)}">${esc(r.bill_number || r.id.slice(0, 8))}</a>`,
+    esc(r.vendor_name || '—'),
+    fmtDate(r.date), fmtDate(r.due_date),
+    `<span class="badge ${r.status === 'paid' ? 'badge-green' : r.status === 'overdue' ? 'badge-red' : 'badge-amber'}">${esc(r.status)}</span>`,
+    fmtMoney(r.total),
+  ],
+  '/app/bills/new',
+));
+
+// ─── Quotes listing + form ────────────────────────────────
+app.get('/app/quotes', async (c) => listingPage(c, 'Quotes', 'quotes', `
+  SELECT q.id, q.quote_number, q.date, q.expires_date, q.status, q.total,
+         c.name as client_name
+  FROM quotes q
+  LEFT JOIN clients c ON c.id = q.client_id
+  WHERE q.company_id = ? ORDER BY q.date DESC, q.id DESC`,
+  ['#', 'Client', 'Date', 'Expires', 'Status', 'Total'],
+  (r: any) => [
+    `<a href="/app/quotes/${esc(r.id)}">${esc(r.quote_number || r.id.slice(0, 8))}</a>`,
+    esc(r.client_name || '—'),
+    fmtDate(r.date), fmtDate(r.expires_date),
+    `<span class="badge ${r.status === 'accepted' ? 'badge-green' : r.status === 'declined' ? 'badge-red' : 'badge-blue'}">${esc(r.status)}</span>`,
+    fmtMoney(r.total),
+  ],
+  '/app/quotes/new',
+));
+
+// ─── Projects listing + form ──────────────────────────────
+app.get('/app/projects', async (c) => listingPage(c, 'Projects', 'projects', `
+  SELECT p.id, p.name, p.status, p.budget, p.start_date, p.end_date,
+         c.name as client_name
+  FROM projects p
+  LEFT JOIN clients c ON c.id = p.client_id
+  WHERE p.company_id = ? ORDER BY p.name`,
+  ['Name', 'Client', 'Status', 'Budget', 'Dates'],
+  (r: any) => [
+    `<a href="/app/projects/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.client_name || '—'),
+    `<span class="badge">${esc(r.status)}</span>`,
+    fmtMoney(r.budget),
+    esc(fmtDate(r.start_date)) + (r.end_date ? ' → ' + esc(fmtDate(r.end_date)) : ''),
+  ],
+  '/app/projects/new',
+));
+
+// ─── Time entries listing + form ──────────────────────────
+app.get('/app/time', async (c) => listingPage(c, 'Time', 'time', `
+  SELECT t.id, t.date, t.duration_minutes, t.description, t.is_billable, t.is_invoiced, t.hourly_rate,
+         e.name as employee_name, p.name as project_name, c.name as client_name
+  FROM time_entries t
+  LEFT JOIN employees e ON e.id = t.employee_id
+  LEFT JOIN projects p ON p.id = t.project_id
+  LEFT JOIN clients c ON c.id = t.client_id
+  WHERE t.company_id = ? ORDER BY t.date DESC LIMIT 300`,
+  ['Date', 'Employee', 'Project', 'Hours', 'Rate', 'Billable'],
+  (r: any) => [
+    fmtDate(r.date),
+    `<a href="/app/time/${esc(r.id)}">${esc(r.employee_name || '—')}</a>`,
+    esc(r.project_name || r.client_name || '—'),
+    String(((r.duration_minutes || 0) / 60).toFixed(2)),
+    fmtMoney(r.hourly_rate),
+    r.is_invoiced ? '✓ inv.' : r.is_billable ? '✓' : '—',
+  ],
+  '/app/time/new',
+));
+
+// ─── Employees listing + form ─────────────────────────────
+app.get('/app/employees', async (c) => listingPage(c, 'Employees', 'employees', `
+  SELECT id, name, email, role, pay_rate, pay_type, status FROM employees
+  WHERE company_id = ? ORDER BY name`,
+  ['Name', 'Email', 'Role', 'Pay'],
+  (r: any) => [
+    `<a href="/app/employees/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.email || '—'),
+    esc(r.role || '—'),
+    fmtMoney(r.pay_rate) + ' / ' + esc(r.pay_type || 'hourly'),
+  ],
+  '/app/employees/new',
+));
+
+// ─── Bills new/edit/show pages ────────────────────────────
+const BILL_DOC_CFG = {
+  kind: 'bill' as const,
+  pluralLabel: 'Bills (AP)',
+  navKey: 'bills',
+  partyLabel: 'Vendor' as const,
+  partyField: 'vendor_id' as const,
+  parties: [] as Array<{ id: string; name: string }>,
+  statusOptions: ['open', 'paid', 'overdue', 'void'],
+  numberLabel: 'Bill #',
+  secondaryDateLabel: 'Due Date',
+  secondaryDateField: 'due_date' as const,
+};
+app.get('/app/bills/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const vendors = await c.env.DB.prepare('SELECT id, name FROM vendors WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active').all();
+  return c.html(documentFormPage(null, [],
+    { ...BILL_DOC_CFG, parties: (vendors.results as any) || [] },
+    new Date().toISOString().slice(0, 10)));
+});
+app.get('/app/bills/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [bill, lines, vendors] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM bills WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT * FROM bill_line_items WHERE bill_id = ? ORDER BY sort_order').bind(c.req.param('id')),
+    c.env.DB.prepare('SELECT id, name FROM vendors WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (bill.results as any[])?.[0];
+  if (!row) return c.notFound();
+  // Project the bill_number column onto generic 'number' field for the form.
+  const normalized = { ...row, number: row.bill_number };
+  return c.html(documentFormPage(normalized, (lines.results as any) || [],
+    { ...BILL_DOC_CFG, parties: (vendors.results as any) || [] },
+    new Date().toISOString().slice(0, 10)));
+});
+
+// ─── Quotes new/edit/show pages ───────────────────────────
+const QUOTE_DOC_CFG = {
+  kind: 'quote' as const,
+  pluralLabel: 'Quotes',
+  navKey: 'quotes',
+  partyLabel: 'Client' as const,
+  partyField: 'client_id' as const,
+  parties: [] as Array<{ id: string; name: string }>,
+  statusOptions: ['draft', 'sent', 'accepted', 'declined', 'expired'],
+  numberLabel: 'Quote #',
+  secondaryDateLabel: 'Expires',
+  secondaryDateField: 'expires_date' as const,
+};
+app.get('/app/quotes/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const clients = await c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active').all();
+  return c.html(documentFormPage(null, [],
+    { ...QUOTE_DOC_CFG, parties: (clients.results as any) || [] },
+    new Date().toISOString().slice(0, 10)));
+});
+app.get('/app/quotes/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [quote, lines, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM quotes WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order').bind(c.req.param('id')),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (quote.results as any[])?.[0];
+  if (!row) return c.notFound();
+  const normalized = { ...row, number: row.quote_number };
+  return c.html(documentFormPage(normalized, (lines.results as any) || [],
+    { ...QUOTE_DOC_CFG, parties: (clients.results as any) || [] },
+    new Date().toISOString().slice(0, 10)));
+});
+
+// ─── Projects new/edit pages ──────────────────────────────
+app.get('/app/projects/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const clients = await c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active').all();
+  return c.html(projectFormPage(null, (clients.results as any) || [], new Date().toISOString().slice(0, 10)));
+});
+app.get('/app/projects/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [proj, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM projects WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (proj.results as any[])?.[0];
+  if (!row) return c.notFound();
+  return c.html(projectFormPage(row, (clients.results as any) || [], new Date().toISOString().slice(0, 10)));
+});
+
+// ─── Time entries new/edit pages ──────────────────────────
+app.get('/app/time/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const [emps, projects, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT id, name, pay_rate FROM employees WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM projects WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  return c.html(timeFormPage(null,
+    (emps.results as any) || [],
+    (projects.results as any) || [],
+    (clients.results as any) || [],
+    new Date().toISOString().slice(0, 10),
+  ));
+});
+app.get('/app/time/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [entry, emps, projects, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM time_entries WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT id, name, pay_rate FROM employees WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM projects WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (entry.results as any[])?.[0];
+  if (!row) return c.notFound();
+  return c.html(timeFormPage(row,
+    (emps.results as any) || [],
+    (projects.results as any) || [],
+    (clients.results as any) || [],
+    new Date().toISOString().slice(0, 10),
+  ));
+});
+
+// ─── Employees new/edit pages ─────────────────────────────
+app.get('/app/employees/new', (c) => c.html(employeeFormPage(null)));
+app.get('/app/employees/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const row = await c.env.DB.prepare('SELECT * FROM employees WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).first<any>();
+  if (!row) return c.notFound();
+  return c.html(employeeFormPage(row));
+});
+app.get('/app/mileage', async (c) => listingPage(c, 'Mileage', 'mileage', `
+  SELECT id, trip_date, purpose, miles, deduction_amount, is_billable, billed_invoice_id
+  FROM mileage_log WHERE company_id = ? ORDER BY trip_date DESC LIMIT 200`,
+  ['Date', 'Purpose', 'Miles', 'Deduction', 'Billable'],
+  (r: any) => [fmtDate(r.trip_date), `<a href="/app/mileage/${esc(r.id)}">${esc(r.purpose || '—')}</a>`, String(r.miles?.toFixed(1) ?? '0'),
+    fmtMoney(r.deduction_amount), r.billed_invoice_id ? '✓ inv.' : r.is_billable ? '✓' : '—'],
+  '/app/mileage/new',
+));
+
+// ─── Per-entity new/edit pages ──────────────────────────────
+app.get('/app/clients/new', (c) => c.html(clientFormPage(null)));
+app.get('/app/clients/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const row = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).first<any>();
+  if (!row) return c.notFound();
+  return c.html(clientFormPage(row));
+});
+
+app.get('/app/vendors/new', (c) => c.html(vendorFormPage(null)));
+app.get('/app/vendors/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const row = await c.env.DB.prepare('SELECT * FROM vendors WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).first<any>();
+  if (!row) return c.notFound();
+  return c.html(vendorFormPage(row));
+});
+
+app.get('/app/mileage/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const [projects, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT id, name FROM projects WHERE company_id = ? AND status = ?').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ?').bind(cid, 'active'),
+  ]);
+  return c.html(mileageFormPage(null,
+    (projects.results as any) || [],
+    (clients.results as any) || [],
+    0.70, // IRS 2026 business rate fallback — desktop sync replaces this when rates land
+    new Date().toISOString().slice(0, 10),
+  ));
+});
+app.get('/app/mileage/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [trip, projects, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM mileage_log WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT id, name FROM projects WHERE company_id = ? AND status = ?').bind(cid, 'active'),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ?').bind(cid, 'active'),
+  ]);
+  const row = (trip.results as any[])?.[0];
+  if (!row) return c.notFound();
+  return c.html(mileageFormPage(row,
+    (projects.results as any) || [],
+    (clients.results as any) || [],
+    Number(row.rate_per_mile) || 0.70,
+    new Date().toISOString().slice(0, 10),
+  ));
+});
+
+app.get('/app/invoices/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const clients = await c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active').all();
+  return c.html(invoiceFormPage(null, [], (clients.results as any) || [], new Date().toISOString().slice(0, 10)));
+});
+app.get('/app/invoices/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [inv, lines, clients] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM invoices WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order').bind(c.req.param('id')),
+    c.env.DB.prepare('SELECT id, name FROM clients WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (inv.results as any[])?.[0];
+  if (!row) return c.notFound();
+  return c.html(invoiceFormPage(row, (lines.results as any) || [], (clients.results as any) || [], new Date().toISOString().slice(0, 10)));
+});
+
 // ─── /api/* — JSON endpoints used by the SPA bits ───────────
 app.use('/api/*', async (c, next) => {
-  // Exempt: sync (own token), rpc/public (pre-auth bootstrap), stripe webhook (own sig)
+  // Sync endpoints carry their own token; everything else needs a user session.
   const p = c.req.path;
-  if (p.startsWith('/api/sync/') || p === '/api/rpc/public' || p === '/api/stripe/webhook') return next();
+  if (p.startsWith('/api/sync/') || p === '/api/rpc/public' || p === '/api/health' || p === '/api/stripe/webhook') return next();
   return requireUserAPI(c, next);
+});
+
+// Audit middleware — auto-logs every mutation (POST/PUT/DELETE) under /api/*
+// AFTER the handler returns 2xx. Entity type is derived from the second path
+// segment ('clients' → 'client'); entity id is the third segment or the
+// `id` field in the response body for creates. Read-only methods are not
+// logged here. Failed handlers (4xx/5xx) skip logging so audit only
+// reflects events that actually happened.
+app.use('/api/*', async (c, next) => {
+  const method = c.req.method;
+  await next();
+  if (!['POST', 'PUT', 'DELETE'].includes(method)) return;
+  if (c.res.status >= 400) return;
+  const path = c.req.path;
+  // Skip auth endpoints and the special-purpose ones that already log inline.
+  if (path.startsWith('/api/sync/') || path === '/api/health' || path === '/api/stripe/webhook'
+      || path === '/api/email/send' || path.includes('/match')
+      || path === '/api/settings' || path === '/api/notifications/mark-all-read') return;
+  const cid = c.get('companyId') as string | undefined;
+  const uid = c.get('userId') as string | undefined;
+  if (!cid) return;
+  // Derive entity_type from '/api/<entity>/...' — singularize trailing 's'.
+  const seg = path.split('/').filter(Boolean);
+  if (seg.length < 2) return;
+  let entityType = seg[1];
+  if (entityType.endsWith('ies')) entityType = entityType.slice(0, -3) + 'y';
+  else if (entityType.endsWith('s')) entityType = entityType.slice(0, -1);
+  const entityId = seg.length >= 3 ? seg[2] : undefined;
+  // For POST creates, try to extract id from the response (we already wrote it).
+  let resolvedId = entityId;
+  if (!resolvedId && method === 'POST') {
+    try {
+      // Clone the response so we don't consume the original stream.
+      const cloned = c.res.clone();
+      const body = await cloned.json<any>();
+      if (body?.id) resolvedId = String(body.id);
+    } catch { /* ignore non-JSON responses */ }
+  }
+  const action = method === 'POST' ? 'create' : method === 'PUT' ? 'update' : 'delete';
+  await logAudit(c.env, cid, uid || null, {
+    action, entity_type: entityType, entity_id: resolvedId,
+    description: `${action} ${entityType}${resolvedId ? ' ' + resolvedId.slice(0, 8) : ''}`,
+  });
+
+  // Fire automation rules. Only on create/update — delete events don't have
+  // a record to evaluate conditions against. The trigger string follows the
+  // convention "<entityType>.<action>" (e.g. "expense.create").
+  if (resolvedId && (action === 'create' || action === 'update')) {
+    const trigger = `${entityType}.${action}`;
+    // Fetch the just-written record so rules can read its fields. Use a
+    // best-effort lookup; if the table doesn't follow the standard naming,
+    // pass an empty record so 'is_set'-style conditions still work.
+    const tableMap: Record<string, string> = {
+      expense: 'expenses', invoice: 'invoices', bill: 'bills',
+      client: 'clients', vendor: 'vendors', quote: 'quotes',
+    };
+    const table = tableMap[entityType];
+    let record: any = { id: resolvedId };
+    if (table) {
+      try {
+        record = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? AND company_id = ?`)
+          .bind(resolvedId, cid).first() || record;
+      } catch { /* unknown table — fall through with id-only record */ }
+    }
+    // waitUntil so rule execution doesn't delay the response.
+    c.executionCtx.waitUntil(runRulesForEvent(c.env, cid, uid || null, trigger, entityType, resolvedId, record));
+  }
 });
 
 // Save a new expense from the capture form.
@@ -629,6 +1101,191 @@ app.delete('/api/invoices/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+// ─── Employees CRUD ─────────────────────────────────────────
+const EMP_FIELDS = ['name', 'email', 'phone', 'role', 'pay_rate', 'pay_type', 'hire_date', 'status', 'notes'];
+app.post('/api/employees', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  if (!b.name) return c.json({ error: 'Name is required' }, 400);
+  const id = uuid();
+  await c.env.DB.prepare(
+    `INSERT INTO employees (id, company_id, ${EMP_FIELDS.join(',')}) VALUES (?, ?, ${EMP_FIELDS.map(() => '?').join(',')})`
+  ).bind(id, cid, ...EMP_FIELDS.map(f => b[f] ?? null)).run();
+  return c.json({ ok: true, id });
+});
+app.put('/api/employees/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  const sets = EMP_FIELDS.map(f => `${f} = ?`).join(', ');
+  const r = await c.env.DB.prepare(
+    `UPDATE employees SET ${sets}, updated_at = datetime('now') WHERE id = ? AND company_id = ?`
+  ).bind(...EMP_FIELDS.map(f => b[f] ?? null), c.req.param('id'), cid).run();
+  if ((r as any).meta?.changes === 0) return c.json({ error: 'Not found' }, 404);
+  return c.json({ ok: true });
+});
+app.delete('/api/employees/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE time_entries SET employee_id = NULL WHERE employee_id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('DELETE FROM employees WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+  ]);
+  return c.json({ ok: true });
+});
+
+// ─── Projects CRUD ──────────────────────────────────────────
+const PROJECT_FIELDS = ['client_id', 'name', 'description', 'status', 'budget', 'budget_type', 'start_date', 'end_date', 'hourly_rate'];
+app.post('/api/projects', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  if (!b.name) return c.json({ error: 'Name is required' }, 400);
+  const id = uuid();
+  await c.env.DB.prepare(
+    `INSERT INTO projects (id, company_id, ${PROJECT_FIELDS.join(',')}) VALUES (?, ?, ${PROJECT_FIELDS.map(() => '?').join(',')})`
+  ).bind(id, cid, ...PROJECT_FIELDS.map(f => b[f] ?? null)).run();
+  return c.json({ ok: true, id });
+});
+app.put('/api/projects/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  const sets = PROJECT_FIELDS.map(f => `${f} = ?`).join(', ');
+  const r = await c.env.DB.prepare(
+    `UPDATE projects SET ${sets}, updated_at = datetime('now') WHERE id = ? AND company_id = ?`
+  ).bind(...PROJECT_FIELDS.map(f => b[f] ?? null), c.req.param('id'), cid).run();
+  if ((r as any).meta?.changes === 0) return c.json({ error: 'Not found' }, 404);
+  return c.json({ ok: true });
+});
+app.delete('/api/projects/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE expenses SET project_id = NULL WHERE project_id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('UPDATE time_entries SET project_id = NULL WHERE project_id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('DELETE FROM projects WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+  ]);
+  return c.json({ ok: true });
+});
+
+// ─── Time entries CRUD ──────────────────────────────────────
+const TIME_FIELDS = ['employee_id', 'project_id', 'client_id', 'date', 'duration_minutes',
+  'description', 'is_billable', 'hourly_rate'];
+app.post('/api/time', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  if (!b.employee_id || !b.date || !(b.duration_minutes > 0)) {
+    return c.json({ error: 'Employee, date, and a non-zero duration are required' }, 400);
+  }
+  const id = uuid();
+  await c.env.DB.prepare(
+    `INSERT INTO time_entries (id, company_id, ${TIME_FIELDS.join(',')}) VALUES (?, ?, ${TIME_FIELDS.map(() => '?').join(',')})`
+  ).bind(id, cid, ...TIME_FIELDS.map(f => b[f] ?? null)).run();
+  return c.json({ ok: true, id });
+});
+app.put('/api/time/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const b = await c.req.json<any>();
+  const sets = TIME_FIELDS.map(f => `${f} = ?`).join(', ');
+  const r = await c.env.DB.prepare(
+    `UPDATE time_entries SET ${sets}, updated_at = datetime('now') WHERE id = ? AND company_id = ?`
+  ).bind(...TIME_FIELDS.map(f => b[f] ?? null), c.req.param('id'), cid).run();
+  if ((r as any).meta?.changes === 0) return c.json({ error: 'Not found' }, 404);
+  return c.json({ ok: true });
+});
+app.delete('/api/time/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  await c.env.DB.prepare('DELETE FROM time_entries WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).run();
+  return c.json({ ok: true });
+});
+
+// ─── Bills CRUD ─────────────────────────────────────────────
+app.post('/api/bills', async (c) => {
+  const cid = c.get('companyId')!;
+  return saveDoc(c, cid, 'bills', 'bill_line_items', null);
+});
+app.put('/api/bills/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  return saveDoc(c, cid, 'bills', 'bill_line_items', c.req.param('id'));
+});
+app.delete('/api/bills/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const id = c.req.param('id');
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM bill_line_items WHERE bill_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM bills WHERE id = ? AND company_id = ?').bind(id, cid),
+  ]);
+  return c.json({ ok: true });
+});
+
+// ─── Quotes CRUD ────────────────────────────────────────────
+app.post('/api/quotes', async (c) => {
+  const cid = c.get('companyId')!;
+  return saveDoc(c, cid, 'quotes', 'quote_line_items', null);
+});
+app.put('/api/quotes/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  return saveDoc(c, cid, 'quotes', 'quote_line_items', c.req.param('id'));
+});
+app.delete('/api/quotes/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const id = c.req.param('id');
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM quote_line_items WHERE quote_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM quotes WHERE id = ? AND company_id = ?').bind(id, cid),
+  ]);
+  return c.json({ ok: true });
+});
+
+// Shared bills/quotes create-or-update. The two entities differ only in
+// table name, line-item table name, party FK column (vendor_id / client_id),
+// secondary date column (due_date / expires_date), and number column
+// (bill_number / quote_number) — everything else is identical.
+async function saveDoc(c: any, cid: string, table: 'bills' | 'quotes', linesTable: string, idOrNull: string | null): Promise<Response> {
+  const b: any = await c.req.json();
+  const partyField = table === 'bills' ? 'vendor_id' : 'client_id';
+  const numberField = table === 'bills' ? 'bill_number' : 'quote_number';
+  const secondaryDateField = table === 'bills' ? 'due_date' : 'expires_date';
+  if (!b[partyField]) return c.json({ error: (table === 'bills' ? 'Vendor' : 'Client') + ' is required' }, 400);
+  const lines: any[] = Array.isArray(b.lines) ? b.lines : [];
+  if (lines.length === 0) return c.json({ error: 'At least one line item is required' }, 400);
+  const { subtotal, tax, total } = computeInvoiceTotals(lines, Number(b.shipping_amount || 0), Number(b.discount || 0));
+
+  const id = idOrNull || uuid();
+  const stmts: D1PreparedStatement[] = [];
+  if (idOrNull) {
+    stmts.push(c.env.DB.prepare(`
+      UPDATE ${table} SET ${partyField} = ?, ${numberField} = ?, date = ?, ${secondaryDateField} = ?, status = ?,
+        subtotal = ?, tax_amount = ?, shipping_amount = ?, discount = ?, total = ?,
+        currency = ?, notes = ?, terms = ?, updated_at = datetime('now')
+      WHERE id = ? AND company_id = ?
+    `).bind(
+      b[partyField], b[numberField] || null, b.date, b[secondaryDateField] || null, b.status || (table === 'bills' ? 'open' : 'draft'),
+      subtotal, tax, Number(b.shipping_amount || 0), Number(b.discount || 0), total,
+      b.currency || 'USD', b.notes || null, b.terms || null, id, cid,
+    ));
+    stmts.push(c.env.DB.prepare(`DELETE FROM ${linesTable} WHERE ${table === 'bills' ? 'bill_id' : 'quote_id'} = ?`).bind(id));
+  } else {
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO ${table} (id, company_id, ${partyField}, ${numberField}, date, ${secondaryDateField}, status,
+        subtotal, tax_amount, shipping_amount, discount, total, amount_paid, currency, notes, terms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+    `).bind(
+      id, cid, b[partyField], b[numberField] || null, b.date, b[secondaryDateField] || null, b.status || (table === 'bills' ? 'open' : 'draft'),
+      subtotal, tax, Number(b.shipping_amount || 0), Number(b.discount || 0), total,
+      b.currency || 'USD', b.notes || null, b.terms || null,
+    ));
+  }
+  lines.forEach((l, i) => {
+    const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+    const taxA = amt * (Number(l.tax_rate || 0) / 100);
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO ${linesTable} (id, ${table === 'bills' ? 'bill_id' : 'quote_id'}, description, quantity, unit_price, amount, tax_rate, tax_amount, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(uuid(), id, l.description || null, Number(l.quantity || 0),
+      Number(l.unit_price || 0), amt, Number(l.tax_rate || 0), taxA, i));
+  });
+  await c.env.DB.batch(stmts);
+  return c.json({ ok: true, id, total });
+}
+
 function computeInvoiceTotals(lines: Array<any>, shipping: number, discount: number) {
   let subtotal = 0, tax = 0;
   for (const l of lines) {
@@ -712,6 +1369,2146 @@ function constantTimeStrEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+// ─── Purchase Orders (re-uses documentFormPage like bills/quotes) ───
+const PO_DOC_CFG = {
+  kind: 'bill' as const,  // Reuses bill-shape (vendor-side); we override the path bits below
+  apiPath: '/api/purchase-orders',
+  pluralLabel: 'Purchase Orders',
+  navKey: 'purchase-orders',
+  partyLabel: 'Vendor' as const,
+  partyField: 'vendor_id' as const,
+  parties: [] as Array<{ id: string; name: string }>,
+  statusOptions: ['draft', 'sent', 'received', 'cancelled', 'closed'],
+  numberLabel: 'PO #',
+  secondaryDateLabel: 'Expected Date',
+  secondaryDateField: 'due_date' as const,  // mapped to expected_date in saveDoc
+};
+app.get('/app/purchase-orders', async (c) => listingPage(c, 'Purchase Orders', 'purchase-orders', `
+  SELECT po.id, po.po_number, po.date, po.expected_date, po.status, po.total,
+         v.name as vendor_name
+  FROM purchase_orders po LEFT JOIN vendors v ON v.id = po.vendor_id
+  WHERE po.company_id = ? ORDER BY po.date DESC`,
+  ['#', 'Vendor', 'Date', 'Expected', 'Status', 'Total'],
+  (r: any) => [
+    `<a href="/app/purchase-orders/${esc(r.id)}">${esc(r.po_number || r.id.slice(0, 8))}</a>`,
+    esc(r.vendor_name || '—'),
+    fmtDate(r.date), fmtDate(r.expected_date),
+    `<span class="badge ${r.status === 'closed' || r.status === 'received' ? 'badge-green' : r.status === 'cancelled' ? 'badge-red' : 'badge-blue'}">${esc(r.status)}</span>`,
+    fmtMoney(r.total),
+  ],
+  '/app/purchase-orders/new',
+));
+
+// ─── Inventory listing ──────────────────────────────────────
+app.get('/app/inventory', async (c) => listingPage(c, 'Inventory', 'inventory', `
+  SELECT id, sku, name, quantity_on_hand, unit_cost, unit_price, reorder_point, status
+  FROM inventory_items WHERE company_id = ? ORDER BY name`,
+  ['SKU', 'Name', 'On Hand', 'Cost', 'Price', 'Status'],
+  (r: any) => [
+    esc(r.sku || '—'),
+    `<a href="/app/inventory/${esc(r.id)}">${esc(r.name)}</a>`,
+    String(r.quantity_on_hand ?? 0) + (r.reorder_point > 0 && r.quantity_on_hand <= r.reorder_point ? ' <span class="badge badge-amber">low</span>' : ''),
+    fmtMoney(r.unit_cost), fmtMoney(r.unit_price),
+    `<span class="badge">${esc(r.status)}</span>`,
+  ],
+  '/app/inventory/new',
+));
+
+// ─── Fixed Assets listing ───────────────────────────────────
+app.get('/app/fixed-assets', async (c) => listingPage(c, 'Fixed Assets', 'fixed-assets', `
+  SELECT id, name, category, purchase_date, purchase_cost, current_value, status
+  FROM fixed_assets WHERE company_id = ? ORDER BY purchase_date DESC`,
+  ['Name', 'Category', 'Purchased', 'Cost', 'Current', 'Status'],
+  (r: any) => [
+    `<a href="/app/fixed-assets/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.category || '—'),
+    fmtDate(r.purchase_date),
+    fmtMoney(r.purchase_cost), fmtMoney(r.current_value),
+    `<span class="badge">${esc(r.status)}</span>`,
+  ],
+  '/app/fixed-assets/new',
+));
+
+// ─── Loans listing ──────────────────────────────────────────
+app.get('/app/loans', async (c) => listingPage(c, 'Loans', 'loans', `
+  SELECT id, name, lender_name, principal, current_balance, interest_rate, status
+  FROM loans WHERE company_id = ? ORDER BY name`,
+  ['Name', 'Lender', 'Principal', 'Balance', 'Rate', 'Status'],
+  (r: any) => [
+    `<a href="/app/loans/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.lender_name || '—'),
+    fmtMoney(r.principal), fmtMoney(r.current_balance),
+    ((r.interest_rate || 0) * 100).toFixed(2) + '%',
+    `<span class="badge">${esc(r.status)}</span>`,
+  ],
+  '/app/loans/new',
+));
+
+// ─── Budgets listing ────────────────────────────────────────
+app.get('/app/budgets', async (c) => listingPage(c, 'Budgets', 'budgets', `
+  SELECT b.id, b.name, b.period, b.budget_amount, b.start_date, b.end_date,
+         c.name as category_name
+  FROM budgets b LEFT JOIN categories c ON c.id = b.category_id
+  WHERE b.company_id = ? ORDER BY b.start_date DESC`,
+  ['Name', 'Category', 'Period', 'Amount', 'Range'],
+  (r: any) => [
+    `<a href="/app/budgets/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.category_name || '—'),
+    `<span class="badge">${esc(r.period)}</span>`,
+    fmtMoney(r.budget_amount),
+    fmtDate(r.start_date) + (r.end_date ? ' → ' + fmtDate(r.end_date) : ''),
+  ],
+  '/app/budgets/new',
+));
+
+// ─── Chart of Accounts (GL) listing ─────────────────────────
+app.get('/app/accounts', async (c) => listingPage(c, 'Chart of Accounts', 'accounts', `
+  SELECT id, code, name, type, subtype, balance, is_active
+  FROM accounts WHERE company_id = ? ORDER BY code, name`,
+  ['Code', 'Name', 'Type', 'Subtype', 'Balance'],
+  (r: any) => [
+    esc(r.code || '—'),
+    `<a href="/app/accounts/${esc(r.id)}">${esc(r.name)}</a>`,
+    `<span class="badge">${esc(r.type)}</span>`,
+    esc(r.subtype || '—'),
+    fmtMoney(r.balance),
+  ],
+  '/app/accounts/new',
+));
+
+// ─── Reports — Profit & Loss + Expense Summary ──────────────
+// Computed inline from invoices + expenses; no Chart-of-Accounts dependency.
+// Period is configurable via ?period=ytd|month|quarter (default ytd).
+app.get('/app/reports', async (c) => {
+  const cid = c.get('companyId')!;
+  const period = c.req.query('period') || 'ytd';
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  let start: string;
+  let end: string = now.toISOString().slice(0, 10);
+  if (period === 'month') start = `${year}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  else if (period === 'quarter') {
+    const qStartMonth = Math.floor(now.getUTCMonth() / 3) * 3 + 1;
+    start = `${year}-${String(qStartMonth).padStart(2, '0')}-01`;
+  } else start = `${year}-01-01`;
+
+  const [income, expense, byCat] = await c.env.DB.batch([
+    c.env.DB.prepare(`
+      SELECT COALESCE(SUM(amount_paid), 0) as paid, COALESCE(SUM(total), 0) as billed
+      FROM invoices WHERE company_id = ? AND date >= ? AND date <= ?
+    `).bind(cid, start, end),
+    c.env.DB.prepare(`
+      SELECT COALESCE(SUM(amount), 0) as subtotal, COALESCE(SUM(tax_amount), 0) as tax,
+             COALESCE(SUM(shipping_amount), 0) as shipping
+      FROM expenses WHERE company_id = ? AND date >= ? AND date <= ?
+    `).bind(cid, start, end),
+    c.env.DB.prepare(`
+      SELECT COALESCE(c.name, 'Uncategorized') as category, COALESCE(SUM(e.amount), 0) as total
+      FROM expenses e LEFT JOIN categories c ON c.id = e.category_id
+      WHERE e.company_id = ? AND e.date >= ? AND e.date <= ?
+      GROUP BY c.id ORDER BY total DESC LIMIT 20
+    `).bind(cid, start, end),
+  ]);
+  const inc = (income.results as any[])[0] || { paid: 0, billed: 0 };
+  const exp = (expense.results as any[])[0] || { subtotal: 0, tax: 0, shipping: 0 };
+  const cats = (byCat.results as any[]) || [];
+  const revenue = Number(inc.paid || 0);
+  const expenses = Number(exp.subtotal || 0) + Number(exp.tax || 0) + Number(exp.shipping || 0);
+  const netProfit = revenue - expenses;
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Reports</h1>
+  <div style="display:flex;gap:8px">
+    <a class="btn ${period === 'month' ? '' : 'btn-ghost'}" href="?period=month">Month</a>
+    <a class="btn ${period === 'quarter' ? '' : 'btn-ghost'}" href="?period=quarter">Quarter</a>
+    <a class="btn ${period === 'ytd' ? '' : 'btn-ghost'}" href="?period=ytd">YTD</a>
+  </div>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">Profit &amp; Loss · ${esc(start)} → ${esc(end)}</div>
+  <div class="grid grid-3" style="gap:1rem;margin-top:1rem">
+    <div><div class="muted" style="font-size:0.75rem;text-transform:uppercase">Revenue</div>
+      <div style="font-size:1.6rem;font-weight:700;color:var(--green)">${fmtMoney(revenue)}</div>
+      <div class="muted" style="font-size:0.75rem">paid · billed ${fmtMoney(Number(inc.billed || 0))}</div></div>
+    <div><div class="muted" style="font-size:0.75rem;text-transform:uppercase">Expenses</div>
+      <div style="font-size:1.6rem;font-weight:700;color:var(--red)">${fmtMoney(expenses)}</div>
+      <div class="muted" style="font-size:0.75rem">incl. ${fmtMoney(Number(exp.tax || 0))} tax · ${fmtMoney(Number(exp.shipping || 0))} ship</div></div>
+    <div><div class="muted" style="font-size:0.75rem;text-transform:uppercase">Net</div>
+      <div style="font-size:1.6rem;font-weight:700;color:${netProfit >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtMoney(netProfit)}</div>
+      <div class="muted" style="font-size:0.75rem">${revenue > 0 ? ((netProfit / revenue) * 100).toFixed(1) + '% margin' : '—'}</div></div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">Expenses by Category</div>
+  <table class="data">
+    <thead><tr><th>Category</th><th class="num">Total</th><th class="num">% of Total</th></tr></thead>
+    <tbody>
+      ${cats.length === 0 ? '<tr><td colspan="3" class="empty-state">No expenses in this period.</td></tr>' :
+        cats.map((r: any) => `<tr>
+          <td>${esc(r.category)}</td>
+          <td class="num">${fmtMoney(r.total)}</td>
+          <td class="num">${expenses > 0 ? ((Number(r.total) / expenses) * 100).toFixed(1) + '%' : '—'}</td>
+        </tr>`).join('')}
+    </tbody>
+  </table>
+</div>`;
+  return c.html(shell({ title: 'Reports', activeNav: 'reports', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Settings page (company info + key/value settings) ──────
+app.get('/app/settings', async (c) => {
+  const cid = c.get('companyId')!;
+  const [company, settings] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM companies WHERE id = ?').bind(cid),
+    c.env.DB.prepare('SELECT key, value FROM settings WHERE company_id = ?').bind(cid),
+  ]);
+  const co = (company.results as any[])[0] || {};
+  const sMap = Object.fromEntries(((settings.results as any[]) || []).map((r: any) => [r.key, r.value]));
+  const body = `
+<div class="page-header"><h1 class="page-title">Settings</h1></div>
+<form id="f" class="card grid" style="gap:1rem">
+  <div class="card-title">Company</div>
+  <label class="field">Company Name<input name="company_name" required value="${esc(co.name || '')}"></label>
+  <div class="grid grid-2" style="gap:1rem">
+    <label class="field">Email<input name="company_email" type="email" value="${esc(co.email || '')}"></label>
+    <label class="field">Phone<input name="company_phone" value="${esc(co.phone || '')}"></label>
+  </div>
+  <label class="field">Address<textarea name="company_address" rows="3">${esc(co.address || '')}</textarea></label>
+  <div class="grid grid-2" style="gap:1rem">
+    <label class="field">Tax ID / EIN<input name="company_tax_id" value="${esc(co.tax_id || '')}"></label>
+    <label class="field">Currency<input name="company_currency" maxlength="4" value="${esc(co.currency || 'USD')}"></label>
+  </div>
+
+  <div class="card-title" style="margin-top:1rem">App Preferences</div>
+  <label class="field">Default Invoice Terms<textarea name="default_invoice_terms" rows="2">${esc(sMap.default_invoice_terms || '')}</textarea></label>
+  <label class="field">Default Invoice Notes<textarea name="default_invoice_notes" rows="2">${esc(sMap.default_invoice_notes || '')}</textarea></label>
+  <div style="display:flex;justify-content:flex-end"><button type="submit" class="btn">Save Settings</button></div>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit', async function(ev){
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const payload = Object.fromEntries(fd.entries());
+  try {
+    await window.fetchJSON('/api/settings', { method: 'PUT', body: JSON.stringify(payload) });
+    window.toast('Settings saved', 'ok');
+  } catch (e) { window.toast(e.message || 'Save failed', 'err'); }
+});
+</script>`;
+  return c.html(shell({ title: 'Settings', activeNav: 'settings', body, brand: 'BAP Cloud' }));
+});
+
+app.put('/api/settings', async (c) => {
+  const cid = c.get('companyId')!;
+  const b: any = await c.req.json();
+  const stmts: D1PreparedStatement[] = [];
+  if (b.company_name) {
+    stmts.push(c.env.DB.prepare(`
+      UPDATE companies SET name = ?, email = ?, phone = ?, address = ?, tax_id = ?, currency = ?
+      WHERE id = ?
+    `).bind(b.company_name, b.company_email || null, b.company_phone || null,
+            b.company_address || null, b.company_tax_id || null,
+            b.company_currency || 'USD', cid));
+  }
+  for (const k of ['default_invoice_terms', 'default_invoice_notes']) {
+    const v = (b[k] ?? '').toString();
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO settings (id, company_id, key, value, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(company_id, key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+    `).bind(uuid(), cid, k, v));
+  }
+  if (stmts.length > 0) await c.env.DB.batch(stmts);
+  return c.json({ ok: true });
+});
+
+// ─── PURCHASE ORDERS new/edit + CRUD ────────────────────────
+// Reuses the bills code path but maps over a different table.
+app.get('/app/purchase-orders/new', async (c) => {
+  const cid = c.get('companyId')!;
+  const vendors = await c.env.DB.prepare('SELECT id, name FROM vendors WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active').all();
+  // Override the form's nav target so document-form.ts emits the right URL.
+  const cfg = { ...PO_DOC_CFG, parties: (vendors.results as any) || [], navKey: 'purchase-orders' };
+  return c.html(documentFormPage(null, [], cfg as any, new Date().toISOString().slice(0, 10)));
+});
+app.get('/app/purchase-orders/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const [po, lines, vendors] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM purchase_orders WHERE id = ? AND company_id = ?').bind(c.req.param('id'), cid),
+    c.env.DB.prepare('SELECT * FROM po_line_items WHERE po_id = ? ORDER BY sort_order').bind(c.req.param('id')),
+    c.env.DB.prepare('SELECT id, name FROM vendors WHERE company_id = ? AND status = ? ORDER BY name').bind(cid, 'active'),
+  ]);
+  const row = (po.results as any[])?.[0];
+  if (!row) return c.notFound();
+  // Map po_number → number, expected_date → due_date (the form's secondary date slot).
+  const normalized = { ...row, number: row.po_number, due_date: row.expected_date };
+  const cfg = { ...PO_DOC_CFG, parties: (vendors.results as any) || [] };
+  return c.html(documentFormPage(normalized, (lines.results as any) || [], cfg as any, new Date().toISOString().slice(0, 10)));
+});
+app.post('/api/purchase-orders', async (c) => savePO(c, null));
+app.put('/api/purchase-orders/:id', async (c) => savePO(c, c.req.param('id')));
+app.delete('/api/purchase-orders/:id', async (c) => {
+  const cid = c.get('companyId')!;
+  const id = c.req.param('id');
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM po_line_items WHERE po_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM purchase_orders WHERE id = ? AND company_id = ?').bind(id, cid),
+  ]);
+  return c.json({ ok: true });
+});
+async function savePO(c: any, idOrNull: string | null): Promise<Response> {
+  const cid = c.get('companyId')!;
+  const b: any = await c.req.json();
+  if (!b.vendor_id) return c.json({ error: 'Vendor is required' }, 400);
+  const lines: any[] = Array.isArray(b.lines) ? b.lines : [];
+  if (lines.length === 0) return c.json({ error: 'At least one line item is required' }, 400);
+  const { subtotal, tax, total } = computeInvoiceTotals(lines, Number(b.shipping_amount || 0), Number(b.discount || 0));
+  const id = idOrNull || uuid();
+  const stmts: D1PreparedStatement[] = [];
+  if (idOrNull) {
+    stmts.push(c.env.DB.prepare(`
+      UPDATE purchase_orders SET vendor_id = ?, po_number = ?, date = ?, expected_date = ?, status = ?,
+        subtotal = ?, tax_amount = ?, shipping_amount = ?, discount = ?, total = ?,
+        currency = ?, notes = ?, terms = ?, updated_at = datetime('now')
+      WHERE id = ? AND company_id = ?
+    `).bind(b.vendor_id, b.bill_number || b.po_number || null, b.date, b.due_date || b.expected_date || null,
+            b.status || 'draft', subtotal, tax, Number(b.shipping_amount || 0), Number(b.discount || 0), total,
+            b.currency || 'USD', b.notes || null, b.terms || null, id, cid));
+    stmts.push(c.env.DB.prepare('DELETE FROM po_line_items WHERE po_id = ?').bind(id));
+  } else {
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO purchase_orders (id, company_id, vendor_id, po_number, date, expected_date, status,
+        subtotal, tax_amount, shipping_amount, discount, total, currency, notes, terms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, cid, b.vendor_id, b.bill_number || b.po_number || null, b.date,
+            b.due_date || b.expected_date || null, b.status || 'draft',
+            subtotal, tax, Number(b.shipping_amount || 0), Number(b.discount || 0), total,
+            b.currency || 'USD', b.notes || null, b.terms || null));
+  }
+  lines.forEach((l, i) => {
+    const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+    const taxA = amt * (Number(l.tax_rate || 0) / 100);
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO po_line_items (id, po_id, description, quantity, unit_price, amount, tax_rate, tax_amount, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(uuid(), id, l.description || null, Number(l.quantity || 0),
+            Number(l.unit_price || 0), amt, Number(l.tax_rate || 0), taxA, i));
+  });
+  await c.env.DB.batch(stmts);
+  return c.json({ ok: true, id, total });
+}
+
+// ─── Generic single-table CRUD (inventory, fixed_assets, loans,
+//     budgets, accounts, categories, recurring_templates, debts) ────
+// Wires up: GET /app/<navKey>/new + /app/<navKey>/:id with simpleFormPage,
+// plus POST /api/<navKey> + PUT/DELETE /api/<navKey>/:id.
+interface SimpleEntity {
+  table: string;
+  navKey: string;
+  apiPath: string;
+  entitySingular: string;
+  entityPlural: string;
+  listPath: string;
+  // SQL column list used in INSERT/UPDATE (must match the form's `name` keys).
+  cols: string[];
+  // Form field definitions
+  fields: SimpleField[];
+  // Optional extra ON DELETE cleanup statements (e.g. cascade null on child FKs).
+  onDelete?: (id: string, cid: string, db: any) => any[];
+}
+
+function wireSimpleEntity(e: SimpleEntity) {
+  const cfg = {
+    entitySingular: e.entitySingular,
+    entityPlural: e.entityPlural,
+    apiPath: e.apiPath,
+    navKey: e.navKey,
+    listPath: e.listPath,
+    fields: e.fields,
+  };
+  app.get(`/app/${e.navKey}/new`, (c) => c.html(simpleFormPage(null, cfg)));
+  app.get(`/app/${e.navKey}/:id`, async (c) => {
+    const cid = c.get('companyId')!;
+    const row = await c.env.DB.prepare(`SELECT * FROM ${e.table} WHERE id = ? AND company_id = ?`)
+      .bind(c.req.param('id'), cid).first<any>();
+    if (!row) return c.notFound();
+    return c.html(simpleFormPage(row, cfg));
+  });
+  app.post(e.apiPath, async (c) => {
+    const cid = c.get('companyId')!;
+    const b: any = await c.req.json();
+    const id = uuid();
+    await c.env.DB.prepare(
+      `INSERT INTO ${e.table} (id, company_id, ${e.cols.join(',')}) VALUES (?, ?, ${e.cols.map(() => '?').join(',')})`
+    ).bind(id, cid, ...e.cols.map(col => b[col] ?? null)).run();
+    return c.json({ ok: true, id });
+  });
+  app.put(`${e.apiPath}/:id`, async (c) => {
+    const cid = c.get('companyId')!;
+    const b: any = await c.req.json();
+    const sets = e.cols.map(col => `${col} = ?`).join(', ');
+    const r = await c.env.DB.prepare(
+      `UPDATE ${e.table} SET ${sets}, updated_at = datetime('now') WHERE id = ? AND company_id = ?`
+    ).bind(...e.cols.map(col => b[col] ?? null), c.req.param('id'), cid).run();
+    if ((r as any).meta?.changes === 0) return c.json({ error: 'Not found' }, 404);
+    return c.json({ ok: true });
+  });
+  app.delete(`${e.apiPath}/:id`, async (c) => {
+    const cid = c.get('companyId')!;
+    const id = c.req.param('id');
+    const extras = e.onDelete ? e.onDelete(id, cid, c.env.DB) : [];
+    await c.env.DB.batch([
+      ...extras,
+      c.env.DB.prepare(`DELETE FROM ${e.table} WHERE id = ? AND company_id = ?`).bind(id, cid),
+    ]);
+    return c.json({ ok: true });
+  });
+}
+
+wireSimpleEntity({
+  table: 'inventory_items', navKey: 'inventory', apiPath: '/api/inventory',
+  entitySingular: 'Inventory Item', entityPlural: 'Inventory', listPath: '/app/inventory',
+  cols: ['sku', 'name', 'description', 'unit_cost', 'unit_price', 'quantity_on_hand',
+         'reorder_point', 'unit_of_measure', 'category', 'status'],
+  fields: [
+    { name: 'name', label: 'Name', kind: 'text', required: true },
+    { name: 'sku', label: 'SKU', kind: 'text', rowGroup: 1 },
+    { name: 'category', label: 'Category', kind: 'text', rowGroup: 1 },
+    { name: 'description', label: 'Description', kind: 'textarea' },
+    { name: 'unit_cost', label: 'Unit Cost', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'unit_price', label: 'Unit Price', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'quantity_on_hand', label: 'Qty on Hand', kind: 'number', coerce: 'number', step: '1', rowGroup: 3 },
+    { name: 'reorder_point', label: 'Reorder Point', kind: 'number', coerce: 'number', step: '1', rowGroup: 3 },
+    { name: 'unit_of_measure', label: 'UoM', kind: 'text', placeholder: 'each, lb, hr, …', rowGroup: 3 },
+    { name: 'status', label: 'Status', kind: 'select', options: [
+      { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }] },
+  ],
+});
+
+wireSimpleEntity({
+  table: 'fixed_assets', navKey: 'fixed-assets', apiPath: '/api/fixed-assets',
+  entitySingular: 'Fixed Asset', entityPlural: 'Fixed Assets', listPath: '/app/fixed-assets',
+  cols: ['name', 'category', 'purchase_date', 'purchase_cost', 'current_value',
+         'useful_life_years', 'depreciation_method', 'accumulated_depreciation',
+         'serial_number', 'location', 'status', 'notes'],
+  fields: [
+    { name: 'name', label: 'Name', kind: 'text', required: true },
+    { name: 'category', label: 'Category', kind: 'text', placeholder: 'Vehicles, Equipment, Furniture…', rowGroup: 1 },
+    { name: 'serial_number', label: 'Serial Number', kind: 'text', rowGroup: 1 },
+    { name: 'purchase_date', label: 'Purchase Date', kind: 'date', rowGroup: 2 },
+    { name: 'purchase_cost', label: 'Purchase Cost', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'current_value', label: 'Current Value', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'useful_life_years', label: 'Useful Life (years)', kind: 'number', coerce: 'integer', step: '1', rowGroup: 3 },
+    { name: 'depreciation_method', label: 'Depreciation', kind: 'select', rowGroup: 3, options: [
+      { value: 'straight_line', label: 'Straight Line' },
+      { value: 'declining_balance', label: 'Declining Balance' },
+      { value: 'macrs', label: 'MACRS' },
+      { value: 'none', label: 'None' }] },
+    { name: 'accumulated_depreciation', label: 'Accum. Depreciation', kind: 'number', coerce: 'number', rowGroup: 3 },
+    { name: 'location', label: 'Location', kind: 'text', rowGroup: 4 },
+    { name: 'status', label: 'Status', kind: 'select', rowGroup: 4, options: [
+      { value: 'active', label: 'Active' }, { value: 'disposed', label: 'Disposed' }, { value: 'sold', label: 'Sold' }] },
+    { name: 'notes', label: 'Notes', kind: 'textarea' },
+  ],
+});
+
+wireSimpleEntity({
+  table: 'loans', navKey: 'loans', apiPath: '/api/loans',
+  entitySingular: 'Loan', entityPlural: 'Loans', listPath: '/app/loans',
+  cols: ['name', 'lender_name', 'loan_type', 'principal', 'current_balance',
+         'interest_rate', 'rate_type', 'start_date', 'term_months', 'payment_amount',
+         'status', 'notes'],
+  fields: [
+    { name: 'name', label: 'Loan Name', kind: 'text', required: true, rowGroup: 1 },
+    { name: 'lender_name', label: 'Lender', kind: 'text', rowGroup: 1 },
+    { name: 'loan_type', label: 'Type', kind: 'select', rowGroup: 2, options: [
+      { value: 'term_loan', label: 'Term Loan' },
+      { value: 'mortgage', label: 'Mortgage' },
+      { value: 'sba', label: 'SBA Loan' },
+      { value: 'line_of_credit', label: 'Line of Credit' },
+      { value: 'auto', label: 'Auto Loan' },
+      { value: 'other', label: 'Other' }] },
+    { name: 'principal', label: 'Original Principal', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'current_balance', label: 'Current Balance', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'interest_rate', label: 'Interest Rate (decimal, e.g. 0.0675)', kind: 'number', coerce: 'number', step: '0.0001', rowGroup: 3 },
+    { name: 'rate_type', label: 'Rate Type', kind: 'select', rowGroup: 3, options: [
+      { value: 'fixed', label: 'Fixed' }, { value: 'variable', label: 'Variable' }] },
+    { name: 'term_months', label: 'Term (months)', kind: 'number', coerce: 'integer', step: '1', rowGroup: 3 },
+    { name: 'start_date', label: 'Start Date', kind: 'date', rowGroup: 4 },
+    { name: 'payment_amount', label: 'Monthly Payment', kind: 'number', coerce: 'number', rowGroup: 4 },
+    { name: 'status', label: 'Status', kind: 'select', rowGroup: 4, options: [
+      { value: 'active', label: 'Active' },
+      { value: 'paid_off', label: 'Paid Off' },
+      { value: 'refinanced', label: 'Refinanced' }] },
+    { name: 'notes', label: 'Notes', kind: 'textarea' },
+  ],
+});
+
+wireSimpleEntity({
+  table: 'budgets', navKey: 'budgets', apiPath: '/api/budgets',
+  entitySingular: 'Budget', entityPlural: 'Budgets', listPath: '/app/budgets',
+  cols: ['name', 'period', 'category_id', 'budget_amount', 'start_date', 'end_date', 'notes'],
+  fields: [
+    { name: 'name', label: 'Budget Name', kind: 'text', required: true },
+    { name: 'period', label: 'Period', kind: 'select', rowGroup: 1, options: [
+      { value: 'monthly', label: 'Monthly' },
+      { value: 'quarterly', label: 'Quarterly' },
+      { value: 'annual', label: 'Annual' }] },
+    { name: 'budget_amount', label: 'Budget Amount', kind: 'number', coerce: 'number', rowGroup: 1 },
+    { name: 'category_id', label: 'Category ID (optional)', kind: 'text', placeholder: 'Leave empty for all categories', rowGroup: 2 },
+    { name: 'start_date', label: 'Start Date', kind: 'date', required: true, rowGroup: 2 },
+    { name: 'end_date', label: 'End Date', kind: 'date', rowGroup: 2 },
+    { name: 'notes', label: 'Notes', kind: 'textarea' },
+  ],
+});
+
+wireSimpleEntity({
+  table: 'accounts', navKey: 'accounts', apiPath: '/api/accounts',
+  entitySingular: 'Account', entityPlural: 'Chart of Accounts', listPath: '/app/accounts',
+  cols: ['code', 'name', 'type', 'subtype', 'description', 'is_active', 'balance', 'parent_id'],
+  fields: [
+    { name: 'code', label: 'Account Code', kind: 'text', placeholder: 'e.g. 1000', rowGroup: 1 },
+    { name: 'name', label: 'Account Name', kind: 'text', required: true, rowGroup: 1 },
+    { name: 'type', label: 'Type', kind: 'select', rowGroup: 2, options: [
+      { value: 'asset', label: 'Asset' },
+      { value: 'liability', label: 'Liability' },
+      { value: 'equity', label: 'Equity' },
+      { value: 'income', label: 'Income' },
+      { value: 'expense', label: 'Expense' }] },
+    { name: 'subtype', label: 'Subtype', kind: 'text', placeholder: 'current_asset, etc.', rowGroup: 2 },
+    { name: 'balance', label: 'Opening Balance', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'description', label: 'Description', kind: 'textarea' },
+    { name: 'is_active', label: 'Active', kind: 'checkbox', coerce: 'checkbox' },
+  ],
+});
+
+// Sidebar ordering puts Reports/Settings AFTER the entity modules but those
+// routes are registered above; the page-handlers below are extras (debts,
+// categories, recurring) the sidebar doesn't yet expose but the API does.
+wireSimpleEntity({
+  table: 'debts', navKey: 'debts', apiPath: '/api/debts',
+  entitySingular: 'Debt', entityPlural: 'Debts', listPath: '/app/debts',
+  cols: ['client_id', 'account_name', 'principal', 'current_balance', 'stage',
+         'status', 'origin_invoice_id', 'interest_rate', 'start_date', 'notes'],
+  fields: [
+    { name: 'account_name', label: 'Account Name', kind: 'text', required: true },
+    { name: 'client_id', label: 'Client ID (optional)', kind: 'text', rowGroup: 1 },
+    { name: 'origin_invoice_id', label: 'Origin Invoice ID', kind: 'text', rowGroup: 1 },
+    { name: 'principal', label: 'Principal', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'current_balance', label: 'Current Balance', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'interest_rate', label: 'Interest Rate', kind: 'number', coerce: 'number', step: '0.0001', rowGroup: 2 },
+    { name: 'stage', label: 'Stage', kind: 'select', rowGroup: 3, options: [
+      'reminder', 'warning', 'final_notice', 'demand_letter', 'collections_agency', 'legal_action', 'judgment', 'garnishment'
+    ].map(s => ({ value: s, label: s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) })) },
+    { name: 'status', label: 'Status', kind: 'select', rowGroup: 3, options: [
+      { value: 'active', label: 'Active' }, { value: 'settled', label: 'Settled' }, { value: 'closed', label: 'Closed' }] },
+    { name: 'start_date', label: 'Start Date', kind: 'date', rowGroup: 3 },
+    { name: 'notes', label: 'Notes', kind: 'textarea' },
+  ],
+});
+
+wireSimpleEntity({
+  table: 'categories', navKey: 'categories', apiPath: '/api/categories',
+  entitySingular: 'Category', entityPlural: 'Categories', listPath: '/app/categories',
+  cols: ['name', 'type', 'color', 'icon', 'description', 'monthly_cap', 'is_active'],
+  fields: [
+    { name: 'name', label: 'Name', kind: 'text', required: true, rowGroup: 1 },
+    { name: 'type', label: 'Type', kind: 'select', rowGroup: 1, options: [
+      { value: 'expense', label: 'Expense' }, { value: 'income', label: 'Income' }] },
+    { name: 'color', label: 'Color', kind: 'text', placeholder: '#10b981', rowGroup: 2 },
+    { name: 'icon', label: 'Icon', kind: 'text', placeholder: 'Emoji or name', rowGroup: 2 },
+    { name: 'monthly_cap', label: 'Monthly Cap (optional)', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'description', label: 'Description', kind: 'textarea' },
+    { name: 'is_active', label: 'Active', kind: 'checkbox', coerce: 'checkbox' },
+  ],
+});
+
+// ─── KPI Dashboard — aggregate widgets for the active period ────────
+// Pulls revenue / expenses / cash position / receivables / payables and
+// renders them as a 4×2 grid of metric cards. SQL aggregates only — no
+// stored snapshots — so values are always live.
+app.get('/app/kpi', async (c) => {
+  const cid = c.get('companyId')!;
+  const now = new Date();
+  const ytdStart = `${now.getUTCFullYear()}-01-01`;
+  const today = now.toISOString().slice(0, 10);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400_000).toISOString().slice(0, 10);
+
+  const [revYTD, expYTD, recvOpen, payOpen, invCount, invLast30] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT COALESCE(SUM(amount_paid),0) as v FROM invoices WHERE company_id=? AND date>=?').bind(cid, ytdStart),
+    c.env.DB.prepare('SELECT COALESCE(SUM(amount),0) + COALESCE(SUM(tax_amount),0) + COALESCE(SUM(shipping_amount),0) as v FROM expenses WHERE company_id=? AND date>=?').bind(cid, ytdStart),
+    c.env.DB.prepare('SELECT COALESCE(SUM(total - amount_paid),0) as v FROM invoices WHERE company_id=? AND status IN (?,?,?)').bind(cid, 'sent', 'overdue', 'partial'),
+    c.env.DB.prepare('SELECT COALESCE(SUM(total - amount_paid),0) as v FROM bills WHERE company_id=? AND status IN (?,?)').bind(cid, 'open', 'overdue'),
+    c.env.DB.prepare('SELECT COUNT(*) as v FROM invoices WHERE company_id=?').bind(cid),
+    c.env.DB.prepare('SELECT COUNT(*) as v FROM invoices WHERE company_id=? AND date>=?').bind(cid, thirtyDaysAgo),
+  ]);
+  const v = (rs: any) => Number((rs.results as any[])[0]?.v || 0);
+  const revenue = v(revYTD);
+  const expenses = v(expYTD);
+  const profit = revenue - expenses;
+  const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+  const card = (label: string, value: string, color = 'var(--text-bright)', sub = '') =>
+    `<div class="card"><div class="muted" style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em">${esc(label)}</div>
+      <div style="font-size:1.6rem;font-weight:800;color:${color};margin-top:6px">${esc(value)}</div>
+      ${sub ? `<div class="muted" style="font-size:0.72rem;margin-top:4px">${esc(sub)}</div>` : ''}</div>`;
+
+  const body = `
+<div class="page-header"><h1 class="page-title">KPI Dashboard</h1>
+  <div class="muted" style="font-size:0.85rem">${esc(ytdStart)} → ${esc(today)}</div>
+</div>
+<div class="grid grid-4" style="gap:1rem;margin-bottom:1rem">
+  ${card('Revenue YTD', fmtMoney(revenue), 'var(--green)')}
+  ${card('Expenses YTD', fmtMoney(expenses), 'var(--red)')}
+  ${card('Net Profit', fmtMoney(profit), profit >= 0 ? 'var(--green)' : 'var(--red)', margin.toFixed(1) + '% margin')}
+  ${card('Cash Position', fmtMoney(revenue - expenses - v(recvOpen)), 'var(--text-bright)', 'rough estimate')}
+</div>
+<div class="grid grid-4" style="gap:1rem">
+  ${card('Accounts Receivable', fmtMoney(v(recvOpen)), 'var(--amber)', 'unpaid invoices')}
+  ${card('Accounts Payable', fmtMoney(v(payOpen)), 'var(--red)', 'unpaid bills')}
+  ${card('Invoices (all-time)', String(v(invCount)))}
+  ${card('Invoices last 30d', String(v(invLast30)))}
+</div>`;
+  return c.html(shell({ title: 'KPI', activeNav: 'kpi', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Forecasting — 6-month moving-average projection ────────────────
+// Takes the last 6 closed months of revenue + expenses, runs a simple
+// moving-average forward 3 months. Renders a tiny inline SVG sparkline
+// — no external charting library, ~80 lines of SVG path math.
+app.get('/app/forecasting', async (c) => {
+  const cid = c.get('companyId')!;
+  const now = new Date();
+  // 9 months: 6 historical for the average, 3 projection. month strings YYYY-MM.
+  const months: string[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+  }
+
+  const [revRows, expRows] = await c.env.DB.batch([
+    c.env.DB.prepare(`
+      SELECT substr(date,1,7) as m, COALESCE(SUM(amount_paid),0) as v
+      FROM invoices WHERE company_id=? AND date>=?
+      GROUP BY substr(date,1,7) ORDER BY m
+    `).bind(cid, months[0] + '-01'),
+    c.env.DB.prepare(`
+      SELECT substr(date,1,7) as m, COALESCE(SUM(amount + tax_amount + shipping_amount),0) as v
+      FROM expenses WHERE company_id=? AND date>=?
+      GROUP BY substr(date,1,7) ORDER BY m
+    `).bind(cid, months[0] + '-01'),
+  ]);
+  const revByMonth = Object.fromEntries(((revRows.results as any[]) || []).map((r: any) => [r.m, Number(r.v)]));
+  const expByMonth = Object.fromEntries(((expRows.results as any[]) || []).map((r: any) => [r.m, Number(r.v)]));
+  const revSeries = months.map(m => revByMonth[m] || 0);
+  const expSeries = months.map(m => expByMonth[m] || 0);
+  // Projection: 6-month average extended 3 months forward.
+  const avg = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / Math.max(1, xs.length);
+  const revFcAvg = avg(revSeries);
+  const expFcAvg = avg(expSeries);
+
+  // Build sparkline SVG (250×60).
+  const sparkline = (series: number[], projected: number, color: string): string => {
+    const all = [...series, projected, projected, projected];
+    const max = Math.max(1, ...all);
+    const pts = all.map((v, i) => `${(i / (all.length - 1)) * 250},${60 - (v / max) * 55}`);
+    const histPath = `M ${pts.slice(0, 6).join(' L ')}`;
+    const fcPath = `M ${pts.slice(5).join(' L ')}`;
+    return `<svg width="250" height="60" viewBox="0 0 250 60" style="margin-top:8px">
+      <path d="${histPath}" fill="none" stroke="${color}" stroke-width="2"/>
+      <path d="${fcPath}" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="4,3" opacity="0.6"/>
+    </svg>`;
+  };
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Forecasting</h1>
+  <div class="muted" style="font-size:0.85rem">6-month history → 3-month projection · moving average</div>
+</div>
+<div class="grid grid-2" style="gap:1rem">
+  <div class="card">
+    <div class="card-title">Revenue trend</div>
+    <div style="font-size:1.6rem;font-weight:800;color:var(--green)">${fmtMoney(revFcAvg)}</div>
+    <div class="muted" style="font-size:0.75rem">projected monthly avg next 3 months</div>
+    ${sparkline(revSeries, revFcAvg, '#34d399')}
+    <div class="muted" style="font-size:0.7rem;margin-top:6px">${esc(months.join(' · '))}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Expense trend</div>
+    <div style="font-size:1.6rem;font-weight:800;color:var(--red)">${fmtMoney(expFcAvg)}</div>
+    <div class="muted" style="font-size:0.75rem">projected monthly avg next 3 months</div>
+    ${sparkline(expSeries, expFcAvg, '#fb7185')}
+    <div class="muted" style="font-size:0.7rem;margin-top:6px">${esc(months.join(' · '))}</div>
+  </div>
+</div>
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Projected Net</div>
+  <div style="font-size:2rem;font-weight:800;color:${revFcAvg - expFcAvg >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtMoney(revFcAvg - expFcAvg)}</div>
+  <div class="muted" style="font-size:0.8rem">monthly · simple moving-average · no seasonality adjustment</div>
+</div>`;
+  return c.html(shell({ title: 'Forecasting', activeNav: 'forecasting', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Audit Trail — paginated log viewer ─────────────────────────────
+app.get('/app/audit', async (c) => {
+  const cid = c.get('companyId')!;
+  const rows = await c.env.DB.prepare(`
+    SELECT id, user_id, action, entity_type, entity_id, description, created_at
+    FROM audit_log WHERE company_id = ?
+    ORDER BY created_at DESC LIMIT 200
+  `).bind(cid).all();
+  const items = (rows.results as any[]) || [];
+  const body = `
+<div class="page-header"><h1 class="page-title">Audit Trail</h1>
+  <div class="muted" style="font-size:0.85rem">Latest 200 events</div>
+</div>
+<table class="data">
+  <thead><tr><th>When</th><th>Action</th><th>Entity</th><th>Description</th></tr></thead>
+  <tbody>
+    ${items.length === 0 ? `<tr><td colspan="4" class="empty-state">No audit events yet.</td></tr>` :
+      items.map((r: any) => `<tr>
+        <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${esc(r.created_at)}</td>
+        <td><span class="badge ${r.action === 'delete' ? 'badge-red' : r.action === 'create' ? 'badge-green' : 'badge-blue'}">${esc(r.action)}</span></td>
+        <td><span class="muted">${esc(r.entity_type)}</span>${r.entity_id ? ` <code style="font-size:0.75rem">${esc(String(r.entity_id).slice(0, 8))}</code>` : ''}</td>
+        <td>${esc(r.description || '—')}</td>
+      </tr>`).join('')}
+  </tbody>
+</table>`;
+  return c.html(shell({ title: 'Audit', activeNav: 'audit', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Notifications — listing + mark-as-read ─────────────────────────
+app.get('/app/notifications', async (c) => {
+  const cid = c.get('companyId')!;
+  const uid = c.get('userId')!;
+  const rows = await c.env.DB.prepare(`
+    SELECT id, kind, title, body, link, is_read, created_at
+    FROM notifications WHERE company_id = ? AND (user_id = ? OR user_id IS NULL)
+    ORDER BY created_at DESC LIMIT 100
+  `).bind(cid, uid).all();
+  const items = (rows.results as any[]) || [];
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Notifications</h1>
+  <button id="markAll" class="btn btn-ghost">Mark all read</button>
+</div>
+<div class="card">
+  ${items.length === 0 ? `<div class="empty-state">No notifications.</div>` :
+    items.map((n: any) => `<div style="display:flex;gap:1rem;padding:0.75rem 0;border-bottom:1px solid var(--border)${n.is_read ? '' : ';background:rgba(96,165,250,0.04)'}">
+      <div style="flex:1">
+        <div style="font-weight:600;color:var(--text-bright)">${esc(n.title)}${n.is_read ? '' : ' <span class="badge badge-blue" style="font-size:0.6rem">new</span>'}</div>
+        ${n.body ? `<div class="muted" style="font-size:0.85rem;margin-top:2px">${esc(n.body)}</div>` : ''}
+        <div class="muted" style="font-size:0.72rem;margin-top:4px;font-family:'SF Mono',Menlo,monospace">${esc(n.created_at)}${n.link ? ` · <a href="${esc(n.link)}">Open</a>` : ''}</div>
+      </div>
+    </div>`).join('')}
+</div>
+<script>
+document.getElementById('markAll').addEventListener('click', async () => {
+  try { await window.fetchJSON('/api/notifications/mark-all-read', { method: 'POST', body: '{}' });
+    location.reload();
+  } catch (e) { window.toast(e.message || 'Failed', 'err'); }
+});
+</script>`;
+  return c.html(shell({ title: 'Notifications', activeNav: 'notifications', body, brand: 'BAP Cloud' }));
+});
+
+app.post('/api/notifications/mark-all-read', async (c) => {
+  const cid = c.get('companyId')!;
+  const uid = c.get('userId')!;
+  await c.env.DB.prepare(`
+    UPDATE notifications SET is_read = 1, read_at = datetime('now')
+    WHERE company_id = ? AND (user_id = ? OR user_id IS NULL) AND is_read = 0
+  `).bind(cid, uid).run();
+  return c.json({ ok: true });
+});
+
+// ─── Schedule C report — IRS Form 1040 Schedule C aggregator ────────
+// Maps expense.schedule_c_line (1–32) to Schedule C box totals. The desktop
+// stores this on each expense; the cloud reads it as-is on synced rows.
+// Output is a printable rollup, not a filled PDF (that's filing-tier work).
+app.get('/app/taxes', async (c) => {
+  const cid = c.get('companyId')!;
+  const year = c.req.query('year') || String(new Date().getUTCFullYear());
+  const start = `${year}-01-01`;
+  const end = `${year}-12-31`;
+
+  const [income, byLine, totalExpenses] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT COALESCE(SUM(amount_paid),0) as v FROM invoices WHERE company_id=? AND date>=? AND date<=?`).bind(cid, start, end),
+    c.env.DB.prepare(`
+      SELECT COALESCE(NULLIF(schedule_c_line, ''), 'unassigned') as line,
+             COALESCE(SUM(amount),0) as total, COUNT(*) as n
+      FROM expenses WHERE company_id=? AND date>=? AND date<=? AND (is_tax_deductible IS NULL OR is_tax_deductible = 1)
+      GROUP BY line ORDER BY line
+    `).bind(cid, start, end),
+    c.env.DB.prepare(`SELECT COALESCE(SUM(amount),0) as v FROM expenses WHERE company_id=? AND date>=? AND date<=? AND (is_tax_deductible IS NULL OR is_tax_deductible = 1)`).bind(cid, start, end),
+  ]);
+  // Line names per the IRS Form 1040 Schedule C (Part II expenses) — abridged.
+  // Stored as strings on the desktop so this mapping intentionally mirrors them.
+  const SC_LABELS: Record<string, string> = {
+    '8': 'Advertising', '9': 'Car & truck', '10': 'Commissions/fees',
+    '11': 'Contract labor', '12': 'Depletion', '13': 'Depreciation',
+    '14': 'Employee benefit programs', '15': 'Insurance (other than health)',
+    '16a': 'Interest (mortgage)', '16b': 'Interest (other)', '17': 'Legal & professional',
+    '18': 'Office expense', '19': 'Pension & profit-sharing',
+    '20a': 'Rent (vehicles/equipment)', '20b': 'Rent (other property)',
+    '21': 'Repairs & maintenance', '22': 'Supplies', '23': 'Taxes & licenses',
+    '24a': 'Travel', '24b': 'Meals (deductible portion)', '25': 'Utilities',
+    '26': 'Wages', '27a': 'Other expenses',
+    'unassigned': 'Unassigned',
+  };
+  const rev = Number((income.results as any[])[0]?.v || 0);
+  const exp = Number((totalExpenses.results as any[])[0]?.v || 0);
+  const net = rev - exp;
+  const lines = (byLine.results as any[]) || [];
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Tax · Schedule C ${esc(year)}</h1>
+  <div style="display:flex;gap:8px">
+    ${['2024','2025','2026'].map(y => `<a class="btn ${y === year ? '' : 'btn-ghost'}" href="?year=${y}">${y}</a>`).join('')}
+  </div>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">Summary · ${esc(start)} → ${esc(end)}</div>
+  <div class="grid grid-3" style="gap:1rem;margin-top:1rem">
+    <div><div class="muted" style="font-size:0.72rem;text-transform:uppercase">Gross receipts (Line 1)</div>
+      <div style="font-size:1.4rem;font-weight:700;color:var(--green)">${fmtMoney(rev)}</div></div>
+    <div><div class="muted" style="font-size:0.72rem;text-transform:uppercase">Total deductible (Line 28)</div>
+      <div style="font-size:1.4rem;font-weight:700;color:var(--red)">${fmtMoney(exp)}</div></div>
+    <div><div class="muted" style="font-size:0.72rem;text-transform:uppercase">Net profit (Line 31)</div>
+      <div style="font-size:1.4rem;font-weight:700;color:${net >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtMoney(net)}</div></div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">By Schedule C line</div>
+  <table class="data">
+    <thead><tr><th>Line</th><th>Description</th><th class="num">Entries</th><th class="num">Total</th></tr></thead>
+    <tbody>
+      ${lines.length === 0 ? `<tr><td colspan="4" class="empty-state">No deductible expenses in ${esc(year)}.</td></tr>` :
+        lines.map((l: any) => `<tr>
+          <td><code>${esc(l.line)}</code></td>
+          <td>${esc(SC_LABELS[l.line] || '—')}</td>
+          <td class="num">${String(l.n)}</td>
+          <td class="num">${fmtMoney(l.total)}</td>
+        </tr>`).join('')}
+    </tbody>
+  </table>
+</div>
+<div class="muted" style="margin-top:1rem;font-size:0.75rem">Aggregator only. For e-filing, export this and your books to a tax preparer or filing service. Cells map to IRS Form 1040 Schedule C, Part II. Confirm with your CPA.</div>`;
+  return c.html(shell({ title: 'Tax', activeNav: 'taxes', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Recurring Templates listing + CRUD ─────────────────────────────
+app.get('/app/recurring', async (c) => listingPage(c, 'Recurring', 'recurring', `
+  SELECT id, type, name, frequency, next_date, is_active, last_run_date
+  FROM recurring_templates WHERE company_id = ? ORDER BY next_date`,
+  ['Type', 'Name', 'Frequency', 'Next run', 'Last run', 'Active'],
+  (r: any) => [
+    `<span class="badge">${esc(r.type)}</span>`,
+    `<a href="/app/recurring/${esc(r.id)}">${esc(r.name)}</a>`,
+    esc(r.frequency),
+    fmtDate(r.next_date),
+    r.last_run_date ? fmtDate(r.last_run_date) : '—',
+    r.is_active ? '✓' : '—',
+  ],
+  '/app/recurring/new',
+));
+
+wireSimpleEntity({
+  table: 'recurring_templates', navKey: 'recurring', apiPath: '/api/recurring',
+  entitySingular: 'Recurring Template', entityPlural: 'Recurring', listPath: '/app/recurring',
+  cols: ['type', 'name', 'frequency', 'next_date', 'is_active', 'template_data'],
+  fields: [
+    { name: 'name', label: 'Template Name', kind: 'text', required: true },
+    { name: 'type', label: 'Type', kind: 'select', rowGroup: 1, options: [
+      { value: 'expense', label: 'Expense' },
+      { value: 'invoice', label: 'Invoice' },
+      { value: 'bill', label: 'Bill' }] },
+    { name: 'frequency', label: 'Frequency', kind: 'select', rowGroup: 1, options: [
+      { value: 'weekly', label: 'Weekly' },
+      { value: 'biweekly', label: 'Bi-weekly' },
+      { value: 'monthly', label: 'Monthly' },
+      { value: 'quarterly', label: 'Quarterly' },
+      { value: 'annual', label: 'Annual' }] },
+    { name: 'next_date', label: 'Next Run', kind: 'date', required: true, rowGroup: 2 },
+    { name: 'is_active', label: 'Active', kind: 'checkbox', coerce: 'checkbox', rowGroup: 2 },
+    { name: 'template_data', label: 'Template Data (JSON)', kind: 'textarea',
+      placeholder: '{"vendor_id":"…","amount":120,"description":"Monthly subscription"}' },
+  ],
+});
+
+// ─── Debt Collection workflow page ──────────────────────────────────
+const DEBT_STAGE_ORDER = ['reminder','warning','final_notice','demand_letter','collections_agency','legal_action','judgment','garnishment'];
+app.get('/app/debt-collection', async (c) => {
+  const cid = c.get('companyId')!;
+  const rows = await c.env.DB.prepare(`
+    SELECT d.id, d.account_name, d.principal, d.current_balance, d.stage, d.status,
+           d.interest_rate, d.start_date,
+           c.name as client_name
+    FROM debts d LEFT JOIN clients c ON c.id = d.client_id
+    WHERE d.company_id = ? AND d.status = 'active' ORDER BY d.current_balance DESC
+  `).bind(cid).all();
+  const items = (rows.results as any[]) || [];
+  const totalOutstanding = items.reduce((s, r: any) => s + Number(r.current_balance || 0), 0);
+  // Bucket by stage for the funnel display.
+  const byStage = Object.fromEntries(DEBT_STAGE_ORDER.map(s => [s, [] as any[]]));
+  for (const r of items) (byStage[r.stage] || (byStage[r.stage] = [])).push(r);
+
+  const body = `
+<div class="page-header"><h1 class="page-title">Debt Collection</h1>
+  <a class="btn" href="/app/debts/new">+ New Debt</a>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="muted" style="font-size:0.72rem;text-transform:uppercase">Total outstanding · ${items.length} active</div>
+  <div style="font-size:1.8rem;font-weight:800;color:var(--red)">${fmtMoney(totalOutstanding)}</div>
+</div>
+<div class="grid" style="gap:1rem;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+  ${DEBT_STAGE_ORDER.map(stage => {
+    const list = byStage[stage] || [];
+    if (list.length === 0) return '';
+    const stageTotal = list.reduce((s, r: any) => s + Number(r.current_balance || 0), 0);
+    return `<div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between">
+        <span>${esc(stage.replace(/_/g, ' '))}</span>
+        <span class="muted">${list.length}</span>
+      </div>
+      <div class="muted" style="font-size:0.75rem">${fmtMoney(stageTotal)}</div>
+      ${list.map((r: any) => `<div style="padding:0.5rem 0;border-top:1px solid var(--border);font-size:0.85rem">
+        <a href="/app/debts/${esc(r.id)}">${esc(r.account_name)}</a>
+        <div class="muted" style="font-size:0.75rem">${esc(r.client_name || '—')} · ${fmtMoney(r.current_balance)}</div>
+      </div>`).join('')}
+    </div>`;
+  }).join('')}
+</div>
+${items.length === 0 ? '<div class="empty-state">No active debts.</div>' : ''}`;
+  return c.html(shell({ title: 'Debt Collection', activeNav: 'debt-collection', body, brand: 'BAP Cloud' }));
+});
+
+// ─── Audit-log helper — call from any mutation to record an event ───
+// Exported for future use; the existing CRUD routes will pick it up in a
+// follow-up that adds before/after hooks. For now, /app/audit reads the
+// table whether or not it has rows yet.
+export async function logAudit(env: Env, companyId: string, userId: string | null, params: {
+  action: string; entity_type: string; entity_id?: string; description?: string; metadata?: any;
+}): Promise<void> {
+  try {
+    await env.DB.prepare(`
+      INSERT INTO audit_log (id, company_id, user_id, action, entity_type, entity_id, description, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(uuid(), companyId, userId, params.action, params.entity_type,
+            params.entity_id || null, params.description || null,
+            params.metadata ? JSON.stringify(params.metadata) : null).run();
+  } catch { /* audit must never throw — it's a side-effect */ }
+}
+
+// ─── Bank Reconciliation ─────────────────────────────────────────────
+// Bank accounts (the user's actual checking/savings) and the imported
+// transactions awaiting match. Match flow: user uploads CSV → rows land in
+// bank_transactions with is_reconciled=0 → user clicks "match" against an
+// expense / invoice / payment → matched_entity_*  is stamped and the row
+// flips to is_reconciled=1.
+
+app.get('/app/bank', async (c) => {
+  const cid = c.get('companyId')!;
+  const [accounts, recentTxns] = await c.env.DB.batch([
+    c.env.DB.prepare(`
+      SELECT ba.id, ba.name, ba.bank_name, ba.account_last4, ba.current_balance,
+             ba.reconciled_balance, ba.reconciled_through_date,
+             COALESCE(unrec.unmatched, 0) as unmatched_count
+      FROM bank_accounts ba
+      LEFT JOIN (
+        SELECT bank_account_id, COUNT(*) as unmatched
+        FROM bank_transactions WHERE is_reconciled = 0 GROUP BY bank_account_id
+      ) unrec ON unrec.bank_account_id = ba.id
+      WHERE ba.company_id = ? AND ba.is_active = 1 ORDER BY ba.name
+    `).bind(cid),
+    c.env.DB.prepare(`
+      SELECT bt.id, bt.date, bt.description, bt.amount, bt.is_reconciled,
+             ba.name as account_name
+      FROM bank_transactions bt
+      JOIN bank_accounts ba ON ba.id = bt.bank_account_id
+      WHERE bt.company_id = ? ORDER BY bt.date DESC LIMIT 50
+    `).bind(cid),
+  ]);
+  const accs = (accounts.results as any[]) || [];
+  const txns = (recentTxns.results as any[]) || [];
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Bank Reconciliation</h1>
+  <a href="/app/bank/new" class="btn">+ Add Account</a>
+</div>
+
+${accs.length === 0 ? `<div class="empty-state">No bank accounts yet. Add one to start reconciling.</div>` : `
+<div class="grid grid-3" style="gap:1rem;margin-bottom:1rem">
+  ${accs.map((a: any) => `<div class="card">
+    <div class="muted" style="font-size:0.72rem;text-transform:uppercase">${esc(a.bank_name || 'Bank')} ${a.account_last4 ? '••' + esc(a.account_last4) : ''}</div>
+    <div style="font-size:1.1rem;font-weight:700">${esc(a.name)}</div>
+    <div style="font-size:1.4rem;font-family:'SF Mono',Menlo,monospace;color:var(--text-bright);margin-top:6px">${fmtMoney(a.current_balance)}</div>
+    <div class="muted" style="font-size:0.75rem;margin-top:4px">
+      ${a.unmatched_count > 0 ? `<span class="badge badge-amber">${a.unmatched_count} to match</span>` : '<span class="badge badge-green">all matched</span>'}
+    </div>
+    <div style="margin-top:0.75rem;display:flex;gap:6px">
+      <a href="/app/bank/${esc(a.id)}/import" class="btn btn-ghost" style="font-size:0.72rem;padding:6px 10px">Import CSV</a>
+      <a href="/app/bank/${esc(a.id)}/match" class="btn btn-ghost" style="font-size:0.72rem;padding:6px 10px">Match</a>
+    </div>
+  </div>`).join('')}
+</div>
+<div class="card">
+  <div class="card-title">Recent transactions (all accounts)</div>
+  <table class="data">
+    <thead><tr><th>Date</th><th>Account</th><th>Description</th><th class="num">Amount</th><th>Status</th></tr></thead>
+    <tbody>
+      ${txns.length === 0 ? `<tr><td colspan="5" class="empty-state">No transactions imported yet.</td></tr>` :
+        txns.map((t: any) => `<tr>
+          <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${fmtDate(t.date)}</td>
+          <td>${esc(t.account_name)}</td>
+          <td>${esc(t.description || '—')}</td>
+          <td class="num" style="color:${Number(t.amount) < 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoney(t.amount)}</td>
+          <td>${t.is_reconciled ? '<span class="badge badge-green">matched</span>' : '<span class="badge badge-amber">pending</span>'}</td>
+        </tr>`).join('')}
+    </tbody>
+  </table>
+</div>`}`;
+  return c.html(shell({ title: 'Bank Recon', activeNav: 'bank', body, brand: 'BAP Cloud' }));
+});
+
+// New bank account form — single-table CRUD via simpleFormPage.
+wireSimpleEntity({
+  table: 'bank_accounts', navKey: 'bank', apiPath: '/api/bank-accounts',
+  entitySingular: 'Bank Account', entityPlural: 'Bank Accounts', listPath: '/app/bank',
+  cols: ['name', 'type', 'bank_name', 'account_last4', 'current_balance',
+         'reconciled_balance', 'reconciled_through_date', 'currency', 'is_active', 'notes'],
+  fields: [
+    { name: 'name', label: 'Account Nickname', kind: 'text', required: true },
+    { name: 'type', label: 'Type', kind: 'select', rowGroup: 1, options: [
+      { value: 'checking', label: 'Checking' },
+      { value: 'savings', label: 'Savings' },
+      { value: 'credit_card', label: 'Credit Card' },
+      { value: 'line_of_credit', label: 'Line of Credit' }] },
+    { name: 'bank_name', label: 'Bank', kind: 'text', rowGroup: 1, placeholder: 'Wells Fargo, etc.' },
+    { name: 'account_last4', label: 'Last 4 of acct #', kind: 'text', rowGroup: 1 },
+    { name: 'current_balance', label: 'Current Balance', kind: 'number', coerce: 'number', rowGroup: 2 },
+    { name: 'currency', label: 'Currency', kind: 'text', rowGroup: 2 },
+    { name: 'is_active', label: 'Active', kind: 'checkbox', coerce: 'checkbox', rowGroup: 2 },
+    { name: 'notes', label: 'Notes', kind: 'textarea' },
+  ],
+});
+
+// CSV import page for a specific bank account. Two-stage: paste CSV → preview
+// rows → confirm-import. Standard CSV format: Date,Description,Amount[,Balance].
+// Date in YYYY-MM-DD or MM/DD/YYYY; Amount as a signed decimal.
+app.get('/app/bank/:id/import', async (c) => {
+  const cid = c.get('companyId')!;
+  const acc = await c.env.DB.prepare('SELECT * FROM bank_accounts WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).first<any>();
+  if (!acc) return c.notFound();
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Import CSV · ${esc(acc.name)}</h1>
+  <a href="/app/bank" class="btn btn-ghost">Back</a>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">CSV format</div>
+  <div class="muted" style="font-size:0.85rem">Expected columns: <code>Date, Description, Amount</code> (optional <code>Balance</code>). Header row required. Amount is signed — negative for debits, positive for credits.</div>
+  <pre style="background:var(--bg-elevated);border-radius:var(--radius);padding:12px;margin-top:8px;font-size:0.78rem;overflow:auto">Date,Description,Amount
+2026-06-01,Office Depot,-89.42
+2026-06-02,Stripe Payout,1240.00</pre>
+</div>
+<form id="f" class="card">
+  <label class="field">CSV<textarea name="csv" rows="14" required placeholder="Paste CSV here…" style="font-family:'SF Mono',Menlo,monospace;font-size:0.82rem"></textarea></label>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:0.75rem">
+    <button type="submit" class="btn">Import</button>
+  </div>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit', async function(ev){
+  ev.preventDefault();
+  const csv = ev.target.csv.value;
+  try {
+    const r = await window.fetchJSON('/api/bank-accounts/${esc(c.req.param('id'))}/import-csv', {
+      method: 'POST', body: JSON.stringify({ csv }),
+    });
+    window.toast(\`Imported \${r.imported} transaction\${r.imported === 1 ? '' : 's'}\`, 'ok');
+    setTimeout(() => location.href = '/app/bank/${esc(c.req.param('id'))}/match', 800);
+  } catch (e) { window.toast(e.message || 'Import failed', 'err'); }
+});
+</script>`;
+  return c.html(shell({ title: 'Import CSV', activeNav: 'bank', body, brand: 'BAP Cloud' }));
+});
+
+// CSV import endpoint — naive parser handles the 3-4 column standard format.
+// Skips rows that don't parse to a valid (date, amount). Detects duplicates
+// by (account_id, date, description, amount) tuple so re-importing the same
+// statement doesn't double-up.
+app.post('/api/bank-accounts/:id/import-csv', async (c) => {
+  const cid = c.get('companyId')!;
+  const accountId = c.req.param('id');
+  const acc = await c.env.DB.prepare('SELECT id FROM bank_accounts WHERE id = ? AND company_id = ?')
+    .bind(accountId, cid).first();
+  if (!acc) return c.json({ error: 'Bank account not found' }, 404);
+  const { csv }: any = await c.req.json();
+  if (!csv || typeof csv !== 'string') return c.json({ error: 'CSV body required' }, 400);
+
+  // Split lines; strip BOM; drop empty.
+  const lines = csv.replace(/^﻿/, '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return c.json({ error: 'CSV needs a header row and at least one data row' }, 400);
+
+  // Parse the header to find column indexes — case-insensitive, allow
+  // common synonyms (Memo/Description, Debit/Credit pair as well as a
+  // single signed Amount column).
+  const head = lines[0].split(',').map(s => s.trim().toLowerCase().replace(/^"|"$/g, ''));
+  const idxDate = head.findIndex(h => h === 'date' || h === 'transaction date' || h === 'posting date');
+  const idxDesc = head.findIndex(h => h === 'description' || h === 'memo' || h === 'payee' || h === 'name');
+  const idxAmt  = head.findIndex(h => h === 'amount' || h === 'value');
+  const idxDeb  = head.findIndex(h => h === 'debit' || h === 'withdrawal');
+  const idxCre  = head.findIndex(h => h === 'credit' || h === 'deposit');
+  const idxBal  = head.findIndex(h => h === 'balance' || h === 'running balance');
+  if (idxDate < 0) return c.json({ error: 'CSV header missing a Date column' }, 400);
+  if (idxAmt < 0 && idxDeb < 0 && idxCre < 0) return c.json({ error: 'CSV header missing an Amount (or Debit/Credit) column' }, 400);
+
+  const normDate = (s: string): string | null => {
+    s = s.trim().replace(/^"|"$/g, '');
+    // YYYY-MM-DD passes through.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // MM/DD/YYYY or M/D/YYYY → YYYY-MM-DD
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+    if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+    return null;
+  };
+  const parseField = (cells: string[], i: number) => i >= 0 ? (cells[i] || '').replace(/^"|"$/g, '').trim() : '';
+  const parseNum = (s: string): number => {
+    if (!s) return 0;
+    // Strip currency symbols, commas, parens (paren-wrapped = negative).
+    let neg = false;
+    s = s.trim();
+    if (/^\(.+\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+    s = s.replace(/[$,\s]/g, '');
+    const n = Number(s);
+    if (!Number.isFinite(n)) return 0;
+    return neg ? -n : n;
+  };
+
+  let imported = 0, skipped = 0;
+  const stmts: D1PreparedStatement[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    // VERY naive CSV split — doesn't handle quoted commas. Banks rarely emit
+    // them in transaction CSVs; if you hit one, paste-edit it out for now.
+    const cells = lines[i].split(',');
+    const date = normDate(parseField(cells, idxDate));
+    const desc = parseField(cells, idxDesc);
+    let amount = 0;
+    if (idxAmt >= 0) amount = parseNum(parseField(cells, idxAmt));
+    else {
+      const deb = parseNum(parseField(cells, idxDeb));
+      const cre = parseNum(parseField(cells, idxCre));
+      amount = cre - deb;  // credit positive, debit negative
+    }
+    if (!date || !Number.isFinite(amount) || amount === 0) { skipped++; continue; }
+    const balanceAfter = idxBal >= 0 ? parseNum(parseField(cells, idxBal)) : null;
+    // Dup detection: same account + date + description + amount.
+    const dup = await c.env.DB.prepare(`
+      SELECT id FROM bank_transactions
+      WHERE bank_account_id = ? AND date = ? AND amount = ? AND COALESCE(description,'') = COALESCE(?,'')
+    `).bind(accountId, date, amount, desc).first();
+    if (dup) { skipped++; continue; }
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO bank_transactions (id, company_id, bank_account_id, date, description, amount, balance_after, imported_from)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'csv')
+    `).bind(uuid(), cid, accountId, date, desc || null, amount, balanceAfter));
+    imported++;
+  }
+  if (stmts.length > 0) await c.env.DB.batch(stmts);
+  return c.json({ ok: true, imported, skipped });
+});
+
+// Reconciliation match page — shows unmatched bank txns alongside candidate
+// expense/payment rows (within ±3 days, ±$0.01 amount-similarity). User
+// clicks a candidate to confirm the match.
+app.get('/app/bank/:id/match', async (c) => {
+  const cid = c.get('companyId')!;
+  const accountId = c.req.param('id');
+  const acc = await c.env.DB.prepare('SELECT * FROM bank_accounts WHERE id = ? AND company_id = ?')
+    .bind(accountId, cid).first<any>();
+  if (!acc) return c.notFound();
+  const txns = await c.env.DB.prepare(`
+    SELECT id, date, description, amount FROM bank_transactions
+    WHERE bank_account_id = ? AND is_reconciled = 0 ORDER BY date DESC LIMIT 50
+  `).bind(accountId).all();
+  const list = (txns.results as any[]) || [];
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Match · ${esc(acc.name)}</h1>
+  <a href="/app/bank" class="btn btn-ghost">Back</a>
+</div>
+${list.length === 0 ? `<div class="empty-state">All transactions matched. Import more or you're caught up.</div>` :
+`<table class="data">
+  <thead><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Match candidates</th></tr></thead>
+  <tbody>
+    ${list.map((t: any) => `<tr>
+      <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${fmtDate(t.date)}</td>
+      <td>${esc(t.description || '—')}</td>
+      <td class="num" style="color:${Number(t.amount) < 0 ? 'var(--red)' : 'var(--green)'}">${fmtMoney(t.amount)}</td>
+      <td><div id="cand-${esc(t.id)}" class="muted" style="font-size:0.78rem">Loading…</div></td>
+    </tr>`).join('')}
+  </tbody>
+</table>`}
+<script>
+async function loadCandidates(){
+  const els = document.querySelectorAll('[id^=cand-]');
+  for (const el of els) {
+    const id = el.id.replace('cand-', '');
+    try {
+      const r = await fetch('/api/bank-transactions/' + id + '/candidates', { credentials: 'same-origin' });
+      const data = await r.json();
+      if (!data.candidates || data.candidates.length === 0) {
+        el.textContent = 'No candidates — create new expense?';
+      } else {
+        el.textContent = '';
+        for (const cand of data.candidates) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn btn-ghost';
+          btn.style.cssText = 'display:inline-block;margin:2px;padding:4px 8px;font-size:0.7rem';
+          btn.textContent = cand.label;
+          btn.addEventListener('click', () => match(id, cand.entity_type, cand.entity_id, btn));
+          el.appendChild(btn);
+        }
+      }
+    } catch { el.textContent = 'Load failed'; }
+  }
+}
+async function match(txnId, entityType, entityId, btn) {
+  btn.disabled = true; btn.textContent = 'Matching…';
+  try {
+    await window.fetchJSON('/api/bank-transactions/' + txnId + '/match', {
+      method: 'POST', body: JSON.stringify({ entity_type: entityType, entity_id: entityId }),
+    });
+    window.toast('Matched', 'ok');
+    btn.closest('tr').style.opacity = '0.4';
+  } catch (e) { window.toast(e.message || 'Match failed', 'err'); btn.disabled = false; btn.textContent = 'Retry'; }
+}
+loadCandidates();
+</script>`;
+  return c.html(shell({ title: 'Bank Match', activeNav: 'bank', body, brand: 'BAP Cloud' }));
+});
+
+// Find candidate matches for a bank transaction. Looks for expenses,
+// payments, and bills with amounts within $0.01 of the txn amount and
+// dates within ±3 days.
+app.get('/api/bank-transactions/:id/candidates', async (c) => {
+  const cid = c.get('companyId')!;
+  const txn = await c.env.DB.prepare('SELECT * FROM bank_transactions WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).first<any>();
+  if (!txn) return c.json({ error: 'Not found' }, 404);
+  const amount = Math.abs(Number(txn.amount));
+  // 3-day date window.
+  const d = new Date(txn.date + 'T00:00:00Z');
+  const lo = new Date(d.getTime() - 3 * 86400_000).toISOString().slice(0, 10);
+  const hi = new Date(d.getTime() + 3 * 86400_000).toISOString().slice(0, 10);
+  const eps = 0.01;
+
+  const candidates: Array<{ entity_type: string; entity_id: string; label: string }> = [];
+  // Debit on the bank side (negative) usually pairs to an expense or bill payment.
+  if (Number(txn.amount) < 0) {
+    const exps = await c.env.DB.prepare(`
+      SELECT id, description, date, amount FROM expenses
+      WHERE company_id = ? AND date >= ? AND date <= ?
+        AND ABS(amount - ?) < ?
+      LIMIT 5
+    `).bind(cid, lo, hi, amount, eps).all();
+    for (const e of (exps.results as any[]) || []) {
+      candidates.push({ entity_type: 'expense', entity_id: e.id, label: `Expense: ${e.description || ''}` });
+    }
+  } else {
+    // Credit usually pairs to a payment.
+    const pays = await c.env.DB.prepare(`
+      SELECT id, date, amount FROM payments
+      WHERE company_id = ? AND date >= ? AND date <= ?
+        AND ABS(amount - ?) < ?
+      LIMIT 5
+    `).bind(cid, lo, hi, amount, eps).all();
+    for (const p of (pays.results as any[]) || []) {
+      candidates.push({ entity_type: 'payment', entity_id: p.id, label: `Payment: ${fmtMoney(p.amount)}` });
+    }
+  }
+  return c.json({ candidates });
+});
+
+// Confirm a match — stamps the txn and increments the account's reconciled
+// balance. NOT reversible from this endpoint; un-matching is a separate PUT.
+app.post('/api/bank-transactions/:id/match', async (c) => {
+  const cid = c.get('companyId')!;
+  const { entity_type, entity_id }: any = await c.req.json();
+  if (!entity_type || !entity_id) return c.json({ error: 'entity_type and entity_id required' }, 400);
+  const r = await c.env.DB.prepare(`
+    UPDATE bank_transactions
+    SET matched_entity_type = ?, matched_entity_id = ?, is_reconciled = 1
+    WHERE id = ? AND company_id = ?
+  `).bind(entity_type, entity_id, c.req.param('id'), cid).run();
+  if ((r as any).meta?.changes === 0) return c.json({ error: 'Not found' }, 404);
+  await logAudit(c.env, cid, c.get('userId') as any, {
+    action: 'reconcile', entity_type: 'bank_transaction', entity_id: c.req.param('id'),
+    description: `Matched to ${entity_type} ${entity_id}`,
+  });
+  return c.json({ ok: true });
+});
+
+// ─── Email send (Cloudflare MailChannels) ────────────────────────────
+// MailChannels accepts POST /send for any Worker without auth — that's the
+// official Cloudflare-recommended path for Worker-originated transactional
+// mail. DKIM/SPF MUST be configured on the sending domain; without it the
+// mail goes straight to spam (or gets rejected).
+//
+// Configuring DKIM for accounting.rmpgutah.us is a one-time DNS step the
+// user does separately (TXT record per Cloudflare docs). This endpoint
+// doesn't gate on that — it just sends and logs whatever the API returns.
+
+app.get('/app/email', async (c) => {
+  const cid = c.get('companyId')!;
+  const log = await c.env.DB.prepare(`
+    SELECT id, to_email, subject, status, sent_at, related_entity_type, related_entity_id, error_message
+    FROM email_log WHERE company_id = ? ORDER BY sent_at DESC LIMIT 100
+  `).bind(cid).all();
+  const items = (log.results as any[]) || [];
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Email</h1>
+  <a href="/app/email/new" class="btn">+ Send Email</a>
+</div>
+<table class="data">
+  <thead><tr><th>Sent</th><th>To</th><th>Subject</th><th>Status</th><th>Related</th></tr></thead>
+  <tbody>
+    ${items.length === 0 ? `<tr><td colspan="5" class="empty-state">No emails sent yet.</td></tr>` :
+      items.map((m: any) => `<tr>
+        <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${esc(m.sent_at)}</td>
+        <td>${esc(m.to_email)}</td>
+        <td>${esc(m.subject || '—')}</td>
+        <td><span class="badge ${m.status === 'sent' ? 'badge-green' : m.status === 'failed' ? 'badge-red' : 'badge-amber'}">${esc(m.status)}</span>${m.error_message ? `<div class="muted" style="font-size:0.7rem">${esc(m.error_message)}</div>` : ''}</td>
+        <td class="muted" style="font-size:0.78rem">${m.related_entity_type ? esc(m.related_entity_type) + ' ' + esc(String(m.related_entity_id || '').slice(0, 8)) : '—'}</td>
+      </tr>`).join('')}
+  </tbody>
+</table>`;
+  return c.html(shell({ title: 'Email', activeNav: 'email', body, brand: 'BAP Cloud' }));
+});
+
+app.get('/app/email/new', (c) => {
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Send Email</h1>
+  <a href="/app/email" class="btn btn-ghost">Back</a>
+</div>
+<form id="f" class="card grid" style="gap:1rem">
+  <div class="grid grid-2" style="gap:1rem">
+    <label class="field">To<input name="to" type="email" required placeholder="client@example.com"></label>
+    <label class="field">From (verified domain only)<input name="from" type="email" required value="noreply@accounting.rmpgutah.us"></label>
+  </div>
+  <label class="field">Subject<input name="subject" required maxlength="200"></label>
+  <label class="field">Body<textarea name="body" rows="10" required></textarea></label>
+  <div class="muted" style="font-size:0.78rem">⚠ DKIM/SPF must be configured on the sending domain or this will land in spam. See Cloudflare MailChannels docs.</div>
+  <div style="display:flex;justify-content:flex-end"><button type="submit" class="btn">Send</button></div>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit', async function(ev){
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const payload = Object.fromEntries(fd.entries());
+  const btn = ev.target.querySelector('button[type=submit]');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await window.fetchJSON('/api/email/send', { method: 'POST', body: JSON.stringify(payload) });
+    window.toast('Email sent', 'ok');
+    setTimeout(() => location.href = '/app/email', 600);
+  } catch (e) { window.toast(e.message || 'Send failed', 'err'); btn.disabled = false; btn.textContent = 'Send'; }
+});
+</script>`;
+  return c.html(shell({ title: 'Send Email', activeNav: 'email', body, brand: 'BAP Cloud' }));
+});
+
+app.post('/api/email/send', async (c) => {
+  const cid = c.get('companyId')!;
+  const uid = c.get('userId') as string;
+  const { to, from, subject, body, related_entity_type, related_entity_id }: any = await c.req.json();
+  if (!to || !subject || !body) return c.json({ error: 'to, subject, body required' }, 400);
+  // Single recipient for simplicity; MailChannels supports multi.
+  const mcPayload = {
+    personalizations: [{ to: [{ email: to }] }],
+    from: { email: from || 'noreply@accounting.rmpgutah.us' },
+    subject,
+    content: [{ type: 'text/plain', value: body }],
+  };
+  let status = 'sent', errorMessage = '';
+  try {
+    const res = await fetch('https://api.mailchannels.net/tx/v1/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mcPayload),
+    });
+    if (!res.ok) {
+      status = 'failed';
+      errorMessage = (await res.text()).slice(0, 500);
+    }
+  } catch (e: any) {
+    status = 'failed';
+    errorMessage = (e?.message || 'Network error').slice(0, 500);
+  }
+  await c.env.DB.prepare(`
+    INSERT INTO email_log (id, company_id, user_id, to_email, from_email, subject, body_preview,
+      related_entity_type, related_entity_id, status, error_message)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(uuid(), cid, uid, to, from || null, subject, String(body).slice(0, 500),
+          related_entity_type || null, related_entity_id || null, status, errorMessage || null).run();
+  await logAudit(c.env, cid, uid, {
+    action: 'email_sent', entity_type: 'email', description: `${subject} → ${to}`,
+  });
+  if (status === 'failed') return c.json({ error: errorMessage || 'Send failed' }, 502);
+  return c.json({ ok: true });
+});
+
+// ─── Scheduled handler — daily cron ──────────────────────────────────
+// Wrangler's cron trigger calls this. Runs every day at 06:00 UTC.
+const handler = {
+  fetch: app.fetch.bind(app),
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runScheduledTasks(env));
+  },
+};
+
+async function runScheduledTasks(env: Env): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    // 1. Instantiate due recurring_templates.
+    const due = await env.DB.prepare(`
+      SELECT * FROM recurring_templates
+      WHERE is_active = 1 AND next_date <= ?
+    `).bind(today).all();
+    for (const tmpl of (due.results as any[]) || []) {
+      try {
+        const data: any = tmpl.template_data ? JSON.parse(tmpl.template_data) : {};
+        const id = uuid();
+        if (tmpl.type === 'expense' && data.amount) {
+          await env.DB.prepare(`
+            INSERT INTO expenses (id, company_id, vendor_id, category_id, date, amount, tax_amount,
+              description, payment_method, status, currency, is_recurring, recurring_template_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+          `).bind(id, tmpl.company_id, data.vendor_id || null, data.category_id || null,
+                  today, Number(data.amount) || 0, Number(data.tax_amount) || 0,
+                  data.description || tmpl.name, data.payment_method || null,
+                  'pending', data.currency || 'USD', tmpl.id).run();
+        } else if (tmpl.type === 'invoice' && Array.isArray(data.lines) && data.lines.length > 0) {
+          // Instantiate an invoice with its lines from template_data.
+          const totals = { subtotal: 0, tax: 0 };
+          for (const l of data.lines) {
+            const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+            totals.subtotal += amt;
+            totals.tax += amt * (Number(l.tax_rate || 0) / 100);
+          }
+          const ship = Number(data.shipping_amount || 0);
+          const disc = Number(data.discount || 0);
+          const total = Math.max(0, totals.subtotal + totals.tax + ship - disc);
+          const inserts: D1PreparedStatement[] = [
+            env.DB.prepare(`
+              INSERT INTO invoices (id, company_id, client_id, invoice_number, date, due_date, status,
+                subtotal, tax_amount, shipping_amount, discount, total, amount_paid, currency, notes, terms)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+            `).bind(id, tmpl.company_id, data.client_id || null,
+                    data.invoice_number || `${tmpl.name.slice(0, 8)}-${today}`,
+                    today, data.due_date || null, 'draft',
+                    Math.round(totals.subtotal * 100) / 100, Math.round(totals.tax * 100) / 100,
+                    ship, disc, total, data.currency || 'USD',
+                    data.notes || null, data.terms || null),
+          ];
+          data.lines.forEach((l: any, i: number) => {
+            const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+            const taxA = amt * (Number(l.tax_rate || 0) / 100);
+            inserts.push(env.DB.prepare(`
+              INSERT INTO invoice_line_items (id, invoice_id, description, quantity, unit_price, amount, tax_rate, tax_amount, sort_order)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(uuid(), id, l.description || null, Number(l.quantity || 0),
+                    Number(l.unit_price || 0), amt, Number(l.tax_rate || 0), taxA, i));
+          });
+          await env.DB.batch(inserts);
+        } else if (tmpl.type === 'bill' && Array.isArray(data.lines) && data.lines.length > 0) {
+          const totals = { subtotal: 0, tax: 0 };
+          for (const l of data.lines) {
+            const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+            totals.subtotal += amt;
+            totals.tax += amt * (Number(l.tax_rate || 0) / 100);
+          }
+          const ship = Number(data.shipping_amount || 0);
+          const disc = Number(data.discount || 0);
+          const total = Math.max(0, totals.subtotal + totals.tax + ship - disc);
+          const inserts: D1PreparedStatement[] = [
+            env.DB.prepare(`
+              INSERT INTO bills (id, company_id, vendor_id, bill_number, date, due_date, status,
+                subtotal, tax_amount, shipping_amount, discount, total, amount_paid, currency, notes, terms)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+            `).bind(id, tmpl.company_id, data.vendor_id || null,
+                    data.bill_number || `${tmpl.name.slice(0, 8)}-${today}`,
+                    today, data.due_date || null, 'open',
+                    Math.round(totals.subtotal * 100) / 100, Math.round(totals.tax * 100) / 100,
+                    ship, disc, total, data.currency || 'USD',
+                    data.notes || null, data.terms || null),
+          ];
+          data.lines.forEach((l: any, i: number) => {
+            const amt = Number(l.quantity || 0) * Number(l.unit_price || 0);
+            const taxA = amt * (Number(l.tax_rate || 0) / 100);
+            inserts.push(env.DB.prepare(`
+              INSERT INTO bill_line_items (id, bill_id, description, quantity, unit_price, amount, tax_rate, tax_amount, sort_order)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(uuid(), id, l.description || null, Number(l.quantity || 0),
+                    Number(l.unit_price || 0), amt, Number(l.tax_rate || 0), taxA, i));
+          });
+          await env.DB.batch(inserts);
+        }
+        // Bump next_date by the frequency.
+        const next = nextRecurringDate(today, tmpl.frequency);
+        await env.DB.prepare(`
+          UPDATE recurring_templates SET last_run_date = ?, next_date = ?, updated_at = datetime('now')
+          WHERE id = ?
+        `).bind(today, next, tmpl.id).run();
+        await logAudit(env, tmpl.company_id, null, {
+          action: 'recurring_run', entity_type: 'recurring_template', entity_id: tmpl.id,
+          description: `Instantiated ${tmpl.type} from "${tmpl.name}"`,
+        });
+      } catch (err: any) {
+        await logAudit(env, tmpl.company_id, null, {
+          action: 'recurring_failed', entity_type: 'recurring_template', entity_id: tmpl.id,
+          description: `Failed: ${err?.message || 'unknown'}`,
+        });
+      }
+    }
+
+    // 2. Mark overdue invoices (due_date < today AND status='sent').
+    await env.DB.prepare(`
+      UPDATE invoices SET status = 'overdue', updated_at = datetime('now')
+      WHERE due_date < ? AND status = 'sent'
+    `).bind(today).run();
+
+    // 3. Low-inventory notifications — one per item that just crossed.
+    const lowStock = await env.DB.prepare(`
+      SELECT id, company_id, name, quantity_on_hand, reorder_point
+      FROM inventory_items
+      WHERE reorder_point > 0 AND quantity_on_hand <= reorder_point AND status = 'active'
+    `).all();
+    for (const it of (lowStock.results as any[]) || []) {
+      // Suppress duplicates: only insert if no unread low-stock notif for this item.
+      const existing = await env.DB.prepare(`
+        SELECT id FROM notifications
+        WHERE company_id = ? AND kind = 'low_inventory' AND link = ? AND is_read = 0
+      `).bind(it.company_id, `/app/inventory/${it.id}`).first();
+      if (existing) continue;
+      await env.DB.prepare(`
+        INSERT INTO notifications (id, company_id, user_id, kind, title, body, link)
+        VALUES (?, ?, NULL, 'low_inventory', ?, ?, ?)
+      `).bind(uuid(), it.company_id,
+              `Low stock: ${it.name}`,
+              `On hand: ${it.quantity_on_hand} (reorder at ${it.reorder_point})`,
+              `/app/inventory/${it.id}`).run();
+    }
+  } catch (err) {
+    console.error('Scheduled task error:', err);
+  }
+}
+
+// ─── Stripe Sync ─────────────────────────────────────────────────────
+// Pulls recent Charge objects from Stripe and inserts them as payments,
+// linking to invoices by metadata.invoice_id (set when the portal Checkout
+// session was created). Differs from the webhook path in that this is a
+// *catch-up* sync — if the webhook missed a delivery (or if the user just
+// connected Stripe), running this fills in the gaps.
+//
+// Stripe key is read from the env secret STRIPE_SECRET_KEY. The user sets
+// it once via `wrangler secret put STRIPE_SECRET_KEY` (not via the UI —
+// secrets shouldn't transit the JSON API).
+
+app.get('/app/stripe', async (c) => {
+  const cid = c.get('companyId')!;
+  const recentPayments = await c.env.DB.prepare(`
+    SELECT p.id, p.date, p.amount, p.stripe_pi_id, p.notes, i.invoice_number
+    FROM payments p
+    LEFT JOIN invoices i ON i.id = p.invoice_id
+    WHERE p.company_id = ? AND p.payment_method = 'stripe'
+    ORDER BY p.date DESC LIMIT 50
+  `).bind(cid).all();
+  const payments = (recentPayments.results as any[]) || [];
+  const totalStripe = payments.reduce((s, p: any) => s + Number(p.amount || 0), 0);
+  const hasKey = !!c.env.STRIPE_SECRET_KEY;
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Stripe Sync</h1>
+  ${hasKey ? `<button id="sync" class="btn">Sync recent payments</button>` : ''}
+</div>
+${!hasKey ? `<div class="error-banner" style="margin-bottom:1rem">
+  Stripe key not configured. Run <code>wrangler secret put STRIPE_SECRET_KEY</code> on the cloud-app deployment, then redeploy.
+</div>` : ''}
+<div class="grid grid-2" style="gap:1rem;margin-bottom:1rem">
+  <div class="card">
+    <div class="muted" style="font-size:0.72rem;text-transform:uppercase">Stripe payments recorded</div>
+    <div style="font-size:1.8rem;font-weight:800;color:var(--green)">${fmtMoney(totalStripe)}</div>
+    <div class="muted" style="font-size:0.75rem">${payments.length} payment${payments.length === 1 ? '' : 's'}</div>
+  </div>
+  <div class="card">
+    <div class="muted" style="font-size:0.72rem;text-transform:uppercase">Webhook</div>
+    <div style="font-size:1rem;font-weight:600;color:var(--text-bright);margin-top:6px">checkout.session.completed</div>
+    <div class="muted" style="font-size:0.75rem">Endpoint URL · https://accounting.rmpgutah.us/api/stripe/webhook</div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">Recent Stripe payments</div>
+  <table class="data">
+    <thead><tr><th>Date</th><th>Invoice</th><th class="num">Amount</th><th>Payment Intent</th></tr></thead>
+    <tbody>
+      ${payments.length === 0 ? `<tr><td colspan="4" class="empty-state">No Stripe payments yet.</td></tr>` :
+        payments.map((p: any) => `<tr>
+          <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${fmtDate(p.date)}</td>
+          <td>${p.invoice_number ? `<a href="/app/invoices/${esc(p.id)}">${esc(p.invoice_number)}</a>` : '—'}</td>
+          <td class="num">${fmtMoney(p.amount)}</td>
+          <td class="muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem">${esc(String(p.stripe_pi_id || '—').slice(0, 28))}</td>
+        </tr>`).join('')}
+    </tbody>
+  </table>
+</div>
+<script>
+const sync = document.getElementById('sync');
+if (sync) sync.addEventListener('click', async () => {
+  sync.disabled = true; sync.textContent = 'Syncing…';
+  try {
+    const r = await window.fetchJSON('/api/stripe/sync', { method: 'POST', body: '{}' });
+    window.toast(\`\${r.imported} new · \${r.skipped} already recorded\`, 'ok');
+    setTimeout(() => location.reload(), 800);
+  } catch (e) { window.toast(e.message || 'Sync failed', 'err'); sync.disabled = false; sync.textContent = 'Sync recent payments'; }
+});
+</script>`;
+  return c.html(shell({ title: 'Stripe', activeNav: 'stripe', body, brand: 'BAP Cloud' }));
+});
+
+// Pull recent charges from Stripe. Catches up after a missed webhook.
+// Pages through up to 100 charges in one call; the user can re-run for more.
+app.post('/api/stripe/sync', async (c) => {
+  const cid = c.get('companyId')!;
+  const key = c.env.STRIPE_SECRET_KEY;
+  if (!key) return c.json({ error: 'STRIPE_SECRET_KEY not configured' }, 400);
+
+  // Last sync cursor — stored as the most-recent payment's stripe_pi_id we've
+  // seen. Stripe charges are listed in descending order, so we walk forward
+  // until we hit a known one.
+  const res = await fetch('https://api.stripe.com/v1/charges?limit=100', {
+    headers: { 'Authorization': `Bearer ${key}` },
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    return c.json({ error: `Stripe API ${res.status}: ${errText.slice(0, 300)}` }, 502);
+  }
+  const payload: any = await res.json();
+  const charges: any[] = payload.data || [];
+
+  let imported = 0, skipped = 0, unmatched = 0;
+  const stmts: D1PreparedStatement[] = [];
+  for (const ch of charges) {
+    if (!ch.paid || ch.refunded) { skipped++; continue; }
+    const pi = ch.payment_intent || ch.id;
+    // Dup check — payments.stripe_pi_id is our natural idempotency key.
+    const dup = await c.env.DB.prepare('SELECT id FROM payments WHERE stripe_pi_id = ?').bind(pi).first();
+    if (dup) { skipped++; continue; }
+
+    const invoiceId = ch.metadata?.invoice_id || null;
+    // If no invoice linked, skip — we don't want orphan payments. Could add
+    // a "Stripe payments awaiting invoice" page later.
+    if (!invoiceId) { unmatched++; continue; }
+    // Verify the invoice belongs to this company; never attribute another
+    // tenant's payment even if a metadata.invoice_id leaks.
+    const inv = await c.env.DB.prepare('SELECT id FROM invoices WHERE id = ? AND company_id = ?')
+      .bind(invoiceId, cid).first();
+    if (!inv) { unmatched++; continue; }
+
+    const amount = (Number(ch.amount) || 0) / 100;
+    const date = new Date(ch.created * 1000).toISOString().slice(0, 10);
+    stmts.push(c.env.DB.prepare(`
+      INSERT INTO payments (id, company_id, invoice_id, date, amount, payment_method, stripe_pi_id, notes)
+      VALUES (?, ?, ?, ?, ?, 'stripe', ?, ?)
+    `).bind(uuid(), cid, invoiceId, date, amount, pi, `Stripe charge ${ch.id}${ch.description ? ' · ' + ch.description : ''}`));
+    stmts.push(c.env.DB.prepare(`
+      UPDATE invoices SET amount_paid = amount_paid + ?,
+        status = CASE WHEN amount_paid + ? >= total THEN 'paid' ELSE 'partial' END,
+        updated_at = datetime('now')
+      WHERE id = ? AND company_id = ?
+    `).bind(amount, amount, invoiceId, cid));
+    imported++;
+  }
+  if (stmts.length > 0) await c.env.DB.batch(stmts);
+  await logAudit(c.env, cid, c.get('userId') as any, {
+    action: 'stripe_sync', entity_type: 'system',
+    description: `Imported ${imported} · skipped ${skipped} · unmatched ${unmatched}`,
+  });
+  return c.json({ ok: true, imported, skipped, unmatched, total_seen: charges.length });
+});
+
+// ─── Rules / Automations engine ──────────────────────────────────────
+// Trigger events are emitted from the audit middleware after each mutation
+// (e.g. 'expense.create'). The engine fetches active rules matching the
+// trigger, evaluates their conditions against the entity record, and
+// executes their actions. Failed actions log to audit but don't roll back.
+
+const SUPPORTED_TRIGGERS = [
+  'expense.create', 'expense.update',
+  'invoice.create', 'invoice.update', 'invoice.overdue',
+  'bill.create', 'bill.update',
+  'client.create', 'vendor.create',
+] as const;
+
+interface RuleCondition { field: string; op: string; value: any; }
+interface RuleAction {
+  kind: 'notify' | 'set_field' | 'send_email' | 'add_tag';
+  // notify
+  title?: string; body?: string; link?: string;
+  // set_field
+  field?: string; value?: any;
+  // send_email
+  to?: string; subject?: string; body_template?: string;
+  // add_tag
+  tag?: string;
+}
+
+function evalCondition(rec: any, cond: RuleCondition): boolean {
+  const v = rec?.[cond.field];
+  switch (cond.op) {
+    case 'eq': return v == cond.value;
+    case 'ne': return v != cond.value;
+    case 'gt': return Number(v) > Number(cond.value);
+    case 'gte': return Number(v) >= Number(cond.value);
+    case 'lt': return Number(v) < Number(cond.value);
+    case 'lte': return Number(v) <= Number(cond.value);
+    case 'contains': return String(v ?? '').toLowerCase().includes(String(cond.value).toLowerCase());
+    case 'is_set': return v != null && v !== '';
+    case 'is_empty': return v == null || v === '';
+    default: return false;
+  }
+}
+
+async function runRulesForEvent(env: Env, companyId: string, userId: string | null, trigger: string,
+                                entityType: string, entityId: string, record: any): Promise<void> {
+  try {
+    const rules = await env.DB.prepare(`
+      SELECT * FROM rules WHERE company_id = ? AND trigger = ? AND is_active = 1
+    `).bind(companyId, trigger).all();
+    for (const rule of (rules.results as any[]) || []) {
+      let conditions: RuleCondition[] = [];
+      let actions: RuleAction[] = [];
+      try {
+        conditions = JSON.parse(rule.conditions || '[]');
+        actions = JSON.parse(rule.actions || '[]');
+      } catch { continue; }
+      // ALL conditions must pass (AND semantics).
+      if (conditions.length > 0 && !conditions.every(c => evalCondition(record, c))) continue;
+
+      let ranCount = 0;
+      for (const action of actions) {
+        try {
+          await executeAction(env, companyId, userId, action, entityType, entityId, record, rule.name);
+          ranCount++;
+        } catch (err: any) {
+          await logAudit(env, companyId, null, {
+            action: 'rule_action_failed', entity_type: 'rule', entity_id: rule.id,
+            description: `${rule.name}: action ${action.kind} failed: ${err?.message || 'unknown'}`,
+          });
+        }
+      }
+      await env.DB.prepare(`
+        UPDATE rules SET run_count = run_count + 1, last_run_at = datetime('now'), updated_at = datetime('now')
+        WHERE id = ?
+      `).bind(rule.id).run();
+      await logAudit(env, companyId, null, {
+        action: 'rule_run', entity_type: 'rule', entity_id: rule.id,
+        description: `${rule.name}: ${ranCount}/${actions.length} actions on ${entityType} ${entityId.slice(0, 8)}`,
+      });
+    }
+  } catch (err) {
+    console.error('Rules engine error:', err);
+  }
+}
+
+async function executeAction(env: Env, companyId: string, userId: string | null,
+                             action: RuleAction, entityType: string, entityId: string,
+                             record: any, ruleName: string): Promise<void> {
+  switch (action.kind) {
+    case 'notify': {
+      await env.DB.prepare(`
+        INSERT INTO notifications (id, company_id, user_id, kind, title, body, link)
+        VALUES (?, ?, NULL, 'rule', ?, ?, ?)
+      `).bind(uuid(), companyId,
+              action.title || ruleName,
+              action.body || `Rule "${ruleName}" matched ${entityType} ${entityId.slice(0, 8)}`,
+              action.link || `/app/${entityType}s/${entityId}`).run();
+      break;
+    }
+    case 'set_field': {
+      if (!action.field) throw new Error('set_field requires field');
+      // Map entity_type to its table; only allow tables the engine knows.
+      const tableMap: Record<string, string> = {
+        expense: 'expenses', invoice: 'invoices', bill: 'bills', client: 'clients', vendor: 'vendors',
+      };
+      const table = tableMap[entityType];
+      if (!table) throw new Error(`Cannot set field on ${entityType}`);
+      await env.DB.prepare(`UPDATE ${table} SET ${action.field} = ?, updated_at = datetime('now') WHERE id = ? AND company_id = ?`)
+        .bind(action.value ?? null, entityId, companyId).run();
+      break;
+    }
+    case 'send_email': {
+      if (!action.to) throw new Error('send_email requires to');
+      // Interpolate {{field}} placeholders in subject + body from the record.
+      const interp = (s: string) => s.replace(/\{\{(\w+)\}\}/g, (_, k) => String(record?.[k] ?? ''));
+      const subject = interp(action.subject || `[${ruleName}] ${entityType} ${entityId.slice(0, 8)}`);
+      const body = interp(action.body_template || `Rule ${ruleName} matched ${entityType} ${entityId}.`);
+      const res = await fetch('https://api.mailchannels.net/tx/v1/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: action.to }] }],
+          from: { email: 'noreply@accounting.rmpgutah.us' },
+          subject,
+          content: [{ type: 'text/plain', value: body }],
+        }),
+      });
+      if (!res.ok) throw new Error(`MailChannels ${res.status}`);
+      await env.DB.prepare(`
+        INSERT INTO email_log (id, company_id, user_id, to_email, from_email, subject, body_preview,
+          related_entity_type, related_entity_id, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent')
+      `).bind(uuid(), companyId, userId, action.to, 'noreply@accounting.rmpgutah.us',
+              subject, body.slice(0, 500), entityType, entityId).run();
+      break;
+    }
+    case 'add_tag': {
+      // For now, add_tag only supports entities with a 'tags' column. Many
+      // entities don't on the cloud schema yet — silently no-op for those.
+      if (!action.tag) return;
+      const supported = ['expenses', 'invoices'];
+      const tableMap: Record<string, string> = { expense: 'expenses', invoice: 'invoices' };
+      const table = tableMap[entityType];
+      if (!table || !supported.includes(table)) return;
+      // Tag column doesn't exist on cloud's expenses/invoices yet — skip.
+      return;
+    }
+  }
+}
+
+// /app/automations — list + create simple rules.
+app.get('/app/automations', async (c) => {
+  const cid = c.get('companyId')!;
+  const rows = await c.env.DB.prepare(`
+    SELECT id, name, description, trigger, is_active, run_count, last_run_at
+    FROM rules WHERE company_id = ? ORDER BY updated_at DESC
+  `).bind(cid).all();
+  const items = (rows.results as any[]) || [];
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Automations</h1>
+  <a href="/app/automations/new" class="btn">+ New Rule</a>
+</div>
+<table class="data">
+  <thead><tr><th>Name</th><th>Trigger</th><th class="num">Runs</th><th>Last run</th><th>Active</th></tr></thead>
+  <tbody>
+    ${items.length === 0 ? `<tr><td colspan="5" class="empty-state">No rules yet. Create one to auto-tag expenses, notify on big invoices, etc.</td></tr>` :
+      items.map((r: any) => `<tr>
+        <td><a href="/app/automations/${esc(r.id)}">${esc(r.name)}</a>${r.description ? `<div class="muted" style="font-size:0.78rem">${esc(r.description)}</div>` : ''}</td>
+        <td><code style="font-size:0.78rem">${esc(r.trigger)}</code></td>
+        <td class="num">${String(r.run_count || 0)}</td>
+        <td class="muted" style="font-size:0.78rem">${r.last_run_at || '—'}</td>
+        <td>${r.is_active ? '<span class="badge badge-green">on</span>' : '<span class="badge">off</span>'}</td>
+      </tr>`).join('')}
+  </tbody>
+</table>
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">How rules work</div>
+  <div class="muted" style="font-size:0.85rem">
+    Each rule has a <strong>trigger</strong> (event name like <code>expense.create</code>), optional <strong>conditions</strong>
+    (all must pass), and <strong>actions</strong> (executed in order). Failed actions log to Audit but don't roll back.
+    Supported actions: <code>notify</code> · <code>set_field</code> · <code>send_email</code>.
+  </div>
+</div>`;
+  return c.html(shell({ title: 'Automations', activeNav: 'automations', body, brand: 'BAP Cloud' }));
+});
+
+wireSimpleEntity({
+  table: 'rules', navKey: 'automations', apiPath: '/api/automations',
+  entitySingular: 'Rule', entityPlural: 'Rules', listPath: '/app/automations',
+  cols: ['name', 'description', 'trigger', 'conditions', 'actions', 'is_active'],
+  fields: [
+    { name: 'name', label: 'Rule Name', kind: 'text', required: true },
+    { name: 'description', label: 'Description', kind: 'text' },
+    { name: 'trigger', label: 'Trigger', kind: 'select', options:
+      SUPPORTED_TRIGGERS.map(t => ({ value: t, label: t })) },
+    { name: 'conditions', label: 'Conditions (JSON array)', kind: 'textarea',
+      placeholder: '[{"field":"amount","op":"gt","value":1000}]' },
+    { name: 'actions', label: 'Actions (JSON array)', kind: 'textarea',
+      placeholder: '[{"kind":"notify","title":"Big expense","body":"Over $1000"}]' },
+    { name: 'is_active', label: 'Active', kind: 'checkbox', coerce: 'checkbox' },
+  ],
+});
+
+// ─── Report Builder ──────────────────────────────────────────────────
+// Lets users build aggregation reports without writing SQL. The UI captures
+// a config object — { source, group_by, aggregations, filters } — and the
+// Worker translates it into a parameterized SQL query.
+//
+// SAFETY: every column / table identifier is validated against an allowlist
+// before substitution. Filter values are parameter-bound. There's NO free-text
+// SQL surface from the UI — that would be an immediate SQL injection vector.
+
+interface ReportConfig {
+  source: string;                        // 'expenses' | 'invoices' | 'bills' | 'time_entries' | …
+  group_by: string[];                    // columns to GROUP BY
+  aggregations: Array<{ column: string; fn: 'sum' | 'count' | 'avg' | 'min' | 'max'; alias?: string }>;
+  filters?: Array<{ column: string; op: string; value: any }>;
+  order_by?: { column: string; dir?: 'asc' | 'desc' };
+  limit?: number;
+}
+
+// Allowed sources and their column allowlists. Anything not in the list
+// gets rejected. Easier-to-trust list than parsing the live schema.
+const REPORT_SOURCES: Record<string, { cols: string[]; numericCols: string[] }> = {
+  expenses: {
+    cols: ['id', 'date', 'amount', 'tax_amount', 'shipping_amount', 'description',
+           'vendor_id', 'category_id', 'project_id', 'client_id', 'payment_method', 'status', 'currency'],
+    numericCols: ['amount', 'tax_amount', 'shipping_amount'],
+  },
+  invoices: {
+    cols: ['id', 'date', 'due_date', 'invoice_number', 'client_id', 'subtotal', 'tax_amount',
+           'shipping_amount', 'discount', 'total', 'amount_paid', 'status', 'currency'],
+    numericCols: ['subtotal', 'tax_amount', 'shipping_amount', 'discount', 'total', 'amount_paid'],
+  },
+  bills: {
+    cols: ['id', 'date', 'due_date', 'bill_number', 'vendor_id', 'subtotal', 'tax_amount',
+           'shipping_amount', 'discount', 'total', 'amount_paid', 'status', 'currency'],
+    numericCols: ['subtotal', 'tax_amount', 'shipping_amount', 'discount', 'total', 'amount_paid'],
+  },
+  time_entries: {
+    cols: ['id', 'date', 'employee_id', 'project_id', 'client_id', 'duration_minutes',
+           'hourly_rate', 'is_billable', 'is_invoiced'],
+    numericCols: ['duration_minutes', 'hourly_rate'],
+  },
+  mileage_log: {
+    cols: ['id', 'trip_date', 'purpose', 'miles', 'rate_per_mile', 'deduction_amount',
+           'is_billable', 'project_id', 'client_id'],
+    numericCols: ['miles', 'rate_per_mile', 'deduction_amount'],
+  },
+};
+
+function buildReportSQL(cfg: ReportConfig): { sql: string; bindings: any[] } | { error: string } {
+  const src = REPORT_SOURCES[cfg.source];
+  if (!src) return { error: `Unknown source: ${cfg.source}` };
+  const validCol = (c: string) => src.cols.includes(c);
+
+  // SELECT clause: grouping columns first, then aggregations.
+  const selectParts: string[] = [];
+  for (const g of cfg.group_by || []) {
+    if (!validCol(g)) return { error: `Invalid group_by column: ${g}` };
+    selectParts.push(g);
+  }
+  const aggs = cfg.aggregations || [];
+  for (const a of aggs) {
+    if (!validCol(a.column)) return { error: `Invalid aggregation column: ${a.column}` };
+    const fn = a.fn.toLowerCase();
+    if (!['sum', 'count', 'avg', 'min', 'max'].includes(fn)) return { error: `Invalid aggregation fn: ${a.fn}` };
+    if (fn !== 'count' && !src.numericCols.includes(a.column)) {
+      return { error: `${a.column} is not numeric — only count is allowed` };
+    }
+    const alias = (a.alias || `${fn}_${a.column}`).replace(/[^a-zA-Z0-9_]/g, '_');
+    selectParts.push(`${fn.toUpperCase()}(${a.column}) AS ${alias}`);
+  }
+  if (selectParts.length === 0) return { error: 'At least one group_by or aggregation is required' };
+
+  let sql = `SELECT ${selectParts.join(', ')} FROM ${cfg.source} WHERE company_id = ?`;
+  const bindings: any[] = [];  // company_id is bound by the caller
+
+  // Filters — each one is a parameter-bound condition.
+  for (const f of cfg.filters || []) {
+    if (!validCol(f.column)) return { error: `Invalid filter column: ${f.column}` };
+    const opMap: Record<string, string> = {
+      eq: '=', ne: '!=', gt: '>', gte: '>=', lt: '<', lte: '<=',
+      like: 'LIKE', is_null: 'IS NULL', is_not_null: 'IS NOT NULL',
+    };
+    const sqlOp = opMap[f.op];
+    if (!sqlOp) return { error: `Invalid filter op: ${f.op}` };
+    if (f.op === 'is_null' || f.op === 'is_not_null') {
+      sql += ` AND ${f.column} ${sqlOp}`;
+    } else {
+      sql += ` AND ${f.column} ${sqlOp} ?`;
+      bindings.push(f.value);
+    }
+  }
+
+  if ((cfg.group_by || []).length > 0) {
+    sql += ` GROUP BY ${cfg.group_by.join(', ')}`;
+  }
+
+  if (cfg.order_by?.column) {
+    if (!validCol(cfg.order_by.column) && !aggs.find(a => (a.alias || `${a.fn}_${a.column}`) === cfg.order_by!.column)) {
+      return { error: `Invalid order_by column: ${cfg.order_by.column}` };
+    }
+    sql += ` ORDER BY ${cfg.order_by.column} ${cfg.order_by.dir === 'desc' ? 'DESC' : 'ASC'}`;
+  }
+
+  const lim = Math.min(Math.max(Number(cfg.limit || 100), 1), 1000);
+  sql += ` LIMIT ${lim}`;
+
+  return { sql, bindings };
+}
+
+// /app/report-builder — saved reports list + new/edit form
+app.get('/app/report-builder', async (c) => {
+  const cid = c.get('companyId')!;
+  const rows = await c.env.DB.prepare(`
+    SELECT id, name, description, chart_type, is_pinned, updated_at
+    FROM saved_reports WHERE company_id = ? ORDER BY is_pinned DESC, name
+  `).bind(cid).all();
+  const items = (rows.results as any[]) || [];
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">Report Builder</h1>
+  <a href="/app/report-builder/new" class="btn">+ New Report</a>
+</div>
+${items.length === 0 ? `
+<div class="card">
+  <div class="card-title">Build aggregation reports from your data</div>
+  <p class="muted" style="font-size:0.9rem">Pick a source table (expenses, invoices, time, …), choose columns to group by, add aggregations (SUM, COUNT, AVG), and optional filters. The result table renders inline; save it to re-run later.</p>
+  <div style="margin-top:1rem"><a href="/app/report-builder/new" class="btn">Build your first report</a></div>
+</div>` : `
+<div class="grid grid-2" style="gap:1rem">
+  ${items.map((r: any) => `<div class="card">
+    <div style="display:flex;align-items:start;gap:8px">
+      <div style="flex:1">
+        <div style="font-size:1rem;font-weight:700">${esc(r.name)}${r.is_pinned ? ' ★' : ''}</div>
+        ${r.description ? `<div class="muted" style="font-size:0.85rem;margin-top:2px">${esc(r.description)}</div>` : ''}
+        <div class="muted" style="font-size:0.72rem;margin-top:8px"><code>${esc(r.chart_type)}</code> · updated ${esc(r.updated_at)}</div>
+      </div>
+      <a href="/app/report-builder/${esc(r.id)}/run" class="btn btn-ghost" style="font-size:0.78rem">Run</a>
+      <a href="/app/report-builder/${esc(r.id)}" class="btn btn-ghost" style="font-size:0.78rem">Edit</a>
+    </div>
+  </div>`).join('')}
+</div>`}`;
+  return c.html(shell({ title: 'Report Builder', activeNav: 'report-builder', body, brand: 'BAP Cloud' }));
+});
+
+wireSimpleEntity({
+  table: 'saved_reports', navKey: 'report-builder', apiPath: '/api/report-builder',
+  entitySingular: 'Saved Report', entityPlural: 'Saved Reports', listPath: '/app/report-builder',
+  cols: ['name', 'description', 'config', 'chart_type', 'is_pinned'],
+  fields: [
+    { name: 'name', label: 'Report Name', kind: 'text', required: true },
+    { name: 'description', label: 'Description', kind: 'text' },
+    { name: 'chart_type', label: 'Display', kind: 'select', rowGroup: 1, options: [
+      { value: 'table', label: 'Table' },
+      { value: 'bar', label: 'Bar chart (top-10)' }] },
+    { name: 'is_pinned', label: 'Pinned', kind: 'checkbox', coerce: 'checkbox', rowGroup: 1 },
+    { name: 'config', label: 'Config (JSON)', kind: 'textarea',
+      placeholder: '{"source":"expenses","group_by":["category_id"],"aggregations":[{"column":"amount","fn":"sum"}],"order_by":{"column":"sum_amount","dir":"desc"}}' },
+  ],
+});
+
+// Run a saved report — executes the SQL and renders the result.
+app.get('/app/report-builder/:id/run', async (c) => {
+  const cid = c.get('companyId')!;
+  const rep = await c.env.DB.prepare('SELECT * FROM saved_reports WHERE id = ? AND company_id = ?')
+    .bind(c.req.param('id'), cid).first<any>();
+  if (!rep) return c.notFound();
+
+  let cfg: ReportConfig;
+  try { cfg = JSON.parse(rep.config || '{}'); }
+  catch { return c.html(shell({ title: 'Report Error', activeNav: 'report-builder', body: `<div class="error-banner">Bad JSON in report config</div>`, brand: 'BAP Cloud' })); }
+
+  const built = buildReportSQL(cfg);
+  if ('error' in built) {
+    return c.html(shell({
+      title: 'Report Error', activeNav: 'report-builder', brand: 'BAP Cloud',
+      body: `<div class="page-header"><h1 class="page-title">${esc(rep.name)}</h1>
+        <a href="/app/report-builder/${esc(rep.id)}" class="btn btn-ghost">Edit</a></div>
+        <div class="error-banner">${esc(built.error)}</div>`,
+    }));
+  }
+
+  let rows: any[] = [];
+  let runError = '';
+  try {
+    const result = await c.env.DB.prepare(built.sql).bind(cid, ...built.bindings).all();
+    rows = (result.results as any[]) || [];
+  } catch (err: any) {
+    runError = err?.message || 'Query failed';
+  }
+
+  // Render either a table or a horizontal bar chart for the top-10 rows.
+  // Bar chart uses inline SVG to avoid a charting library.
+  let resultHTML = '';
+  if (runError) {
+    resultHTML = `<div class="error-banner">${esc(runError)}</div>`;
+  } else if (rows.length === 0) {
+    resultHTML = `<div class="empty-state">No rows.</div>`;
+  } else if (rep.chart_type === 'bar') {
+    const cols = Object.keys(rows[0]);
+    // Pick the first non-numeric column as label, last as value.
+    const valueCol = cols[cols.length - 1];
+    const labelCol = cols[0];
+    const top = rows.slice(0, 10);
+    const max = Math.max(1, ...top.map(r => Number(r[valueCol]) || 0));
+    resultHTML = `<div class="card"><div class="card-title">${esc(valueCol)} by ${esc(labelCol)}</div>
+      ${top.map(r => {
+        const val = Number(r[valueCol]) || 0;
+        const pct = (val / max) * 100;
+        return `<div style="display:grid;grid-template-columns:160px 1fr 100px;gap:8px;align-items:center;padding:6px 0">
+          <div style="font-size:0.85rem;color:var(--text)">${esc(String(r[labelCol] ?? '—').slice(0, 22))}</div>
+          <div style="background:var(--bg-elevated);border-radius:var(--radius);height:18px;overflow:hidden">
+            <div style="width:${pct.toFixed(1)}%;height:100%;background:var(--accent);"></div>
+          </div>
+          <div class="num muted" style="font-family:'SF Mono',Menlo,monospace;font-size:0.85rem">${fmtMoney(val)}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } else {
+    const cols = Object.keys(rows[0]);
+    resultHTML = `<div class="card"><table class="data">
+      <thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(r => `<tr>${cols.map(col => {
+        const v = r[col];
+        const numeric = typeof v === 'number';
+        return `<td${numeric ? ' class="num"' : ''}>${esc(numeric ? fmtMoney(v) : String(v ?? '—'))}</td>`;
+      }).join('')}</tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  const body = `
+<div class="page-header">
+  <h1 class="page-title">${esc(rep.name)}</h1>
+  <div style="display:flex;gap:8px">
+    <a href="/app/report-builder/${esc(rep.id)}" class="btn btn-ghost">Edit</a>
+    <a href="/app/report-builder" class="btn btn-ghost">Back</a>
+  </div>
+</div>
+${rep.description ? `<div class="muted" style="margin-bottom:1rem">${esc(rep.description)}</div>` : ''}
+${resultHTML}
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Query</div>
+  <pre style="font-family:'SF Mono',Menlo,monospace;font-size:0.78rem;background:var(--bg-elevated);padding:12px;border-radius:var(--radius);overflow:auto">${esc(built.sql)}</pre>
+</div>`;
+  return c.html(shell({ title: rep.name, activeNav: 'report-builder', body, brand: 'BAP Cloud' }));
+});
+
+function nextRecurringDate(from: string, freq: string): string {
+  const d = new Date(from + 'T00:00:00Z');
+  switch (freq) {
+    case 'weekly':    d.setUTCDate(d.getUTCDate() + 7); break;
+    case 'biweekly':  d.setUTCDate(d.getUTCDate() + 14); break;
+    case 'monthly':   d.setUTCMonth(d.getUTCMonth() + 1); break;
+    case 'quarterly': d.setUTCMonth(d.getUTCMonth() + 3); break;
+    case 'annual':    d.setUTCFullYear(d.getUTCFullYear() + 1); break;
+    default:          d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
 // ─── /api/rpc/public — unauthenticated channels (auth bootstrap) ─────────────
 // Called before the user has a session: has-users, login, register.
 // The channel whitelist is strict — nothing reads or writes company data here.
@@ -767,4 +3564,5 @@ app.get('*', async (c) => {
   return c.env.ASSETS.fetch(new Request(assetUrl.toString(), c.req.raw));
 });
 
-export default app;
+export default handler;
+

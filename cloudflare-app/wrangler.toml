@@ -59,6 +59,14 @@ id = "80d2753794c3434aa35a3c39d12e3fdd"
 PORTAL_BRAND = "Business Accounting Pro"
 ENVIRONMENT = "production"
 
+# Cron trigger — fires the Worker's `scheduled()` handler. Runs daily at
+# 06:00 UTC to:
+#   - Instantiate any recurring_templates whose next_date <= today
+#   - Mark overdue invoices (due_date < today AND status='sent') as 'overdue'
+#   - Emit notifications for low-inventory items
+[triggers]
+crons = ["0 6 * * *"]
+
 # Local-dev overrides. `wrangler dev` will use these instead of [vars].
 [env.dev.vars]
 ENVIRONMENT = "development"
