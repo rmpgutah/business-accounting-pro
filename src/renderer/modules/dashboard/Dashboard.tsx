@@ -946,7 +946,7 @@ const Dashboard: React.FC = () => {
           in print/PDF, where .report-summary-tiles collapses it to an inline
           summary line. */}
       {isOn('kpis') && (
-      <div className={`grid ${isMini('kpis') ? 'grid-cols-8' : 'grid-cols-4'} report-summary-tiles print-only`} style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
+      <div className={`hidden print:grid ${isMini('kpis') ? 'grid-cols-8' : 'grid-cols-4'} report-summary-tiles`} style={{ gap: 'var(--cust-tile-gap, 20px)' }}>
         <KpiTile
           label="Revenue"
           value={stats.revenue}
