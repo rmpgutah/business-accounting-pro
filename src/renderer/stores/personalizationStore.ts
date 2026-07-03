@@ -46,9 +46,9 @@ export interface NotificationPref {
 }
 
 export const DEFAULT_ACCENTS: AccentSlots = {
-  primary: '#10b981',   // emerald brand
-  income: '#34d399',
-  expense: '#fb7185',   // warm rose
+  primary: '#3b82f6',   // platinum blue
+  income: '#4ade80',
+  expense: '#ef4444',   // true red
   warning: '#f59e0b',   // amber
   blue: '#60a5fa',      // informational only
   purple: '#c084fc',
