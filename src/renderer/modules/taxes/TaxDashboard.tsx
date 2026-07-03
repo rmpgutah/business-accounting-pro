@@ -169,8 +169,10 @@ const TaxDashboard: React.FC = () => {
   }, [currentYear, taxPayments, quarterlyAmount]);
 
   // Prefer the earliest unpaid quarter — including overdue ones — so the user
-  // isn't silently skipped past a missed deadline.
-  const nextDue = quarters.find((q) => !q.paid);
+  // isn't silently skipped past a missed deadline. Quarters with nothing
+  // actually owed (e.g. taxable income floored at $0) have no payment to
+  // surface here.
+  const nextDue = quarters.find((q) => !q.paid && q.amount > 0);
 
   const effectiveRate = netIncome > 0 ? (totalEstimatedTax / netIncome) * 100 : 0;
 
@@ -188,7 +190,6 @@ const TaxDashboard: React.FC = () => {
       {nextDue && (
         <div
           className="block-card p-4 border-l-2 border-l-accent-warning flex items-center gap-3"
-          style={{ borderRadius: '2px' }}
         >
           <AlertTriangle size={18} className="text-accent-warning flex-shrink-0" />
           <div className="flex-1">
@@ -316,7 +317,7 @@ const TaxDashboard: React.FC = () => {
           <tbody>
             {quarters.map((q) => {
               const remaining = Math.max(0, q.amount - q.paidAmount);
-              const overdue = !q.paid && q.dueDate < today;
+              const overdue = !q.paid && q.dueDate < today && remaining > 0;
               return (
                 <tr key={q.quarter}>
                   <td className="text-text-primary font-medium text-sm">{q.quarter}</td>
