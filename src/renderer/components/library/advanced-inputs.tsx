@@ -221,7 +221,7 @@ export function Stepper({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: '6px 0 0 6px',
+            borderRadius: 'var(--app-radius) 0 0 var(--app-radius)',
             opacity: val <= min ? 0.4 : 1,
           }}
           aria-label="Decrease"
@@ -252,7 +252,7 @@ export function Stepper({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: '0 6px 6px 0',
+            borderRadius: '0 var(--app-radius) var(--app-radius) 0',
             opacity: val >= max ? 0.4 : 1,
           }}
           aria-label="Increase"
