@@ -229,10 +229,12 @@ const Sidebar: React.FC = () => {
         borderColor: 'var(--structure)',
       }}
     >
+      {/* Gold stripe at the very top — brand accent bar */}
+      <div style={{ height: '3px', background: 'var(--color-accent-warning)', flexShrink: 0 }} />
       {/* App Header — pt-10 leaves room for macOS traffic lights on hiddenInset title bar */}
       <div
         className="flex items-center gap-2.5 px-3 pt-10 pb-2 shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        style={{ borderBottom: '1px solid var(--color-accent-warning)' }}
       >
         <img
           src={logoUrl}

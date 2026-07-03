@@ -46,11 +46,11 @@ export interface NotificationPref {
 }
 
 export const DEFAULT_ACCENTS: AccentSlots = {
-  primary: '#10b981',   // emerald brand
+  primary: '#60a5fa',   // sky blue brand
   income: '#34d399',
   expense: '#fb7185',   // warm rose
-  warning: '#f59e0b',   // amber
-  blue: '#60a5fa',      // informational only
+  warning: '#f59e0b',   // amber / gold
+  blue: '#60a5fa',      // informational
   purple: '#c084fc',
 };
 
@@ -413,13 +413,6 @@ export const usePersonalizationStore = create<PersonalizationState>()(
           const raw = await api.getSetting(`personalization:${userId}`);
           if (!raw) return;
           const data = JSON.parse(raw);
-          // Upgrade legacy blue-brand accents to the Warm Structured Glass
-          // defaults (mirrors the persist migrate). Cloud settings predate the
-          // retarget, so a straight set() would re-introduce the old blue
-          // --accent-primary on every login, leaving buttons/tabs/toggles blue.
-          if (data?.accents?.primary === '#60a5fa') {
-            data.accents = { ...DEFAULT_ACCENTS };
-          }
           set({ ...data });
         } catch {
           // ignore
@@ -428,12 +421,10 @@ export const usePersonalizationStore = create<PersonalizationState>()(
     }),
     {
       name: 'bap-personalization',
-      // Bumped for the Warm Structured Glass retarget: users who never customized
-      // their accent still hold the legacy blue brand in persisted state. Reset the
-      // accent set to the new emerald/amber/rose defaults only if it's untouched.
-      version: 2,
+      version: 3,
       migrate: (persisted: any) => {
-        if (persisted?.accents?.primary === '#60a5fa') {
+        // v3: blue is now the intended primary — undo any forced emerald reset
+        if (persisted?.accents?.primary === '#10b981') {
           persisted.accents = { ...DEFAULT_ACCENTS };
         }
         return persisted;

@@ -641,7 +641,7 @@ const ClientsModule: React.FC = () => {
                           <td className="text-text-primary font-medium text-xs">{c.name}</td>
                           <td className="text-text-secondary text-xs">{c.email || '--'}</td>
                           <td>
-                            <span className={`block-badge ${c.status === 'active' ? 'block-badge-green' : c.status === 'prospect' ? 'block-badge-blue' : 'block-badge-default'}`}>
+                            <span className={`block-badge ${c.status === 'active' ? 'block-badge-income' : c.status === 'prospect' ? 'block-badge-blue' : 'block-badge-expense'}`}>
                               {c.status}
                             </span>
                           </td>

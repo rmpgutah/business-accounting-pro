@@ -44,6 +44,14 @@ const FixedAssetsModule = lazy(() => import('./modules/fixed-assets'));
 const AutomationsModule = lazy(() => import('./modules/automations'));
 const RulesModule = lazy(() => import('./modules/rules'));
 const DebtCollectionModule = lazy(() => import('./modules/debt-collection'));
+const LoansModule = lazy(() => import('./modules/loans'));
+const VendorsApModule = lazy(() => import('./modules/vendors-ap'));
+const QuotesModule = lazy(() => import('./modules/quotes'));
+const MileageModule = lazy(() => import('./modules/mileage'));
+const CockpitModule = lazy(() => import('./modules/cockpit/Cockpit'));
+const EsignModule = lazy(() => import('./modules/esign'));
+const ComponentLibraryModule = lazy(() => import('./modules/component-library/ComponentLibrary'));
+const CustomizationModule = lazy(() => import('./modules/customization/CustomizationCenter'));
 
 // ─── Module Name Map ────────────────────────────────────
 const MODULE_NAMES: Record<string, string> = {
@@ -78,6 +86,14 @@ const MODULE_NAMES: Record<string, string> = {
   'purchase-orders': 'Purchase Orders',
   'fixed-assets': 'Fixed Assets',
   'debt-collection': 'Debt Collection',
+  loans: 'Loans',
+  'vendors-ap': 'Vendors & AP',
+  quotes: 'Quotes',
+  mileage: 'Mileage',
+  cockpit: 'Intelligence Cockpit',
+  esign: 'E-Sign',
+  'component-library': 'Component Library',
+  customization: 'Customization',
 };
 
 // ─── Loading Fallback ────────────────────────────────────
@@ -126,6 +142,14 @@ const ModuleView: React.FC = () => {
       case 'automations': return <AutomationsModule />;
       case 'rules': return <RulesModule />;
       case 'debt-collection': return <DebtCollectionModule />;
+      case 'loans': return <LoansModule />;
+      case 'vendors-ap': return <VendorsApModule />;
+      case 'quotes': return <QuotesModule />;
+      case 'mileage': return <MileageModule />;
+      case 'cockpit': return <CockpitModule />;
+      case 'esign': return <EsignModule />;
+      case 'component-library': return <ComponentLibraryModule />;
+      case 'customization': return <CustomizationModule />;
       default:
         return (
           <div className="flex items-center justify-center h-full p-6">

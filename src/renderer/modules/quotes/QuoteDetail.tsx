@@ -129,7 +129,7 @@ const activityIcon = (t: string): React.ReactNode => {
     case 'sent':
       return <Send size={12} className="text-accent-blue" />;
     case 'viewed':
-      return <Eye size={12} className="text-accent-info" />;
+      return <Eye size={12} className="text-accent-blue" />;
     case 'accepted':
     case 'converted':
       return <CheckCircle2 size={12} className="text-accent-income" />;

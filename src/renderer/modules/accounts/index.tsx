@@ -10,41 +10,16 @@ import JournalEntryForm from './JournalEntryForm';
 import { useAppStore } from '../../stores/appStore';
 import api from '../../lib/api';
 
-// GLAnalytics is owned by this agent. Other tabs (Trial Balance, GL,
-// Reconciliation, Period Close, Audit) are owned by sibling agents and are
-// rendered through a dynamic require() at runtime so this file builds even
-// before they land. If a sibling module is absent we fall back to a stub.
+// All sibling tabs lazy-loaded from their real locations. TrialBalance and
+// GeneralLedger live in ../reports/, Reconciliation/PeriodClose in this dir,
+// AuditTrail in ../audit/. Direct imports replace the old runtime-glob loader
+// that mis-resolved sibling modules and always rendered "Coming Soon" stubs.
 const GLAnalytics = lazy(() => import('./GLAnalytics'));
-
-const ComingSoon: React.FC<{ name: string }> = ({ name }) => (
-  <div className="block-card text-text-muted text-sm" style={{ padding: 24 }}>
-    {name} is being prepared by a sibling agent. Check back shortly.
-  </div>
-);
-
-// Loader that tries a runtime require; if not yet present, renders the stub.
-const SiblingTab: React.FC<{ name: string; modulePath: string }> = ({ name, modulePath }) => {
-  const [Comp, setComp] = useState<React.ComponentType | null>(null);
-  const [tried, setTried] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    // @ts-ignore — Vite resolves this dynamic import via glob; missing modules
-    // resolve to undefined at build time, so we accept the rejection silently.
-    const all = import.meta.glob('./*.tsx');
-    const key = `./${modulePath}.tsx`;
-    if (all[key]) {
-      (all[key] as any)().then((mod: any) => {
-        if (!cancelled) setComp(() => (mod.default || mod[modulePath]) as React.ComponentType);
-      }).catch(() => { if (!cancelled) setTried(true); });
-    } else {
-      setTried(true);
-    }
-    return () => { cancelled = true; };
-  }, [modulePath]);
-  if (Comp) return <Comp />;
-  if (tried) return <ComingSoon name={name} />;
-  return <div className="text-text-muted text-sm">Loading…</div>;
-};
+const TrialBalance = lazy(() => import('../reports/TrialBalance'));
+const GeneralLedger = lazy(() => import('../reports/GeneralLedger'));
+const Reconciliation = lazy(() => import('./Reconciliation'));
+const PeriodClose = lazy(() => import('./PeriodClose'));
+const AuditTrail = lazy(() => import('../audit'));
 
 // ─── Types ──────────────────────────────────────────────
 type Tab =
@@ -284,12 +259,12 @@ const AccountsModule: React.FC = () => {
       )}
 
       <Suspense fallback={<div className="text-text-muted text-sm">Loading…</div>}>
-        {activeTab === 'trial-balance' && <SiblingTab name="Trial Balance" modulePath="TrialBalance" />}
-        {activeTab === 'general-ledger' && <SiblingTab name="General Ledger" modulePath="GeneralLedger" />}
-        {activeTab === 'reconciliation' && <SiblingTab name="Reconciliation" modulePath="Reconciliation" />}
-        {activeTab === 'period-close' && <SiblingTab name="Period Close" modulePath="PeriodClose" />}
+        {activeTab === 'trial-balance' && <TrialBalance />}
+        {activeTab === 'general-ledger' && <GeneralLedger />}
+        {activeTab === 'reconciliation' && <Reconciliation />}
+        {activeTab === 'period-close' && <PeriodClose />}
         {activeTab === 'analytics' && <GLAnalytics />}
-        {activeTab === 'audit' && <SiblingTab name="Audit Trail" modulePath="AuditTrail" />}
+        {activeTab === 'audit' && <AuditTrail />}
       </Suspense>
 
       {/* Account Form Modal */}

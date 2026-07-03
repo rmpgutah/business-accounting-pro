@@ -269,7 +269,7 @@ const QuotesModule: React.FC = () => {
       case 'sent':
         return <ArrowRight size={12} className="text-accent-blue" />;
       case 'viewed':
-        return <Bell size={12} className="text-accent-info" />;
+        return <Bell size={12} className="text-accent-blue" />;
       case 'accepted':
       case 'converted':
         return <TrendingUp size={12} className="text-accent-income" />;

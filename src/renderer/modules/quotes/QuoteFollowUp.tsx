@@ -464,8 +464,8 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
           style={{ borderBottom: '1px solid var(--hairline)' }}
         >
           <div className="flex items-center gap-2">
-            <Eye size={14} className="text-accent-info" />
-            <span className="text-xs font-semibold text-accent-info uppercase tracking-wider">
+            <Eye size={14} className="text-accent-blue" />
+            <span className="text-xs font-semibold text-accent-blue uppercase tracking-wider">
               Recently Viewed by Client (Engagement Signals)
             </span>
           </div>
