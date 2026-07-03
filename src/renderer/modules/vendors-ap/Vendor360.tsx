@@ -58,12 +58,24 @@ const Vendor360: React.FC<{ vendorId: string; onBack: () => void }> = ({ vendorI
 
       {/* Header */}
       <div className="block-card p-4 flex items-start justify-between">
-        <div>
-          <div className="text-xl font-bold text-text-primary">{v.name || 'Vendor'}</div>
-          <div className="flex items-center gap-2 mt-1">
-            <ClassificationBadge def={VENDOR_TYPE} value={v.vendor_type} size="xs" />
-            <ClassificationBadge def={VENDOR_APPROVAL} value={v.approval_status} size="xs" />
-            {v.email && <span className="text-[11px] text-text-muted">{v.email}</span>}
+        <div className="flex items-start gap-3">
+          <div
+            className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-bg-elevated border border-border-primary overflow-hidden"
+            style={{ borderRadius: 'var(--app-radius)' }}
+          >
+            {v.logo_data && /^data:image\//i.test(String(v.logo_data)) ? (
+              <img src={v.logo_data} alt={v.name || 'Vendor'} className="w-full h-full object-contain" />
+            ) : (
+              <span className="text-sm font-bold text-text-muted">{v.name?.[0]?.toUpperCase() ?? '?'}</span>
+            )}
+          </div>
+          <div>
+            <div className="text-xl font-bold text-text-primary">{v.name || 'Vendor'}</div>
+            <div className="flex items-center gap-2 mt-1">
+              <ClassificationBadge def={VENDOR_TYPE} value={v.vendor_type} size="xs" />
+              <ClassificationBadge def={VENDOR_APPROVAL} value={v.approval_status} size="xs" />
+              {v.email && <span className="text-[11px] text-text-muted">{v.email}</span>}
+            </div>
           </div>
         </div>
         {score && (

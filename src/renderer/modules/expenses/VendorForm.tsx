@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Building2 } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Building2, X } from 'lucide-react';
 import api from '../../lib/api';
 
 // ─── Types ──────────────────────────────────────────────
@@ -12,6 +12,7 @@ interface VendorFormData {
   payment_terms: string;
   notes: string;
   status: string;
+  logo_data: string | null;
 }
 
 interface VendorFormProps {
@@ -29,6 +30,7 @@ const emptyForm: VendorFormData = {
   payment_terms: '',
   notes: '',
   status: 'active',
+  logo_data: null,
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -56,6 +58,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
             payment_terms: data.payment_terms != null ? String(data.payment_terms) : '',
             notes: data.notes || '',
             status: data.status || 'active',
+            logo_data: data.logo_data || null,
           });
         }
       } catch (err) {
@@ -74,6 +77,24 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
+
+  const handleLogoUpload = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/svg+xml,image/webp';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.size > 500 * 1024) { alert('Logo must be smaller than 500KB'); return; }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        setForm((prev) => ({ ...prev, logo_data: dataUrl }));
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +117,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
         payment_terms: form.payment_terms ? parseInt(form.payment_terms, 10) || 0 : 0,
         notes: form.notes || null,
         status: form.status,
+        logo_data: form.logo_data || null,
       };
 
       if (isEditing && vendorId) {
@@ -144,6 +166,39 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Logo */}
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                  Logo
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  {form.logo_data ? (
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img
+                        src={form.logo_data}
+                        alt="Vendor logo"
+                        style={{ height: 56, maxWidth: 120, objectFit: 'contain', borderRadius: '6px', border: '1px solid var(--color-border-primary)' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, logo_data: null }))}
+                        style={{ position: 'absolute', top: -6, right: -6, background: 'var(--color-accent-expense)', color: '#fff', borderRadius: '50%', width: 18, height: 18, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="Remove logo"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ width: 80, height: 56, borderRadius: '6px', border: '1px dashed var(--color-border-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>No logo</span>
+                    </div>
+                  )}
+                  <button type="button" className="block-btn" onClick={handleLogoUpload}>
+                    {form.logo_data ? 'Replace Logo' : 'Upload Logo'}
+                  </button>
+                </div>
+              </div>
+
               {/* Name */}
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
