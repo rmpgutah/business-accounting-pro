@@ -87,7 +87,7 @@ const AuditTrailView: React.FC<{ debtId: string }> = ({ debtId }) => {
               dispute_filed: 'Dispute Filed', record_deleted: 'Record Deleted', interest_recalculated: 'Interest Recalculated',
             };
             return (
-              <div key={entry.id} className="flex items-start gap-3 px-3 py-2 border-l-2 border-border-primary text-xs hover:bg-bg-hover transition-colors" style={{ borderRadius: '0 6px 6px 0' }}>
+              <div key={entry.id} className="flex items-start gap-3 px-3 py-2 border-l-2 border-border-primary text-xs hover:bg-bg-hover transition-colors" style={{ borderRadius: '0 var(--app-radius) var(--app-radius) 0' }}>
                 <span className="text-text-muted font-mono whitespace-nowrap">{formatDate(entry.performed_at, { style: 'short' })}</span>
                 <div className="flex-1 min-w-0">
                   <span className="text-text-primary font-semibold">{labels[entry.action] || entry.action}</span>
@@ -517,7 +517,7 @@ const LegalTimeline: React.FC<{ debtId: string }> = ({ debtId }) => {
             <div
               key={a.id}
               className="flex items-start gap-3 px-3 py-3 border-l-2 border-accent-blue hover:bg-bg-hover transition-colors"
-              style={{ borderRadius: '0 6px 6px 0' }}
+              style={{ borderRadius: '0 var(--app-radius) var(--app-radius) 0' }}
             >
               <div className="flex-shrink-0 text-center" style={{ minWidth: 80 }}>
                 <div className="text-xs font-mono text-text-muted">{a.filing_date || formatDate(a.created_at, { style: 'short' })}</div>
