@@ -395,7 +395,7 @@ const ComplianceAuditTrail: React.FC<{ debtId: string }> = ({ debtId }) => {
             <div
               key={entry.id || i}
               className={`flex items-start gap-3 px-3 py-2 text-xs border-l-2 ${entry.source === 'compliance' ? 'border-accent-blue' : 'border-border-primary'} hover:bg-bg-hover transition-colors`}
-              style={{ borderRadius: '0 6px 6px 0' }}
+              style={{ borderRadius: '0 var(--app-radius) var(--app-radius) 0' }}
             >
               <span className="text-text-muted font-mono whitespace-nowrap flex-shrink-0">{entry.timestamp || '-'}</span>
               <div className="flex-1 min-w-0">

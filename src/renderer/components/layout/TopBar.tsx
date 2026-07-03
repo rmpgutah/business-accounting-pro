@@ -187,7 +187,7 @@ const TopBar: React.FC = () => {
         {/* @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property */}
         <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' }}>
           <button
-            className="flex items-center gap-2 px-2.5 py-1.5 text-text-primary transition-all duration-150"
+            className="flex items-center gap-2 px-2.5 py-1.5 min-w-0 text-text-primary transition-all duration-150"
             style={{ borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.06)' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
@@ -203,14 +203,14 @@ const TopBar: React.FC = () => {
         {/* Center — Search trigger */}
         <button
           onClick={() => setSearchOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 w-80 text-text-muted text-sm transition-all duration-150"
+          className="flex items-center gap-2 px-3 py-1.5 w-80 min-w-0 text-text-muted text-sm transition-all duration-150"
           // @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property
           style={{ borderRadius: '6px', WebkitAppRegion: 'no-drag', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
         >
-          <Search size={14} />
-          <span className="flex-1 text-left">Search...</span>
+          <Search size={14} className="shrink-0" />
+          <span className="flex-1 text-left truncate min-w-0">Search...</span>
           <kbd
             className="text-[10px] px-1.5 py-0.5 bg-bg-tertiary border border-border-secondary text-text-muted"
             style={{ borderRadius: '6px' }}

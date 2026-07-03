@@ -152,7 +152,7 @@ const BudgetVsActualReport: React.FC = () => {
 
       <div class="stats">
         <div class="stat" style="border-left:3px solid #0f172a;"><div class="stat-lbl">Budget</div><div class="stat-val">${fmt.format(totalBudgeted)}</div></div>
-        <div class="stat" style="border-left:3px solid #2563eb;"><div class="stat-lbl">Actual Spend</div><div class="stat-val" style="color:#2563eb;">${fmt.format(totalActual)}</div></div>
+        <div class="stat" style="border-left:3px solid #3b82f6;"><div class="stat-lbl">Actual Spend</div><div class="stat-val" style="color:#3b82f6;">${fmt.format(totalActual)}</div></div>
         <div class="stat" style="border-left:3px solid ${totalVariance >= 0 ? '#16a34a' : '#dc2626'};"><div class="stat-lbl">Variance</div><div class="stat-val" style="color:${totalVariance >= 0 ? '#16a34a' : '#dc2626'};">${fmt.format(totalVariance)}</div></div>
         <div class="stat" style="border-left:3px solid ${utilizationColor};"><div class="stat-lbl">Utilization</div><div class="stat-val" style="color:${utilizationColor};">${utilizationPct}%</div></div>
       </div>

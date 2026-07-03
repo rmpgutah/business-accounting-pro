@@ -2186,10 +2186,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               {selectedVendor && (
                 <div className="col-span-3 flex items-center gap-3 mt-1">
                   {selectedVendor.is_1099_eligible ? (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>1099-RELEVANT</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>1099-RELEVANT</span>
                   ) : null}
                   {selectedVendor.is_1099_eligible && selectedVendor.w9_status !== 'collected' && selectedVendor.w9_status !== 'on_file' && (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#dc262622', color: '#f87171' }}
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-expense-bg)', color: 'var(--color-accent-expense)' }}
                       title="1099-eligible vendor without a W-9 on file — backup withholding may apply">
                       MISSING W-9 — BACKUP WITHHOLDING WARNING
                     </span>

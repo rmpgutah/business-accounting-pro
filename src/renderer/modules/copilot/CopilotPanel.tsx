@@ -386,14 +386,14 @@ const CopilotPanel: React.FC<CopilotPanelProps> = ({ onClose }) => {
         <div className="flex items-center gap-1">
           <button
             onClick={startNewThread}
-            className="p-1.5 rounded hover:bg-white/5 transition-colors"
+            className="p-1.5 rounded hover:bg-bg-hover transition-colors"
             title="New conversation"
           >
             <Plus size={14} className="text-text-secondary" />
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 rounded hover:bg-white/5 transition-colors"
+            className="p-1.5 rounded hover:bg-bg-hover transition-colors"
             title="Close"
           >
             <X size={14} className="text-text-secondary" />
@@ -414,7 +414,7 @@ const CopilotPanel: React.FC<CopilotPanelProps> = ({ onClose }) => {
               <button
                 key={t.id}
                 onClick={() => loadThread(t.id)}
-                className={`flex items-center justify-between w-full px-4 py-2 text-left hover:bg-white/5 transition-colors ${t.id === threadId ? 'bg-white/5' : ''}`}
+                className={`flex items-center justify-between w-full px-4 py-2 text-left hover:bg-bg-hover transition-colors ${t.id === threadId ? 'bg-bg-hover' : ''}`}
               >
                 <div className="flex flex-col min-w-0">
                   <span className="text-[12px] text-text-primary truncate">{t.title || 'Untitled'}</span>
@@ -422,7 +422,7 @@ const CopilotPanel: React.FC<CopilotPanelProps> = ({ onClose }) => {
                 </div>
                 <button
                   onClick={(e) => deleteThread(t.id, e)}
-                  className="p-1 rounded hover:bg-white/10 shrink-0"
+                  className="p-1 rounded hover:bg-bg-hover shrink-0"
                   title="Delete"
                 >
                   <Trash2 size={11} className="text-text-muted" />
@@ -488,7 +488,7 @@ const CopilotPanel: React.FC<CopilotPanelProps> = ({ onClose }) => {
           {streaming ? (
             <button
               onClick={stopStreaming}
-              className="shrink-0 p-1.5 rounded transition-colors hover:bg-white/10"
+              className="shrink-0 p-1.5 rounded transition-colors hover:bg-bg-hover"
               title="Stop"
             >
               <Square size={14} style={{ color: 'var(--color-accent-expense)' }} />
