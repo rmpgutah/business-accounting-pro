@@ -7285,8 +7285,8 @@ export function registerIpcHandlers(): void {
   });
 
   // ─── Print / Preview System ─────────────────────────────
-  ipcMain.handle('print:preview', (_event, { html, title }: { html: string; title: string }) => {
-    openPrintPreview(html, title);
+  ipcMain.handle('print:preview', (_event, { html, title, pdfOptions }: { html: string; title: string; pdfOptions?: PDFOptions & { defaultFilename?: string } }) => {
+    openPrintPreview(html, title, pdfOptions);
     return { success: true };
   });
 

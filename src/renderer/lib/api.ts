@@ -335,8 +335,18 @@ const api = {
     invoke('accounts:watchlist-check', { companyId }),
 
   // Print / Preview
-  printPreview: (html: string, title: string): Promise<{ success?: boolean }> =>
-    invoke('print:preview', { html, title }),
+  printPreview: (
+    html: string,
+    title: string,
+    pdfOptions?: {
+      pageSize?: 'A4' | 'Letter' | 'Legal' | 'Tabloid';
+      landscape?: boolean;
+      margins?: { top: number; bottom: number; left: number; right: number };
+      printBackground?: boolean;
+      noPageNumbers?: boolean;
+    }
+  ): Promise<{ success?: boolean }> =>
+    invoke('print:preview', { html, title, ...(pdfOptions ? { pdfOptions } : {}) }),
   saveToPDF: (
     html: string,
     title: string,

@@ -31,6 +31,11 @@ export type PDFOptions = {
   margins?: { top: number; bottom: number; left: number; right: number };
   printBackground?: boolean;
   metadata?: PDFMetadata;
+  // Suppresses the "Page X of Y" footer entirely. Needed for documents with
+  // an exact, precision-critical layout (e.g. checks aligned to check-stock
+  // paper) where the reserved footer margin would compress the content and
+  // a page-number stamp wouldn't belong on the document anyway.
+  noPageNumbers?: boolean;
 };
 
 // Page-layout defaults — metadata is intentionally NOT here (it's
@@ -43,6 +48,7 @@ const DEFAULT_PDF_OPTIONS: PageLayoutOptions = {
   landscape: false,
   margins: { top: 0.4, bottom: 0.4, left: 0.4, right: 0.4 },
   printBackground: true,
+  noPageNumbers: false,
 };
 
 function resolvePDFOptions(opts?: PDFOptions): PageLayoutOptions {
@@ -51,6 +57,7 @@ function resolvePDFOptions(opts?: PDFOptions): PageLayoutOptions {
     landscape: opts?.landscape ?? DEFAULT_PDF_OPTIONS.landscape,
     margins: opts?.margins ?? DEFAULT_PDF_OPTIONS.margins,
     printBackground: opts?.printBackground ?? DEFAULT_PDF_OPTIONS.printBackground,
+    noPageNumbers: opts?.noPageNumbers ?? DEFAULT_PDF_OPTIONS.noPageNumbers,
   };
 }
 
@@ -66,9 +73,12 @@ const PDF_FOOTER_TEMPLATE =
   'Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>';
 
 function toPrintToPDFOptions(layout: PageLayoutOptions) {
+  // noPageNumbers is a layout instruction, not a printToPDF option — drop it
+  // from the object passed to Chromium (which rejects unknown properties).
+  const { noPageNumbers, ...rest } = layout;
   return {
-    ...layout,
-    displayHeaderFooter: true,
+    ...rest,
+    displayHeaderFooter: !noPageNumbers,
     headerTemplate: PDF_HEADER_TEMPLATE,
     footerTemplate: PDF_FOOTER_TEMPLATE,
   };

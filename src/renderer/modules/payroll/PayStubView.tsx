@@ -285,7 +285,11 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
     };
 
     const html = generatePaycheckHTML(stubWithYTD, emp, activeCompany, run, { isVoid });
-    await api.printPreview(html, `${isVoid ? 'VOID ' : ''}Paycheck — ${emp?.name || 'Employee'}`);
+    await api.printPreview(html, `${isVoid ? 'VOID ' : ''}Paycheck — ${emp?.name || 'Employee'}`, {
+      pageSize: 'Letter',
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      noPageNumbers: true,
+    });
   };
 
   // ─── Render ─────────────────────────────────────────

@@ -1439,7 +1439,11 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
                       bodies.push(extractCheckBody(checkHtml));
                     }
                     const combined = wrapBatchChecks(bodies);
-                    await api.printPreview(combined, 'Payroll Checks — All Employees');
+                    await api.printPreview(combined, 'Payroll Checks — All Employees', {
+                      pageSize: 'Letter',
+                      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+                      noPageNumbers: true,
+                    });
                   }}
                 >
                   <Printer size={14} />
