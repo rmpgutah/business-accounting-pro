@@ -251,7 +251,10 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Navigation — user-customized order with Pinned + More overflow */}
-      <nav className="flex-1 overflow-y-auto py-2 scrollbar-thin">
+      <nav
+        className="flex-1 overflow-y-auto py-2 scrollbar-thin"
+        style={{ scrollbarColor: 'var(--color-border-secondary) var(--color-bg-primary)' }}
+      >
         {/* ALWAYS-VISIBLE: rendered above everything, ignores all personalization */}
         {alwaysVisible.length > 0 && (
           <div>

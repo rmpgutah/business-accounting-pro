@@ -22,7 +22,7 @@ export const GlobalToolbar: React.FC = () => {
     <div
       style={{
         position: 'fixed',
-        top: 12,
+        top: 68,
         right: 12,
         zIndex: 1000,
         display: 'flex',
