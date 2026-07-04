@@ -33,6 +33,7 @@ interface ExpenseFormData {
   category_id: string;
   account_id: string;
   vendor_id: string;
+  vendor_location_id: string;
   payment_method: string;
   project_id: string;
   client_id: string;
@@ -306,6 +307,7 @@ const emptyForm: ExpenseFormData = {
   category_id: '',
   account_id: '',
   vendor_id: '',
+  vendor_location_id: '',
   payment_method: '',
   project_id: '',
   client_id: '',
