@@ -1130,7 +1130,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="block truncate max-w-[160px]">{debt.debtor_name}</span>
                         {!!debt.has_plan && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>PLAN</span>
                         )}
                         {!!debt.has_pending_settlement && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
@@ -1151,7 +1151,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
                         )}
                         {!!debt.interest_frozen && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#3b82f622', color: '#60a5fa' }}>FROZEN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>FROZEN</span>
                         )}
                         {debt.statute_of_limitations_date && (() => {
                           const dLeft = Math.ceil((new Date(debt.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
@@ -1286,7 +1286,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="block truncate max-w-[160px]">{debt.debtor_name}</span>
                         {!!debt.has_plan && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#2563eb22', color: '#60a5fa' }}>PLAN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>PLAN</span>
                         )}
                         {!!debt.has_pending_settlement && (
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#0891b222', color: '#06b6d4' }}>OFFER</span>
@@ -1307,7 +1307,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#d9770622', color: '#f59e0b' }}>DNC</span>
                         )}
                         {!!debt.interest_frozen && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#3b82f622', color: '#60a5fa' }}>FROZEN</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>FROZEN</span>
                         )}
                         {debt.statute_of_limitations_date && (() => {
                           const dLeft = Math.ceil((new Date(debt.statute_of_limitations_date).getTime() - Date.now()) / 86400000);
