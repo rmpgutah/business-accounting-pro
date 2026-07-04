@@ -1,6 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
 import api from '../../lib/api';
+import { useCompanyStore } from '../../stores/companyStore';
+import { useCustomizationStore } from '../../stores/customizationStore';
+import { optionKey } from '../../customization/registry';
+import ClientContacts, { ClientContact } from './ClientContacts';
+import {
+  CLIENT_TIER, CLIENT_INDUSTRY, CLIENT_SEGMENT, CLIENT_LIFECYCLE, CLIENT_RISK,
+  ClassificationSelect, riskRatingFromAvgDaysLate,
+} from '../../lib/classifications';
 
 // ─── Types ──────────────────────────────────────────────
 interface ClientData {
@@ -19,6 +27,24 @@ interface ClientData {
   tax_id: string;
   status: 'active' | 'inactive' | 'prospect';
   notes: string;
+  // Extended profile
+  industry: string;
+  website: string;
+  company_size: string;
+  credit_limit: number;
+  preferred_payment_method: string;
+  assigned_rep_id: string;
+  internal_notes: string;
+  tags: string;
+  tags_input: string;
+  // Default Invoice Settings
+  default_payment_terms: string;
+  default_late_fee_pct: number;
+  // Classifications
+  tier: string;
+  segment: string;
+  lifecycle_stage: string;
+  risk_rating: string;
 }
 
 const EMPTY_CLIENT: ClientData = {
@@ -36,7 +62,55 @@ const EMPTY_CLIENT: ClientData = {
   tax_id: '',
   status: 'active',
   notes: '',
+  // Extended profile
+  industry: '',
+  website: '',
+  company_size: '',
+  credit_limit: 0,
+  preferred_payment_method: '',
+  assigned_rep_id: '',
+  internal_notes: '',
+  tags: '',
+  tags_input: '',
+  // Default Invoice Settings
+  default_payment_terms: '',
+  default_late_fee_pct: 0,
+  // Classifications
+  tier: '',
+  segment: '',
+  lifecycle_stage: '',
+  risk_rating: '',
 };
+
+// Seed a NEW client from the Clients › Defaults customization options. Mirrors
+// the Expense form's robust pattern: a customization default is honored only
+// when it's a VALID value for the field; otherwise the EMPTY_CLIENT default is
+// kept. Descriptor values are labels (status enum, "net30", "United States")
+// that don't map 1:1 to the form's field types, so each is validated/converted.
+function seededClientDefaults(): Partial<ClientData> {
+  const get = (id: string) => useCustomizationStore.getState().get(optionKey('clients', id));
+  const out: Partial<ClientData> = {};
+
+  const status = String(get('clients-default-status') ?? '').trim().toLowerCase();
+  if (status === 'active' || status === 'inactive' || status === 'prospect') out.status = status;
+
+  // Payment terms: descriptor is a label ("net30", "due_on_receipt"); field is a number of days.
+  const ptRaw = String(get('clients-default-payment-terms') ?? '').trim().toLowerCase();
+  if (ptRaw) {
+    if (ptRaw === 'due_on_receipt' || ptRaw === 'receipt' || ptRaw === 'net0') out.payment_terms = 0;
+    else { const m = ptRaw.match(/\d+/); if (m) out.payment_terms = Number(m[0]); }
+  }
+
+  // Country: descriptor may be a name ("United States"); field stores a code.
+  const country = String(get('clients-default-country') ?? '').trim();
+  if (/^[A-Za-z]{2}$/.test(country)) out.country = country.toUpperCase();
+  else if (/^(united states|usa|u\.?s\.?a?\.?)$/i.test(country)) out.country = 'US';
+
+  const creditLimit = Number(get('clients-default-credit-limit'));
+  if (Number.isFinite(creditLimit) && creditLimit > 0) out.credit_limit = creditLimit;
+
+  return out;
+}
 
 interface ClientFormProps {
   clientId?: string | null;
@@ -60,11 +134,19 @@ const Field: React.FC<{
 
 // ─── Component ──────────────────────────────────────────
 const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) => {
-  const [data, setData] = useState<ClientData>({ ...EMPTY_CLIENT });
-  const [paymentTermsRaw, setPaymentTermsRaw] = useState<string>(String(EMPTY_CLIENT.payment_terms));
+  // New clients seed from the Clients › Defaults customization (validated);
+  // editing a client ignores them — the load effect overwrites with the row.
+  const initialClient = useMemo<ClientData>(
+    () => (clientId ? { ...EMPTY_CLIENT } : { ...EMPTY_CLIENT, ...seededClientDefaults() }),
+    [clientId],
+  );
+  const [data, setData] = useState<ClientData>(initialClient);
+  const [paymentTermsRaw, setPaymentTermsRaw] = useState<string>(String(initialClient.payment_terms));
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contacts, setContacts] = useState<ClientContact[]>([]);
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
 
   const isEditing = Boolean(clientId);
 
@@ -75,9 +157,26 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
     const load = async () => {
       try {
         setLoading(true);
+        // Critical: client data
         const client = await api.get('clients', clientId);
+
+        // Non-critical — failures don't hide primary content
+        api.listClientContacts(clientId)
+          .then(r => { if (!cancelled) setContacts((r ?? []).map((c: any) => ({ ...c, is_primary: Boolean(c.is_primary) }))); })
+          .catch(() => {});
+
         if (!cancelled && client) {
           const pt = client.payment_terms ?? 30;
+          // Parse tags JSON array → comma-separated string
+          let tagsInput = '';
+          if (client.tags) {
+            try {
+              const parsed = JSON.parse(client.tags);
+              tagsInput = Array.isArray(parsed) ? parsed.join(', ') : '';
+            } catch {
+              tagsInput = '';
+            }
+          }
           setData({
             id: client.id,
             name: client.name ?? '',
@@ -94,6 +193,24 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
             tax_id: client.tax_id ?? '',
             status: client.status ?? 'active',
             notes: client.notes ?? '',
+            // Extended profile
+            industry: client.industry ?? '',
+            website: client.website ?? '',
+            company_size: client.company_size ?? '',
+            credit_limit: client.credit_limit ?? 0,
+            preferred_payment_method: client.preferred_payment_method ?? '',
+            assigned_rep_id: client.assigned_rep_id ?? '',
+            internal_notes: client.internal_notes ?? '',
+            tags: client.tags ?? '',
+            tags_input: tagsInput,
+            // Default Invoice Settings
+            default_payment_terms: client.default_payment_terms || '',
+            default_late_fee_pct: client.default_late_fee_pct || 0,
+            // Classifications
+            tier: client.tier || '',
+            segment: client.segment || '',
+            lifecycle_stage: client.lifecycle_stage || '',
+            risk_rating: client.risk_rating || '',
           });
           setPaymentTermsRaw(String(pt));
         }
@@ -113,8 +230,17 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
     setData((prev) => ({ ...prev, [field]: value }));
   };
 
+  // UX: Cmd+S triggers save instead of "Save HTML"
+  useEffect(() => {
+    const onSave = () => { if (!saving) handleSave(); };
+    window.addEventListener('app:cmd-save', onSave);
+    return () => window.removeEventListener('app:cmd-save', onSave);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
   // ─── Save ──────────────────────────────────────────
   const handleSave = async () => {
+    if (saving) return;
     if (!data.name.trim()) {
       setError('Client name is required.');
       return;
@@ -126,23 +252,101 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
       return;
     }
 
+    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+      setError('Email is not a valid format.');
+      return;
+    }
+
+    if (data.phone && data.phone.length > 32) {
+      setError('Phone number is too long (max 32 characters).');
+      return;
+    }
+
+    if (data.default_late_fee_pct < 0 || data.default_late_fee_pct > 100) {
+      setError('Default late fee % must be between 0 and 100.');
+      return;
+    }
+
+    if (data.credit_limit < 0) {
+      setError('Credit limit cannot be negative.');
+      return;
+    }
+
     try {
       setSaving(true);
       setError(null);
 
-      const payload: Record<string, any> = { ...data, payment_terms: parsedTerms };
-      delete payload.id;
+      // Convert tags_input (comma-separated) → JSON array string
+      const tagsJson = JSON.stringify(
+        data.tags_input.split(',').map(t => t.trim()).filter(Boolean)
+      );
 
+      const payload: Record<string, any> = {
+        ...data,
+        name: data.name.trim(),
+        email: data.email.trim(),
+        phone: data.phone.trim(),
+        payment_terms: parsedTerms,
+        tags: tagsJson,
+        default_payment_terms: data.default_payment_terms.trim() || null,
+        default_late_fee_pct: data.default_late_fee_pct || 0,
+      };
+      delete payload.id;
+      delete payload.tags_input;
+
+      // Auto-classify on save (only when user hasn't picked one)
+      if (isEditing && clientId) {
+        try {
+          const companyId = activeCompany?.id;
+          // Risk rating from avg days late on invoices
+          if (!payload.risk_rating && companyId) {
+            const r = await api.rawQuery(
+              `SELECT AVG(CASE WHEN paid_date IS NOT NULL AND due_date IS NOT NULL
+                 THEN julianday(paid_date) - julianday(due_date) ELSE 0 END) AS avg_late
+               FROM invoices WHERE client_id = ? AND company_id = ?`,
+              [clientId, companyId]
+            );
+            const row = Array.isArray(r) ? r[0] : r;
+            if (row && Number.isFinite(row.avg_late)) {
+              payload.risk_rating = riskRatingFromAvgDaysLate(Number(row.avg_late));
+            }
+          }
+          // VIP auto-set when total paid > VIP threshold (default $50k)
+          if ((!payload.lifecycle_stage || payload.lifecycle_stage === 'active') && companyId) {
+            const r2 = await api.rawQuery(
+              `SELECT COALESCE(SUM(amount_paid), 0) AS paid FROM invoices WHERE client_id = ? AND company_id = ?`,
+              [clientId, companyId]
+            );
+            const row2 = Array.isArray(r2) ? r2[0] : r2;
+            const paid = Number(row2?.paid || 0);
+            const VIP_THRESHOLD = 50000;
+            if (paid >= VIP_THRESHOLD) payload.lifecycle_stage = 'vip';
+          }
+        } catch (_) { /* ignore — auto classification is best-effort */ }
+      }
+
+      let savedId: string;
       if (isEditing && clientId) {
         await api.update('clients', clientId, payload);
+        savedId = clientId;
       } else {
-        await api.create('clients', payload);
+        const created = await api.create('clients', payload);
+        if (!created?.id) throw new Error('Client created but no ID returned');
+        savedId = created.id;
+      }
+
+      try {
+        await api.saveClientContacts(savedId, contacts.map(c => ({ ...c, client_id: savedId })));
+      } catch (contactErr) {
+        console.warn('Client saved but contacts failed to save:', contactErr);
+        // Don't throw — the client was saved successfully
       }
 
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface save-client errors instead of swallowing
       console.error('Failed to save client:', err);
-      setError('Failed to save client. Please try again.');
+      setError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
@@ -153,7 +357,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div
         className="block-card-elevated w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: '6px' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
@@ -162,6 +366,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
           </h2>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="text-text-muted hover:text-text-primary transition-colors p-1"
           >
             <X size={18} />
@@ -176,7 +381,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
             {error && (
               <div
                 className="mb-4 p-3 text-sm text-accent-expense bg-accent-expense-bg border border-accent-expense/20"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: '6px' }}
               >
                 {error}
               </div>
@@ -187,6 +392,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="Client Name" span={2}>
                 <input
                   className="block-input"
+                  name="name"
+                  autoComplete="name"
                   placeholder="Enter client name"
                   value={data.name}
                   onChange={(e) => set('name', e.target.value)}
@@ -199,8 +406,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                   value={data.type}
                   onChange={(e) => set('type', e.target.value as ClientData['type'])}
                 >
-                  <option value="individual">Individual</option>
                   <option value="company">Company</option>
+                  <option value="individual">Individual</option>
                 </select>
               </Field>
 
@@ -220,6 +427,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                 <input
                   className="block-input"
                   type="email"
+                  name="email"
                   autoComplete="email"
                   placeholder="email@example.com"
                   value={data.email}
@@ -231,6 +439,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                 <input
                   className="block-input"
                   type="tel"
+                  name="phone"
                   autoComplete="tel"
                   placeholder="(555) 000-0000"
                   value={data.phone}
@@ -241,6 +450,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="Address Line 1" span={2}>
                 <input
                   className="block-input"
+                  name="address_line1"
+                  autoComplete="address-line1"
                   placeholder="Street address"
                   value={data.address_line1}
                   onChange={(e) => set('address_line1', e.target.value)}
@@ -250,6 +461,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="Address Line 2" span={2}>
                 <input
                   className="block-input"
+                  name="address_line2"
+                  autoComplete="address-line2"
                   placeholder="Apt, suite, unit, etc."
                   value={data.address_line2}
                   onChange={(e) => set('address_line2', e.target.value)}
@@ -259,6 +472,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="City">
                 <input
                   className="block-input"
+                  name="city"
+                  autoComplete="address-level2"
                   placeholder="City"
                   value={data.city}
                   onChange={(e) => set('city', e.target.value)}
@@ -268,6 +483,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="State">
                 <input
                   className="block-input"
+                  name="state"
+                  autoComplete="address-level1"
                   placeholder="State"
                   value={data.state}
                   onChange={(e) => set('state', e.target.value)}
@@ -277,6 +494,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="ZIP Code">
                 <input
                   className="block-input"
+                  name="zip"
+                  autoComplete="postal-code"
                   placeholder="00000"
                   value={data.zip}
                   onChange={(e) => set('zip', e.target.value)}
@@ -286,6 +505,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="Country">
                 <input
                   className="block-input"
+                  name="country"
+                  autoComplete="country-name"
                   placeholder="US"
                   value={data.country}
                   onChange={(e) => set('country', e.target.value)}
@@ -305,6 +526,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
               <Field label="Tax ID">
                 <input
                   className="block-input"
+                  name="tax_id"
+                  autoComplete="off"
                   placeholder="Tax identification number"
                   value={data.tax_id}
                   onChange={(e) => set('tax_id', e.target.value)}
@@ -321,6 +544,109 @@ const ClientForm: React.FC<ClientFormProps> = ({ clientId, onClose, onSaved }) =
                   style={{ resize: 'vertical' }}
                 />
               </Field>
+
+              {/* Extended Profile */}
+              <div className="col-span-2 mt-4">
+                <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Extended Profile</div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Industry</label>
+                <ClassificationSelect def={CLIENT_INDUSTRY} value={data.industry} onChange={(v) => setData(p => ({ ...p, industry: v }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Tier</label>
+                <ClassificationSelect def={CLIENT_TIER} value={data.tier} onChange={(v) => setData(p => ({ ...p, tier: v }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Segment</label>
+                <ClassificationSelect def={CLIENT_SEGMENT} value={data.segment} onChange={(v) => setData(p => ({ ...p, segment: v }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Lifecycle Stage</label>
+                <ClassificationSelect def={CLIENT_LIFECYCLE} value={data.lifecycle_stage} onChange={(v) => setData(p => ({ ...p, lifecycle_stage: v }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Risk Rating</label>
+                <ClassificationSelect def={CLIENT_RISK} value={data.risk_rating} onChange={(v) => setData(p => ({ ...p, risk_rating: v }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Website</label>
+                <input className="block-input" type="url" name="website" autoComplete="url" value={data.website} onChange={(e) => setData(p => ({ ...p, website: e.target.value }))} placeholder="https://" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Company Size</label>
+                <select className="block-select w-full" value={data.company_size} onChange={(e) => setData(p => ({ ...p, company_size: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  {/* Sorted alphabetically per app-wide UX directive (originally numeric order: 1-10 → 1000+) */}
+                  <option value="1000+">1,000+ employees</option>
+                  <option value="1-10">1–10 employees</option>
+                  <option value="11-50">11–50 employees</option>
+                  <option value="201-1000">201–1,000 employees</option>
+                  <option value="51-200">51–200 employees</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Credit Limit</label>
+                <input className="block-input" type="number" step="100" value={data.credit_limit} onChange={(e) => setData(p => ({ ...p, credit_limit: parseFloat(e.target.value) || 0 }))} placeholder="0.00" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Preferred Payment</label>
+                <select className="block-select w-full" value={data.preferred_payment_method} onChange={(e) => setData(p => ({ ...p, preferred_payment_method: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  <option value="ach">ACH / Bank Transfer</option>
+                  <option value="cash">Cash</option>
+                  <option value="check">Check</option>
+                  <option value="credit_card">Credit Card</option>
+                  <option value="wire">Wire Transfer</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Assigned Rep ID</label>
+                <input className="block-input" value={data.assigned_rep_id || ''} onChange={(e) => setData(p => ({...p, assigned_rep_id: e.target.value}))} placeholder="Rep ID or name" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Tags (comma-separated)</label>
+                <input className="block-input" value={data.tags_input || ''} onChange={(e) => setData(p => ({ ...p, tags_input: e.target.value }))} placeholder="vip, partner, net-30" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Internal Notes</label>
+                <textarea className="block-input" rows={3} value={data.internal_notes} onChange={(e) => setData(p => ({ ...p, internal_notes: e.target.value }))} placeholder="Internal notes (not visible to client)..." style={{ resize: 'vertical' }} />
+              </div>
+
+              {/* Default Invoice Settings */}
+              <div className="col-span-2" style={{ marginTop: 16 }}>
+                <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3 pb-2 border-b border-border-primary">
+                  Default Invoice Settings
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Default Payment Terms</label>
+                    <input
+                      className="block-input"
+                      placeholder="e.g. Net 30"
+                      value={data.default_payment_terms || ''}
+                      onChange={e => setData(p => ({ ...p, default_payment_terms: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Default Late Fee %</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="block-input"
+                      placeholder="e.g. 1.5"
+                      value={data.default_late_fee_pct || ''}
+                      onChange={e => setData(p => ({ ...p, default_late_fee_pct: parseFloat(e.target.value) || 0 }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Contacts */}
+              <div className="col-span-2 mt-4">
+                <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Contacts</div>
+                <ClientContacts contacts={contacts} onChange={setContacts} />
+              </div>
             </div>
 
             {/* Actions */}
