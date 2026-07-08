@@ -45,6 +45,7 @@ import ClientInsights from './ClientInsights';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
 import EntityChip from '../../components/EntityChip';
+import AttachmentsPanel from '../../components/AttachmentsPanel';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
@@ -937,6 +938,10 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
         <div className="grid grid-cols-2 gap-4 mt-6">
           <RelatedPanel entityType="client" entityId={clientId} />
           <EntityTimeline entityType="client" entityId={clientId} />
+        </div>
+
+        <div className="mt-4">
+          <AttachmentsPanel entityType="client" entityId={clientId} />
         </div>
       </div>
     </div>
