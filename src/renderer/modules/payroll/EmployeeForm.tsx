@@ -38,6 +38,8 @@ interface EmployeeFormData {
   status: string; // active | inactive | terminated | on_leave | probation
   employment_type: 'full-time' | 'part-time' | 'contractor';
   department: string;
+  department_id: string;
+  manager_id: string;
   job_title: string;
   role: string;
   work_location: string;
@@ -87,6 +89,8 @@ const EMPTY_FORM: EmployeeFormData = {
   status: 'active',
   employment_type: 'full-time',
   department: '',
+  department_id: '',
+  manager_id: '',
   job_title: '',
   role: '',
   work_location: '',
@@ -1599,6 +1603,24 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
 
   const isEditing = Boolean(employeeId);
 
+  // ─── Departments + managers (for the Org fields) ────
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
+  const [managerOptions, setManagerOptions] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [depts, emps] = await Promise.all([
+        api.query('departments', {}, { field: 'name', dir: 'asc' }),
+        api.query('employees', { status: 'active' }, { field: 'name', dir: 'asc' }),
+      ]);
+      if (!cancelled) {
+        setDepartments(Array.isArray(depts) ? depts : []);
+        setManagerOptions(Array.isArray(emps) ? emps.filter((e: any) => e.id !== employeeId) : []);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [employeeId]);
+
   // PERF: memoize the pay-history element so it isn't re-rendered on every
   // keystroke in the form (it only depends on the stable employeeId).
   const payHistoryEl = useMemo(
@@ -1634,6 +1656,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             status: emp.status ?? 'active',
             employment_type: emp.employment_type ?? 'full-time',
             department: emp.department ?? '',
+            department_id: emp.department_id ?? '',
+            manager_id: emp.manager_id ?? '',
             job_title: emp.job_title ?? '',
             role: emp.role ?? '',
             work_location: emp.work_location ?? '',
@@ -1760,6 +1784,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
         status: form.status,
         employment_type: form.employment_type,
         department: form.department.trim(),
+        department_id: form.department_id || '',
+        manager_id: form.manager_id || '',
         job_title: form.job_title.trim(),
         role: form.role || '',
         work_location: form.work_location || '',
@@ -2205,6 +2231,24 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Department</label>
               <ClassificationSelect def={EMPLOYEE_DEPARTMENT} value={form.department} onChange={(v) => setForm(p => ({ ...p, department: v }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Department (Org Chart)</label>
+              <select className="block-select w-full" value={form.department_id} onChange={(e) => setForm(p => ({ ...p, department_id: e.target.value }))}>
+                <option value="">No department</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Manager</label>
+              <select className="block-select w-full" value={form.manager_id} onChange={(e) => setForm(p => ({ ...p, manager_id: e.target.value }))}>
+                <option value="">No manager</option>
+                {managerOptions.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Role</label>
