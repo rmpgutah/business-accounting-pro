@@ -6,6 +6,7 @@ import { formatCurrency, formatDate } from '../../lib/format';
 import { Section, Empty, Th, Td, StatCard, MiniBar, TOK, gradeColor } from './shared/ui';
 import { VENDOR_TYPE, VENDOR_APPROVAL, ClassificationBadge } from '../../lib/classifications';
 import { useNavigation } from '../../lib/navigation';
+import AttachmentsPanel from '../../components/AttachmentsPanel';
 
 const Vendor360: React.FC<{ vendorId: string; onBack: () => void }> = ({ vendorId, onBack }) => {
   const [snap, setSnap] = useState<any>(null);
@@ -195,6 +196,10 @@ const Vendor360: React.FC<{ vendorId: string; onBack: () => void }> = ({ vendorI
             </div>
           )}
         </Section>
+      </div>
+
+      <div className="mt-6">
+        <AttachmentsPanel entityType="vendor" entityId={vendorId} />
       </div>
     </div>
   );
