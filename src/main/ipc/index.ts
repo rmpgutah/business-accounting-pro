@@ -727,7 +727,7 @@ export function registerIpcHandlers(): void {
     'payroll_runs', 'pay_stubs', 'federal_payroll_constants',
     'employee_equipment', 'equipment_penalties', 'employee_credentials',
     'employee_checklist_items', 'employee_reviews', 'employee_disciplinary',
-    'pto_policies', 'pto_balances', 'pto_transactions',
+    'pto_policies', 'pto_balances', 'pto_transactions', 'departments',
     'state_tax_brackets', 'approval_queue',
     'je_comments',
     // Workflow + numbering + email templates (2026-04-23)
@@ -983,6 +983,15 @@ export function registerIpcHandlers(): void {
           const lines = dbI.prepare(`SELECT COUNT(*) as c FROM journal_entry_lines WHERE account_id = ?`).get(id) as any;
           if (lines?.c > 0) {
             throw new Error(`Cannot delete account with ${lines.c} journal entry line(s). Use soft delete (mark inactive) instead.`);
+          }
+        } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
+        break;
+      case 'departments':
+        // Departments can't be deleted while employees are still assigned — block
+        try {
+          const assigned = dbI.prepare(`SELECT COUNT(*) as c FROM employees WHERE department_id = ?`).get(id) as any;
+          if (assigned?.c > 0) {
+            throw new Error(`Cannot delete department with ${assigned.c} employee(s) assigned. Reassign them first.`);
           }
         } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
         break;

@@ -9376,6 +9376,17 @@ export function initDatabase(): Database.Database {
   )`,
   "CREATE INDEX IF NOT EXISTS idx_vendor_locations_vendor ON vendor_locations(vendor_id)",
   "ALTER TABLE expenses ADD COLUMN vendor_location_id TEXT DEFAULT NULL",
+  `CREATE TABLE IF NOT EXISTS departments (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id),
+    name TEXT NOT NULL,
+    head_employee_id TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_departments_company ON departments(company_id)",
+  "ALTER TABLE employees ADD COLUMN manager_id TEXT DEFAULT ''",
+  "ALTER TABLE employees ADD COLUMN department_id TEXT DEFAULT ''",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was
