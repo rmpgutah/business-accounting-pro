@@ -32,7 +32,15 @@ function buildTree(employees: OrgEmployee[]): OrgNode[] {
   return roots;
 }
 
-const OrgChartNode: React.FC<{ node: OrgNode; onSelect: (id: string) => void; depth: number }> = ({ node, onSelect, depth }) => (
+// SAFETY: manager_id is single-valued per employee, so a manager cycle (A→B→A)
+// can never be reachable from buildTree's `roots` — the cycle is topologically
+// disconnected from every real root and simply never renders. This depth cap is
+// pure defense-in-depth in case that invariant is ever broken by a future edit.
+const MAX_ORG_CHART_DEPTH = 500;
+
+const OrgChartNode: React.FC<{ node: OrgNode; onSelect: (id: string) => void; depth: number }> = ({ node, onSelect, depth }) => {
+  if (depth > MAX_ORG_CHART_DEPTH) return null;
+  return (
   <div style={{ marginLeft: depth === 0 ? 0 : 20 }}>
     <button
       className="block-card p-2.5 flex items-center gap-2 w-full text-left hover:border-accent-blue transition-colors"
@@ -55,7 +63,8 @@ const OrgChartNode: React.FC<{ node: OrgNode; onSelect: (id: string) => void; de
       </div>
     )}
   </div>
-);
+  );
+};
 
 interface OrgChartProps {
   onSelectEmployee: (id: string) => void;
