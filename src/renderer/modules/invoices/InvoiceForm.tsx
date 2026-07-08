@@ -1,20 +1,53 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { ArrowLeft, Trash2, Eye, EyeOff, BookOpen, X, Star, GripVertical, ChevronUp, ChevronDown, Bold, Italic } from 'lucide-react';
 import api from '../../lib/api';
-import { required, validateForm, minValue } from '../../lib/validation';
+import { FieldLabel } from '../../components/FieldLabel';
+import { required, validateForm } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { ClientContext } from '../../components/ContextPanel';
+import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
+import { SnippetPicker } from '../../components/SnippetPicker';
+import RowTypeToolbar from './RowTypeToolbar';
+import PaymentScheduleEditor, { Milestone } from './PaymentScheduleEditor';
+import type { LineRowType } from '../../../shared/types';
+import ErrorBanner from '../../components/ErrorBanner';
+import { roundCents, formatStatus } from '../../lib/format';
+import { todayLocal, toLocalDateString } from '../../lib/date-helpers';
+import {
+  useInvoicingPrefs,
+  getInvoicingPrefs,
+  buildInvoiceNumber,
+  termsValueToLabel,
+} from '../../customization/invoicing-prefs';
 
 // ─── Types ──────────────────────────────────────────────
 interface Client {
   id: string;
   name: string;
+  email?: string;
+  phone?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  default_payment_terms?: string;
+  default_late_fee_pct?: number;
 }
 
 interface Account {
   id: string;
   name: string;
   code: string;
+}
+
+interface CatalogItem {
+  id: string;
+  name: string;
+  description: string;
+  unit_price: number;
+  tax_rate: number;
+  account_id: string | null;
 }
 
 interface LineItem {
@@ -24,7 +57,86 @@ interface LineItem {
   unit_price: number;
   tax_rate: number;
   account_id: string;
+  row_type: LineRowType;
+  unit_label: string;
+  item_code: string;
+  line_discount: number;
+  line_discount_type: 'percent' | 'flat';
+  discount_pct: number;
+  tax_rate_override: number;   // -1 = use invoice rate
+  bold: number;
+  italic: number;
+  highlight_color: string;
 }
+
+export type InvoiceType = 'standard' | 'service' | 'product' | 'retainer' | 'credit_note' | 'proforma';
+
+interface InvoiceTypeConfig {
+  label: string;
+  description: string;
+  qtyLabel: string;
+  unitPriceLabel: string;
+  showItemCode: boolean;
+  showUnit: boolean;
+  defaultUnitLabel: string;
+  numberPrefix: string;
+}
+
+const INVOICE_TYPE_CONFIG: Record<InvoiceType, InvoiceTypeConfig> = {
+  standard:    { label: 'Standard',    description: 'General purpose invoice',            qtyLabel: 'Qty',    unitPriceLabel: 'Unit Price',  showItemCode: false, showUnit: false, defaultUnitLabel: '',    numberPrefix: 'INV' },
+  service:     { label: 'Service',     description: 'Labor, consulting & hourly services', qtyLabel: 'Hours',  unitPriceLabel: 'Rate / Hr',   showItemCode: false, showUnit: true,  defaultUnitLabel: 'hrs', numberPrefix: 'SVC' },
+  product:     { label: 'Product',     description: 'Physical goods & inventory items',    qtyLabel: 'Qty',    unitPriceLabel: 'Unit Price',  showItemCode: true,  showUnit: true,  defaultUnitLabel: 'ea',  numberPrefix: 'PRD' },
+  retainer:    { label: 'Retainer',    description: 'Advance payment or retainer fee',    qtyLabel: 'Qty',    unitPriceLabel: 'Amount',      showItemCode: false, showUnit: false, defaultUnitLabel: '',    numberPrefix: 'RET' },
+  credit_note: { label: 'Credit Note', description: 'Credit memo or refund',              qtyLabel: 'Qty',    unitPriceLabel: 'Unit Price',  showItemCode: false, showUnit: false, defaultUnitLabel: '',    numberPrefix: 'CR'  },
+  proforma:    { label: 'Proforma',    description: 'Preliminary estimate (not final)',    qtyLabel: 'Qty',    unitPriceLabel: 'Unit Price',  showItemCode: false, showUnit: false, defaultUnitLabel: '',    numberPrefix: 'PRO' },
+};
+
+const CURRENCIES_COMMON = ['AUD', 'CAD', 'EUR', 'GBP', 'USD'];
+const CURRENCIES_OTHER = ['CHF', 'CNY', 'INR', 'JPY', 'MXN'];
+const CURRENCIES = [...CURRENCIES_COMMON, ...CURRENCIES_OTHER];
+
+// ─── GripCell (hoisted to module scope to prevent remount-on-render) ───
+interface GripCellProps {
+  idx: number;
+  isFirst: boolean;
+  isLast: boolean;
+  onMoveUp: (idx: number) => void;
+  onMoveDown: (idx: number) => void;
+  onActivateDrag: (idx: number) => void;
+}
+
+const GripCell: React.FC<GripCellProps> = React.memo(({ idx, isFirst, isLast, onMoveUp, onMoveDown, onActivateDrag }) => (
+  <td
+    className="p-1 text-center"
+    style={{ cursor: 'grab', color: 'var(--color-text-muted)', width: 28 }}
+    onMouseDown={() => onActivateDrag(idx)}
+  >
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+      <button
+        type="button"
+        onClick={() => onMoveUp(idx)}
+        disabled={isFirst}
+        title="Move up"
+        aria-label={`Move row ${idx + 1} up`}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: isFirst ? 'not-allowed' : 'pointer', opacity: isFirst ? 0.3 : 1 }}
+      >
+        <ChevronUp size={9} />
+      </button>
+      <GripVertical size={11} aria-hidden="true" />
+      <button
+        type="button"
+        onClick={() => onMoveDown(idx)}
+        disabled={isLast}
+        title="Move down"
+        aria-label={`Move row ${idx + 1} down`}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: isLast ? 'not-allowed' : 'pointer', opacity: isLast ? 0.3 : 1 }}
+      >
+        <ChevronDown size={9} />
+      </button>
+    </div>
+  </td>
+));
+GripCell.displayName = 'GripCell';
 
 interface InvoiceFormData {
   client_id: string;
@@ -32,13 +144,23 @@ interface InvoiceFormData {
   issue_date: string;
   due_date: string;
   terms: string;
-  subtotal: number;
-  tax: number;
   discount: number;
-  total: number;
   notes: string;
   terms_text: string;
   status: string;
+  internal_notes: string;
+  po_number: string;
+  job_reference: string;
+  late_fee_pct: number;
+  late_fee_grace_days: number;
+  discount_pct: number;
+  invoice_type: InvoiceType;
+  currency: string;
+  shipping_amount: number;
+  custom_field_1: string;
+  custom_field_2: string;
+  custom_field_3: string;
+  custom_field_4: string;
 }
 
 // ─── Currency Formatter ─────────────────────────────────
@@ -51,18 +173,35 @@ const fmt = new Intl.NumberFormat('en-US', {
 
 // ─── Helpers ────────────────────────────────────────────
 let lineIdCounter = 0;
-const newLineItem = (): LineItem => ({
+const newLineItem = (rowType: LineRowType = 'item', defaultUnitLabel = ''): LineItem => ({
   id: `new-${++lineIdCounter}`,
   description: '',
-  quantity: 1,
+  // Default-line-quantity honours Customization › Invoicing › Defaults.
+  // Read non-reactively here because newLineItem() is called outside React's
+  // render path (from button handlers); the prefs snapshot is always current
+  // because the store is the source of truth.
+  quantity: getInvoicingPrefs().defaultQuantity,
   unit_price: 0,
-  tax_rate: 0,
+  tax_rate: getInvoicingPrefs().defaultTaxRate,
   account_id: '',
+  row_type: rowType,
+  unit_label: defaultUnitLabel,
+  item_code: '',
+  line_discount: 0,
+  line_discount_type: 'percent',
+  discount_pct: 0,
+  tax_rate_override: -1,
+  bold: 0,
+  italic: 0,
+  highlight_color: '',
 });
 
-// Bug fix #12a: scope invoice number generation to the active company so
-// numbers don't collide across companies or reference another company's data.
 const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
+  // Numbering preferences (prefix/suffix/pad/year-month) come from the
+  // Customization Center; the sequence integer is derived from the most
+  // recent invoice's trailing digits to avoid collisions even after the
+  // user changes their prefix mid-stream.
+  let seq = 1001;
   try {
     const rows = await api.rawQuery(
       'SELECT invoice_number FROM invoices WHERE company_id = ? ORDER BY created_at DESC LIMIT 1',
@@ -70,23 +209,121 @@ const fetchNextInvoiceNumber = async (companyId: string): Promise<string> => {
     );
     if (rows && rows.length > 0) {
       const last = rows[0].invoice_number as string;
-      const match = last.match(/(\d+)$/);
-      if (match) {
-        return `INV-${parseInt(match[1], 10) + 1}`;
-      }
+      const match = last.match(/(\d+)(?!.*\d)/); // trailing run of digits
+      if (match) seq = parseInt(match[1], 10) + 1;
     }
-  } catch {
-    /* fall through to default */
-  }
-  return 'INV-1001';
+  } catch { /* fall through */ }
+  return buildInvoiceNumber(seq);
 };
 
-const todayISO = (): string => new Date().toISOString().slice(0, 10);
+// DATE: Item #2 — local time today.
+const todayISO = (): string => todayLocal();
 
-const thirtyDaysLater = (): string => {
-  const d = new Date();
-  d.setDate(d.getDate() + 30);
-  return d.toISOString().slice(0, 10);
+// DATE: Item #4 — noon-anchor for round-trip-safe date arithmetic, then format
+// in local time. Previously used toISOString() which could shift the day in TZ
+// east of UTC+12 even for a noon anchor.
+const addDays = (isoDate: string, days: number): string => {
+  const d = new Date(isoDate + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return toLocalDateString(d);
+};
+
+const TERMS_DAYS: Record<string, number> = {
+  'Due on receipt': 0,
+  'Net 15': 15,
+  'Net 30': 30,
+  'Net 45': 45,
+  'Net 60': 60,
+};
+
+// ─── Catalog Dropdown ────────────────────────────────────
+interface CatalogDropdownProps {
+  items: CatalogItem[];
+  onSelect: (item: CatalogItem) => void;
+  onClose: () => void;
+}
+
+const CatalogDropdown: React.FC<CatalogDropdownProps> = ({ items, onSelect, onClose }) => {
+  const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return items.slice(0, 10);
+    const q = query.toLowerCase();
+    return items.filter(
+      (i) => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q)
+    ).slice(0, 10);
+  }, [query, items]);
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        zIndex: 100,
+        background: 'var(--color-bg-secondary)',
+        border: '1px solid var(--color-border-primary)',
+        borderRadius: '6px',
+        width: '280px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ padding: '8px', borderBottom: '1px solid var(--color-border-primary)', display: 'flex', gap: 6 }}>
+        <input
+          ref={inputRef}
+          className="block-input"
+          placeholder="Search catalog..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ flex: 1, fontSize: '12px', padding: '4px 8px' }}
+        />
+        <button className="block-btn p-1" onClick={onClose} title="Close"><X size={12} /></button>
+      </div>
+      {filtered.length === 0 ? (
+        <div style={{ padding: '12px', color: 'var(--color-text-muted)', fontSize: '12px', textAlign: 'center' }}>
+          No catalog items found
+        </div>
+      ) : (
+        <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+          {filtered.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onSelect(item)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '8px 12px',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                borderBottom: '1px solid var(--color-border-primary)',
+                color: 'var(--color-text-primary)',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div style={{ fontSize: '12px', fontWeight: 600 }}>{item.name}</div>
+              {item.description && (
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                  {item.description.slice(0, 60)}{item.description.length > 60 ? '…' : ''}
+                </div>
+              )}
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                {fmt.format(item.unit_price)} · Tax: {item.tax_rate}%
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -102,26 +339,72 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
   const [clients, setClients] = useState<Client[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState<number | null>(null);
+  const [savingToCatalog, setSavingToCatalog] = useState<number | null>(null);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [showSchedule, setShowSchedule] = useState(false);
+  // P1.12: Duplicate-invoice detection — populated by checkDuplicates()
+  // when handleSave finds a suspiciously similar recent invoice. Render
+  // path shows a confirm modal; on Continue we set bypassDuplicate=true
+  // and re-call handleSave.
+  const [duplicateCandidates, setDuplicateCandidates] = useState<Array<{ id: string; invoice_number: string; total: number; due_date: string; status: string; created_at: string }>>([]);
+  const [pendingSendAfterSave, setPendingSendAfterSave] = useState(false);
 
-  const [form, setForm] = useState<InvoiceFormData>({
-    client_id: '',
-    invoice_number: '',
-    issue_date: todayISO(),
-    due_date: thirtyDaysLater(),
-    terms: 'Net 30',
-    subtotal: 0,
-    tax: 0,
-    discount: 0,
-    total: 0,
-    notes: '',
-    terms_text: '',
-    status: 'draft',
+  // Reactive prefs — used in render for column-style toggles, shipping
+  // visibility, manual-override lock, etc.
+  const prefs = useInvoicingPrefs();
+
+  const [form, setForm] = useState<InvoiceFormData>(() => {
+    // Seed the form from the Customization Center for NEW invoices. Edit
+    // mode overwrites these immediately via the loader below, so it's safe
+    // to use prefs as the genesis state in both flows.
+    const p = getInvoicingPrefs();
+    const t = termsValueToLabel(p.paymentTerms);
+    return {
+      client_id: '',
+      invoice_number: '',
+      issue_date: todayISO(),
+      // Due-days override wins when set explicitly; otherwise follow the
+      // chosen payment-terms enum so the two prefs stay consistent.
+      due_date: addDays(todayISO(), p.defaultDueDays !== 30 ? p.defaultDueDays : t.days),
+      terms: t.label,
+      discount: 0,
+      notes: p.defaultNotes,
+      terms_text: p.defaultTerms,
+      status: 'draft',
+      internal_notes: '',
+      po_number: '',
+      job_reference: '',
+      late_fee_pct: 0,
+      late_fee_grace_days: 0,
+      discount_pct: p.defaultDiscountRate,
+      invoice_type: 'standard',
+      currency: 'USD',
+      shipping_amount: 0,
+      custom_field_1: '',
+      custom_field_2: '',
+      custom_field_3: '',
+      custom_field_4: '',
+    };
   });
 
   const [lines, setLines] = useState<LineItem[]>([newLineItem()]);
+
+  // Drag-and-drop state for line reordering
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [rowDraggable, setRowDraggableState] = useState<Record<number, boolean>>({});
+  const [hoveredLineIdx, setHoveredLineIdx] = useState<number | null>(null);
+
+  const setRowDraggable = useCallback((idx: number, value: boolean) => {
+    setRowDraggableState((prev) => ({ ...prev, [idx]: value }));
+  }, []);
 
   // ─── Fetch reference data + existing invoice ─────────
   useEffect(() => {
@@ -130,15 +413,24 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     const load = async () => {
       if (!activeCompany) return;
       try {
-        // Bug fix #12b: clients and accounts queries were missing company_id.
         const cid = activeCompany.id;
+
+        // Critical: clients + accounts needed for form
         const [clientData, accountData] = await Promise.all([
           api.query('clients', { company_id: cid }),
           api.query('accounts', { company_id: cid, type: 'revenue' }),
         ]);
         if (cancelled) return;
-        setClients(clientData ?? []);
-        setAccounts(accountData ?? []);
+        setClients(Array.isArray(clientData) ? clientData : []);
+        setAccounts(Array.isArray(accountData) ? accountData : []);
+
+        // Non-critical secondary data — failures don't hide primary content
+        api.listCatalogItems()
+          .then(r => { if (!cancelled) setCatalogItems(Array.isArray(r) ? r : []); })
+          .catch(() => {});
+        api.getInvoiceSettings()
+          .then(r => { if (!cancelled && r && !r.error) setInvoiceSettings(r); })
+          .catch(() => {});
 
         if (!invoiceId) {
           const nextNum = await fetchNextInvoiceNumber(cid);
@@ -146,7 +438,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             setForm((prev) => ({ ...prev, invoice_number: nextNum }));
           }
 
-          // Read prefill stored by "Create Invoice from Time" flow
           const prefillRaw = localStorage.getItem('invoiceFormPrefill');
           if (prefillRaw) {
             try {
@@ -175,6 +466,24 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
               localStorage.removeItem('invoiceFormPrefill');
             }
           }
+
+          // Consume nav:prefillClientId from sessionStorage (e.g., from ClientDetail "New Invoice")
+          const prefillClientId = sessionStorage.getItem('nav:prefillClientId');
+          if (prefillClientId) {
+            sessionStorage.removeItem('nav:prefillClientId');
+            if (!cancelled) {
+              setForm((prev) => ({ ...prev, client_id: prefillClientId }));
+            }
+          }
+
+          // Consume nav:prefillProjectId from sessionStorage
+          const prefillProjectId = sessionStorage.getItem('nav:prefillProjectId');
+          if (prefillProjectId) {
+            sessionStorage.removeItem('nav:prefillProjectId');
+            if (!cancelled) {
+              setForm((prev) => ({ ...prev, job_reference: prefillProjectId }));
+            }
+          }
         }
 
         if (invoiceId) {
@@ -184,19 +493,40 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             client_id: inv.client_id ?? '',
             invoice_number: inv.invoice_number ?? '',
             issue_date: inv.issue_date ?? todayISO(),
-            due_date: inv.due_date ?? thirtyDaysLater(),
+            due_date: inv.due_date ?? addDays(todayISO(), 30),
             terms: inv.terms ?? 'Net 30',
-            subtotal: inv.subtotal ?? 0,
-            tax: inv.tax_amount ?? 0,
             discount: inv.discount_amount ?? 0,
-            total: inv.total ?? 0,
             notes: inv.notes ?? '',
-            terms_text: '',
+            terms_text: inv.terms_text ?? '',
             status: inv.status ?? 'draft',
+            po_number: inv.po_number || '',
+            job_reference: inv.job_reference || '',
+            internal_notes: inv.internal_notes || '',
+            late_fee_pct: inv.late_fee_pct || 0,
+            late_fee_grace_days: inv.late_fee_grace_days || 0,
+            discount_pct: inv.discount_pct || 0,
+            invoice_type: (inv.invoice_type as InvoiceType) || 'standard',
+            currency: inv.currency || 'USD',
+            shipping_amount: inv.shipping_amount || 0,
+            custom_field_1: inv.custom_field_1 || '',
+            custom_field_2: inv.custom_field_2 || '',
+            custom_field_3: inv.custom_field_3 || '',
+            custom_field_4: inv.custom_field_4 || '',
           });
 
-          const lineData = await api.query('invoice_line_items', { invoice_id: invoiceId });
+          const [lineData, scheduleData] = await Promise.all([
+            api.query('invoice_line_items', { invoice_id: invoiceId }, { field: 'sort_order', dir: 'asc' }),
+            api.listPaymentSchedule(invoiceId).catch(() => []),
+          ]);
           if (cancelled) return;
+          if (scheduleData && scheduleData.length > 0) {
+            setMilestones(scheduleData.map((m: any) => ({
+              id: m.id, milestone_label: m.milestone_label || '',
+              due_date: m.due_date || '', amount: Number(m.amount || 0),
+              paid: !!m.paid,
+            })));
+            setShowSchedule(true);
+          }
           if (lineData && lineData.length > 0) {
             setLines(
               lineData.map((l: any) => ({
@@ -206,6 +536,16 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 unit_price: l.unit_price ?? 0,
                 tax_rate: l.tax_rate ?? 0,
                 account_id: l.account_id ?? '',
+                row_type: l.row_type ?? 'item',
+                unit_label: l.unit_label ?? '',
+                item_code: l.item_code ?? '',
+                line_discount: l.line_discount ?? 0,
+                line_discount_type: l.line_discount_type ?? 'percent',
+                discount_pct: l.discount_pct || 0,
+                tax_rate_override: l.tax_rate_override != null ? l.tax_rate_override : -1,
+                bold: l.bold ?? 0,
+                italic: l.italic ?? 0,
+                highlight_color: l.highlight_color ?? '',
               }))
             );
           }
@@ -221,27 +561,137 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     return () => { cancelled = true; };
   }, [invoiceId, activeCompany]);
 
-  // ─── Line item calculations ──────────────────────────
-  const lineAmounts = useMemo(
-    () => lines.map((l) => l.quantity * l.unit_price),
+  // ─── Line item calculations (item rows only) ─────────
+  // Convention (issue #2): line discount reduces taxable base — tax is computed
+  // on the discounted line amount, matching standard US sales-tax expectation.
+  // Convention (issue #1): each line's discounted amount and tax are rounded to
+  // whole cents BEFORE summing, so the printed line totals reconcile exactly to
+  // subtotal/tax shown at the bottom of the invoice.
+  const subtotal = useMemo(
+    () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => {
+      const baseAmount = l.quantity * l.unit_price;
+      const discountedAmount = roundCents(baseAmount * (1 - (l.discount_pct || 0) / 100));
+      return s + discountedAmount;
+    }, 0),
     [lines]
   );
-
-  const subtotal = useMemo(() => lineAmounts.reduce((s, a) => s + a, 0), [lineAmounts]);
 
   const taxTotal = useMemo(
-    () =>
-      lines.reduce((s, l) => {
-        const amt = l.quantity * l.unit_price;
-        return s + amt * (l.tax_rate / 100);
-      }, 0),
+    () => lines.filter(l => (l.row_type || 'item') === 'item').reduce((s, l) => {
+      const baseAmount = l.quantity * l.unit_price;
+      const discountedAmount = roundCents(baseAmount * (1 - (l.discount_pct || 0) / 100));
+      // BUG FIX: `>= 0` treats null as 0 (because null coerces to 0). Use
+      // ?? -1 so null/undefined fall back to "no override" rather than
+      // silently zeroing the tax rate. Mirrors print-templates.ts.
+      const overrideVal = Number(l.tax_rate_override ?? -1);
+      const effectiveTaxRate = overrideVal >= 0 ? overrideVal : (l.tax_rate || 0);
+      return s + roundCents(discountedAmount * (effectiveTaxRate / 100));
+    }, 0),
     [lines]
   );
 
-  const total = useMemo(
-    () => subtotal + taxTotal - form.discount,
-    [subtotal, taxTotal, form.discount]
+  const taxByRate = useMemo(() => {
+    const map: Record<string, { taxable: number; tax: number }> = {};
+    for (const l of lines) {
+      if ((l.row_type || 'item') !== 'item') continue;
+      // BUG FIX: ?? -1 instead of >= 0 — null coerces to 0
+      const ovr = Number(l.tax_rate_override ?? -1);
+      const rate = ovr >= 0 ? ovr : (l.tax_rate || 0);
+      if (rate <= 0) continue;
+      const base = roundCents(l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100));
+      const key = rate.toFixed(2);
+      if (!map[key]) map[key] = { taxable: 0, tax: 0 };
+      map[key].taxable = roundCents(map[key].taxable + base);
+      map[key].tax = roundCents(map[key].tax + roundCents(base * (rate / 100)));
+    }
+    return map;
+  }, [lines]);
+
+  const sortedTaxRates = useMemo(
+    () => Object.keys(taxByRate).sort((a, b) => parseFloat(a) - parseFloat(b)),
+    [taxByRate]
   );
+
+  const shippingTax = useMemo(() => 0, []); // reserved for future shipping tax
+  // Header % discount: amount taken off subtotal+tax. Applied AFTER tax, same
+  // convention as the flat $ discount. Previously this field was stored but
+  // never reduced the total (a long-standing no-op); now it does.
+  const headerPctDiscount = useMemo(
+    () => roundCents((subtotal + taxTotal) * ((form.discount_pct || 0) / 100)),
+    [subtotal, taxTotal, form.discount_pct]
+  );
+  const total = useMemo(() => {
+    // Header discount (issue #3) is applied AFTER tax. Document choice: header
+    // discount does not reduce taxable base; only per-line discount_pct does.
+    // Shipping is included. Both the flat $ discount (form.discount) and the
+    // % discount (form.discount_pct) subtract from the post-tax subtotal.
+    const raw = roundCents(subtotal + taxTotal - (form.discount || 0) - headerPctDiscount + (form.shipping_amount || 0) + shippingTax);
+    return form.invoice_type === 'credit_note' ? -Math.abs(raw) : raw;
+  }, [subtotal, taxTotal, form.discount, headerPctDiscount, form.shipping_amount, form.invoice_type, shippingTax]);
+
+  // ─── Type config derived from form ──────────────────
+  const typeConfig = useMemo(() => INVOICE_TYPE_CONFIG[form.invoice_type] || INVOICE_TYPE_CONFIG.standard, [form.invoice_type]);
+
+  // ─── Currency formatter (switches based on selected currency) ───
+  const currencyFmt = useMemo(() => new Intl.NumberFormat('en-US', {
+    style: 'currency', currency: form.currency || 'USD',
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  }), [form.currency]);
+
+  // ─── Live preview HTML ───────────────────────────────
+  const previewHTML = useMemo(() => {
+    if (!showPreview || !activeCompany) return '';
+    const client = clients.find((c) => c.id === form.client_id) || null;
+    const inv = {
+      invoice_number: form.invoice_number || 'PREVIEW',
+      issue_date: form.issue_date,
+      due_date: form.due_date,
+      terms: form.terms,
+      status: form.status,
+      subtotal,
+      tax_amount: taxTotal,
+      discount_amount: form.discount,
+      total,
+      notes: form.notes,
+      terms_text: form.terms_text,
+      amount_paid: 0,
+      invoice_type: form.invoice_type,
+      currency: form.currency,
+      shipping_amount: form.shipping_amount || 0,
+      // Header/meta fields the template reads — without these the live preview
+      // doesn't match the saved/printed invoice.
+      po_number: form.po_number,
+      job_reference: form.job_reference,
+      discount_pct: form.discount_pct,
+      late_fee_pct: form.late_fee_pct,
+      late_fee_grace_days: form.late_fee_grace_days,
+      custom_field_1: form.custom_field_1,
+      custom_field_2: form.custom_field_2,
+      custom_field_3: form.custom_field_3,
+      custom_field_4: form.custom_field_4,
+    };
+    const lineData = lines.map((l) => ({
+      description: l.description,
+      quantity: l.quantity,
+      unit_price: l.unit_price,
+      tax_rate: l.tax_rate,
+      // Per-line discount / tax overrides drive the totals card breakdown
+      // and the discount-strikethrough rendering. Pass them through.
+      discount_pct: l.discount_pct,
+      tax_rate_override: l.tax_rate_override,
+      account_id: l.account_id,
+      amount: roundCents(l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100)),
+      row_type: l.row_type || 'item',
+      unit_label: l.unit_label,
+      item_code: l.item_code,
+      line_discount: l.line_discount,
+      line_discount_type: l.line_discount_type,
+      bold: l.bold,
+      italic: l.italic,
+      highlight_color: l.highlight_color,
+    }));
+    return generateInvoiceHTML(inv, activeCompany, client, lineData, invoiceSettings || undefined);
+  }, [showPreview, form, lines, subtotal, taxTotal, total, activeCompany, clients, invoiceSettings]);
 
   // ─── Line item helpers ───────────────────────────────
   const updateLine = useCallback(
@@ -255,114 +705,389 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     []
   );
 
-  const addLine = useCallback(() => {
-    setLines((prev) => [...prev, newLineItem()]);
+  const addLine = useCallback((rowType: LineRowType = 'item') => {
+    const cfg = INVOICE_TYPE_CONFIG[form.invoice_type] || INVOICE_TYPE_CONFIG.standard;
+    setLines((prev) => [...prev, newLineItem(rowType, rowType === 'item' ? cfg.defaultUnitLabel : '')]);
+  }, [form.invoice_type]);
+
+  const removeLine = useCallback(
+    (index: number) => {
+      // Behavior › Confirm before deleting — gated for line removal so a
+      // misclick on the trash icon doesn't wipe a populated row. Empty
+      // rows (no description AND no amount) skip the prompt entirely.
+      // Reading via the setter avoids depending on `lines` in deps, which
+      // would otherwise re-create this callback on every keystroke.
+      setLines((prev) => {
+        if (prev.length <= 1) return prev;
+        const line = prev[index];
+        const isEmpty = !line?.description && !Number(line?.unit_price) && !Number(line?.quantity);
+        if (!isEmpty && getInvoicingPrefs().confirmBeforeDelete) {
+          if (!confirm('Delete this line item?')) return prev;
+        }
+        return prev.filter((_, i) => i !== index);
+      });
+    },
+    []
+  );
+
+  const moveLine = useCallback((from: number, to: number) => {
+    setLines((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
   }, []);
 
-  const removeLine = useCallback((index: number) => {
-    setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
+  const moveLineUp = useCallback((idx: number) => {
+    if (idx > 0) moveLine(idx, idx - 1);
+  }, [moveLine]);
+
+  const moveLineDown = useCallback((idx: number) => {
+    setLines((prev) => {
+      if (idx >= prev.length - 1) return prev;
+      const next = [...prev];
+      const [item] = next.splice(idx, 1);
+      next.splice(idx + 1, 0, item);
+      return next;
+    });
   }, []);
+
+  const handleDragStart = useCallback((idx: number) => (e: React.DragEvent) => {
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    // Required for Firefox
+    e.dataTransfer.setData('text/plain', String(idx));
+  }, []);
+
+  const handleDragOver = useCallback((idx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragIndex !== null && dragIndex !== idx) setOverIndex(idx);
+  }, [dragIndex]);
+
+  const handleDragLeave = useCallback(() => {
+    setOverIndex(null);
+  }, []);
+
+  const handleDrop = useCallback((idx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragIndex !== null && dragIndex !== idx) {
+      moveLine(dragIndex, idx);
+    }
+    setDragIndex(null);
+    setOverIndex(null);
+  }, [dragIndex, moveLine]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragIndex(null);
+    setOverIndex(null);
+    setRowDraggableState({});
+  }, []);
+
+  const handleActivateDrag = useCallback((i: number) => {
+    setRowDraggable(i, true);
+  }, [setRowDraggable]);
+
+  // Safety net: if user mousedowns the grip but releases without starting a drag,
+  // neither onDragEnd nor a drop fires. Reset rowDraggable on any document mouseup
+  // (deferred to next tick so dragstart can fire first and preserve state).
+  useEffect(() => {
+    const onGlobalMouseUp = () => {
+      setTimeout(() => {
+        setDragIndex((current) => {
+          if (current !== null) return current; // drag in progress — don't touch
+          setRowDraggableState({});
+          return current;
+        });
+      }, 0);
+    };
+    document.addEventListener('mouseup', onGlobalMouseUp);
+    return () => document.removeEventListener('mouseup', onGlobalMouseUp);
+  }, []);
+
+  const getRowDragProps = useCallback((idx: number) => ({
+    draggable: !!rowDraggable[idx],
+    onDragStart: handleDragStart(idx),
+    onDragOver: handleDragOver(idx),
+    onDragLeave: handleDragLeave,
+    onDrop: handleDrop(idx),
+    onDragEnd: handleDragEnd,
+  }), [rowDraggable, handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd]);
+
+  const getRowDragStyle = useCallback((idx: number): React.CSSProperties => {
+    const style: React.CSSProperties = {};
+    if (overIndex === idx && dragIndex !== null && dragIndex !== idx) {
+      style.borderTop = '2px solid var(--color-accent-blue)';
+    }
+    if (dragIndex === idx) {
+      style.opacity = 0.4;
+    }
+    return style;
+  }, [overIndex, dragIndex]);
 
   // ─── Form field helpers ──────────────────────────────
+  // `dirtyRef` tracks whether the user has changed *anything* since this
+  // form was mounted. Used by the warn-unsaved behavior preference to
+  // gate beforeunload prompts and the back-button confirm. A ref (not
+  // state) so flipping it doesn't cause a re-render — only the unload
+  // handler ever reads it.
+  const dirtyRef = useRef(false);
+  const markDirty = useCallback(() => { dirtyRef.current = true; }, []);
+
   const updateField = useCallback(
     (field: keyof InvoiceFormData, value: string | number) => {
+      dirtyRef.current = true;
       setForm((prev) => ({ ...prev, [field]: value }));
     },
     []
   );
 
+  // Behavior › Warn about unsaved changes — install a beforeunload guard
+  // that fires only when the user has actually touched something and the
+  // preference is on. Uninstalled on unmount so other pages aren't
+  // affected.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      if (!getInvoicingPrefs().warnUnsaved) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  // Wrap the parent-provided onBack so the warn-unsaved preference applies
+  // to in-app navigation too (the beforeunload only catches window-level
+  // closes). The wrapped version is what the back button calls.
+  const guardedBack = useCallback(() => {
+    if (dirtyRef.current && getInvoicingPrefs().warnUnsaved) {
+      if (!confirm('Discard unsaved changes to this invoice?')) return;
+    }
+    onBack();
+  }, [onBack]);
+
+  // Smart due date: auto-calculate from terms when user changes terms dropdown
+  const handleTermsChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const newTerms = e.target.value;
+      setForm((prev) => {
+        const days = TERMS_DAYS[newTerms] ?? 30;
+        return {
+          ...prev,
+          terms: newTerms,
+          due_date: addDays(prev.issue_date || todayISO(), days),
+        };
+      });
+    },
+    []
+  );
+
+  // Also update due date when issue_date changes (maintain the terms offset)
+  const handleIssueDateChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newDate = e.target.value;
+      setForm((prev) => {
+        const days = TERMS_DAYS[prev.terms] ?? 30;
+        return {
+          ...prev,
+          issue_date: newDate,
+          due_date: newDate ? addDays(newDate, days) : prev.due_date,
+        };
+      });
+    },
+    []
+  );
+
+  // ─── Catalog: apply item to line ─────────────────────
+  const applyCatalogItem = useCallback(
+    (lineIndex: number, item: CatalogItem) => {
+      setLines((prev) => {
+        const next = [...prev];
+        next[lineIndex] = {
+          ...next[lineIndex],
+          description: item.name,
+          unit_price: item.unit_price,
+          tax_rate: item.tax_rate,
+          account_id: item.account_id || next[lineIndex].account_id,
+        };
+        return next;
+      });
+      setCatalogOpen(null);
+    },
+    []
+  );
+
+  // Save current line item to catalog
+  const saveLineToCatalog = useCallback(
+    async (lineIndex: number) => {
+      const line = lines[lineIndex];
+      if (!line.description.trim()) return;
+      setSavingToCatalog(lineIndex);
+      try {
+        await api.saveCatalogItem({
+          name: line.description,
+          description: '',
+          unit_price: line.unit_price,
+          tax_rate: line.tax_rate,
+          account_id: line.account_id || null,
+        });
+        const updated = await api.listCatalogItems().catch(() => null);
+        if (updated) setCatalogItems(updated);
+      } catch (err) {
+        console.error('Failed to save to catalog:', err);
+      } finally {
+        setSavingToCatalog(null);
+      }
+    },
+    [lines]
+  );
+
   // ─── Save ────────────────────────────────────────────
-  const handleSave = async (sendAfterSave: boolean) => {
-    const activeLines = lines.filter((l) => l.description.trim() || l.unit_price > 0);
+  const handleSave = async (sendAfterSave: boolean, bypassDuplicate: boolean = false) => {
+    if (saving) return;
+    const activeLines = lines.filter((l) => (l.row_type || 'item') === 'item' && (l.description.trim() || l.unit_price > 0));
 
     const lineItemErrors: string[] = [];
     activeLines.forEach((l, i) => {
       const num = i + 1;
-      if (!l.description.trim()) {
-        lineItemErrors.push(`Line item ${num}: description cannot be empty.`);
-      }
-      if (isNaN(l.quantity) || l.quantity < 0) {
-        lineItemErrors.push(`Line item ${num}: quantity must be a non-negative number.`);
-      }
-      if (isNaN(l.unit_price) || l.unit_price < 0) {
-        lineItemErrors.push(`Line item ${num}: unit price must be a non-negative number.`);
-      }
+      if (!l.description.trim()) lineItemErrors.push(`Line item ${num}: description cannot be empty.`);
+      if (isNaN(l.quantity) || l.quantity < 0) lineItemErrors.push(`Line item ${num}: quantity must be a non-negative number.`);
+      if (isNaN(l.unit_price) || l.unit_price < 0) lineItemErrors.push(`Line item ${num}: unit price must be a non-negative number.`);
     });
 
     const checks: Array<string | null> = [
       required(form.client_id, 'Client'),
-      lines.every((l) => !l.description.trim() && l.unit_price === 0)
+      lines.every((l) => (l.row_type || 'item') !== 'item' || (!l.description.trim() && l.unit_price === 0))
         ? 'At least one line item is required'
         : null,
-      ...activeLines.map((l, i) =>
-        minValue(l.quantity * l.unit_price, 0.01, `Line item ${i + 1} amount`)
-      ),
     ];
     const validationErrors = [...validateForm(checks), ...lineItemErrors];
+    if (form.issue_date && form.due_date && form.due_date < form.issue_date) {
+      validationErrors.push('Due date must be on or after issue date');
+    }
+    if (form.discount && subtotal > 0 && form.discount > subtotal) {
+      validationErrors.push('Discount cannot exceed subtotal');
+    }
+    if (form.discount && form.discount < 0) {
+      validationErrors.push('Discount cannot be negative');
+    }
+    if (form.invoice_type !== 'credit_note' && total <= 0) {
+      validationErrors.push('Invoice total must be greater than zero');
+    }
+    activeLines.forEach((l, i) => {
+      const num = i + 1;
+      if (l.quantity === 0 && l.unit_price === 0) {
+        // skip empty-ish rows silently
+      } else if (l.quantity <= 0) {
+        validationErrors.push(`Line item ${num}: quantity must be greater than zero.`);
+      }
+    });
     if (validationErrors.length > 0) {
       setErrors(validationErrors);
       return;
     }
     setErrors([]);
 
+    // ── P1.12: Duplicate-invoice detection ─────────────────
+    // Run BEFORE setSaving so the user can cancel without leaving
+    // the form in a "saving…" state. Skip when:
+    //   • already user-bypassed in a prior call
+    //   • editing an existing invoice (the old one would self-match)
+    //   • no client selected (can't dedupe across clients)
+    if (!bypassDuplicate && !isEdit && form.client_id) {
+      try {
+        const dupRes = await api.checkDuplicateInvoices({
+          client_id: form.client_id,
+          total: roundCents(total),
+          due_date: form.due_date || null,
+          excludeId: isEdit ? invoiceId : null,
+        });
+        if (dupRes.duplicates && dupRes.duplicates.length > 0) {
+          // Show modal — user clicks Continue to bypass and proceed,
+          // or Cancel to abort. handleSave is re-invoked from the
+          // modal Continue button with bypassDuplicate=true.
+          setDuplicateCandidates(dupRes.duplicates);
+          setPendingSendAfterSave(sendAfterSave);
+          return; // Modal renders; save resumes via continueDuplicate()
+        }
+      } catch (err) {
+        // Best-effort: never block save on detection failure.
+        console.warn('Duplicate detection failed; proceeding with save:', err);
+      }
+    }
+
     setSaving(true);
+
     try {
-      const status = sendAfterSave ? 'sent' : 'draft';
-      // Bug fix #12c: do NOT reset amount_paid on edit — this would wipe
-      // any recorded partial or full payments against the invoice.
       const invoiceData: Record<string, any> = {
         client_id: form.client_id,
         invoice_number: form.invoice_number,
         issue_date: form.issue_date,
         due_date: form.due_date,
         terms: form.terms,
-        subtotal,
-        tax_amount: taxTotal,
-        discount_amount: form.discount,
-        total,
+        subtotal: roundCents(subtotal),
+        tax_amount: roundCents(taxTotal),
+        discount_amount: roundCents(form.discount),
+        total: roundCents(total),
         notes: form.notes,
-        status,
+        terms_text: form.terms_text,
+        status: sendAfterSave ? 'sent' : 'draft',
+        po_number: form.po_number.trim() || null,
+        job_reference: form.job_reference.trim() || null,
+        internal_notes: form.internal_notes.trim() || null,
+        late_fee_pct: form.late_fee_pct || 0,
+        late_fee_grace_days: form.late_fee_grace_days || 0,
+        discount_pct: form.discount_pct || 0,
+        invoice_type: form.invoice_type || 'standard',
+        currency: form.currency || 'USD',
+        shipping_amount: roundCents(form.shipping_amount || 0),
+        custom_field_1: form.custom_field_1.trim() || null,
+        custom_field_2: form.custom_field_2.trim() || null,
+        custom_field_3: form.custom_field_3.trim() || null,
+        custom_field_4: form.custom_field_4.trim() || null,
       };
-      if (!isEdit) {
-        invoiceData.amount_paid = 0;
+      if (!isEdit) invoiceData.amount_paid = 0;
+
+      const lineItems = lines.map((l, idx) => ({
+        description: l.description,
+        quantity: l.quantity,
+        unit_price: l.unit_price,
+        tax_rate: l.tax_rate,
+        account_id: l.account_id || null,
+        // Persist the discounted, rounded line amount so subtotal == sum(line amounts)
+        amount: (l.row_type || 'item') === 'item'
+          ? roundCents(l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100))
+          : 0,
+        sort_order: idx,
+        row_type: l.row_type || 'item',
+        unit_label: l.unit_label || '',
+        item_code: l.item_code || '',
+        line_discount: l.line_discount || 0,
+        line_discount_type: l.line_discount_type || 'percent',
+        discount_pct: l.discount_pct || 0,
+        tax_rate_override: l.tax_rate_override != null ? l.tax_rate_override : -1,
+        bold: l.bold || 0,
+        italic: l.italic || 0,
+        highlight_color: l.highlight_color || '',
+      }));
+
+      const result = await api.saveInvoice({ invoiceId: isEdit ? invoiceId : null, invoiceData, lineItems, isEdit });
+      if (result?.error) throw new Error(result.error);
+      if (!result?.id) throw new Error('Invoice saved but no ID was returned.');
+      const savedId = result.id;
+      // Save payment schedule if active
+      if (showSchedule && milestones.length > 0) {
+        await api.savePaymentSchedule(savedId, milestones).catch(console.error);
       }
-
-      let savedId: string;
-
-      if (isEdit && invoiceId) {
-        await api.update('invoices', invoiceId, invoiceData);
-        savedId = invoiceId;
-
-        // Remove old line items then re-create
-        const oldLines = await api.query('invoice_line_items', { invoice_id: invoiceId });
-        if (oldLines) {
-          for (const ol of oldLines) {
-            await api.remove('invoice_line_items', ol.id);
-          }
-        }
-      } else {
-        const result = await api.create('invoices', invoiceData);
-        savedId = result?.id ?? result;
-      }
-
-      // Create line items
-      for (const line of lines) {
-        if (!line.description && line.unit_price === 0) continue;
-        await api.create('invoice_line_items', {
-          invoice_id: savedId,
-          description: line.description,
-          quantity: line.quantity,
-          unit_price: line.unit_price,
-          tax_rate: line.tax_rate,
-          account_id: line.account_id || null,
-          amount: line.quantity * line.unit_price,
-        });
-      }
-
+      // Clear dirty so the warn-unsaved guard doesn't fire on navigation.
+      dirtyRef.current = false;
       onSaved(savedId);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to save invoice:', err);
-      setErrors([`Failed to save invoice: ${err?.message || 'Please try again.'}`]);
+      const detail = err instanceof Error ? err.message : String(err);
+      setErrors([`Failed to save invoice: ${detail}`]);
     } finally {
       setSaving(false);
     }
@@ -376,74 +1101,106 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
     );
   }
 
-  return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
-      {/* Header */}
-      <div className="module-header">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} className="block-btn p-2" title="Back">
-            <ArrowLeft size={16} />
-          </button>
-          <h1 className="module-title text-text-primary">
-            {isEdit ? 'Edit Invoice' : 'New Invoice'}
-          </h1>
-        </div>
-        <div className="module-actions">
-          <button
-            className="block-btn"
-            disabled={saving}
-            onClick={() => handleSave(false)}
-          >
-            {saving ? 'Saving...' : 'Save as Draft'}
-          </button>
-          <button
-            className="block-btn-primary"
-            disabled={saving}
-            onClick={() => handleSave(true)}
-          >
-            {saving ? 'Saving...' : 'Save & Send'}
-          </button>
-        </div>
-      </div>
-
+  // ─── Form content (shared between single-pane and split-pane) ───
+  const formContent = (
+    <div className="p-6 space-y-6">
       {/* Validation Errors */}
       {errors.length > 0 && (
-        <div
-          style={{
-            background: 'var(--color-accent-expense-bg)',
-            border: '1px solid var(--color-accent-expense)',
-            borderRadius: '2px',
-            padding: '12px 16px',
-          }}
-        >
-          <ul style={{ margin: 0, padding: '0 0 0 16px', listStyle: 'disc' }}>
-            {errors.map((err, i) => (
-              <li key={i} style={{ color: 'var(--color-accent-expense)', fontSize: '13px', lineHeight: '1.6' }}>
-                {err}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ErrorBanner
+          message={errors.join(' \u2022 ')}
+          title="Validation errors"
+          onDismiss={() => setErrors([])}
+        />
       )}
+
+      {/* Invoice Type Selector */}
+      <div className="block-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">Invoice Type</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{typeConfig.description}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider mr-1">Currency</label>
+            <select
+              className="block-select"
+              style={{ width: 80, fontSize: 12 }}
+              value={form.currency}
+              onChange={e => setForm(p => ({ ...p, currency: e.target.value }))}
+            >
+              <optgroup label="Common">
+                {CURRENCIES_COMMON.map(c => <option key={c} value={c}>{c}</option>)}
+              </optgroup>
+              <optgroup label="Other">
+                {CURRENCIES_OTHER.map(c => <option key={c} value={c}>{c}</option>)}
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {(Object.keys(INVOICE_TYPE_CONFIG) as InvoiceType[]).map(type => {
+            const cfg = INVOICE_TYPE_CONFIG[type];
+            const isActive = form.invoice_type === type;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setForm(p => ({ ...p, invoice_type: type }))}
+                style={{
+                  padding: '5px 14px',
+                  borderRadius: 6,
+                  border: `1px solid ${isActive ? 'var(--color-accent)' : 'var(--color-border-primary)'}`,
+                  background: isActive ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
+                  color: isActive ? '#fff' : 'var(--color-text-secondary)',
+                  fontSize: 12,
+                  fontWeight: isActive ? 700 : 400,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {cfg.label}
+              </button>
+            );
+          })}
+        </div>
+        {form.invoice_type === 'credit_note' && (
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--color-accent-expense-bg)', border: '1px solid var(--color-accent-expense)', borderRadius: 6, fontSize: 12, color: 'var(--color-accent-expense)', fontWeight: 600 }}>
+            Credit Note — total will be displayed as a negative amount (credit to client)
+          </div>
+        )}
+        {form.invoice_type === 'proforma' && (
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(234,179,8,0.08)', border: '1px solid #d97706', borderRadius: 6, fontSize: 12, color: '#d97706', fontWeight: 600 }}>
+            Proforma — this invoice is preliminary and not a final billing document
+          </div>
+        )}
+      </div>
 
       {/* Invoice Header Fields */}
       <div className="block-card">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           {/* Client */}
           <div>
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-              Client
-            </label>
-            <select
-              className="block-select"
-              value={form.client_id}
-              onChange={(e) => updateField('client_id', e.target.value)}
-            >
+            <FieldLabel label="Client" tooltip="The client this invoice will be billed to" required />
+            <select className="block-select" value={form.client_id} onChange={(e) => {
+              const newClientId = e.target.value;
+              const client = clients.find(c => c.id === newClientId);
+              setForm(prev => ({
+                ...prev,
+                client_id: newClientId,
+                ...(client?.default_payment_terms
+                  ? {
+                      terms: client.default_payment_terms,
+                      due_date: addDays(prev.issue_date || todayISO(), TERMS_DAYS[client.default_payment_terms] ?? 30),
+                    }
+                  : {}),
+                ...(client?.default_late_fee_pct && client.default_late_fee_pct > 0
+                  ? { late_fee_pct: client.default_late_fee_pct }
+                  : {}),
+              }));
+            }}>
               <option value="">Select a client...</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
+              {[...clients].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
             <ClientContext clientId={form.client_id || null} companyId={activeCompany?.id ?? ''} />
@@ -451,140 +1208,495 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
           {/* Invoice Number */}
           <div>
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-              Invoice Number
-            </label>
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">Invoice Number</label>
             <input
               type="text"
               className="block-input"
               value={form.invoice_number}
               onChange={(e) => updateField('invoice_number', e.target.value)}
+              readOnly={!prefs.allowManualNumberOverride}
+              title={!prefs.allowManualNumberOverride ? 'Manual override is disabled in Customization › Invoicing › Numbering' : undefined}
+              style={!prefs.allowManualNumberOverride ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
             />
           </div>
 
           {/* Issue Date */}
           <div>
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-              Issue Date
-            </label>
-            <input
-              type="date"
-              className="block-input"
-              value={form.issue_date}
-              onChange={(e) => updateField('issue_date', e.target.value)}
-            />
+            <FieldLabel label="Issue Date" tooltip="Date the invoice is issued" required />
+            <input type="date" className="block-input" value={form.issue_date} onChange={handleIssueDateChange} />
           </div>
 
           {/* Due Date */}
           <div>
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-              Due Date
-            </label>
-            <input
-              type="date"
-              className="block-input"
-              value={form.due_date}
-              onChange={(e) => updateField('due_date', e.target.value)}
-            />
+            <FieldLabel label="Due Date" tooltip="Auto-set from Terms · can be overridden manually" required />
+            <input type="date" className="block-input" value={form.due_date} onChange={(e) => updateField('due_date', e.target.value)} />
           </div>
 
           {/* Terms */}
           <div>
             <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
               Terms
+              <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>
+                (auto-updates due date)
+              </span>
             </label>
-            <select
-              className="block-select"
-              value={form.terms}
-              onChange={(e) => updateField('terms', e.target.value)}
-            >
+            <select className="block-select" value={form.terms} onChange={handleTermsChange}>
               <option value="Due on receipt">Due on receipt</option>
               <option value="Net 15">Net 15</option>
               <option value="Net 30">Net 30</option>
               <option value="Net 45">Net 45</option>
               <option value="Net 60">Net 60</option>
+              {/* Sorted alphabetically per app-wide UX directive */}
             </select>
           </div>
         </div>
       </div>
 
       {/* Line Items */}
+      {/*
+        Layout note: this table has 12-14 columns depending on type config.
+        Without a min-width, the column width percentages collapse in narrow
+        windows and inputs become unusable (~50px wide). We:
+          1. Switch the wrapper from overflow-hidden → overflow-x-auto so a
+             horizontal scrollbar appears when the viewport can't hold the
+             natural width.
+          2. Pin a min-width on the table itself (~1100px without item code,
+             ~1200px with) so percentages always resolve against a usable
+             baseline. Full-screen view stays scrollbar-free; narrow windows
+             gain a scroll affordance instead of a crushed form.
+          3. Mark header cells nowrap so labels like "TAX %" / "UNIT PRICE"
+             never wrap onto two lines.
+      */}
       <div className="block-card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
-          <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-            Line Items
-          </span>
-          <button
-            className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
-            onClick={addLine}
-          >
-            <Plus size={14} />
-            Add Line
-          </button>
+          <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Line Items</span>
+          {catalogItems.length > 0 && (
+            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+              <BookOpen size={11} style={{ display: 'inline', marginRight: 4 }} />
+              {catalogItems.length} catalog item{catalogItems.length !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
 
-        <table className="block-table">
+        <div className="overflow-x-auto">
+        <table
+          className="block-table"
+          style={{ minWidth: typeConfig.showItemCode ? 1200 : 1080, tableLayout: 'fixed' }}
+        >
           <thead>
             <tr>
-              <th style={{ width: '30%' }}>Description</th>
-              <th style={{ width: '10%' }}>Qty</th>
-              <th style={{ width: '14%' }}>Unit Price</th>
-              <th style={{ width: '12%' }} className="text-right">Amount</th>
-              <th style={{ width: '10%' }}>Tax %</th>
-              <th style={{ width: '18%' }}>Account</th>
-              <th style={{ width: '6%' }}></th>
+              <th style={{ width: '2%', whiteSpace: 'nowrap' }}></th>
+              {typeConfig.showItemCode && <th style={{ width: '9%', whiteSpace: 'nowrap' }}>SKU / Code</th>}
+              <th style={{ width: typeConfig.showItemCode ? '24%' : '30%', whiteSpace: 'nowrap' }}>Description</th>
+              {typeConfig.showUnit && <th style={{ width: '6%', whiteSpace: 'nowrap' }}>Unit</th>}
+              <th style={{ width: '8%', whiteSpace: 'nowrap' }}>{typeConfig.qtyLabel}</th>
+              <th style={{ width: '12%', whiteSpace: 'nowrap' }}>{typeConfig.unitPriceLabel}</th>
+              <th style={{ width: '8%', whiteSpace: 'nowrap' }} className="text-right">Base</th>
+              <th style={{ width: '8%', whiteSpace: 'nowrap' }}>Tax %</th>
+              <th style={{ width: '5%', whiteSpace: 'nowrap' }}>Disc%</th>
+              <th style={{ width: '5%', whiteSpace: 'nowrap' }}>Tax Ovr%</th>
+              <th style={{ width: '8%', whiteSpace: 'nowrap' }} className="text-right">Tax</th>
+              <th style={{ width: '9%', whiteSpace: 'nowrap' }} className="text-right">Total</th>
+              <th style={{ width: '10%', whiteSpace: 'nowrap' }}>Account</th>
+              <th style={{ width: '7%', whiteSpace: 'nowrap' }}></th>
             </tr>
           </thead>
           <tbody>
             {lines.map((line, idx) => {
-              const amount = line.quantity * line.unit_price;
-              return (
-                <tr key={line.id}>
-                  <td className="p-1">
-                    <input
-                      className="block-input"
-                      placeholder="Item description"
-                      value={line.description}
-                      onChange={(e) => updateLine(idx, 'description', e.target.value)}
+              const rowType = line.row_type || 'item';
+              const isItem = rowType === 'item';
+              const baseAmount = line.quantity * line.unit_price;
+              const amount = baseAmount * (1 - (line.discount_pct || 0) / 100);
+              // BUG FIX: ?? -1 instead of >= 0 — null coerces to 0
+              const _ovr = Number(line.tax_rate_override ?? -1);
+              const effectiveTaxRate = _ovr >= 0 ? _ovr : (line.tax_rate || 0);
+              const lineTax = isItem ? amount * (effectiveTaxRate / 100) : 0;
+              const lineTotal = amount + lineTax;
+
+              if (rowType === 'spacer') {
+                return (
+                  <tr
+                    key={line.id}
+                    {...getRowDragProps(idx)}
+                    style={{
+                      background: 'var(--color-bg-tertiary)',
+                      opacity: 0.5,
+                      ...getRowDragStyle(idx),
+                    }}
+                  >
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
                     />
+                    <td className="p-1 text-center" colSpan={11}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px' }}>
+                        <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>spacer</span>
+                        <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={11} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }
+
+              if (rowType === 'section') {
+                return (
+                  <tr
+                    key={line.id}
+                    {...getRowDragProps(idx)}
+                    style={{
+                      background: 'rgba(100,116,139,0.08)',
+                      ...getRowDragStyle(idx),
+                    }}
+                  >
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
+                    <td colSpan={10} className="p-1">
+                      <input
+                        className="block-input font-bold"
+                        placeholder="Section heading..."
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                        style={{ width: '100%', fontSize: '13px', fontWeight: 700 }}
+                      />
+                    </td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                );
+              }
+
+              if (rowType === 'note') {
+                return (
+                  <tr
+                    key={line.id}
+                    {...getRowDragProps(idx)}
+                    style={{
+                      background: 'var(--color-bg-secondary)',
+                      ...getRowDragStyle(idx),
+                    }}
+                  >
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
+                    <td colSpan={10} className="p-1">
+                      <input
+                        className="block-input"
+                        placeholder="Note (italic in PDF)..."
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                        style={{ width: '100%', fontStyle: 'italic', color: 'var(--color-text-muted)' }}
+                      />
+                    </td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                );
+              }
+
+              if (rowType === 'subtotal') {
+                // MATH: subtotal cell sits in the "Total" column (which shows
+                // each item's discounted base + line tax). Sum that same value
+                // so the inline subtotal reconciles with the rows above it
+                // and with the print template's subtotal row.
+                const subtotalAmt = lines
+                  .slice(0, idx)
+                  .filter(r => (r.row_type || 'item') === 'item')
+                  .reduce((s, r) => {
+                    const base = r.quantity * r.unit_price * (1 - (r.discount_pct || 0) / 100);
+                    // BUG FIX: ?? -1 instead of >= 0 — null coerces to 0
+                    const _ovr = Number(r.tax_rate_override ?? -1);
+                    const rate = _ovr >= 0 ? _ovr : (r.tax_rate || 0);
+                    return s + base + base * (rate / 100);
+                  }, 0);
+                return (
+                  <tr
+                    key={line.id}
+                    {...getRowDragProps(idx)}
+                    style={{
+                      borderTop: '1px solid var(--color-border-primary)',
+                      background: 'var(--color-bg-tertiary)',
+                      ...getRowDragStyle(idx),
+                    }}
+                  >
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
+                    <td colSpan={9} className="p-1">
+                      <input
+                        className="block-input font-bold"
+                        placeholder="Subtotal label..."
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                    </td>
+                    <td className="p-1 text-right font-mono font-bold text-text-primary">{currencyFmt.format(subtotalAmt)}</td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                );
+              }
+
+              if (rowType === 'image') {
+                return (
+                  <tr
+                    key={line.id}
+                    {...getRowDragProps(idx)}
+                    style={getRowDragStyle(idx)}
+                  >
+                    <GripCell
+                      idx={idx}
+                      isFirst={idx === 0}
+                      isLast={idx === lines.length - 1}
+                      onMoveUp={moveLineUp}
+                      onMoveDown={moveLineDown}
+                      onActivateDrag={handleActivateDrag}
+                    />
+                    <td colSpan={9} className="p-1">
+                      <input
+                        className="block-input"
+                        placeholder="Image URL or base64..."
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                      <input
+                        className="block-input mt-1"
+                        placeholder="Caption (optional)..."
+                        value={line.unit_label}
+                        onChange={(e) => updateLine(idx, 'unit_label', e.target.value)}
+                        style={{ width: '100%', fontSize: '11px' }}
+                      />
+                    </td>
+                    <td></td>
+                    <td className="p-1 text-center">
+                      <button className="text-text-muted p-1" onClick={() => removeLine(idx)} title="Remove"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                );
+              }
+
+              // Standard item row
+              return (
+                <tr
+                  key={line.id}
+                  {...getRowDragProps(idx)}
+                  onMouseEnter={() => setHoveredLineIdx(idx)}
+                  onMouseLeave={() => setHoveredLineIdx(null)}
+                  style={getRowDragStyle(idx)}
+                >
+                  <GripCell
+                    idx={idx}
+                    isFirst={idx === 0}
+                    isLast={idx === lines.length - 1}
+                    onMoveUp={moveLineUp}
+                    onMoveDown={moveLineDown}
+                    onActivateDrag={handleActivateDrag}
+                  />
+                  {typeConfig.showItemCode && (
+                    <td className="p-1">
+                      <input
+                        className="block-input font-mono"
+                        style={{ fontSize: 11 }}
+                        placeholder="SKU"
+                        value={line.item_code}
+                        onChange={e => updateLine(idx, 'item_code', e.target.value)}
+                      />
+                    </td>
+                  )}
+                  <td className="p-1" style={{ position: 'relative' }}>
+                    {hoveredLineIdx === idx && dragIndex === null && (
+                      <div
+                        onMouseEnter={() => setHoveredLineIdx(idx)}
+                        onMouseLeave={() => setHoveredLineIdx(null)}
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 'calc(100% + 2px)',
+                          zIndex: 20,
+                          display: 'flex',
+                          gap: 2,
+                          padding: '3px 4px',
+                          background: 'var(--color-bg-elevated)',
+                          border: '1px solid var(--color-border-primary)',
+                          borderRadius: 6,
+                        }}>
+                        <button
+                          type="button"
+                          title="Bold"
+                          onClick={() => updateLine(idx, 'bold', line.bold ? 0 : 1)}
+                          style={{
+                            background: line.bold ? 'var(--color-accent-blue)' : 'transparent',
+                            color: line.bold ? '#fff' : 'var(--color-text-muted)',
+                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 6,
+                          }}
+                        >
+                          <Bold size={10} />
+                        </button>
+                        <button
+                          type="button"
+                          title="Italic"
+                          onClick={() => updateLine(idx, 'italic', line.italic ? 0 : 1)}
+                          style={{
+                            background: line.italic ? 'var(--color-accent-blue)' : 'transparent',
+                            color: line.italic ? '#fff' : 'var(--color-text-muted)',
+                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 6,
+                          }}
+                        >
+                          <Italic size={10} />
+                        </button>
+                        <div style={{ width: 1, background: 'var(--color-border-primary)', margin: '0 2px' }} />
+                        {['', '#fef9c3', '#dbeafe', '#fecaca', '#dcfce7'].map((color) => (
+                          <button
+                            key={color || 'none'}
+                            type="button"
+                            title={color ? `Highlight ${color}` : 'No highlight'}
+                            onClick={() => updateLine(idx, 'highlight_color', color)}
+                            style={{
+                              background: color || 'transparent',
+                              border: line.highlight_color === color
+                                ? '2px solid var(--color-accent-blue)'
+                                : '1px solid var(--color-border-primary)',
+                              width: 14, height: 14, cursor: 'pointer', borderRadius: 6,
+                              backgroundImage: color ? 'none' : 'linear-gradient(45deg, transparent 45%, var(--color-accent-expense) 45%, var(--color-accent-expense) 55%, transparent 55%)',
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <input
+                        className="block-input"
+                        placeholder="Item description"
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, 'description', e.target.value)}
+                        style={{
+                          flex: 1,
+                          fontWeight: line.bold ? 700 : undefined,
+                          fontStyle: line.italic ? 'italic' : undefined,
+                          background: line.highlight_color || undefined,
+                        }}
+                      />
+                      <button
+                        className="block-btn p-1"
+                        style={{ flexShrink: 0 }}
+                        onClick={() => setCatalogOpen(catalogOpen === idx ? null : idx)}
+                        title="Pick from catalog"
+                      >
+                        <BookOpen size={13} />
+                      </button>
+                    </div>
+                    {catalogOpen === idx && (
+                      <CatalogDropdown
+                        items={catalogItems}
+                        onSelect={(item) => applyCatalogItem(idx, item)}
+                        onClose={() => setCatalogOpen(null)}
+                      />
+                    )}
                   </td>
+                  {typeConfig.showUnit && (
+                    <td className="p-1">
+                      <input
+                        className="block-input"
+                        style={{ fontSize: 11 }}
+                        placeholder={typeConfig.defaultUnitLabel || 'unit'}
+                        value={line.unit_label}
+                        onChange={e => updateLine(idx, 'unit_label', e.target.value)}
+                      />
+                    </td>
+                  )}
                   <td className="p-1">
                     <input
                       type="number"
-                      min={1}
                       className="block-input text-right font-mono"
                       value={line.quantity}
-                      onChange={(e) =>
-                        updateLine(idx, 'quantity', Math.max(1, parseFloat(e.target.value) || 1))
-                      }
+                      onChange={(e) => updateLine(idx, 'quantity', parseFloat(e.target.value) || 0)}
                     />
                   </td>
                   <td className="p-1">
                     <input
                       type="number"
-                      min={0}
                       step="0.01"
                       className="block-input text-right font-mono"
                       value={line.unit_price}
-                      onChange={(e) =>
-                        updateLine(idx, 'unit_price', parseFloat(e.target.value) || 0)
-                      }
+                      onChange={(e) => updateLine(idx, 'unit_price', parseFloat(e.target.value) || 0)}
                     />
                   </td>
-                  <td className="p-1 text-right font-mono text-text-secondary">
-                    {fmt.format(amount)}
-                  </td>
+                  <td className="p-1 text-right font-mono text-text-secondary">{currencyFmt.format(amount)}</td>
                   <td className="p-1">
                     <input
                       type="number"
-                      min={0}
                       step="0.01"
                       className="block-input text-right font-mono"
                       value={line.tax_rate}
-                      onChange={(e) =>
-                        updateLine(idx, 'tax_rate', parseFloat(e.target.value) || 0)
-                      }
+                      onChange={(e) => updateLine(idx, 'tax_rate', parseFloat(e.target.value) || 0)}
                     />
+                  </td>
+                  <td className="p-1">
+                    {/* Per-line discount % */}
+                    <input
+                      type="number"
+                      max={100}
+                      step="0.1"
+                      className="block-input text-right font-mono"
+                      style={{ width: 70 }}
+                      placeholder="Disc%"
+                      title="Line discount %"
+                      value={line.discount_pct || ''}
+                      onChange={e => updateLine(idx, 'discount_pct', parseFloat(e.target.value) || 0)}
+                    />
+                  </td>
+                  <td className="p-1">
+                    {/* Per-line tax override */}
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      className="block-input text-right font-mono"
+                      style={{ width: 70 }}
+                      placeholder="Tax%"
+                      title="Tax rate override (blank = invoice rate)"
+                      value={(() => {
+                        // BUG FIX: ?? -1 instead of >= 0 — null coerces to 0
+                        const _ovr = Number(line.tax_rate_override ?? -1);
+                        return _ovr >= 0 ? _ovr : '';
+                      })()}
+                      onChange={e => {
+                        const parsed = parseFloat(e.target.value);
+                        const v = e.target.value === '' ? -1 : (isNaN(parsed) ? -1 : parsed);
+                        updateLine(idx, 'tax_rate_override', v);
+                      }}
+                    />
+                  </td>
+                  <td className="p-1 text-right font-mono" style={{ color: 'var(--color-accent-revenue)', fontSize: 12 }}>
+                    {isItem && lineTax > 0 ? `+${currencyFmt.format(lineTax)}` : '—'}
+                  </td>
+                  <td className="p-1 text-right font-mono font-semibold text-text-primary">
+                    {isItem ? currencyFmt.format(lineTotal) : ''}
                   </td>
                   <td className="p-1">
                     <select
@@ -593,90 +1705,427 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                       onChange={(e) => updateLine(idx, 'account_id', e.target.value)}
                     >
                       <option value="">Select account</option>
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.code ? `${a.code} - ${a.name}` : a.name}
-                        </option>
-                      ))}
+                      {[...accounts]
+                        .sort((a, b) => {
+                          const la = a.code ? `${a.code} - ${a.name}` : a.name;
+                          const lb = b.code ? `${b.code} - ${b.name}` : b.name;
+                          return la.localeCompare(lb, undefined, { sensitivity: 'base' });
+                        })
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>{a.code ? `${a.code} - ${a.name}` : a.name}</option>
+                        ))}
                     </select>
                   </td>
                   <td className="p-1 text-center">
-                    <button
-                      className="text-text-muted hover:text-accent-expense transition-colors p-1"
-                      onClick={() => removeLine(idx)}
-                      title="Remove line"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                      <button
+                        className="text-text-muted hover:text-accent-expense transition-colors p-1"
+                        onClick={() => removeLine(idx)}
+                        title="Remove line"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                      {isItem && line.description.trim() && (
+                        <button
+                          className="text-text-muted hover:text-accent-revenue transition-colors p-1"
+                          onClick={() => saveLineToCatalog(idx)}
+                          title="Save to catalog"
+                          disabled={savingToCatalog === idx}
+                        >
+                          <Star size={13} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+        </div>{/* /overflow-x-auto */}
+
+        <div className="px-4 py-3 border-t border-border-primary" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <RowTypeToolbar onAdd={addLine} />
+          {/* A7 — Snippet picker. Inserts a saved line-item template
+              with one click. The "Save Current" affordance lets
+              users capture the LAST item line as a snippet. */}
+          <SnippetPicker
+            onPick={(s) => {
+              setLines((prev) => [...prev, {
+                ...newLineItem('item', s.unit_label || ''),
+                description: s.description || '',
+                quantity: s.quantity || 1,
+                unit_price: s.unit_price || 0,
+                tax_rate: s.tax_rate || 0,
+                unit_label: s.unit_label || '',
+                item_code: s.item_code || '',
+              } as any]);
+            }}
+            onSaveAsSnippet={() => {
+              // Capture the LAST item-type line as the snippet template
+              const items = lines.filter((l) => (l.row_type || 'item') === 'item' && (l.description?.trim() || l.unit_price > 0));
+              const last = items[items.length - 1];
+              if (!last) return null;
+              return {
+                description: last.description,
+                quantity: last.quantity,
+                unit_label: last.unit_label || '',
+                unit_price: last.unit_price,
+                tax_rate: last.tax_rate || 0,
+                item_code: last.item_code || '',
+              };
+            }}
+          />
+        </div>
       </div>
 
       {/* Footer Totals */}
       <div className="flex justify-end">
-        <div className="block-card w-80 space-y-3">
+        <div className="block-card w-96 space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-text-secondary">Subtotal</span>
-            <span className="font-mono text-text-primary">{fmt.format(subtotal)}</span>
+            <span className="font-mono text-text-primary">{currencyFmt.format(subtotal)}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-text-secondary">Tax</span>
-            <span className="font-mono text-text-primary">{fmt.format(taxTotal)}</span>
-          </div>
+          {(form.discount > 0) && (
+            <div className="flex justify-between text-sm">
+              <span className="text-text-secondary">Pre-Tax Amount</span>
+              <span className="font-mono text-text-primary">{currencyFmt.format(subtotal - (form.discount || 0))}</span>
+            </div>
+          )}
+          {sortedTaxRates.length > 1 ? (
+            sortedTaxRates.map((rate) => (
+              <div key={rate} className="flex justify-between text-sm">
+                <span className="text-text-secondary">Tax @ {rate}% on {currencyFmt.format(taxByRate[rate].taxable)}</span>
+                <span className="font-mono text-text-primary">{currencyFmt.format(taxByRate[rate].tax)}</span>
+              </div>
+            ))
+          ) : (
+            <div className="flex justify-between text-sm">
+              <span className="text-text-secondary">Tax</span>
+              <span className="font-mono text-text-primary">{currencyFmt.format(taxTotal)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm items-center">
-            <span className="text-text-secondary">Discount</span>
+            <span className="text-text-secondary">Discount (flat)</span>
             <input
               type="number"
-              min={0}
               step="0.01"
               className="block-input text-right font-mono w-28"
               value={form.discount}
               onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
             />
           </div>
+          {/* Header % discount — now wired into the total (was stored-and-ignored
+              before). Shown side-by-side with the flat $ discount so users see
+              the combined effect immediately. */}
+          <div className="flex justify-between text-sm items-center">
+            <span className="text-text-secondary">Discount (%)</span>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                className="block-input text-right font-mono w-20"
+                placeholder="0"
+                value={form.discount_pct || ''}
+                onChange={(e) => updateField('discount_pct', parseFloat(e.target.value) || 0)}
+              />
+              <span className="text-text-muted text-xs">%</span>
+            </div>
+          </div>
+          {headerPctDiscount > 0 && (
+            <div className="flex justify-between text-xs text-text-muted">
+              <span>({form.discount_pct}% off post-tax)</span>
+              <span className="font-mono">−{currencyFmt.format(headerPctDiscount)}</span>
+            </div>
+          )}
+          {/* Shipping row — surfaces only when Defaults › Include shipping
+              field is on, OR when the invoice already has a shipping amount
+              (so a saved invoice never silently loses its shipping line). */}
+          {(prefs.includeShipping || (form.shipping_amount || 0) > 0) && (
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-text-secondary">Shipping</span>
+              <input
+                type="number"
+                step="0.01"
+                className="block-input text-right font-mono w-28"
+                value={form.shipping_amount || ''}
+                placeholder="0.00"
+                onChange={(e) => setForm(p => ({ ...p, shipping_amount: parseFloat(e.target.value) || 0 }))}
+              />
+            </div>
+          )}
           <div
             className="flex justify-between text-sm font-bold pt-3"
             style={{ borderTop: '1px solid var(--color-border-primary)' }}
           >
-            <span className="text-text-primary">Total</span>
-            <span className="font-mono text-text-primary text-lg">{fmt.format(total)}</span>
+            <span className="text-text-primary">
+              {form.invoice_type === 'credit_note' ? 'Credit Amount' : 'Total'}
+              {form.currency !== 'USD' && <span style={{ fontSize: 10, fontWeight: 400, marginLeft: 6, color: 'var(--color-text-muted)' }}>{form.currency}</span>}
+            </span>
+            <span
+              className="font-mono text-lg"
+              style={{ color: form.invoice_type === 'credit_note' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}
+            >
+              {form.invoice_type === 'credit_note' ? `(${currencyFmt.format(Math.abs(total))}) CR` : currencyFmt.format(total)}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Notes & Terms */}
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-            Notes
+      {/* Payment Schedule */}
+      <div className="block-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSchedule ? 16 : 0 }}>
+          <div>
+            <div className="text-xs font-semibold text-text-muted uppercase tracking-wider">Payment Schedule</div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: 2 }}>Split this invoice into milestone payments</div>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" checked={showSchedule} onChange={(e) => setShowSchedule(e.target.checked)} style={{ width: 16, height: 16 }} />
+            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>Enable</span>
           </label>
-          <textarea
-            className="block-input"
-            rows={4}
-            placeholder="Notes visible to the client..."
-            value={form.notes}
-            onChange={(e) => updateField('notes', e.target.value)}
-            style={{ resize: 'vertical' }}
-          />
         </div>
-        <div>
-          <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-            Terms & Conditions
-          </label>
-          <textarea
-            className="block-input"
-            rows={4}
-            placeholder="Payment terms, late fees, etc..."
-            value={form.terms_text}
-            onChange={(e) => updateField('terms_text', e.target.value)}
-            style={{ resize: 'vertical' }}
+        {showSchedule && (
+          <PaymentScheduleEditor
+            milestones={milestones}
+            onChange={setMilestones}
+            totalAmount={total}
           />
+        )}
+      </div>
+
+      {/* Settings & References */}
+      <div className="block-card p-5 mb-4">
+        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4 pb-2 border-b border-border-primary">
+          Settings & References
+        </h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">PO Number</label>
+            <input className="block-input" placeholder="Client's purchase order #" value={form.po_number} onChange={e => setForm(p => ({ ...p, po_number: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Job / Project Reference</label>
+            <input className="block-input" placeholder="Internal job or project name" value={form.job_reference} onChange={e => setForm(p => ({ ...p, job_reference: e.target.value }))} />
+          </div>
+          {[1, 2, 3, 4].map((n) => {
+            const label = (invoiceSettings as any)?.[`custom_field_${n}_label`];
+            if (!label) return null;
+            const key = `custom_field_${n}` as keyof InvoiceFormData;
+            return (
+              <div key={n}>
+                <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                  {label}
+                </label>
+                <input
+                  className="block-input"
+                  value={(form[key] as string) || ''}
+                  onChange={(e) => updateField(key, e.target.value)}
+                />
+              </div>
+            );
+          })}
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Invoice Discount %</label>
+            <input type="number" max={100} step="0.1" className="block-input" placeholder="0" value={form.discount_pct || ''} onChange={e => setForm(p => ({ ...p, discount_pct: parseFloat(e.target.value) || 0 }))} />
+          </div>
+          <div className="flex gap-3">
+            <div style={{ flex: 1 }}>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Late Fee %</label>
+              <input type="number" step="0.1" className="block-input" placeholder="e.g. 1.5" value={form.late_fee_pct || ''} onChange={e => setForm(p => ({ ...p, late_fee_pct: parseFloat(e.target.value) || 0 }))} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Grace Days</label>
+              <input type="number" min={0} step={1} className="block-input" placeholder="0" value={form.late_fee_grace_days || ''} onChange={e => setForm(p => ({ ...p, late_fee_grace_days: parseInt(e.target.value) || 0 }))} />
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Notes */}
+      <div className="block-card p-5 mb-4">
+        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4 pb-2 border-b border-border-primary">Notes</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+              Client Notes <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, textTransform: 'none', fontSize: 11 }}>(printed on invoice)</span>
+            </label>
+            <textarea className="block-input" rows={3} placeholder="Notes visible to your client..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+              Internal Notes <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, textTransform: 'none', fontSize: 11 }}>(never printed)</span>
+            </label>
+            <textarea className="block-input" rows={3} placeholder="Private notes for your team..." value={form.internal_notes} onChange={e => setForm(p => ({ ...p, internal_notes: e.target.value }))} />
+          </div>
+        </div>
+      </div>
+
+      {/* Terms & Conditions */}
+      <div>
+        <label className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
+          Terms &amp; Conditions
+        </label>
+        <textarea
+          className="block-input"
+          rows={4}
+          placeholder="Payment terms, late fees, etc..."
+          value={form.terms_text}
+          onChange={(e) => updateField('terms_text', e.target.value)}
+          style={{ resize: 'vertical' }}
+        />
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div
+        className="module-header"
+        style={{ flexShrink: 0, padding: '0 24px', borderBottom: '1px solid var(--color-border-primary)' }}
+      >
+        <div className="flex items-center gap-3">
+          <button onClick={guardedBack} className="block-btn p-2" title="Back">
+            <ArrowLeft size={16} />
+          </button>
+          <h1 className="module-title text-text-primary">
+            {isEdit ? 'Edit' : 'New'} {typeConfig.label} Invoice
+          </h1>
+        </div>
+        <div className="module-actions">
+          <button
+            className="block-btn flex items-center gap-1.5"
+            onClick={() => setShowPreview((v) => !v)}
+            title={showPreview ? 'Hide preview' : 'Show live preview'}
+          >
+            {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+            {showPreview ? 'Hide Preview' : 'Preview'}
+          </button>
+          <button className="block-btn" disabled={saving} onClick={() => handleSave(false)}>
+            {saving ? 'Saving...' : 'Save as Draft'}
+          </button>
+          <button className="block-btn-primary" disabled={saving} onClick={() => handleSave(true)}>
+            {saving ? 'Saving...' : 'Save & Send'}
+          </button>
+        </div>
+      </div>
+
+      {/* Body: single-pane or split-pane */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Form pane */}
+        <div
+          style={{
+            width: showPreview ? '540px' : '100%',
+            flexShrink: 0,
+            overflowY: 'auto',
+            borderRight: showPreview ? '1px solid var(--color-border-primary)' : 'none',
+          }}
+        >
+          {formContent}
+        </div>
+
+        {/* Preview pane */}
+        {showPreview && (
+          <div style={{ flex: 1, overflow: 'hidden', background: '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '8px 12px', fontSize: '11px', color: '#64748b', fontWeight: 600, background: '#e2e8f0', borderBottom: '1px solid #cbd5e1', flexShrink: 0 }}>
+              LIVE PREVIEW
+            </div>
+            {/* Deliberate exception to the PDF-redesign: the live-edit preview
+                stays an HTML iframe (not <PdfPreview>) for per-keystroke
+                responsiveness — re-rendering a real PDF on every edit would be
+                too slow. The Preview/Print/Save actions route through the real
+                classic-PDF pipeline (api.printPreview / api.print / api.saveToPDF). */}
+            <iframe
+              srcDoc={previewHTML}
+              title="Invoice Preview"
+              style={{ flex: 1, border: 'none', width: '100%', background: '#fff' }}
+              sandbox="allow-same-origin"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* P1.12 — Duplicate-invoice confirm modal. Renders when
+          checkDuplicateInvoices returned matches; user picks Continue
+          (re-invokes handleSave with bypassDuplicate=true) or Cancel
+          (clears state, returns control to the form). */}
+      {duplicateCandidates.length > 0 && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+          onClick={() => { setDuplicateCandidates([]); setPendingSendAfterSave(false); }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--color-bg-primary)',
+              border: '1px solid var(--color-border-primary)',
+              borderRadius: 8,
+              maxWidth: 560,
+              width: '100%',
+              padding: 24,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{ fontSize: 20 }} aria-hidden>⚠️</span>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                Possible duplicate invoice
+              </h3>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 14 }}>
+              The same client has {duplicateCandidates.length === 1 ? 'a recent invoice' : `${duplicateCandidates.length} recent invoices`} with a similar total and due date. This is the most common cause of double-billing — review before continuing.
+            </p>
+            <div style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 6, padding: 12, marginBottom: 16, maxHeight: 200, overflowY: 'auto' }}>
+              {duplicateCandidates.map((d) => {
+                const ageDays = Math.max(0, Math.floor((Date.now() - new Date(d.created_at).getTime()) / 86_400_000));
+                return (
+                  <div key={d.id} style={{ fontSize: 12, padding: '6px 0', borderBottom: '1px dashed var(--color-border-primary)', display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{d.invoice_number}</div>
+                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                        {formatStatus(d.status).label} · saved {ageDays === 0 ? 'today' : `${ageDays} day${ageDays === 1 ? '' : 's'} ago`}
+                        {d.due_date ? ` · due ${d.due_date}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700, fontSize: 13, color: 'var(--color-text-primary)' }}>
+                      ${d.total.toFixed(2)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                className="block-btn"
+                onClick={() => { setDuplicateCandidates([]); setPendingSendAfterSave(false); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="block-btn-primary"
+                onClick={() => {
+                  const sendAfter = pendingSendAfterSave;
+                  setDuplicateCandidates([]);
+                  setPendingSendAfterSave(false);
+                  // Re-invoke handleSave with bypass flag set
+                  handleSave(sendAfter, true);
+                }}
+              >
+                Save Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

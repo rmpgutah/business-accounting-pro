@@ -1,10 +1,19 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { ArrowLeft, Send, DollarSign, FileText, Calendar, Edit, Download, Eye, Mail, Printer, Copy, Scale, Bell, Trash2, Repeat, Activity, TrendingUp, Share2, Eye as EyeIcon, AlertTriangle } from 'lucide-react';
 import api from '../../lib/api';
-import { generateInvoiceHTML } from '../../lib/print-templates';
+import ErrorBanner from '../../components/ErrorBanner';
+import PortalShareModal from '../../components/PortalShareModal';
+import { generateInvoiceHTML, InvoiceSettings } from '../../lib/print-templates';
+import { computeInvoicePaidStatus } from '../../../shared/payment-math';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
+import { useNavigation } from '../../lib/navigation';
 import PaymentRecorder from './PaymentRecorder';
+import { formatCurrency, formatStatus, formatDate, humanizeLabel, formatPaymentMethod } from '../../lib/format';
+import RelatedPanel from '../../components/RelatedPanel';
+import { InvoiceStatusBadge, PaymentProgress, DueDateChip } from '../../components/library';
+import EntityTimeline from '../../components/EntityTimeline';
+import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'partial';
@@ -23,7 +32,73 @@ interface Invoice {
   status: InvoiceStatus;
   terms: string;
   notes: string;
+  po_number?: string;
+  job_reference?: string;
+  internal_notes?: string;
+  late_fee_pct?: number;
+  late_fee_grace_days?: number;
+  discount_pct?: number;
+  invoice_type?: string;
+  currency?: string;
+  shipping_amount?: number;
+  // 2026-04 enhancements
+  times_sent?: number;
+  portal_viewed_count?: number;
+  last_viewed_at?: string;
+  tags?: string;
 }
+
+interface ActivityEntry {
+  id: string;
+  invoice_id: string;
+  activity_type: string;
+  description: string;
+  user_name: string;
+  metadata_json?: string;
+  created_at: string;
+}
+
+interface PaymentPrediction {
+  predicted_date?: string;
+  predictedDate?: string;
+  avg_days_to_pay?: number;
+  confidence?: number;
+  [key: string]: any;
+}
+
+// PORTAL: privacy preview — returns ONLY the fields the public portal exposes.
+// Internal-only fields (internal_notes, created_by, late_fee_pct, etc.) are
+// deliberately excluded so the user can audit what the recipient sees before
+// they share. Keep this in sync with what the server-side portal renders.
+export function getInvoicePortalPreview(
+  invoice: { invoice_number: string; issue_date: string; due_date: string; total: number; amount_paid: number; status: string; currency?: string; notes?: string; terms?: string },
+  client: { name?: string } | null,
+): React.ReactNode {
+  return (
+    <div className="space-y-1">
+      <div><span className="text-text-muted">Invoice:</span> <span className="font-mono">{invoice.invoice_number}</span></div>
+      <div><span className="text-text-muted">Bill to:</span> {client?.name ?? '—'}</div>
+      <div><span className="text-text-muted">Issued:</span> {invoice.issue_date || '—'}</div>
+      <div><span className="text-text-muted">Due:</span> {invoice.due_date || '—'}</div>
+      <div><span className="text-text-muted">Status:</span> {formatStatus(invoice.status).label}</div>
+      <div><span className="text-text-muted">Total:</span> {(invoice.currency ?? 'USD')} {invoice.total?.toFixed(2)}</div>
+      <div><span className="text-text-muted">Paid:</span> {(invoice.currency ?? 'USD')} {invoice.amount_paid?.toFixed(2)}</div>
+      {invoice.terms && <div><span className="text-text-muted">Terms:</span> {invoice.terms}</div>}
+      {invoice.notes && <div><span className="text-text-muted">Notes:</span> {invoice.notes}</div>}
+      <div className="text-text-muted italic pt-1 border-t border-border-primary mt-2">
+        Hidden from recipient: internal notes, created-by, late-fee config.
+      </div>
+    </div>
+  );
+}
+
+const INVOICE_TYPE_COLORS: Record<string, string> = {
+  service:     'var(--color-accent-blue)',
+  product:     'var(--color-accent-purple)',
+  retainer:    'var(--color-accent-warning)',
+  credit_note: 'var(--color-accent-income)',
+  proforma:    'var(--color-text-muted)',
+};
 
 interface LineItem {
   id: string;
@@ -32,6 +107,9 @@ interface LineItem {
   unit_price: number;
   amount: number;
   tax_rate: number;
+  tax_rate_override?: number;
+  discount_pct?: number;
+  row_type?: string;
   account_id: string;
 }
 
@@ -57,23 +135,6 @@ interface Payment {
   reference: string;
 }
 
-// ─── Currency Formatter ─────────────────────────────────
-const fmt = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-// ─── Status Badge Map ───────────────────────────────────
-const STATUS_BADGE: Record<InvoiceStatus, { label: string; className: string }> = {
-  draft: { label: 'Draft', className: 'block-badge block-badge-blue' },
-  sent: { label: 'Sent', className: 'block-badge block-badge-warning' },
-  paid: { label: 'Paid', className: 'block-badge block-badge-income' },
-  overdue: { label: 'Overdue', className: 'block-badge block-badge-expense' },
-  partial: { label: 'Partial', className: 'block-badge block-badge-purple' },
-};
-
 // ─── Component ──────────────────────────────────────────
 interface InvoiceDetailProps {
   invoiceId: string;
@@ -84,6 +145,7 @@ interface InvoiceDetailProps {
 const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const setModule = useAppStore((s) => s.setModule);
+  const nav = useNavigation();
 
   const sendToCollections = (id: string) => {
     sessionStorage.setItem('nav:source_invoice', id);
@@ -95,30 +157,177 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [editPaymentId, setEditPaymentId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [reminders, setReminders] = useState<any[]>([]);
+  const [schedulingReminders, setSchedulingReminders] = useState(false);
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings | null>(null);
+  const [paymentSchedule, setPaymentSchedule] = useState<any[]>([]);
+  const [debtLink, setDebtLink] = useState<any>(null);
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
+  const [prediction, setPrediction] = useState<PaymentPrediction | null>(null);
+  const [allClientInvoices, setAllClientInvoices] = useState<any[]>([]);
+  const [applyingLateFee, setApplyingLateFee] = useState(false);
+  const [convertingRecurring, setConvertingRecurring] = useState(false);
+  // PORTAL: share modal + cached base URL (resolved from main via `portal:base-url`).
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [portalBaseUrl, setPortalBaseUrl] = useState<string>('https://rmpgutahps.us/client/login');
+  // P1.9 — Inline print preview pane (live updates as fields change,
+  // no round-trip through the OS print system). Toggled via the Eye
+  // button alongside the existing "Preview" button (which still opens
+  // the system preview window for full-screen scrutiny).
+  const [showInlinePreview, setShowInlinePreview] = useState(false);
+  useEffect(() => {
+    api.portalBaseUrl().then(r => { if (r?.baseUrl) setPortalBaseUrl(r.baseUrl); }).catch(() => {});
+  }, []);
 
-  const buildHTML = () => {
+  // Memoized HTML for the inline preview iframe. Skips portal-token
+  // resolution (it's async and would require effect+state) — the QR
+  // section gracefully degrades to nothing when no token is present.
+  // Trade-off: the inline preview lacks a live QR, but updates
+  // synchronously as fields change. The full Preview/Print buttons
+  // still go through buildHTML() which DOES fetch the token.
+  const inlinePreviewHTML = useMemo(() => {
+    if (!showInlinePreview || !invoice) return '';
+    const settingsWithBase: any = invoiceSettings
+      ? { ...invoiceSettings, portal_base_url: portalBaseUrl }
+      : { portal_base_url: portalBaseUrl };
+    return generateInvoiceHTML(invoice, activeCompany, client, lines, settingsWithBase, paymentSchedule);
+  }, [showInlinePreview, invoice, client, lines, invoiceSettings, paymentSchedule, activeCompany, portalBaseUrl]);
+
+  // ── P1.10: Page-break analysis ───────────────────────────────
+  // After the iframe loads, walk the rendered DOM and figure out
+  // (a) how many printed pages this will produce and (b) which line
+  // items will straddle a page boundary (bad UX — a row split across
+  // two pages is hard to read).
+  //
+  // Page math: Letter = 8.5×11" = 816×1056 px @ 96 DPI. Default
+  // @page margins set in baseStyles are 0.55" top + 0.85" bottom +
+  // 0.5" sides → printable area is 7.5"w × 9.6"h = 720×921 px.
+  // The first page also reserves space for the @bottom-left/right
+  // running content (~12pt + padding ≈ 24px per box).
+  const previewIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const PRINTABLE_PAGE_HEIGHT_PX = 921; // 9.6" at 96 DPI
+  const [pageAnalysis, setPageAnalysis] = useState<{
+    pageCount: number;
+    straddlers: Array<{ rowIndex: number; description: string; pageBoundary: number }>;
+    docHeightPx: number;
+  } | null>(null);
+
+  const analyzePages = useCallback(() => {
+    const iframe = previewIframeRef.current;
+    if (!iframe || !iframe.contentDocument) return;
+    try {
+      const doc = iframe.contentDocument;
+      const body = doc.body;
+      if (!body) return;
+      const docHeight = body.scrollHeight;
+      const pageCount = Math.max(1, Math.ceil(docHeight / PRINTABLE_PAGE_HEIGHT_PX));
+
+      // Find rows that straddle a page boundary. We only flag <tr>
+      // elements inside <tbody> (header rows are handled by CSS
+      // display:table-header-group which auto-repeats).
+      const straddlers: Array<{ rowIndex: number; description: string; pageBoundary: number }> = [];
+      const rows = Array.from(doc.querySelectorAll('tbody tr')) as HTMLElement[];
+      rows.forEach((row, idx) => {
+        const top = row.offsetTop;
+        const height = row.offsetHeight;
+        const bottom = top + height;
+        // For each page boundary the row crosses, record one warning.
+        for (let p = 1; p < pageCount; p++) {
+          const boundary = p * PRINTABLE_PAGE_HEIGHT_PX;
+          if (top < boundary && bottom > boundary) {
+            // Pull a short label from the first text-bearing cell.
+            const firstCell = row.querySelector('td');
+            const label = (firstCell?.textContent || '').trim().slice(0, 60) || `Row ${idx + 1}`;
+            straddlers.push({ rowIndex: idx + 1, description: label, pageBoundary: p });
+          }
+        }
+      });
+
+      setPageAnalysis({ pageCount, straddlers, docHeightPx: docHeight });
+    } catch (err) {
+      // contentDocument access can throw if cross-origin (shouldn't
+      // happen with srcDoc, but defensive). Skip analysis on failure.
+      setPageAnalysis(null);
+    }
+  }, []);
+
+  // Re-run analysis whenever the preview HTML changes. Slight delay
+  // gives the iframe time to layout after srcDoc swap.
+  useEffect(() => {
+    if (!showInlinePreview || !inlinePreviewHTML) {
+      setPageAnalysis(null);
+      return;
+    }
+    const t = setTimeout(analyzePages, 250);
+    return () => clearTimeout(t);
+  }, [inlinePreviewHTML, showInlinePreview, analyzePages]);
+
+  // PORTAL: lazy-resolve the invoice's portal token so the printed PDF
+  // can render a scannable QR. Idempotent — the IPC handler returns the
+  // existing token if any, otherwise creates a new one with the
+  // configured expiry. We attach it to a copy of the invoice rather
+  // than mutating state so React doesn't re-render unnecessarily.
+  const buildHTML = async (): Promise<string> => {
     if (!invoice) return '';
-    return generateInvoiceHTML(invoice, activeCompany, client, lines);
+    let portalToken: string | null = null;
+    try {
+      const res = await api.generateInvoiceToken(invoice.id);
+      portalToken = (res as any)?.token || null;
+    } catch {
+      portalToken = null; // Graceful: render without QR if token fails
+    }
+    const invoiceWithToken = portalToken
+      ? { ...invoice, portal_token: portalToken }
+      : invoice;
+    const settingsWithBase: any = invoiceSettings
+      ? { ...invoiceSettings, portal_base_url: portalBaseUrl }
+      : { portal_base_url: portalBaseUrl };
+    return generateInvoiceHTML(invoiceWithToken, activeCompany, client, lines, settingsWithBase, paymentSchedule);
   };
 
   const handlePreview = async () => {
-    const html = buildHTML();
+    const html = await buildHTML();
     if (!html) return;
     await api.printPreview(html, `Invoice ${invoice?.invoice_number || ''}`);
   };
 
   const handlePrint = async () => {
-    const html = buildHTML();
+    const html = await buildHTML();
     if (!html) return;
     await api.print(html);
   };
 
   const handleSavePDF = async () => {
-    const html = buildHTML();
-    if (!html) return;
-    await api.saveToPDF(html, `Invoice-${invoice?.invoice_number || ''}`);
+    const html = await buildHTML();
+    if (!html || !invoice) return;
+    // P1.6: thread PDF metadata through so Finder/Spotlight/Adobe see
+    // descriptive Title/Author/Subject/Keywords on the saved PDF.
+    const cur = (invoice.currency || 'USD').toUpperCase();
+    const totalNum = Number((invoice as any).total ?? (invoice as any).total_amount ?? 0);
+    const totalStr = (() => {
+      try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(totalNum); }
+      catch { return `${cur} ${totalNum.toFixed(2)}`; }
+    })();
+    const isCredit = (invoice as any).invoice_type === 'credit_note';
+    const docType = isCredit ? 'Credit Note' : 'Invoice';
+    const num = invoice.invoice_number || invoice.id;
+    await api.saveToPDF(html, `${docType}-${num}`, {
+      doctype: docType.toLowerCase().replace(/\s+/g, '-'),
+      identifier: String(num),
+      pdfOptions: {
+        metadata: {
+          title: `${docType} ${num}${client?.name ? ' — ' + client.name : ''}`,
+          author: activeCompany?.name || 'Business Accounting Pro',
+          subject: `${docType} #${num} for ${totalStr}${invoice.due_date ? ' — Due ' + invoice.due_date : ''}`,
+          keywords: [docType.toLowerCase(), String(num), client?.name || '', cur, invoice.status || ''].filter(Boolean),
+          creator: 'Business Accounting Pro',
+        },
+      },
+    });
   };
 
   const loadData = async () => {
@@ -127,15 +336,51 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
       if (!inv) return;
       setInvoice(inv);
 
+      // Critical data: client, lines, payments
       const [clientData, lineData, paymentData] = await Promise.all([
         api.get('clients', inv.client_id),
-        api.query('invoice_line_items', { invoice_id: invoiceId }),
+        api.query('invoice_line_items', { invoice_id: invoiceId }, { field: 'sort_order', dir: 'asc' }),
         api.query('payments', { invoice_id: invoiceId }),
       ]);
 
       setClient(clientData ?? null);
-      setLines(lineData ?? []);
-      setPayments(paymentData ?? []);
+      setLines(Array.isArray(lineData) ? lineData : []);
+      setPayments(Array.isArray(paymentData) ? paymentData : []);
+
+      // Non-critical secondary data — failures don't hide primary content
+      api.invoiceListReminders(invoiceId)
+        .then(r => { setReminders(Array.isArray(r) ? r : []); })
+        .catch(() => {});
+      api.getInvoiceSettings()
+        .then(r => { if (r && !r.error) setInvoiceSettings(r); })
+        .catch(() => {});
+      api.listPaymentSchedule(invoiceId)
+        .then(r => { setPaymentSchedule(Array.isArray(r) ? r : []); })
+        .catch(() => {});
+      api.getInvoiceDebtLink(invoiceId).then(setDebtLink).catch(() => {});
+
+      // Activity log
+      api.rawQuery(
+        `SELECT * FROM invoice_activity_log WHERE invoice_id = ? ORDER BY created_at DESC LIMIT 50`,
+        [invoiceId]
+      ).then((rows: any) => {
+        setActivityLog(Array.isArray(rows) ? rows : []);
+      }).catch(() => {});
+
+      // Predicted payment (only if unpaid)
+      if (inv.status !== 'paid' && (inv.status as string) !== 'void' && (inv.status as string) !== 'cancelled') {
+        api.intelPredictPayment(invoiceId).then((r: any) => {
+          if (r && !r.error) setPrediction(r);
+        }).catch(() => {});
+      }
+
+      // All client invoices (for Statement print)
+      if (inv.client_id) {
+        api.query('invoices', { client_id: inv.client_id }, { field: 'issue_date', dir: 'desc' })
+          .then((rows: any) => {
+            setAllClientInvoices(Array.isArray(rows) ? rows : []);
+          }).catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to load invoice detail:', err);
     } finally {
@@ -152,18 +397,52 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     [invoice]
   );
 
+  const taxByRate = useMemo(() => {
+    const map: Record<string, { taxable: number; tax: number }> = {};
+    for (const l of lines) {
+      if ((l.row_type || 'item') !== 'item') continue;
+      const override = l.tax_rate_override;
+      const rate = (override != null && override >= 0) ? override : l.tax_rate;
+      if (rate <= 0) continue;
+      const base = l.quantity * l.unit_price * (1 - (l.discount_pct || 0) / 100);
+      const key = rate.toFixed(2);
+      if (!map[key]) map[key] = { taxable: 0, tax: 0 };
+      map[key].taxable += base;
+      map[key].tax += base * (rate / 100);
+    }
+    return map;
+  }, [lines]);
+
+  const sortedTaxRates = useMemo(
+    () => Object.keys(taxByRate).sort((a, b) => parseFloat(a) - parseFloat(b)),
+    [taxByRate]
+  );
+
   const handleSendInvoice = async () => {
     if (!invoice || invoice.status === 'paid') return;
     setSending(true);
+    setActionError('');
     try {
-      const result = await api.sendInvoiceEmail(invoiceId);
+      // Build the SAME HTML the user saw in preview so the attached PDF matches.
+      const html = await buildHTML();
+      const result = await api.sendInvoiceEmail(invoiceId, html || undefined);
       if (result?.error) {
+        // VISIBILITY: surface send-invoice errors instead of swallowing
         console.error('Send invoice failed:', result.error);
-      } else if (result?.newStatus) {
-        setInvoice((prev) => (prev ? { ...prev, status: result.newStatus as InvoiceStatus } : prev));
+        setActionError(`Failed to open email: ${result.error}`);
+      } else if (result?.success) {
+        if (result.newStatus) {
+          setInvoice((prev) => (prev ? { ...prev, status: result.newStatus as InvoiceStatus } : prev));
+        }
+        // Let the user know the PDF is ready for manual attachment
+        if (result.pdfPath) {
+          console.info('Invoice PDF saved to:', result.pdfPath);
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
+      // VISIBILITY: surface send-invoice exceptions instead of swallowing
       console.error('Failed to send invoice:', err);
+      setActionError(err?.message ?? String(err));
     } finally {
       setSending(false);
     }
@@ -172,12 +451,14 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
   const handleCopyPortalLink = async () => {
     try {
       const { token } = await api.generateInvoiceToken(invoice!.id);
-      const url = `https://accounting.rmpgutah.us/portal/${token}`;
+      // PORTAL: build URL from configured SYNC_SERVER (setting-driven), not a hardcoded host.
+      const url = `${portalBaseUrl}/portal/${token}`;
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to copy portal link:', err);
+      setActionError(`Copy failed: ${err?.message ?? String(err)}`);
     }
   };
 
@@ -186,9 +467,124 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     const result = await api.cloneRecord('invoices', invoice.id);
     if (result?.error) {
       console.error('Duplicate invoice failed:', result.error);
+      alert('Failed to duplicate invoice: ' + result.error);
       return;
     }
-    onBack();
+    if (result?.id) {
+      onEdit(result.id); // Open the cloned invoice for editing
+    } else {
+      onBack();
+    }
+  };
+
+  const handleScheduleReminders = async () => {
+    if (!invoice) return;
+    setSchedulingReminders(true);
+    try {
+      await api.invoiceScheduleReminders(invoiceId);
+      const updated = await api.invoiceListReminders(invoiceId);
+      setReminders(updated ?? []);
+    } catch (err: any) {
+      // VISIBILITY: surface schedule-reminders errors instead of swallowing
+      console.error('Failed to schedule reminders:', err);
+      setActionError(`Failed to schedule reminders: ${err?.message ?? String(err)}`);
+    } finally {
+      setSchedulingReminders(false);
+    }
+  };
+
+  const handleApplyLateFee = async () => {
+    if (!invoice) return;
+    setApplyingLateFee(true);
+    try {
+      const result = await api.applyLateFees();
+      await api.create('invoice_activity_log', {
+        invoice_id: invoice.id,
+        activity_type: 'late_fee_applied',
+        description: `Late fees evaluated — ${result?.applied || 0} invoice(s) updated`,
+      });
+      loadData();
+    } catch (err: any) {
+      console.error('Apply late fee failed:', err);
+      setActionError(`Failed to apply late fee: ${err?.message ?? String(err)}`);
+    } finally {
+      setApplyingLateFee(false);
+    }
+  };
+
+  const handleConvertToRecurring = async () => {
+    if (!invoice) return;
+    setConvertingRecurring(true);
+    try {
+      // Shell: log the intent, then route the user to the Recurring module.
+      await api.create('invoice_activity_log', {
+        invoice_id: invoice.id,
+        activity_type: 'convert_to_recurring',
+        description: 'User clicked Convert to Recurring',
+      });
+      sessionStorage.setItem('nav:source_invoice', invoice.id);
+      setModule('recurring');
+    } catch (err: any) {
+      console.error('Convert to recurring failed:', err);
+      setActionError(`Failed to convert: ${err?.message ?? String(err)}`);
+    } finally {
+      setConvertingRecurring(false);
+    }
+  };
+
+  const handlePrintStatement = async () => {
+    if (!invoice || !client) return;
+    const rows = allClientInvoices;
+    const totalOutstanding = rows
+      .filter((r) => r.status !== 'paid' && r.status !== 'void' && r.status !== 'cancelled')
+      .reduce((s: number, r: any) => s + ((r.total || 0) - (r.amount_paid || 0)), 0);
+    const html = `
+      <html><head><title>Statement — ${client.name}</title>
+      <style>
+        body { font-family: -apple-system, sans-serif; padding: 32px; color: #111; }
+        h1 { font-size: 22px; margin-bottom: 4px; }
+        .sub { color: #555; font-size: 12px; margin-bottom: 24px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+        th { background: #f4f4f4; }
+        .num { text-align: right; font-family: monospace; }
+        .total { font-weight: bold; font-size: 14px; margin-top: 16px; text-align: right; }
+        .row-current { background: #fff7d6; }
+      </style></head><body>
+        <h1>Customer Statement</h1>
+        <div class="sub">${client.name} — Generated ${new Date().toLocaleDateString()}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Issue Date</th>
+              <th>Due Date</th>
+              <th>Status</th>
+              <th class="num">Total</th>
+              <th class="num">Paid</th>
+              <th class="num">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((r: any) => {
+              const balance = (r.total || 0) - (r.amount_paid || 0);
+              const cls = r.id === invoice.id ? 'row-current' : '';
+              return `<tr class="${cls}">
+                <td>${r.invoice_number || ''}</td>
+                <td>${formatDate(r.issue_date)}</td>
+                <td>${formatDate(r.due_date)}</td>
+                <td>${r.status || ''}</td>
+                <td class="num">${formatCurrency(r.total || 0)}</td>
+                <td class="num">${formatCurrency(r.amount_paid || 0)}</td>
+                <td class="num">${formatCurrency(balance)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        <div class="total">Total Outstanding: ${formatCurrency(totalOutstanding)}</div>
+      </body></html>
+    `;
+    await api.printPreview(html, `Statement — ${client.name}`);
   };
 
   const handlePaymentSaved = () => {
@@ -206,10 +602,18 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
     );
   }
 
-  const badge = STATUS_BADGE[invoice.status] ?? STATUS_BADGE.draft;
+  const badge = formatStatus(invoice.status);
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full">
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+      <div className="p-6 space-y-6 overflow-y-auto" style={{ flex: showInlinePreview ? '1 1 55%' : '1 1 100%', minWidth: 0 }}>
+      {actionError && (
+        <ErrorBanner
+          message={actionError}
+          title="Action failed"
+          onDismiss={() => setActionError('')}
+        />
+      )}
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
@@ -218,8 +622,40 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </button>
           <h1 className="module-title text-text-primary">{invoice.invoice_number}</h1>
           <span className={badge.className}>{badge.label}</span>
+          {invoice.invoice_type && invoice.invoice_type !== 'standard' && (
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase',
+              background: (INVOICE_TYPE_COLORS[invoice.invoice_type] || 'var(--color-text-muted)') + '22',
+              color: INVOICE_TYPE_COLORS[invoice.invoice_type] || 'var(--color-text-muted)',
+            }}>
+              {humanizeLabel(invoice.invoice_type)}
+            </span>
+          )}
+          {invoice.currency && invoice.currency !== 'USD' && (
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '2px 6px', borderRadius: 6, background: 'var(--color-bg-tertiary)' }}>
+              {invoice.currency}
+            </span>
+          )}
+          {debtLink && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-accent-expense)', background: 'var(--color-accent-expense-bg)', padding: '2px 8px', borderRadius: 6 }}>
+              In Collections
+            </span>
+          )}
         </div>
         <div className="module-actions">
+          {/* P1.9 — Toggle inline preview pane. The existing Preview
+              button still opens the system preview window for full-page
+              scrutiny; this toggle gives a quick side-by-side check
+              without leaving the detail view. */}
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={() => setShowInlinePreview(v => !v)}
+            title={showInlinePreview ? 'Hide inline preview' : 'Show inline preview alongside the form'}
+            style={showInlinePreview ? { background: 'var(--color-accent-blue)', color: '#fff', borderColor: 'var(--color-accent-blue)' } : undefined}
+          >
+            <Eye size={14} />
+            {showInlinePreview ? 'Hide Inline' : 'Inline Preview'}
+          </button>
           <button
             className="block-btn flex items-center gap-2"
             onClick={handlePreview}
@@ -243,45 +679,50 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </button>
           <button
             onClick={handleCopyPortalLink}
-            className="block-btn text-xs"
+            className="px-3 py-1.5 border-2 border-border-primary text-xs font-bold uppercase tracking-wider hover:bg-bg-primary hover:text-white transition-colors flex items-center gap-1"
+            title="Copy a shareable portal link to the clipboard"
           >
-            {copied ? 'Copied!' : 'Copy Portal Link'}
+            {copied ? <><span aria-hidden>✓</span> Copied!</> : 'Copy Portal Link'}
+          </button>
+          {/* A11Y: live region announces the copy action without stealing focus. */}
+          <span aria-live="polite" className="sr-only">{copied ? 'Portal link copied to clipboard' : ''}</span>
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="block-btn flex items-center gap-2"
+            title="Open share options (regenerate, disable, preview)"
+          >
+            <Share2 size={14} />
+            Share
           </button>
           <button
             onClick={handleDuplicate}
-            className="block-btn flex items-center gap-2"
+            className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors"
           >
             <Copy size={14} /> Duplicate
           </button>
-          {invoice.status === 'draft' && (
-            <button
-              className="block-btn flex items-center gap-2"
-              onClick={() => onEdit(invoiceId)}
-            >
-              <Edit size={14} />
-              Edit
-            </button>
-          )}
-          {invoice.status !== 'paid' && (
-            <>
-              <button
-                className="block-btn-primary flex items-center gap-2"
-                onClick={handleSendInvoice}
-                disabled={sending}
-              >
-                <Mail size={14} />
-                {sending ? 'Sending...' : 'Send Invoice'}
-              </button>
-              <button
-                className="block-btn-success flex items-center gap-2"
-                onClick={() => setShowPaymentModal(true)}
-              >
-                <DollarSign size={14} />
-                Record Payment
-              </button>
-            </>
-          )}
-          {invoice.status === 'overdue' && (
+          <button
+            className="block-btn flex items-center gap-2"
+            onClick={() => onEdit(invoiceId)}
+          >
+            <Edit size={14} />
+            Edit
+          </button>
+          <button
+            className="block-btn-primary flex items-center gap-2"
+            onClick={handleSendInvoice}
+            disabled={sending}
+          >
+            <Mail size={14} />
+            {sending ? 'Sending...' : 'Send Invoice'}
+          </button>
+          <button
+            className="block-btn-success flex items-center gap-2"
+            onClick={() => { setEditPaymentId(null); setShowPaymentModal(true); }}
+          >
+            <DollarSign size={14} />
+            Record Payment
+          </button>
+          {invoice.status === 'overdue' && (invoice.total - (invoice.amount_paid || 0)) > 0.005 && (
             <button
               onClick={() => sendToCollections(invoice.id)}
               className="block-btn text-xs flex items-center gap-2"
@@ -314,19 +755,31 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 <span className="text-text-muted flex items-center gap-1.5">
                   <Calendar size={12} /> Issue Date
                 </span>
-                <span className="text-text-primary">{invoice.issue_date}</span>
+                <span className="text-text-primary">{formatDate(invoice.issue_date)}</span>
               </div>
               <div>
                 <span className="text-text-muted flex items-center gap-1.5">
                   <Calendar size={12} /> Due Date
                 </span>
-                <span className="text-text-primary">{invoice.due_date}</span>
+                <span className="text-text-primary">{formatDate(invoice.due_date)}</span>
               </div>
             </div>
             {invoice.terms && (
               <div className="text-sm">
                 <span className="text-text-muted">Terms: </span>
                 <span className="text-text-secondary">{invoice.terms}</span>
+              </div>
+            )}
+            {invoice.po_number && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className="text-text-muted" style={{ fontSize: 11 }}>PO#</span>
+                <span className="text-text-primary" style={{ fontSize: 12, fontWeight: 500 }}>{invoice.po_number}</span>
+              </div>
+            )}
+            {invoice.job_reference && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className="text-text-muted" style={{ fontSize: 11 }}>Project</span>
+                <span className="text-text-primary" style={{ fontSize: 12, fontWeight: 500 }}>{invoice.job_reference}</span>
               </div>
             )}
           </div>
@@ -338,18 +791,21 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             </span>
             {client ? (
               <div className="space-y-1 text-sm">
-                <p className="text-text-primary font-semibold text-base">{client.name}</p>
+                <p className="text-text-primary font-semibold text-base">
+                  <EntityChip type="client" id={client.id} label={client.name} variant="inline" />
+                </p>
                 {client.email && <p className="text-text-secondary">{client.email}</p>}
-                {(client.address_line1 || client.city) && (
-                  <p className="text-text-muted whitespace-pre-line">
-                    {[
-                      client.address_line1,
-                      client.address_line2,
-                      [client.city, client.state, client.zip].filter(Boolean).join(', '),
-                      client.country,
-                    ].filter(Boolean).join('\n')}
-                  </p>
-                )}
+                {(() => {
+                  const addr = [
+                    client.address_line1,
+                    client.address_line2,
+                    [client.city, client.state, client.zip].filter(Boolean).join(', '),
+                    client.country && client.country !== 'US' ? client.country : '',
+                  ].filter(Boolean);
+                  return addr.length > 0 ? (
+                    <p className="text-text-muted whitespace-pre-line">{addr.join('\n')}</p>
+                  ) : null;
+                })()}
                 {client.phone && <p className="text-text-muted">{client.phone}</p>}
               </div>
             ) : (
@@ -358,70 +814,118 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           </div>
         </div>
 
-        {/* Line Items Table */}
-        <table className="block-table mb-6">
+        {/* Line Items Table — wrap in fade-edge container so right-side
+            columns (Tax %, Tax Amount, Amount) don't get visually clipped
+            on narrow viewports without the user noticing. */}
+        <div className="table-wrap-fade mb-6">
+        <table className="block-table">
           <thead>
             <tr>
               <th>Description</th>
-              <th className="text-right">Qty</th>
-              <th className="text-right">Unit Price</th>
-              <th className="text-right">Tax %</th>
-              <th className="text-right">Amount</th>
+              <th className="text-right col-nowrap">Qty</th>
+              <th className="text-right col-nowrap">Unit Price</th>
+              <th className="text-right col-nowrap">Tax %</th>
+              <th className="text-right col-nowrap">Tax Amount</th>
+              <th className="text-right col-nowrap">Amount</th>
             </tr>
           </thead>
           <tbody>
-            {lines.map((line) => (
-              <tr key={line.id}>
-                <td className="text-text-primary">{line.description}</td>
-                <td className="text-right font-mono text-text-secondary">{line.quantity}</td>
-                <td className="text-right font-mono text-text-secondary">
-                  {fmt.format(line.unit_price)}
-                </td>
-                <td className="text-right font-mono text-text-secondary">
-                  {line.tax_rate > 0 ? `${line.tax_rate}%` : '--'}
-                </td>
-                <td className="text-right font-mono text-text-primary">
-                  {fmt.format(line.quantity * line.unit_price)}
-                </td>
-              </tr>
-            ))}
+            {lines.map((line) => {
+              // MATH: Apply per-line discount_pct to base, mirror InvoiceForm/print template
+              // so this UI table reconciles with the totals box and the printed PDF.
+              // Use tax_rate_override (when set, i.e. >= 0) to match how form computes tax.
+              const baseAmount = line.quantity * line.unit_price;
+              const discountedAmount = baseAmount * (1 - (line.discount_pct || 0) / 100);
+              const effectiveTaxRate = (line.tax_rate_override != null && line.tax_rate_override >= 0)
+                ? line.tax_rate_override
+                : (line.tax_rate || 0);
+              const lineTax = discountedAmount * (effectiveTaxRate / 100);
+              const lineTotal = discountedAmount + lineTax;
+              return (
+                <tr key={line.id}>
+                  <td className="text-text-primary">{line.description}</td>
+                  <td className="text-right font-mono text-text-secondary">{line.quantity}</td>
+                  <td className="text-right font-mono text-text-secondary">
+                    {formatCurrency(line.unit_price)}
+                  </td>
+                  <td className="text-right font-mono text-text-secondary">
+                    {effectiveTaxRate > 0 ? `${effectiveTaxRate}%` : '--'}
+                  </td>
+                  <td className="text-right font-mono text-text-secondary">
+                    {effectiveTaxRate > 0 ? formatCurrency(lineTax) : '--'}
+                  </td>
+                  <td className="text-right font-mono text-text-primary">
+                    {formatCurrency(lineTotal)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        </div>
 
         {/* Totals */}
         <div className="flex justify-end">
           <div className="w-72 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-text-secondary">Subtotal</span>
-              <span className="font-mono text-text-primary">{fmt.format(invoice.subtotal)}</span>
+              <span className="font-mono text-text-primary">{formatCurrency(invoice.subtotal)}</span>
             </div>
-            {invoice.tax_amount > 0 && (
+            {(invoice.discount_amount > 0 || invoice.tax_amount > 0) && (
               <div className="flex justify-between text-sm">
-                <span className="text-text-secondary">Tax</span>
-                <span className="font-mono text-text-primary">{fmt.format(invoice.tax_amount)}</span>
+                <span className="text-text-secondary">Pre-Tax Amount</span>
+                <span className="font-mono text-text-primary">{formatCurrency((invoice.subtotal || 0) - (invoice.discount_amount || 0))}</span>
               </div>
+            )}
+            {sortedTaxRates.length > 1 ? (
+              sortedTaxRates.map((rate) => (
+                <div key={rate} className="flex justify-between text-sm">
+                  <span className="text-text-secondary">Tax @ {rate}% on {formatCurrency(taxByRate[rate].taxable)}</span>
+                  <span className="font-mono text-text-primary">{formatCurrency(taxByRate[rate].tax)}</span>
+                </div>
+              ))
+            ) : (
+              invoice.tax_amount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-text-secondary">Tax</span>
+                  <span className="font-mono text-text-primary">{formatCurrency(invoice.tax_amount)}</span>
+                </div>
+              )
             )}
             {invoice.discount_amount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-text-secondary">Discount</span>
                 <span className="font-mono text-accent-income">
-                  -{fmt.format(invoice.discount_amount)}
+                  -{formatCurrency(invoice.discount_amount)}
                 </span>
+              </div>
+            )}
+            {(invoice.shipping_amount || 0) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-text-secondary">Shipping</span>
+                <span className="font-mono text-text-primary">{formatCurrency(invoice.shipping_amount || 0)}</span>
               </div>
             )}
             <div
               className="flex justify-between text-sm font-bold pt-2"
               style={{ borderTop: '1px solid var(--color-border-primary)' }}
             >
-              <span className="text-text-primary">Total</span>
-              <span className="font-mono text-text-primary text-lg">
-                {fmt.format(invoice.total)}
+              <span className="text-text-primary">
+                {invoice.invoice_type === 'credit_note' ? 'Credit Amount' : 'Total'}
+              </span>
+              <span
+                className="font-mono text-lg"
+                style={{ color: invoice.invoice_type === 'credit_note' ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}
+              >
+                {invoice.invoice_type === 'credit_note'
+                  ? `(${formatCurrency(Math.abs(invoice.total))}) CR`
+                  : formatCurrency(invoice.total)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-text-secondary">Amount Paid</span>
               <span className="font-mono text-accent-income">
-                {fmt.format(invoice.amount_paid)}
+                {formatCurrency(invoice.amount_paid)}
               </span>
             </div>
             <div
@@ -434,24 +938,215 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                   balance > 0 ? 'text-accent-warning' : 'text-accent-income'
                 }`}
               >
-                {fmt.format(balance)}
+                {formatCurrency(balance)}
               </span>
             </div>
           </div>
         </div>
 
+        {/* Late Fee Notice */}
+        {invoice.late_fee_pct != null && invoice.late_fee_pct > 0 && (
+          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8 }}>
+            Late fee of {invoice.late_fee_pct}% applies after {invoice.late_fee_grace_days || 0} grace days.
+          </div>
+        )}
+
         {/* Notes */}
         {invoice.notes && (
           <div
-            className="mt-8 pt-6"
+            className="grid grid-cols-2 gap-6 mt-8 pt-6"
             style={{ borderTop: '1px solid var(--color-border-primary)' }}
           >
-            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">
-              Notes
-            </span>
-            <p className="text-sm text-text-secondary whitespace-pre-line">{invoice.notes}</p>
+            <div>
+              <span className="text-xs font-semibold text-text-muted uppercase tracking-wider block mb-2">
+                Notes
+              </span>
+              <p className="text-sm text-text-secondary whitespace-pre-line">{invoice.notes}</p>
+            </div>
           </div>
         )}
+      </div>
+
+      {/* Payment status overview (library components) */}
+      <div className="block-card p-4 flex flex-wrap items-center gap-4">
+        <InvoiceStatusBadge status={invoice.status as any} />
+        <DueDateChip
+          dueDate={invoice.due_date}
+          paid={(invoice.total - (invoice.amount_paid || 0)) <= 0.005}
+        />
+        <div className="flex-1 min-w-[200px]">
+          <PaymentProgress paid={invoice.amount_paid || 0} total={invoice.total} />
+        </div>
+      </div>
+
+      {/* Aging Banner — for unpaid invoices.
+          Gate on the actual outstanding balance, not just the `status` string:
+          a fully-paid invoice can retain a stale `sent`/`overdue` status, and must
+          never render as overdue. Float-safe epsilon avoids sub-cent residue. */}
+      {(invoice.total - (invoice.amount_paid || 0)) > 0.005 && invoice.status !== 'paid' && (invoice.status as string) !== 'void' && (invoice.status as string) !== 'cancelled' && (() => {
+        const dueDate = new Date(invoice.due_date);
+        const days = Math.floor((Date.now() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+        let label = '';
+        let color = '#22c55e';
+        let bg = 'rgba(34,197,94,0.10)';
+        let border = '#22c55e';
+        if (days <= 0) {
+          label = days === 0 ? 'Due today' : `Due in ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'}`;
+        } else if (days <= 30) {
+          label = `${days} day${days === 1 ? '' : 's'} overdue`;
+          color = '#facc15'; bg = 'rgba(250,204,21,0.10)'; border = '#facc15';
+        } else if (days <= 60) {
+          label = `${days} days overdue`;
+          color = '#f97316'; bg = 'rgba(249,115,22,0.10)'; border = '#f97316';
+        } else if (days <= 90) {
+          label = `${days} days overdue`;
+          color = '#ef4444'; bg = 'rgba(239,68,68,0.10)'; border = '#ef4444';
+        } else {
+          label = `${days} days overdue — critical`;
+          color = '#dc2626'; bg = 'rgba(220,38,38,0.15)'; border = '#dc2626';
+        }
+        return (
+          <div
+            className="flex items-center justify-between px-4 py-3"
+            style={{ background: bg, border: `1px solid ${border}`, borderRadius: 6 }}
+          >
+            <div className="flex items-center gap-2">
+              <Calendar size={16} style={{ color }} />
+              <span className="text-sm font-bold" style={{ color }}>
+                {label}
+              </span>
+              <span className="text-xs text-text-muted">
+                Balance: {formatCurrency(invoice.total - invoice.amount_paid)}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Predicted Payment + Engagement Metrics — only meaningful while a balance is owed */}
+      {((invoice.total - (invoice.amount_paid || 0)) > 0.005 && invoice.status !== 'paid' && (invoice.status as string) !== 'void' && (invoice.status as string) !== 'cancelled') && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="block-card p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp size={14} className="text-accent-blue" />
+              <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                Predicted Payment
+              </span>
+            </div>
+            {prediction && (prediction.predicted_date || prediction.predictedDate) ? (
+              <div className="space-y-2">
+                <div>
+                  <div className="text-[11px] text-text-muted">Expected Pay Date</div>
+                  <div className="text-lg font-bold font-mono text-text-primary">
+                    {formatDate(String(prediction.predicted_date || prediction.predictedDate))}
+                  </div>
+                </div>
+                {prediction.avg_days_to_pay != null && (
+                  <div>
+                    <div className="text-[11px] text-text-muted">Client Avg Days to Pay</div>
+                    <div className="text-sm font-mono text-text-secondary">
+                      {Number(prediction.avg_days_to_pay).toFixed(1)} days
+                    </div>
+                  </div>
+                )}
+                {prediction.confidence != null && (
+                  <div>
+                    <div className="text-[11px] text-text-muted">Confidence</div>
+                    <div className="text-sm font-mono text-text-secondary">
+                      {(Number(prediction.confidence) * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm text-text-muted">
+                Not enough payment history to predict.
+              </div>
+            )}
+          </div>
+
+          <div className="block-card p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <EyeIcon size={14} className="text-accent-blue" />
+              <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                Engagement
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <div className="text-[11px] text-text-muted">Times Sent</div>
+                <div className="text-lg font-bold font-mono text-text-primary">
+                  {invoice.times_sent ?? 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-text-muted">Times Viewed</div>
+                <div className="text-lg font-bold font-mono text-text-primary">
+                  {invoice.portal_viewed_count ?? 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-text-muted">Last Viewed</div>
+                <div className="text-sm font-mono text-text-secondary">
+                  {invoice.last_viewed_at ? formatDate(invoice.last_viewed_at) : '—'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Actions Row */}
+      <div className="block-card p-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+            Quick Actions
+          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {(invoice.total - (invoice.amount_paid || 0)) > 0.005 && invoice.status !== 'paid' && (
+              <button
+                className="block-btn flex items-center gap-2 text-xs"
+                onClick={handleScheduleReminders}
+                disabled={schedulingReminders}
+              >
+                <Bell size={12} />
+                {schedulingReminders ? 'Scheduling…' : 'Send Reminder'}
+              </button>
+            )}
+            {(invoice.total - (invoice.amount_paid || 0)) > 0.005 && invoice.status !== 'paid' && (invoice.late_fee_pct ?? 0) > 0 && (
+              <button
+                className="block-btn flex items-center gap-2 text-xs"
+                onClick={handleApplyLateFee}
+                disabled={applyingLateFee}
+              >
+                <DollarSign size={12} />
+                {applyingLateFee ? 'Applying…' : 'Apply Late Fee'}
+              </button>
+            )}
+            <button
+              className="block-btn flex items-center gap-2 text-xs"
+              onClick={handleConvertToRecurring}
+              disabled={convertingRecurring}
+            >
+              <Repeat size={12} />
+              Convert to Recurring
+            </button>
+            <button
+              className="block-btn flex items-center gap-2 text-xs"
+              onClick={handleDuplicate}
+            >
+              <Copy size={12} />
+              Duplicate Invoice
+            </button>
+            <button
+              className="block-btn flex items-center gap-2 text-xs"
+              onClick={handlePrintStatement}
+            >
+              <Printer size={12} />
+              Print Statement
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Payment History */}
@@ -473,19 +1168,127 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 <th>Method</th>
                 <th>Reference</th>
                 <th className="text-right">Amount</th>
+                <th style={{ width: 40 }}></th>
               </tr>
             </thead>
             <tbody>
               {payments.map((p) => (
                 <tr key={p.id}>
-                  <td className="text-text-secondary">{p.date}</td>
-                  <td className="text-text-secondary capitalize">{p.payment_method}</td>
+                  <td className="text-text-secondary">{formatDate(p.date)}</td>
+                  <td className="text-text-secondary capitalize">{humanizeLabel(p.payment_method)}</td>
                   <td className="text-text-muted font-mono">{p.reference || '--'}</td>
                   <td className="text-right font-mono text-accent-income">
-                    {fmt.format(p.amount)}
+                    {formatCurrency(p.amount)}
+                  </td>
+                  <td>
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="text-text-muted hover:text-accent-blue transition-colors p-0.5"
+                        onClick={() => { setEditPaymentId(p.id); setShowPaymentModal(true); }}
+                        title="Edit payment"
+                      >
+                        <Edit size={12} />
+                      </button>
+                      <button
+                        className="text-text-muted hover:text-accent-expense transition-colors p-0.5"
+                        onClick={async () => {
+                          if (!window.confirm('Delete this payment? The invoice balance will be recalculated.')) return;
+                          try {
+                            await api.remove('payments', p.id);
+                            const remainingPayments = await api.query('payments', { invoice_id: invoiceId });
+                            // Shared recompute keeps delete/edit/create in agreement.
+                            const { amountPaid, status } = computeInvoicePaidStatus(
+                              invoice?.total || 0,
+                              (remainingPayments || []).map((pay: any) => pay.amount),
+                              invoice?.due_date,
+                            );
+                            await api.update('invoices', invoiceId, { amount_paid: amountPaid, status });
+                            loadData();
+                          } catch (err: any) {
+                            alert('Failed to delete payment: ' + (err?.message || 'Unknown error'));
+                          }
+                        }}
+                        title="Delete payment"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Reminders */}
+      <div className="block-card p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell size={14} className="text-text-muted" />
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+              Reminders
+            </span>
+          </div>
+          {invoice.status !== 'paid' && (
+            <button
+              className="block-btn flex items-center gap-2 text-xs"
+              onClick={handleScheduleReminders}
+              disabled={schedulingReminders}
+            >
+              <Bell size={12} />
+              {schedulingReminders ? 'Scheduling...' : 'Schedule Reminders'}
+            </button>
+          )}
+        </div>
+        {reminders.length === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-sm text-text-muted">No reminders scheduled.</p>
+            {invoice.status !== 'paid' && (
+              <p className="text-xs text-text-muted mt-1">
+                Click "Schedule Reminders" to auto-create reminders based on the due date.
+              </p>
+            )}
+          </div>
+        ) : (
+          <table className="block-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Scheduled Date</th>
+                <th>Status</th>
+                <th>Sent At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reminders.map((r: any) => {
+                const typeLabels: Record<string, string> = {
+                  before_due: '3 Days Before Due',
+                  on_due: 'On Due Date',
+                  overdue_7: '7 Days Overdue',
+                  overdue_14: '14 Days Overdue',
+                  overdue_30: '30 Days Overdue',
+                  overdue_60: '60 Days Overdue',
+                  custom: 'Custom',
+                };
+                const statusBadge = formatStatus(r.status);
+                return (
+                  <tr key={r.id}>
+                    <td className="text-text-primary text-sm">
+                      {typeLabels[r.reminder_type] || r.reminder_type}
+                    </td>
+                    <td className="text-text-secondary text-sm">
+                      {formatDate(r.scheduled_date)}
+                    </td>
+                    <td>
+                      <span className={statusBadge.className}>{statusBadge.label}</span>
+                    </td>
+                    <td className="text-text-muted text-sm font-mono">
+                      {r.sent_at ? formatDate(r.sent_at) : '--'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -497,9 +1300,205 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           invoiceId={invoiceId}
           invoiceTotal={invoice.total}
           amountPaid={invoice.amount_paid}
-          onClose={() => setShowPaymentModal(false)}
+          currency={invoice.currency || 'USD'}
+          editPaymentId={editPaymentId}
+          onClose={() => { setShowPaymentModal(false); setEditPaymentId(null); }}
           onSaved={handlePaymentSaved}
         />
+      )}
+
+      {/* PORTAL: share modal — token + expiry + regenerate / disable / preview. */}
+      {showShareModal && invoice && (
+        <PortalShareModal
+          title={`Share invoice ${invoice.invoice_number}`}
+          buildUrl={(token) => `${portalBaseUrl}/portal/${token}`}
+          fetchInfo={() => api.invoiceTokenInfo(invoice.id)}
+          generateToken={() => api.generateInvoiceToken(invoice.id)}
+          regenerate={() => api.invoiceRegenerateToken(invoice.id)}
+          disable={() => api.invoiceDisableToken(invoice.id)}
+          previewNode={getInvoicePortalPreview(invoice, client)}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
+
+      {/* Invoice-specific Activity Timeline */}
+      <div className="block-card p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-border-primary flex items-center gap-2">
+          <Activity size={14} className="text-text-muted" />
+          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+            Invoice Activity Timeline
+          </span>
+        </div>
+        {activityLog.length === 0 ? (
+          <div className="p-6 text-center text-sm text-text-muted">
+            No activity logged yet.
+          </div>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {activityLog.map((a) => {
+              const ICONS: Record<string, React.ReactNode> = {
+                sent: <Send size={12} />,
+                viewed: <Eye size={12} />,
+                paid: <DollarSign size={12} />,
+                payment_recorded: <DollarSign size={12} />,
+                reminder_scheduled: <Bell size={12} />,
+                reminder_sent: <Bell size={12} />,
+                late_fee_applied: <DollarSign size={12} />,
+                convert_to_recurring: <Repeat size={12} />,
+                duplicate_created: <Copy size={12} />,
+              };
+              const COLORS: Record<string, string> = {
+                sent: 'var(--color-accent-blue)',
+                viewed: 'var(--color-accent-purple)',
+                paid: 'var(--color-accent-income)',
+                payment_recorded: 'var(--color-accent-income)',
+                reminder_scheduled: 'var(--color-accent-warning)',
+                reminder_sent: 'var(--color-accent-warning)',
+                late_fee_applied: 'var(--color-accent-expense)',
+                convert_to_recurring: 'var(--color-accent-blue)',
+                duplicate_created: 'var(--color-text-muted)',
+              };
+              const icon = ICONS[a.activity_type] || <Activity size={12} />;
+              const color = COLORS[a.activity_type] || 'var(--color-text-muted)';
+              return (
+                <li
+                  key={a.id}
+                  style={{
+                    padding: '10px 16px',
+                    borderBottom: '1px solid var(--color-border-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                      background: `${color}22`, color, display: 'flex',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    {icon}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="text-xs text-text-primary font-medium">
+                      {a.activity_type.replace(/_/g, ' ')}
+                      {a.user_name && (
+                        <span className="text-text-muted font-normal"> · {a.user_name}</span>
+                      )}
+                    </div>
+                    {a.description && (
+                      <div className="text-[11px] text-text-secondary truncate">{a.description}</div>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-text-muted whitespace-nowrap">
+                    {a.created_at ? formatDate(a.created_at) : '—'}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* ── Cross-entity panels — related records + activity timeline ── */}
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        <RelatedPanel entityType="invoice" entityId={invoiceId} hide={['lines', 'payments']} />
+        <EntityTimeline entityType="invoices" entityId={invoiceId} />
+      </div>
+      </div>
+
+      {/* P1.9 — Inline Preview Pane (right-hand 45% when toggled) */}
+      {showInlinePreview && (
+        <div style={{
+          flex: '1 1 45%',
+          minWidth: 0,
+          borderLeft: '1px solid var(--color-border-primary)',
+          background: 'var(--color-bg-secondary)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          <div style={{
+            padding: '8px 14px',
+            borderBottom: '1px solid var(--color-border-primary)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'var(--color-bg-primary)',
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              Live Preview
+              {pageAnalysis && (
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  background: pageAnalysis.straddlers.length > 0 ? 'rgba(217, 119, 6, 0.15)' : 'rgba(22, 163, 74, 0.12)',
+                  color: pageAnalysis.straddlers.length > 0 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)',
+                  letterSpacing: '0.5px',
+                }}>
+                  {pageAnalysis.pageCount} page{pageAnalysis.pageCount === 1 ? '' : 's'}
+                </span>
+              )}
+            </span>
+            <button
+              onClick={() => setShowInlinePreview(false)}
+              style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 14, padding: 4 }}
+              title="Close inline preview"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* P1.10: Page-break warning banner — only renders when at
+              least one row straddles a page boundary. Lists each
+              offender so the user knows exactly which line item to
+              shorten or reorder. */}
+          {pageAnalysis && pageAnalysis.straddlers.length > 0 && (
+            <div style={{
+              padding: '8px 14px',
+              borderBottom: '1px solid var(--color-border-primary)',
+              background: 'rgba(217, 119, 6, 0.08)',
+              fontSize: 11,
+              color: 'var(--color-text-primary)',
+            }}>
+              <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-accent-warning)' }}>
+                <AlertTriangle size={12} />
+                {pageAnalysis.straddlers.length} row{pageAnalysis.straddlers.length === 1 ? '' : 's'} will be split across pages
+              </div>
+              <ul style={{ margin: '4px 0 0 18px', padding: 0, listStyle: 'disc', color: 'var(--color-text-muted)' }}>
+                {pageAnalysis.straddlers.slice(0, 5).map((s, i) => (
+                  <li key={i} style={{ fontSize: 10.5, lineHeight: 1.5 }}>
+                    Row {s.rowIndex} ("{s.description.length > 40 ? s.description.slice(0, 40) + '…' : s.description}") straddles page {s.pageBoundary}/{s.pageBoundary + 1}
+                  </li>
+                ))}
+                {pageAnalysis.straddlers.length > 5 && (
+                  <li style={{ fontSize: 10.5, fontStyle: 'italic' }}>
+                    …and {pageAnalysis.straddlers.length - 5} more
+                  </li>
+                )}
+              </ul>
+              <div style={{ fontSize: 10.5, color: 'var(--color-text-muted)', marginTop: 6, fontStyle: 'italic' }}>
+                Tip: shorten descriptions, split into multiple lines, or insert a section row before the boundary.
+              </div>
+            </div>
+          )}
+
+          {/* Deliberate exception to the PDF-redesign: this live preview stays
+              an HTML iframe (not <PdfPreview>) because analyzePages walks the
+              iframe's DOM for page-straddler analysis — a PDF <embed> has no
+              inspectable DOM — and for per-keystroke responsiveness. The
+              Preview/Print/Save actions still produce the real classic PDF. */}
+          <iframe
+            ref={previewIframeRef}
+            srcDoc={inlinePreviewHTML}
+            title="Invoice live preview"
+            style={{ flex: 1, width: '100%', border: 'none', background: '#fff' }}
+            sandbox="allow-same-origin"
+            onLoad={analyzePages}
+          />
+        </div>
       )}
     </div>
   );

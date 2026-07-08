@@ -22,6 +22,8 @@ interface Employee {
   status: string;
   role?: string;
   department?: string;
+  department_id?: string;
+  manager_id?: string;
   work_location?: string;
   cost_class?: string;
 }
@@ -91,6 +93,9 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [managerFilter, setManagerFilter] = useState<string>('all');
+  const [departmentOptions, setDepartmentOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [error, setError] = useState('');
@@ -109,6 +114,9 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
         if (!cancelled) {
           setEmployees(Array.isArray(rows) ? rows : []);
         }
+        api.query('departments', { company_id: activeCompany.id }, { field: 'name', dir: 'asc' }).then((depts) => {
+          if (!cancelled) setDepartmentOptions(Array.isArray(depts) ? depts : []);
+        }).catch(() => {});
         // Enrich with payroll data (scoped to the active company to avoid cross-company leaks)
         api.rawQuery(
           `SELECT ps.employee_id,
@@ -162,6 +170,14 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
       list = list.filter((e) => e.status === statusFilter);
     }
 
+    if (departmentFilter !== 'all') {
+      list = list.filter((e) => (e.department_id || '') === departmentFilter);
+    }
+
+    if (managerFilter !== 'all') {
+      list = list.filter((e) => (e.manager_id || '') === managerFilter);
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
@@ -180,7 +196,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
     });
 
     return list;
-  }, [employees, typeFilter, statusFilter, searchQuery, sortField, sortDir]);
+  }, [employees, typeFilter, statusFilter, departmentFilter, managerFilter, searchQuery, sortField, sortDir]);
 
   // ─── Workforce Stats ────────────────────────────────
   const stats = useMemo(() => {
@@ -427,6 +443,32 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
             <option value="inactive">Inactive</option>
           </select>
         </div>
+        <div className="relative inline-flex items-center gap-1.5">
+          <select
+            className="block-select"
+            style={{ width: 'auto', minWidth: '140px' }}
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+          >
+            <option value="all">All Departments</option>
+            {departmentOptions.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="relative inline-flex items-center gap-1.5">
+          <select
+            className="block-select"
+            style={{ width: 'auto', minWidth: '140px' }}
+            value={managerFilter}
+            onChange={(e) => setManagerFilter(e.target.value)}
+          >
+            <option value="all">All Managers</option>
+            {employees.filter((e) => employees.some((sub) => sub.manager_id === e.id)).map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Bulk Actions Toolbar */}
@@ -515,6 +557,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                 <SortableHeader field="status" label="Status" activeSortField={sortField} activeSortDir={sortDir} onSort={handleSort} />
                 {cEmpCol('payroll-col-job-title') && <th>Role</th>}
                 {cEmpCol('payroll-col-department') && <th>Dept.</th>}
+                <th>Manager</th>
                 {cEmpCol('payroll-col-location') && <th>Location</th>}
                 <th>Cost Class</th>
                 {cEmpCol('payroll-col-last-paid') && <th>Last Paid</th>}
@@ -568,6 +611,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
                   </td>
                   {cEmpCol('payroll-col-job-title') && <td><ClassificationBadge def={EMPLOYEE_ROLE} value={emp.role} /></td>}
                   {cEmpCol('payroll-col-department') && <td><ClassificationBadge def={EMPLOYEE_DEPARTMENT} value={emp.department} /></td>}
+                  <td className="text-text-secondary text-xs">{employees.find((m) => m.id === emp.manager_id)?.name ?? '--'}</td>
                   {cEmpCol('payroll-col-location') && <td><ClassificationBadge def={EMPLOYEE_WORK_LOCATION} value={emp.work_location} /></td>}
                   <td><ClassificationBadge def={EMPLOYEE_COST_CLASS} value={emp.cost_class} /></td>
                   {cEmpCol('payroll-col-last-paid') && (
