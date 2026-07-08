@@ -34,6 +34,7 @@ import { SnippetPicker } from '../../components/SnippetPicker';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
 import { useNavigation } from '../../lib/navigation';
+import AttachmentsPanel from '../../components/AttachmentsPanel';
 
 // ─── Types ───────────────────────────────────────────────
 type View = 'list' | 'form' | 'detail';
@@ -2484,6 +2485,10 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
       <div className="grid grid-cols-2 gap-4 mt-6">
         <RelatedPanel entityType="bill" entityId={billId} hide={['lines', 'payments']} />
         <EntityTimeline entityType="bills" entityId={billId} />
+      </div>
+
+      <div className="mt-4">
+        <AttachmentsPanel entityType="bill" entityId={billId} />
       </div>
 
       {balance > 0.001 && (
