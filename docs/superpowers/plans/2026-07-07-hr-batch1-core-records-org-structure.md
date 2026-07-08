@@ -16,6 +16,8 @@
 
 ### Task 1: `departments` table + `employees.manager_id`/`department_id` columns + `VALID_TABLES`
 
+> **Amendment (discovered during Task 3 review, fixed in commit `5d11dcc`):** A `departments` table already existed in this codebase from an earlier "F228" cost-accounting batch, with columns `id, company_id, code (NOT NULL, UNIQUE with company_id), name, manager_id, parent_id, description, is_active, created_at, updated_at`. The `CREATE TABLE IF NOT EXISTS departments (...)` below was silently a no-op against that real table, and its narrower shape (`head_employee_id`) doesn't reflect what actually exists. The step below is left as originally written for history, but **the actual applied fix removed the CREATE TABLE + its index entirely**, keeping only the two `employees` ALTER TABLEs. Downstream tasks must use the *real* schema: department name is `name`, department head is the existing `manager_id` column (not `head_employee_id`), and creating a department requires a `code` (required, unique per company) in addition to `name`.
+
 **Files:**
 - Modify: `src/main/database/index.ts` (append to the `migrations` array, ends at line 9379 with `"ALTER TABLE expenses ADD COLUMN vendor_location_id TEXT DEFAULT NULL",` followed by `];`)
 - Modify: `src/main/ipc/index.ts:709` (`VALID_TABLES` Set)
@@ -848,6 +850,8 @@ EOF
 
 ### Task 6: `DepartmentsManager.tsx` — new component
 
+> **Amendment:** the original version of this task assumed `departments` was a brand-new table with a `head_employee_id` column. Task 1's review turned up a pre-existing `departments` table (from an earlier "F228" cost-accounting batch) with a different real schema: `id, company_id, code (NOT NULL, UNIQUE per company), name, manager_id (the department head), parent_id, description, is_active, created_at, updated_at`. The code below is corrected to match that real schema — it collects a required, unique `code` on create and reads/writes `manager_id` (not `head_employee_id`) for the department head.
+
 **Files:**
 - Create: `src/renderer/modules/payroll/DepartmentsManager.tsx`
 
@@ -862,8 +866,9 @@ import ErrorBanner from '../../components/ErrorBanner';
 
 interface Department {
   id: string;
+  code: string;
   name: string;
-  head_employee_id: string;
+  manager_id: string;
 }
 
 interface EmployeeOption {
@@ -877,10 +882,12 @@ const DepartmentsManager: React.FC = () => {
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCode, setEditCode] = useState('');
   const [editName, setEditName] = useState('');
-  const [editHead, setEditHead] = useState('');
+  const [editManager, setEditManager] = useState('');
 
   const load = async () => {
     if (!activeCompany) return;
@@ -903,9 +910,14 @@ const DepartmentsManager: React.FC = () => {
   useEffect(() => { load(); }, [activeCompany?.id]);
 
   const handleCreate = async () => {
-    if (!newName.trim()) return;
+    if (!newCode.trim() || !newName.trim()) return;
     try {
-      await api.create('departments', { name: newName.trim(), head_employee_id: '' });
+      const result = await api.create('departments', { code: newCode.trim(), name: newName.trim(), manager_id: '' });
+      if (result && (result as any).error) {
+        setError((result as any).error);
+        return;
+      }
+      setNewCode('');
       setNewName('');
       await load();
     } catch (err: any) {
@@ -915,14 +927,19 @@ const DepartmentsManager: React.FC = () => {
 
   const startEdit = (d: Department) => {
     setEditingId(d.id);
+    setEditCode(d.code);
     setEditName(d.name);
-    setEditHead(d.head_employee_id || '');
+    setEditManager(d.manager_id || '');
   };
 
   const saveEdit = async () => {
     if (!editingId) return;
     try {
-      await api.update('departments', editingId, { name: editName.trim(), head_employee_id: editHead });
+      const result = await api.update('departments', editingId, { code: editCode.trim(), name: editName.trim(), manager_id: editManager });
+      if (result && (result as any).error) {
+        setError((result as any).error);
+        return;
+      }
       setEditingId(null);
       await load();
     } catch (err: any) {
@@ -953,6 +970,14 @@ const DepartmentsManager: React.FC = () => {
 
       <div className="flex items-center gap-2">
         <input
+          className="block-input"
+          style={{ width: '140px' }}
+          placeholder="Code (e.g. ENG)"
+          value={newCode}
+          onChange={(e) => setNewCode(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+        />
+        <input
           className="block-input flex-1"
           placeholder="New department name..."
           value={newName}
@@ -968,6 +993,7 @@ const DepartmentsManager: React.FC = () => {
         <table className="block-table w-full">
           <thead>
             <tr>
+              <th>Code</th>
               <th>Department</th>
               <th>Head</th>
               <th></th>
@@ -979,10 +1005,13 @@ const DepartmentsManager: React.FC = () => {
                 {editingId === d.id ? (
                   <>
                     <td>
+                      <input className="block-input w-full" value={editCode} onChange={(e) => setEditCode(e.target.value)} />
+                    </td>
+                    <td>
                       <input className="block-input w-full" value={editName} onChange={(e) => setEditName(e.target.value)} />
                     </td>
                     <td>
-                      <select className="block-select w-full" value={editHead} onChange={(e) => setEditHead(e.target.value)}>
+                      <select className="block-select w-full" value={editManager} onChange={(e) => setEditManager(e.target.value)}>
                         <option value="">No head assigned</option>
                         {employees.map((e) => (
                           <option key={e.id} value={e.id}>{e.name}</option>
@@ -996,12 +1025,13 @@ const DepartmentsManager: React.FC = () => {
                   </>
                 ) : (
                   <>
+                    <td className="text-text-secondary text-xs font-mono">{d.code}</td>
                     <td className="flex items-center gap-2">
                       <Building2 size={14} className="text-accent-blue shrink-0" />
                       <span className="text-text-primary font-medium">{d.name}</span>
                     </td>
                     <td className="text-text-secondary text-xs">
-                      {employees.find((e) => e.id === d.head_employee_id)?.name ?? '--'}
+                      {employees.find((e) => e.id === d.manager_id)?.name ?? '--'}
                     </td>
                     <td className="text-right">
                       <button className="text-text-muted hover:text-text-primary mr-2" onClick={() => startEdit(d)}><Pencil size={14} /></button>

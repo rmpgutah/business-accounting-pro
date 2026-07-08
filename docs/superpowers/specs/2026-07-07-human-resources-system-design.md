@@ -91,19 +91,13 @@ process as Batch 1.
 
 ### Data model
 
-New table (added to `src/main/database/schema.sql`, since it's a brand-new
-table using `CREATE TABLE IF NOT EXISTS`):
-
-```sql
-CREATE TABLE IF NOT EXISTS departments (
-  id TEXT PRIMARY KEY,
-  company_id TEXT NOT NULL REFERENCES companies(id),
-  name TEXT NOT NULL,
-  head_employee_id TEXT DEFAULT '',
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
-);
-```
+**Amendment (discovered during implementation):** a `departments` table
+already existed from an earlier "F228" cost-accounting batch — no new table
+was created. Its real schema: `id, company_id, code (NOT NULL, UNIQUE per
+company), name, manager_id (department head), parent_id, description,
+is_active, created_at, updated_at`. The department head is the existing
+`manager_id` column on `departments`, not a new `head_employee_id` column.
+Creating a department requires a unique `code` in addition to `name`.
 
 `employees` table gets 2 new columns via an `ALTER TABLE` entry in the
 `migrations` array in `src/main/database/index.ts` (matching the existing
