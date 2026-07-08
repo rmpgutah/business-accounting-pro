@@ -58,11 +58,21 @@ process as Batch 1.
   routing to a single combined module at `src/renderer/modules/payroll/`.
 - That module's tabs today: Summary, Employees, Run Payroll, History, PTO,
   HR Portal (`Tab = 'summary' | 'employees' | 'run' | 'history' | 'pto' | 'hr-portal'`).
-- `employees` table (schema.sql:230) has: name, email, type, pay_type,
-  pay_rate, pay_schedule, filing_status, federal_allowances, state,
-  state_allowances, start_date, end_date, ssn_last4, status, custom_fields.
-  No manager, department, or job title fields exist yet.
-- No dedicated `departments` table exists.
+- `employees` table (schema.sql:230) has the base columns (name, email,
+  type, pay_type, pay_rate, pay_schedule, filing_status, start_date,
+  end_date, ssn_last4, status, custom_fields, ...) plus several columns
+  added later via `ALTER TABLE` migrations in `database/index.ts`:
+  `department` (free-text, validated client-side against a fixed
+  `EMPLOYEE_DEPARTMENT` enum in `classifications.tsx`), `job_title`,
+  `role`, `work_location`, `cost_class`, plus contact/banking fields.
+  **No `manager_id` column and no `departments` table exist.**
+- Employee records have no dedicated IPC channels — they go through the
+  app's generic, whitelisted `db:query` / `db:create` / `db:update` /
+  `db:delete` handlers (table name checked against a `VALID_TABLES` set
+  in `ipc/index.ts`), same as most other tables.
+- No automated test framework exists in this project (no jest/vitest; the
+  `test:*` npm scripts are one-off Node scripts). Batch 1 verification is
+  manual, via the dev server.
 
 ## Batch 1 Design
 
@@ -81,56 +91,82 @@ process as Batch 1.
 
 ### Data model
 
-New table (added to `src/main/database/schema.sql`):
+New table (added to `src/main/database/schema.sql`, since it's a brand-new
+table using `CREATE TABLE IF NOT EXISTS`):
 
 ```sql
 CREATE TABLE IF NOT EXISTS departments (
   id TEXT PRIMARY KEY,
   company_id TEXT NOT NULL REFERENCES companies(id),
   name TEXT NOT NULL,
-  head_employee_id TEXT REFERENCES employees(id),
+  head_employee_id TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
 ```
 
-`employees` table gets 3 new nullable columns via `ALTER TABLE` migration in
-`src/main/database/index.ts` (try/catch pattern per existing convention):
+`employees` table gets 2 new columns via an `ALTER TABLE` entry in the
+`migrations` array in `src/main/database/index.ts` (matching the existing
+style there — plain columns, no FK constraint on ALTER-added columns, since
+SQLite can't enforce those retroactively and the codebase doesn't do it
+elsewhere):
 
-- `manager_id TEXT REFERENCES employees(id)` — self-referencing, nullable
-- `department_id TEXT REFERENCES departments(id)` — nullable
-- `job_title TEXT DEFAULT ''`
+- `manager_id TEXT DEFAULT ''` — self-referencing by convention (holds
+  another employee's `id` or empty string), new column
+- `department_id TEXT DEFAULT ''` — new column, references `departments.id`
+  by convention
+
+The existing `department` (free-text enum), `job_title`, and `role`
+columns already exist from prior migrations and are **not** removed.
+`department_id` supersedes `department` for the new Directory/Org Chart/
+Departments UI going forward; the legacy `department` text column is left
+in place untouched (no backfill/data migration in Batch 1) so existing
+reports or other code paths that already read `department` keep working.
+`job_title` is reused as-is for function 3 — no new job-title column needed.
 
 No new history/audit table in Batch 1. Turnover and tenure analytics are
 computed on the fly from existing `start_date` / `end_date` / `status`
 columns. A dedicated headcount-history table is deferred until/unless
 trend-over-time reporting is explicitly requested (YAGNI).
 
-`departments` needs no entry in `tablesWithoutCompanyId` (it has
-`company_id`) and no entry in `tablesWithoutUpdatedAt` (it has
-`updated_at`).
+`departments` needs no entry in `tablesWithoutCompanyId`/`tablesWithoutUpdatedAt`
+exemption sets (`src/main/database/tableConfig.ts`) since it has both
+`company_id` and `updated_at`. It does need to be added to the
+`VALID_TABLES` whitelist in `src/main/ipc/index.ts` so the generic
+`db:query`/`db:create`/`db:update`/`db:delete` handlers accept it.
 
-### IPC handlers (new, in `src/main/ipc/index.ts`)
+### IPC handlers
 
-All company-scoped via `db.getCurrentCompanyId()`; all writes call
-`scheduleAutoBackup()`.
-
-- `departments:list` / `departments:create` / `departments:update` /
-  `departments:delete`
-- Employee update path extended to accept `manager_id`, `department_id`,
-  `job_title` (existing employee update handler, not a new channel)
-- `hr:orgChart` — returns employees joined to department name and manager
-  name via `api.rawQuery()` (flat-row convention; no bare `db:query` JOINs)
-- `hr:analytics` — headcount by department, active vs. terminated counts,
-  average tenure, new hires/departures in a selectable date range
+- `departments` CRUD rides entirely on the existing generic
+  `db:query` / `db:create` / `db:update` / `db:delete` handlers once
+  `'departments'` is added to `VALID_TABLES` (`ipc/index.ts`) — no new
+  channels needed. A `case 'departments':` block is added to the existing
+  `cleanupReferencesBeforeDelete` switch so deleting a department that
+  still has employees assigned is blocked with a clear error, consistent
+  with how other referenced entities behave.
+- `manager_id` / `department_id` on an employee are set through the
+  existing generic `db:update` call on the `employees` table — no new
+  channel needed there either.
+- `hr:orgChart` — new dedicated handler (registered in `ipc/index.ts`
+  alongside other dedicated handlers like `dashboard:activity`), using a
+  direct `db.getDb().prepare(sql).all(companyId)` query with a
+  `LEFT JOIN employees mgr ON mgr.id = e.manager_id` and
+  `LEFT JOIN departments d ON d.id = e.department_id`, returning employee
+  rows enriched with `manager_name` and `department_name`. Read-only, so
+  no `scheduleAutoBackup()` call needed.
+- `hr:analytics` — new dedicated handler, same style: headcount by
+  department, active vs. terminated counts, average tenure, new
+  hires/departures in a selectable date range. Read-only.
 
 ### UI components (`src/renderer/modules/payroll/`)
 
-- `EmployeeList.tsx` (Directory tab): add filter bar (department, status,
-  manager) and columns for department / job title / manager
-- `EmployeeForm.tsx`: add Job Title (text), Department (select from
-  `departments:list`), Manager (select from active employees, excluding
-  self to prevent immediate self-reference)
+- `EmployeeList.tsx` (Directory tab): add filter bar (department_id,
+  status, manager) and columns for department name / job title / manager name
+- `EmployeeForm.tsx`: replace the fixed-enum department `ClassificationSelect`
+  with a dynamic Department select sourced from `api.query('departments', ...)`,
+  writing to `department_id`; add a Manager select (active employees,
+  excluding self) writing to `manager_id`. `job_title` already exists and
+  needs no changes.
 - `OrgChart.tsx` (new): recursive indented tree built from `manager_id`,
   rooted at employees with no manager; clicking a node navigates to that
   employee's Directory record
