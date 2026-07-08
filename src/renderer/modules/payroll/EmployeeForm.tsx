@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+import { useCompanyStore } from '../../stores/companyStore';
 
 // PERF: these heavy panels sit below the form and would otherwise
 // re-render on EVERY keystroke (each fetches + renders lists), causing
@@ -1602,16 +1603,18 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
   const [ytdSummary, setYtdSummary] = useState<any>(null);
 
   const isEditing = Boolean(employeeId);
+  const activeCompany = useCompanyStore((s) => s.activeCompany);
 
   // ─── Departments + managers (for the Org fields) ────
   const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
   const [managerOptions, setManagerOptions] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => {
+    if (!activeCompany) return;
     let cancelled = false;
     (async () => {
       const [depts, emps] = await Promise.all([
-        api.query('departments', {}, { field: 'name', dir: 'asc' }),
-        api.query('employees', { status: 'active' }, { field: 'name', dir: 'asc' }),
+        api.query('departments', { company_id: activeCompany.id }, { field: 'name', dir: 'asc' }),
+        api.query('employees', { company_id: activeCompany.id, status: 'active' }, { field: 'name', dir: 'asc' }),
       ]);
       if (!cancelled) {
         setDepartments(Array.isArray(depts) ? depts : []);
@@ -1619,7 +1622,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
       }
     })();
     return () => { cancelled = true; };
-  }, [employeeId]);
+  }, [employeeId, activeCompany]);
 
   // PERF: memoize the pay-history element so it isn't re-rendered on every
   // keystroke in the form (it only depends on the stable employeeId).
