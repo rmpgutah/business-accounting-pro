@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Users, DollarSign, FileText, Calculator, Plus, Trash2, Printer,
   LayoutDashboard, ChevronDown, ChevronRight, Download, TrendingUp, Clock, ArrowRight, Eye, Edit,
+  Network, Building2, BarChart3,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -12,11 +13,14 @@ import PayrollRunner from './PayrollRunner';
 import PayStubView from './PayStubView';
 import PtoDashboard from './PtoDashboard';
 import HrPortal from './HrPortal';
+import OrgChart from './OrgChart';
+import DepartmentsManager from './DepartmentsManager';
+import HrAnalytics from './HrAnalytics';
 import ErrorBanner from '../../components/ErrorBanner';
 import { formatDate } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
-type Tab = 'summary' | 'employees' | 'run' | 'history' | 'pto' | 'hr-portal';
+type Tab = 'summary' | 'employees' | 'run' | 'history' | 'pto' | 'hr-portal' | 'org-chart' | 'departments' | 'analytics';
 
 interface PayrollRun {
   id: string;
@@ -546,7 +550,10 @@ const PayrollModule: React.FC = () => {
   // ─── Tab definitions ──────────────────────────────────
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'summary', label: 'Dashboard', icon: <LayoutDashboard size={14} /> },
-    { key: 'employees', label: 'Employees', icon: <Users size={14} /> },
+    { key: 'employees', label: 'Directory', icon: <Users size={14} /> },
+    { key: 'org-chart', label: 'Org Chart', icon: <Network size={14} /> },
+    { key: 'departments', label: 'Departments', icon: <Building2 size={14} /> },
+    { key: 'analytics', label: 'Analytics', icon: <BarChart3 size={14} /> },
     { key: 'run', label: 'Run Payroll', icon: <Calculator size={14} /> },
     { key: 'history', label: 'History', icon: <FileText size={14} /> },
     { key: 'pto', label: 'PTO', icon: <DollarSign size={14} /> },
@@ -560,7 +567,7 @@ const PayrollModule: React.FC = () => {
       <div className="flex items-center border-b border-border-primary bg-bg-secondary px-6 pt-4">
         <div className="flex items-center gap-2 mr-6">
           <Users size={20} className="text-accent-blue" />
-          <h1 className="text-base font-bold text-text-primary">Payroll</h1>
+          <h1 className="text-base font-bold text-text-primary">Human Resources</h1>
         </div>
         <div className="flex gap-0">
           {tabs.map((tab) => (
@@ -751,6 +758,15 @@ const PayrollModule: React.FC = () => {
             onNewEmployee={handleNewEmployee}
           />
         )}
+
+        {/* Org Chart Tab */}
+        {activeTab === 'org-chart' && <OrgChart onSelectEmployee={handleSelectEmployee} />}
+
+        {/* Departments Tab */}
+        {activeTab === 'departments' && <DepartmentsManager />}
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' && <HrAnalytics />}
 
         {/* PTO Tab */}
         {activeTab === 'pto' && <PtoDashboard />}
