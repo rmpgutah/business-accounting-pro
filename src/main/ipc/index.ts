@@ -4918,6 +4918,71 @@ export function registerIpcHandlers(): void {
     }));
   });
 
+  // ─── HR: Org Chart ───────────────────────────────────────
+  ipcMain.handle('hr:orgChart', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    const dbInstance = db.getDb();
+    return dbInstance.prepare(
+      `SELECT e.id, e.name, e.job_title, e.manager_id, e.department_id,
+              mgr.name as manager_name,
+              d.name as department_name
+       FROM employees e
+       LEFT JOIN employees mgr ON mgr.id = e.manager_id
+       LEFT JOIN departments d ON d.id = e.department_id
+       WHERE e.company_id = ? AND e.status = 'active'
+       ORDER BY e.name`
+    ).all(companyId);
+  });
+
+  // ─── HR: Headcount & Turnover Analytics ──────────────────
+  ipcMain.handle('hr:analytics', (_event, { startDate, endDate }: { startDate: string; endDate: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+
+    const byDepartment = dbInstance.prepare(
+      `SELECT COALESCE(d.name, 'Unassigned') as department_name, COUNT(*) as count
+       FROM employees e
+       LEFT JOIN departments d ON d.id = e.department_id
+       WHERE e.company_id = ? AND e.status = 'active'
+       GROUP BY department_name
+       ORDER BY count DESC`
+    ).all(companyId) as any[];
+
+    const statusCounts = dbInstance.prepare(
+      `SELECT status, COUNT(*) as count FROM employees WHERE company_id = ? GROUP BY status`
+    ).all(companyId) as any[];
+    const active = statusCounts.find(r => r.status === 'active')?.count || 0;
+    const inactive = statusCounts.reduce((s, r) => (r.status !== 'active' ? s + r.count : s), 0);
+
+    const newHires = dbInstance.prepare(
+      `SELECT COUNT(*) as count FROM employees WHERE company_id = ? AND start_date >= ? AND start_date <= ?`
+    ).get(companyId, startDate, endDate) as any;
+
+    const departures = dbInstance.prepare(
+      `SELECT COUNT(*) as count FROM employees WHERE company_id = ? AND end_date >= ? AND end_date <= ?`
+    ).get(companyId, startDate, endDate) as any;
+
+    const tenureRows = dbInstance.prepare(
+      `SELECT start_date, end_date FROM employees WHERE company_id = ? AND start_date IS NOT NULL AND start_date != ''`
+    ).all(companyId) as any[];
+    const now = Date.now();
+    let totalDays = 0;
+    let counted = 0;
+    for (const r of tenureRows) {
+      const start = new Date(r.start_date).getTime();
+      const end = r.end_date ? new Date(r.end_date).getTime() : now;
+      if (!isNaN(start) && !isNaN(end) && end >= start) {
+        totalDays += (end - start) / 86400000;
+        counted++;
+      }
+    }
+    const avgTenureDays = counted > 0 ? Math.round(totalDays / counted) : 0;
+
+    return { byDepartment, active, inactive, newHires: newHires?.count || 0, departures: departures?.count || 0, avgTenureDays };
+  });
+
   // ─── File Dialog ────────────────────────────────────────
   ipcMain.handle('dialog:open-file', async (_event, options?: { filters?: Array<{ name: string; extensions: string[] }> }) => {
     const result = await dialog.showOpenDialog({
