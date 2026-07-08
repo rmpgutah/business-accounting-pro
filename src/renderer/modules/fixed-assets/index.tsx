@@ -20,6 +20,7 @@ import {
   ASSET_CATEGORY, ASSET_CONDITION,
   ClassificationBadge, ClassificationSelect,
 } from '../../lib/classifications';
+import AttachmentsPanel from '../../components/AttachmentsPanel';
 
 // ─── Types ───────────────────────────────────────────────
 interface FixedAsset {
@@ -1596,6 +1597,10 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
       <div className="grid grid-cols-2 gap-4 mt-2">
         <RelatedPanel entityType="fixed_asset" entityId={assetId} />
         <EntityTimeline entityType="fixed_assets" entityId={assetId} />
+      </div>
+
+      <div className="mt-4">
+        <AttachmentsPanel entityType="fixed_asset" entityId={assetId} />
       </div>
 
       {/* Chart Tab */}

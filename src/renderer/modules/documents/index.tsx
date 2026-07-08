@@ -6,6 +6,7 @@ import { format, parseISO } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import ErrorBanner from '../../components/ErrorBanner';
+import DocumentViewerModal from '../../components/DocumentViewerModal';
 
 // ─── Types ──────────────────────────────────────────────
 interface Document {
@@ -22,7 +23,8 @@ interface Document {
   created_at: string;
 }
 
-type EntityFilter = '' | 'client' | 'invoice' | 'expense' | 'project';
+type EntityFilter = '' | 'client' | 'invoice' | 'expense' | 'project'
+  | 'vendor' | 'bill' | 'purchase_order' | 'employee' | 'fixed_asset' | 'tax_payment' | 'bank_account' | 'debt';
 
 // ─── Helpers ────────────────────────────────────────────
 const formatFileSize = (bytes: number): string => {
@@ -44,6 +46,14 @@ const entityBadgeClass: Record<string, string> = {
   invoice: 'block-badge block-badge-income',
   expense: 'block-badge block-badge-expense',
   project: 'block-badge block-badge-purple',
+  vendor: 'block-badge block-badge-blue',
+  bill: 'block-badge block-badge-expense',
+  purchase_order: 'block-badge block-badge-purple',
+  employee: 'block-badge block-badge-blue',
+  fixed_asset: 'block-badge block-badge-purple',
+  tax_payment: 'block-badge block-badge-warning',
+  bank_account: 'block-badge block-badge-blue',
+  debt: 'block-badge block-badge-expense',
 };
 
 // ─── Component ──────────────────────────────────────────
@@ -82,6 +92,14 @@ const Documents: React.FC = () => {
              WHEN 'invoice' THEN (SELECT invoice_number FROM invoices WHERE id = d.entity_id)
              WHEN 'project' THEN (SELECT name FROM projects WHERE id = d.entity_id)
              WHEN 'expense' THEN (SELECT description FROM expenses WHERE id = d.entity_id)
+             WHEN 'vendor'         THEN (SELECT name FROM vendors WHERE id = d.entity_id)
+             WHEN 'bill'           THEN (SELECT bill_number FROM bills WHERE id = d.entity_id)
+             WHEN 'purchase_order' THEN (SELECT po_number FROM purchase_orders WHERE id = d.entity_id)
+             WHEN 'employee'       THEN (SELECT name FROM employees WHERE id = d.entity_id)
+             WHEN 'fixed_asset'    THEN (SELECT name FROM fixed_assets WHERE id = d.entity_id)
+             WHEN 'tax_payment'    THEN (SELECT confirmation_number FROM tax_payments WHERE id = d.entity_id)
+             WHEN 'bank_account'   THEN (SELECT name FROM bank_accounts WHERE id = d.entity_id)
+             WHEN 'debt'           THEN (SELECT debtor_name FROM debts WHERE id = d.entity_id)
            END AS entity_name
          FROM documents d
          WHERE d.company_id = ?
@@ -103,29 +121,11 @@ const Documents: React.FC = () => {
   }, [activeCompany]);
 
   const handleUpload = async () => {
+    if (!activeCompany) return;
     try {
-      const file = await api.openFileDialog();
-      if (!file) return; // user cancelled
-
-      const mimeType = file.name.endsWith('.pdf') ? 'application/pdf'
-        : file.name.endsWith('.png') ? 'image/png'
-        : file.name.endsWith('.jpg') || file.name.endsWith('.jpeg') ? 'image/jpeg'
-        : file.name.endsWith('.csv') ? 'text/csv'
-        : file.name.endsWith('.xlsx') ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        : 'application/octet-stream';
-
-      const doc = await api.create('documents', {
-        filename: file.name,
-        file_path: file.path,
-        file_size: file.size,
-        mime_type: mimeType,
-        entity_type: '',
-        entity_id: '',
-        tags: '',
-        uploaded_at: new Date().toISOString(),
-      });
-
-      setDocuments((prev) => [doc, ...prev]);
+      const doc = await api.uploadDocument(activeCompany.id, '', '');
+      if (!doc) return; // user cancelled
+      setDocuments((prev) => [doc as unknown as Document, ...prev]);
       setOpSuccess('Document uploaded'); setTimeout(() => setOpSuccess(''), 3000);
     } catch (err: any) {
       // VISIBILITY: surface upload errors via banner instead of duplicate alert
@@ -261,6 +261,14 @@ const Documents: React.FC = () => {
               <option value="invoice">Invoice</option>
               <option value="expense">Expense</option>
               <option value="project">Project</option>
+              <option value="vendor">Vendor</option>
+              <option value="bill">Bill</option>
+              <option value="purchase_order">Purchase Order</option>
+              <option value="employee">Employee</option>
+              <option value="fixed_asset">Fixed Asset</option>
+              <option value="tax_payment">Tax Payment</option>
+              <option value="bank_account">Bank Account</option>
+              <option value="debt">Debt</option>
             </select>
           </div>
         </div>
@@ -402,6 +410,14 @@ const Documents: React.FC = () => {
                 <option value="invoice">Invoice</option>
                 <option value="expense">Expense</option>
                 <option value="project">Project</option>
+                <option value="vendor">Vendor</option>
+                <option value="bill">Bill</option>
+                <option value="purchase_order">Purchase Order</option>
+                <option value="employee">Employee</option>
+                <option value="fixed_asset">Fixed Asset</option>
+                <option value="tax_payment">Tax Payment</option>
+                <option value="bank_account">Bank Account</option>
+                <option value="debt">Debt</option>
               </select>
             </div>
             <div>
@@ -426,61 +442,7 @@ const Documents: React.FC = () => {
 
       {/* Preview Modal */}
       {previewDoc && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 cursor-pointer"
-          onClick={() => setPreviewDoc(null)}
-        >
-          <div
-            className="block-card-elevated w-full max-w-lg space-y-4 cursor-pointer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-text-primary">Document Preview</h3>
-              <button
-                className="text-text-muted hover:text-text-primary transition-colors"
-                onClick={() => setPreviewDoc(null)}
-              >
-                <Eye size={16} />
-              </button>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-text-muted">Filename</span>
-                <span className="text-text-primary font-medium">{previewDoc.filename}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-muted">Type</span>
-                <span className="text-text-secondary">{previewDoc.mime_type || 'Unknown'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-muted">Size</span>
-                <span className="text-text-secondary font-mono">
-                  {formatFileSize(previewDoc.file_size)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-muted">Entity</span>
-                <span className="text-text-secondary">
-                  {previewDoc.entity_type
-                    ? `${previewDoc.entity_type}: ${previewDoc.entity_name || previewDoc.entity_id}`
-                    : 'Unattached'}
-                </span>
-              </div>
-              {previewDoc.tags && (
-                <div className="flex justify-between">
-                  <span className="text-text-muted">Tags</span>
-                  <span className="text-text-secondary">{previewDoc.tags}</span>
-                </div>
-              )}
-            </div>
-            <div className="bg-bg-tertiary border border-border-primary p-8 text-center">
-              <FileText size={48} className="mx-auto text-text-muted mb-2" />
-              <p className="text-xs text-text-muted">
-                Full document preview will be available in a future update.
-              </p>
-            </div>
-          </div>
-        </div>
+        <DocumentViewerModal doc={previewDoc as unknown as import('../../../shared/types').Document} onClose={() => setPreviewDoc(null)} />
       )}
 
       {/* Footer */}

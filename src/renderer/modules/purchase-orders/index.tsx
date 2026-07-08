@@ -11,6 +11,7 @@ import EntityTimeline from '../../components/EntityTimeline';
 import { formatCurrency, formatDate, formatStatus, roundCents } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import EntityChip from '../../components/EntityChip';
+import AttachmentsPanel from '../../components/AttachmentsPanel';
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -1142,6 +1143,10 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
       <div className="grid grid-cols-2 gap-4 mt-6">
         <RelatedPanel entityType="purchase_order" entityId={poId} hide={['lines']} />
         <EntityTimeline entityType="purchase_orders" entityId={poId} />
+      </div>
+
+      <div className="mt-4">
+        <AttachmentsPanel entityType="purchase_order" entityId={poId} />
       </div>
 
       {isFinal && (

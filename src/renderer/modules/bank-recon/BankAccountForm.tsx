@@ -3,6 +3,7 @@ import { Save, X } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import type { BankAccount } from './BankAccountList';
+import AttachmentsPanel from '../../components/AttachmentsPanel';
 
 // ─── Types ──────────────────────────────────────────────
 interface GLAccount {
@@ -238,6 +239,10 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
             />
           </div>
         </div>
+
+        {isEditing && account && (
+          <AttachmentsPanel entityType="bank_account" entityId={account.id} />
+        )}
 
         {/* Actions */}
         <div className="flex items-center gap-2">

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { CreditCard, Plus, X } from 'lucide-react';
+import { CreditCard, Plus, X, Paperclip } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
+import AttachmentsPanel from '../../components/AttachmentsPanel';
 
 // ─── Types ──────────────────────────────────────────────
 interface TaxPayment {
@@ -58,6 +59,7 @@ const TaxPayments: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [attachmentsPaymentId, setAttachmentsPaymentId] = useState<string | null>(null);
 
   const currentYear = new Date().getFullYear();
 
@@ -319,6 +321,7 @@ const TaxPayments: React.FC = () => {
                 <th>Period</th>
                 <th>Year</th>
                 <th>Confirmation #</th>
+                <th className="text-center">Files</th>
               </tr>
             </thead>
             <tbody>
@@ -338,6 +341,16 @@ const TaxPayments: React.FC = () => {
                   <td className="font-mono text-text-muted text-xs">
                     {p.confirmation_number || '-'}
                   </td>
+                  <td className="text-center">
+                    <button
+                      type="button"
+                      className="text-text-muted hover:text-accent-blue transition-colors p-1"
+                      onClick={() => setAttachmentsPaymentId(p.id)}
+                      title="Attachments"
+                    >
+                      <Paperclip size={14} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -349,12 +362,40 @@ const TaxPayments: React.FC = () => {
                 <td className="text-right font-mono font-bold text-text-primary">
                   {fmt.format(totalPaid)}
                 </td>
-                <td colSpan={4} />
+                <td colSpan={5} />
               </tr>
             </tfoot>
           </table>
         </div>
       )}
+
+      {attachmentsPaymentId && (() => {
+        const attachmentsPayment = payments.find((p) => p.id === attachmentsPaymentId);
+        const typeLabel = attachmentsPayment
+          ? PAYMENT_TYPES.find((t) => t.value === attachmentsPayment.type)?.label || attachmentsPayment.type
+          : '';
+        return (
+          <div
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+            onClick={() => setAttachmentsPaymentId(null)}
+          >
+            <div className="block-card-elevated w-full max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Attachments{attachmentsPayment ? ` — ${typeLabel} ${attachmentsPayment.date}` : ''}
+                </h3>
+                <button
+                  className="text-text-muted hover:text-text-primary transition-colors"
+                  onClick={() => setAttachmentsPaymentId(null)}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <AttachmentsPanel entityType="tax_payment" entityId={attachmentsPaymentId} />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

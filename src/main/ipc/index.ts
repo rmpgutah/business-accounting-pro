@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog, shell } from 'electron';
+import { ipcMain, BrowserWindow, dialog, shell, app } from 'electron';
 import { v4 as uuid } from 'uuid';
 import Anthropic from '@anthropic-ai/sdk';
 import * as db from '../database';
@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { generateInvoicePDF, buildInvoiceHTML } from '../services/pdf-generator';
+import { copyIntoDocumentsStore } from '../services/document-storage';
 import { SCHEDULE_C_BY_CATEGORY } from '../services/schedule-c-map';
 import { monthlyDepreciation } from '../services/depreciation';
 import { sendInvoiceEmail } from '../services/email-sender';
@@ -4993,6 +4994,44 @@ export function registerIpcHandlers(): void {
     const filePath = result.filePaths[0];
     const stats = fs.statSync(filePath);
     return { path: filePath, name: path.basename(filePath), size: stats.size };
+  });
+
+  // ─── Document Upload (copies file into app-managed storage) ──
+  ipcMain.handle('documents:upload', async (_event, args: {
+    companyId: string;
+    entityType: string;
+    entityId: string;
+    filters?: Array<{ name: string; extensions: string[] }>;
+  }) => {
+    const { companyId, entityType, entityId, filters } = args;
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: filters || [{ name: 'All Files', extensions: ['*'] }],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+
+    const sourcePath = result.filePaths[0];
+    const filename = path.basename(sourcePath);
+    const stored = copyIntoDocumentsStore(app.getPath('userData'), companyId, sourcePath);
+
+    const doc = db.create('documents', {
+      company_id: companyId,
+      filename,
+      file_path: stored.path,
+      file_size: stored.size,
+      mime_type: stored.mimeType,
+      entity_type: entityType,
+      entity_id: entityId,
+      tags: '',
+      uploaded_at: new Date().toISOString(),
+    });
+    scheduleAutoBackup();
+    return doc;
+  });
+
+  // ─── Open a stored document in the OS default app ────────────
+  ipcMain.handle('documents:open-path', async (_event, filePath: string) => {
+    return openPathInOS(filePath);
   });
 
   // ─── PDF Metadata Builder (P1.6) ─────────────────────────

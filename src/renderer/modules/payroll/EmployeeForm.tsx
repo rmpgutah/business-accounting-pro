@@ -4,6 +4,7 @@ import api from '../../lib/api';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
+import AttachmentsPanel from '../../components/AttachmentsPanel';
 import { useCompanyStore } from '../../stores/companyStore';
 
 // PERF: these heavy panels sit below the form and would otherwise
@@ -2395,6 +2396,12 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
         <div className="grid grid-cols-2 gap-4 mt-6">
           <MemoRelatedPanel entityType="employee" entityId={employeeId} hide={HIDE_PAYSTUBS} />
           <MemoEntityTimeline entityType="employees" entityId={employeeId} />
+        </div>
+      )}
+
+      {isEditing && employeeId && (
+        <div className="mt-4">
+          <AttachmentsPanel entityType="employee" entityId={employeeId} />
         </div>
       )}
 

@@ -239,6 +239,17 @@ const api = {
   openFileDialog: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) =>
     invoke('dialog:open-file', options),
 
+  // Document attachments
+  uploadDocument: (
+    companyId: string,
+    entityType: string,
+    entityId: string,
+    filters?: Array<{ name: string; extensions: string[] }>
+  ): Promise<import('../../shared/types').Document | null> =>
+    invoke('documents:upload', { companyId, entityType, entityId, filters }),
+  openPath: (filePath: string): Promise<string> =>
+    invoke('documents:open-path', filePath),
+
   // Auth
   register: (email: string, password: string, displayName: string) =>
     invoke('auth:register', { email, password, displayName }),

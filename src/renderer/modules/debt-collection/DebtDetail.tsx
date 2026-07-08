@@ -37,6 +37,7 @@ import { calcRiskScore, getRiskBadge, collectionScore, getCollectionBadge } from
 import RelatedPanel from '../../components/RelatedPanel';
 import EntityTimeline from '../../components/EntityTimeline';
 import CollectionCostsPanel from './CollectionCostsPanel';
+import AttachmentsPanel from '../../components/AttachmentsPanel';
 
 // ─── Types ──────────────────────────────────────────────
 interface DebtDetailProps {
@@ -2415,6 +2416,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
       <div className="grid grid-cols-2 gap-4 mt-6">
         <RelatedPanel entityType="debt" entityId={debtId} hide={['comms', 'evidence', 'contacts', 'payments']} />
         <EntityTimeline entityType="debts" entityId={debtId} />
+      </div>
+
+      <div className="mt-4">
+        <AttachmentsPanel entityType="debt" entityId={debtId} label="Contracts & Documents" />
       </div>
 
       {/* Pulse animation */}

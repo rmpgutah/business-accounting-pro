@@ -13,6 +13,7 @@ import api from '../../lib/api';
 import { useNavigation } from '../../lib/navigation';
 import { Plus } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
+import AttachmentsPanel from '../../components/AttachmentsPanel';
 
 // ─── Types ──────────────────────────────────────────────
 interface Project {
@@ -410,6 +411,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projectId, onBack, onEdit
         {activeTab === 'invoices' && (
           <InvoicesTab invoices={invoices} />
         )}
+      </div>
+
+      <div className="mt-4">
+        <AttachmentsPanel entityType="project" entityId={projectId} />
       </div>
     </div>
   );
