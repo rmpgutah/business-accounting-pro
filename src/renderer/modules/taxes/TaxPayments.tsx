@@ -369,16 +369,33 @@ const TaxPayments: React.FC = () => {
         </div>
       )}
 
-      {attachmentsPaymentId && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={() => setAttachmentsPaymentId(null)}
-        >
-          <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <AttachmentsPanel entityType="tax_payment" entityId={attachmentsPaymentId} />
+      {attachmentsPaymentId && (() => {
+        const attachmentsPayment = payments.find((p) => p.id === attachmentsPaymentId);
+        const typeLabel = attachmentsPayment
+          ? PAYMENT_TYPES.find((t) => t.value === attachmentsPayment.type)?.label || attachmentsPayment.type
+          : '';
+        return (
+          <div
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+            onClick={() => setAttachmentsPaymentId(null)}
+          >
+            <div className="block-card-elevated w-full max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Attachments{attachmentsPayment ? ` — ${typeLabel} ${attachmentsPayment.date}` : ''}
+                </h3>
+                <button
+                  className="text-text-muted hover:text-text-primary transition-colors"
+                  onClick={() => setAttachmentsPaymentId(null)}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <AttachmentsPanel entityType="tax_payment" entityId={attachmentsPaymentId} />
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
