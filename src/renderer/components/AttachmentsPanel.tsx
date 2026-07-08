@@ -35,27 +35,32 @@ const AttachmentsPanel: React.FC<AttachmentsPanelProps> = ({ entityType, entityI
   const [viewingDoc, setViewingDoc] = useState<Document | null>(null);
   const [error, setError] = useState('');
 
-  const load = async () => {
-    if (!entityId) { setLoading(false); return; }
-    try {
-      const rows = await api.rawQuery(
-        'SELECT * FROM documents WHERE entity_type = ? AND entity_id = ? ORDER BY uploaded_at DESC',
-        [entityType, entityId]
-      );
-      setDocs(Array.isArray(rows) ? rows : []);
-    } catch (err: any) {
-      console.error('Failed to load attachments:', err);
-      setError(err?.message || 'Failed to load attachments');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    let ignore = false;
     setLoading(true);
-    load();
+    (async () => {
+      if (!entityId || !activeCompany) {
+        if (!ignore) setLoading(false);
+        return;
+      }
+      try {
+        const rows = await api.rawQuery(
+          'SELECT * FROM documents WHERE company_id = ? AND entity_type = ? AND entity_id = ? ORDER BY uploaded_at DESC',
+          [activeCompany.id, entityType, entityId]
+        );
+        if (!ignore) setDocs(Array.isArray(rows) ? rows : []);
+      } catch (err: any) {
+        console.error('Failed to load attachments:', err);
+        if (!ignore) setError(err?.message || 'Failed to load attachments');
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityType, entityId]);
+  }, [entityType, entityId, activeCompany]);
 
   const handleUpload = async () => {
     if (!activeCompany || !entityId) return;
