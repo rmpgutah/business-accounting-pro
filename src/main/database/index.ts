@@ -9376,6 +9376,13 @@ export function initDatabase(): Database.Database {
   )`,
   "CREATE INDEX IF NOT EXISTS idx_vendor_locations_vendor ON vendor_locations(vendor_id)",
   "ALTER TABLE expenses ADD COLUMN vendor_location_id TEXT DEFAULT NULL",
+  // HR Batch 1: no new `departments` table needed here — the F228 cost-accounting
+  // batch already created one (see the "F228 — departments" CREATE TABLE above),
+  // with columns id/company_id/code/name/manager_id/parent_id/description/is_active.
+  // We reuse it: `manager_id` on a department row is its head/manager, and the two
+  // ALTER TABLEs below let an *employee* point at their manager and department.
+  "ALTER TABLE employees ADD COLUMN manager_id TEXT DEFAULT ''",
+  "ALTER TABLE employees ADD COLUMN department_id TEXT DEFAULT ''",
   ];
   // SCHEMA: previously this loop swallowed ALL errors silently, so a
   // genuine schema problem (typo in CREATE TABLE, broken FK, etc.) was

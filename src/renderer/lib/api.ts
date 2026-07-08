@@ -92,6 +92,11 @@ const api = {
   dashboardCashflow: (startDate: string, endDate: string) =>
     invoke('dashboard:cashflow', { startDate, endDate }),
 
+  // Human Resources
+  hrOrgChart: () => invoke('hr:orgChart'),
+  hrAnalytics: (startDate: string, endDate: string) =>
+    invoke('hr:analytics', { startDate, endDate }),
+
   // Search
   globalSearch: (query: string) => invoke('search:global', query),
   searchIndex: (query: string, limit?: number) =>

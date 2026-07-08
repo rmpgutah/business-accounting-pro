@@ -728,7 +728,7 @@ export function registerIpcHandlers(): void {
     'payroll_runs', 'pay_stubs', 'federal_payroll_constants',
     'employee_equipment', 'equipment_penalties', 'employee_credentials',
     'employee_checklist_items', 'employee_reviews', 'employee_disciplinary',
-    'pto_policies', 'pto_balances', 'pto_transactions',
+    'pto_policies', 'pto_balances', 'pto_transactions', 'departments',
     'state_tax_brackets', 'approval_queue',
     'je_comments',
     // Workflow + numbering + email templates (2026-04-23)
@@ -984,6 +984,15 @@ export function registerIpcHandlers(): void {
           const lines = dbI.prepare(`SELECT COUNT(*) as c FROM journal_entry_lines WHERE account_id = ?`).get(id) as any;
           if (lines?.c > 0) {
             throw new Error(`Cannot delete account with ${lines.c} journal entry line(s). Use soft delete (mark inactive) instead.`);
+          }
+        } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
+        break;
+      case 'departments':
+        // Departments can't be deleted while employees are still assigned — block
+        try {
+          const assigned = dbI.prepare(`SELECT COUNT(*) as c FROM employees WHERE department_id = ?`).get(id) as any;
+          if (assigned?.c > 0) {
+            throw new Error(`Cannot delete department with ${assigned.c} employee(s) assigned. Reassign them first.`);
           }
         } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
         break;
@@ -4908,6 +4917,71 @@ export function registerIpcHandlers(): void {
       income: inflow.find((r: any) => r.month === month)?.total || 0,
       expenses: outflow.find((r: any) => r.month === month)?.total || 0,
     }));
+  });
+
+  // ─── HR: Org Chart ───────────────────────────────────────
+  ipcMain.handle('hr:orgChart', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    const dbInstance = db.getDb();
+    return dbInstance.prepare(
+      `SELECT e.id, e.name, e.job_title, e.manager_id, e.department_id,
+              mgr.name as manager_name,
+              d.name as department_name
+       FROM employees e
+       LEFT JOIN employees mgr ON mgr.id = e.manager_id
+       LEFT JOIN departments d ON d.id = e.department_id
+       WHERE e.company_id = ? AND e.status = 'active'
+       ORDER BY e.name`
+    ).all(companyId);
+  });
+
+  // ─── HR: Headcount & Turnover Analytics ──────────────────
+  ipcMain.handle('hr:analytics', (_event, { startDate, endDate }: { startDate: string; endDate: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+
+    const byDepartment = dbInstance.prepare(
+      `SELECT COALESCE(d.name, 'Unassigned') as department_name, COUNT(*) as count
+       FROM employees e
+       LEFT JOIN departments d ON d.id = e.department_id
+       WHERE e.company_id = ? AND e.status = 'active'
+       GROUP BY department_name
+       ORDER BY count DESC`
+    ).all(companyId) as any[];
+
+    const statusCounts = dbInstance.prepare(
+      `SELECT status, COUNT(*) as count FROM employees WHERE company_id = ? GROUP BY status`
+    ).all(companyId) as any[];
+    const active = statusCounts.find(r => r.status === 'active')?.count || 0;
+    const inactive = statusCounts.reduce((s, r) => (r.status !== 'active' ? s + r.count : s), 0);
+
+    const newHires = dbInstance.prepare(
+      `SELECT COUNT(*) as count FROM employees WHERE company_id = ? AND start_date >= ? AND start_date <= ?`
+    ).get(companyId, startDate, endDate) as any;
+
+    const departures = dbInstance.prepare(
+      `SELECT COUNT(*) as count FROM employees WHERE company_id = ? AND end_date >= ? AND end_date <= ?`
+    ).get(companyId, startDate, endDate) as any;
+
+    const tenureRows = dbInstance.prepare(
+      `SELECT start_date, end_date FROM employees WHERE company_id = ? AND start_date IS NOT NULL AND start_date != ''`
+    ).all(companyId) as any[];
+    const now = Date.now();
+    let totalDays = 0;
+    let counted = 0;
+    for (const r of tenureRows) {
+      const start = new Date(r.start_date).getTime();
+      const end = r.end_date ? new Date(r.end_date).getTime() : now;
+      if (!isNaN(start) && !isNaN(end) && end >= start) {
+        totalDays += (end - start) / 86400000;
+        counted++;
+      }
+    }
+    const avgTenureDays = counted > 0 ? Math.round(totalDays / counted) : 0;
+
+    return { byDepartment, active, inactive, newHires: newHires?.count || 0, departures: departures?.count || 0, avgTenureDays };
   });
 
   // ─── File Dialog ────────────────────────────────────────
