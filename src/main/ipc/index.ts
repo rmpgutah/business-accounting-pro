@@ -16407,7 +16407,8 @@ export function registerIpcHandlers(): void {
   /* ── Body + terms ── */
   .letter-body { margin-top: 12px; font-size: 10.5pt; }
   .letter-body p { margin: 8px 0; text-align: justify; }
-  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; table-layout: fixed; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+  .equip-table { table-layout: fixed; }
   .equip-table col.c-num { width: 4%; }
   .equip-table col.c-item { width: 16%; }
   .equip-table col.c-serial { width: 13%; }
