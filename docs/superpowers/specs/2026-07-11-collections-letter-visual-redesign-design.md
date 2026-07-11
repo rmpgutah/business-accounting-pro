@@ -13,7 +13,7 @@ Two categories of defect, found by reading the generated PDFs and the source tem
 
 1. **Structural (content-integrity) bugs**, independent of styling:
    - Equipment Agreement: a second batch of clauses was appended without renumbering — sections 14, 15, and 16 each appear **twice** with entirely different content (e.g. one "14. Software Misconduct..." and a separate, later "14. Governing Law..."). Verified via `grep` that nothing in the template cross-references sections 14/15/16 by number, so renumbering is a pure, content-preserving fix.
-   - Employment Agreement: otherwise numbered correctly 1–29 straight through, but the final clause is mislabeled "31." instead of "30." (isolated off-by-one; confirmed no cross-reference to "Section 31" elsewhere).
+   - Employment Agreement: **correction during implementation** — an earlier pass of this design incorrectly claimed the final clause was mislabeled "31." instead of "30." That claim was based on a `grep` regex that silently truncated any heading title longer than 60 characters, which hid an actual "30. Reservation of Rights, Limitation of Liability & No Waiver." clause immediately before "31. Governing Law, Venue & Severability." Re-verified with an unclipped grep: the document is correctly numbered 1 through 31 straight through, with no duplicates or gaps. **No fix needed here — this item is retired.**
    A document handed to a collections agency or court with duplicate/skipped section numbers reads as sloppy and undermines its credibility as a properly executed agreement.
 
 2. **Visual/layout defects**:
@@ -50,9 +50,9 @@ In the template literal (~lines 16610–16626), the second-batch headings get re
 
 The first-batch `14. Software Misconduct...`, `15. Wage-Law Compliance...`, `16. Acknowledgment of Receipt...` are unchanged (they're the correct, first occurrence of those numbers). Result: clean 1→20 sequence, verified by re-running the grep-for-duplicates check after the edit.
 
-### 2. Employment Agreement — final clause number fix
+### 2. Employment Agreement — final clause number (retired — no defect found)
 
-Single-line change: `31. Governing Law, Venue &amp; Severability.` → `30. Governing Law, Venue &amp; Severability.` (~line 16727 region). No other clause numbers change.
+**Retired during implementation.** The Employment Agreement's clause numbering was independently re-verified and found already correct (1 through 31, sequential, no gaps or duplicates) — see the correction note in Problem §1 above. No code change is made under this item.
 
 ### 3. Equipment table redesign
 
@@ -75,7 +75,7 @@ Both templates' `<style>` blocks are edited independently and in full — no new
 
 - Regenerate both PDFs for a test employee/equipment record (via the existing `employee:generate-employee-agreement` and equipment-agreement IPC handlers, exercised from the running app) and visually confirm:
   - Equipment Agreement section numbers run 1→20 with no duplicates.
-  - Employment Agreement's final section reads "30." not "31.".
+  - Employment Agreement section numbers run 1→31 with no duplicates or gaps (unchanged by this pass — confirmed already correct).
   - Equipment tables render within page margins with a long (11+ digit) serial number and a long combined item name, at both 1 row and 5+ rows, with no horizontal overflow.
   - Stolen/Damaged/Returned status cells are visually distinct by color.
 - `npm run typecheck` must pass (template-literal edits inside an existing `.ts` file, no new types).

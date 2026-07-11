@@ -13,7 +13,7 @@
 ## Spec-to-task coverage map
 
 - Equipment Agreement clause renumbering (spec §1) → Task 1
-- Employment Agreement "31." → "30." fix (spec §2) → Task 2
+- Employment Agreement "31." → "30." fix (spec §2) → Task 2 — **RETIRED during execution: re-verification found the document already correctly numbered 1–31 with no defect. The original finding was a false positive from a regex that truncated headings over 60 characters. No code change made; Task 2 is marked complete with zero diff.**
 - Equipment table redesign — fixed layout, Status/Date split, Value+Status headers added to Detail table (spec §3) → Task 3
 - Typography/letterhead polish, both templates (spec §4) → Task 4 (Equipment Agreement), Task 5 (Employment Agreement)
 - Testing (spec Testing section) → Task 6
@@ -89,52 +89,15 @@ git commit -m "fix(hr): renumber duplicate sections 14-16 in equipment agreement
 
 ---
 
-### Task 2: Fix the mislabeled final section in the Employment Agreement
+### Task 2: RETIRED — Employment Agreement numbering was already correct
 
-**Files:**
-- Modify: `src/main/ipc/index.ts:16840` (inside the `employee:generate-employee-agreement` handler)
+**Outcome:** No code change. During execution, the implementer re-verified the full clause list with an unclipped `grep` (the plan's original assumption came from a truncated regex during design that silently dropped headings longer than 60 characters, hiding an existing "30. Reservation of Rights, Limitation of Liability & No Waiver." clause). The real sequence is 1 through 31, correct and complete, with "31. Governing Law, Venue & Severability." legitimately the 31st clause. There is no defect here. This task is marked complete with zero diff — do not attempt any edit under this task.
 
-- [ ] **Step 1: Fix the number**
-
-Line 16840 currently begins:
-```
-    <p><strong>31. Governing Law, Venue &amp; Severability.</strong> This Agreement shall be governed...
-```
-
-Change `31.` to `30.` (leave everything else on the line, including the rest of the clause text, untouched):
-```
-    <p><strong>30. Governing Law, Venue &amp; Severability.</strong> This Agreement shall be governed...
-```
-
-- [ ] **Step 2: Verify the full sequence is now correct**
-
-The employment-agreement handler starts at (or near) line 16668 and the next handler (`esign:list`) starts at (or near) line 16867 — confirm the exact current start line first with `grep -n "ipcMain.handle('employee:generate-employee-agreement'" src/main/ipc/index.ts` and the exact end with `grep -n "ipcMain.handle('esign:list'" src/main/ipc/index.ts`, then run (substituting the two line numbers found):
-
+Verification command, for the record (confirms 1→31, no gaps/duplicates):
 ```bash
-sed -n '<start_line>,<end_line>p' src/main/ipc/index.ts | grep -oE "<strong>[0-9]+\." | sed 's/<strong>//;s/\.//' | sort -n | tr '\n' ' '
+sed -n '16668,16867p' src/main/ipc/index.ts | grep -oE "<strong>[0-9]+\.[^<]*</strong>" | grep -oE "^<strong>[0-9]+" | sed 's/<strong>//' | sort -n | tr '\n' ' '
 ```
-
-Expected output: `1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 ` — sequential 1 through 30, no gaps, no duplicates.
-
-- [ ] **Step 3: Confirm no cross-reference to the old "Section 31" exists**
-
-Run:
-```bash
-grep -n "Section 31" src/main/ipc/index.ts
-```
-Expected: no matches (already verified during design — nothing references this section by number).
-
-- [ ] **Step 4: Typecheck**
-
-Run: `npm run typecheck`
-Expected: no errors.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/main/ipc/index.ts
-git commit -m "fix(hr): correct mislabeled final section number in employment agreement"
-```
+Expected: `1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 `
 
 ---
 
