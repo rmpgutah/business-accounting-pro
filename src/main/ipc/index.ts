@@ -16751,14 +16751,14 @@ export function registerIpcHandlers(): void {
   @page { margin: 0.85in 0.9in; size: Letter; }
   body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
   .container { max-width: 680px; margin: 0 auto; }
-  .letterhead { text-align: center; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 2px solid #111; }
-  .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #111; margin: 0; }
-  .letterhead .co-addr { font-size: 9pt; color: #555; margin-top: 2px; letter-spacing: 0.3px; }
+  .letterhead { text-align: center; padding-bottom: 14px; margin-bottom: 20px; border-bottom: 0.5px solid #ccc; }
+  .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #111; margin: 0; padding-bottom: 6px; border-bottom: 1.5px solid #111; display: inline-block; }
+  .letterhead .co-addr { font-size: 9pt; color: #555; margin-top: 6px; letter-spacing: 0.3px; }
   .letter-date { margin-top: 20px; font-size: 10.5pt; }
   .addressee { margin-top: 16px; font-size: 10.5pt; line-height: 1.5; }
   .re-line { margin-top: 14px; font-size: 10.5pt; font-weight: 700; }
   .salutation { margin-top: 14px; font-size: 11pt; }
-  h2 { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12pt; margin-top: 22px; margin-bottom: 8px; color: #222; border-bottom: 1px solid #ccc; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
+  h2 { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12pt; margin-top: 18px; margin-bottom: 8px; color: #222; border-bottom: 1px solid #ccc; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
   .letter-body { margin-top: 12px; font-size: 10.5pt; }
   .letter-body p { margin: 8px 0; text-align: justify; }
   .info-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
@@ -16770,7 +16770,7 @@ export function registerIpcHandlers(): void {
   .signature-row { display: flex; justify-content: space-between; margin-top: 24px; }
   .signature-field { flex: 1; }
   .signature-line { border-top: 1px solid #374151; margin-top: 36px; padding-top: 4px; font-size: 10pt; }
-  .footer { margin-top: 36px; text-align: center; font-size: 8.5pt; color: #999; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; border-top: 1px solid #ddd; padding-top: 8px; }
+  .footer { margin-top: 36px; text-align: center; font-size: 8.5pt; color: #999; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; border-top: 0.5px solid #ccc; padding-top: 8px; }
   @media print { body { padding: 0; } }
 </style></head>
 <body>
