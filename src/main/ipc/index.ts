@@ -16311,20 +16311,25 @@ export function registerIpcHandlers(): void {
       let equipmentRows = '';
       let penaltySection = '';
       let totalValue = 0;
-      const dispositionLabel = (item: any): string => {
-        const map: Record<string, string> = {
-          in_use: 'In Use', returned_good: 'Returned', returned_damaged: 'Returned (Damaged)',
-          lost: 'Lost', stolen: 'Stolen', not_returned: 'Not Returned', retired: 'Retired',
-        };
+      const statusMap: Record<string, string> = {
+        in_use: 'In Use', returned_good: 'Returned', returned_damaged: 'Returned (Damaged)',
+        lost: 'Lost', stolen: 'Stolen', not_returned: 'Not Returned', retired: 'Retired',
+      };
+      const statusSeverity: Record<string, 'high' | 'medium' | 'none'> = {
+        in_use: 'none', returned_good: 'none', retired: 'none',
+        returned_damaged: 'medium', lost: 'medium',
+        stolen: 'high', not_returned: 'high',
+      };
+      const dispositionInfo = (item: any): { label: string; date: string; severity: 'high' | 'medium' | 'none' } => {
         const d = item.disposition || (item.return_date ? 'returned_good' : 'in_use');
-        let label = map[d] || 'In Use';
-        if ((item.return_date || item.disposition_date) && d !== 'in_use') {
-          label += ` · ${fmtDate(item.return_date || item.disposition_date)}`;
-        }
-        return label;
+        const label = statusMap[d] || 'In Use';
+        const severity = statusSeverity[d] || 'none';
+        const dateVal = item.return_date || item.disposition_date;
+        const date = (dateVal && d !== 'in_use') ? fmtDate(dateVal) : '—';
+        return { label, date, severity };
       };
       if (equipment.length === 0) {
-        equipmentRows = '<tr><td colspan="8" style="text-align:center;padding:16px;color:#6b7280;">No equipment assigned.</td></tr>';
+        equipmentRows = '<tr><td colspan="9" style="text-align:center;padding:16px;color:#6b7280;">No equipment assigned.</td></tr>';
       } else {
         const penaltyTypeLabel = (t: string, amt: number) => {
           const a = Number(amt) || 0;
@@ -16336,15 +16341,19 @@ export function registerIpcHandlers(): void {
         equipment.forEach((item: any, i: number) => {
           const val = Number(item.value) || 0;
           totalValue += val;
+          const disp = dispositionInfo(item);
+          const statusBg = disp.severity === 'high' ? '#fef2f2' : disp.severity === 'medium' ? '#fffbeb' : 'transparent';
+          const statusColor = disp.severity === 'high' ? '#dc2626' : disp.severity === 'medium' ? '#d97706' : '#374151';
           equipmentRows += `<tr>
             <td style="padding:8px;border:1px solid #d1d5db;">${i + 1}</td>
             <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.item_name)}</td>
-            <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.serial_number || '—')}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;word-break:break-all;">${esc(item.serial_number || '—')}</td>
             <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.model || '—')}</td>
             <td style="padding:8px;border:1px solid #d1d5db;text-transform:capitalize;">${esc(item.condition || 'good')}</td>
             <td style="padding:8px;border:1px solid #d1d5db;text-align:right;">${val > 0 ? fmtCurrency(val) : '—'}</td>
             <td style="padding:8px;border:1px solid #d1d5db;">${fmtDate(item.assigned_date)}</td>
-            <td style="padding:8px;border:1px solid #d1d5db;">${esc(dispositionLabel(item))}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;background:${statusBg};color:${statusColor};font-weight:${disp.severity === 'none' ? '400' : '700'};">${esc(disp.label)}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;">${disp.date}</td>
           </tr>`;
 
           // Penalties defined for this item.
@@ -16398,7 +16407,16 @@ export function registerIpcHandlers(): void {
   /* ── Body + terms ── */
   .letter-body { margin-top: 12px; font-size: 10.5pt; }
   .letter-body p { margin: 8px 0; text-align: justify; }
-  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; table-layout: fixed; }
+  .equip-table col.c-num { width: 4%; }
+  .equip-table col.c-item { width: 16%; }
+  .equip-table col.c-serial { width: 13%; }
+  .equip-table col.c-model { width: 10%; }
+  .equip-table col.c-cond { width: 10%; }
+  .equip-table col.c-value { width: 10%; }
+  .equip-table col.c-date { width: 12%; }
+  .equip-table col.c-status { width: 15%; }
+  .equip-table col.c-statusdate { width: 10%; }
   th { background: #f3f4f6; padding: 8px; border: 1px solid #d1d5db; text-align: left; font-weight: 600; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
   td { padding: 8px; border: 1px solid #d1d5db; }
   .terms { margin: 16px 0; }
@@ -16452,10 +16470,14 @@ export function registerIpcHandlers(): void {
 
   <h2>Equipment Issued</h2>
   <p>The Employer has issued the following equipment to the Employee for business use. The Employee acknowledges receipt of the items listed below and agrees to the terms set forth in this Agreement.</p>
-  <table>
+  <table class="equip-table">
+    <colgroup>
+      <col class="c-num" /><col class="c-item" /><col class="c-serial" /><col class="c-model" />
+      <col class="c-cond" /><col class="c-value" /><col class="c-date" /><col class="c-status" /><col class="c-statusdate" />
+    </colgroup>
     <thead>
       <tr>
-        <th style="width:40px;">#</th>
+        <th>#</th>
         <th>Item</th>
         <th>Serial #</th>
         <th>Model</th>
@@ -16463,11 +16485,12 @@ export function registerIpcHandlers(): void {
         <th style="text-align:right;">Value</th>
         <th>Date Issued</th>
         <th>Status</th>
+        <th>Status Date</th>
       </tr>
     </thead>
     <tbody>
       ${equipmentRows}
-      ${totalValue > 0 ? `<tr><td colspan="5" style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">Total Equipment Value</td><td style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">${fmtCurrency(totalValue)}</td><td colspan="2" style="border:1px solid #d1d5db;"></td></tr>` : ''}
+      ${totalValue > 0 ? `<tr><td colspan="5" style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">Total Equipment Value</td><td style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">${fmtCurrency(totalValue)}</td><td colspan="3" style="border:1px solid #d1d5db;"></td></tr>` : ''}
     </tbody>
   </table>
 
@@ -16628,15 +16651,22 @@ export function registerIpcHandlers(): void {
 
   <h2>Equipment Schedule &mdash; Detailed Itemization</h2>
   <p>The following equipment has been issued to the Employee. The Employee acknowledges receipt and confirms the condition of each item as indicated at the time of issuance.</p>
-  <table>
+  <table class="equip-table">
+    <colgroup>
+      <col class="c-num" /><col class="c-item" /><col class="c-serial" /><col class="c-model" />
+      <col class="c-cond" /><col class="c-value" /><col class="c-date" /><col class="c-status" /><col class="c-statusdate" />
+    </colgroup>
     <thead>
       <tr>
-        <th style="width:40px;">#</th>
+        <th>#</th>
         <th>Item Description</th>
         <th>Serial Number</th>
         <th>Model / SKU</th>
         <th>Condition at Issuance</th>
+        <th style="text-align:right;">Value</th>
         <th>Date Issued</th>
+        <th>Status</th>
+        <th>Status Date</th>
       </tr>
     </thead>
     <tbody>
