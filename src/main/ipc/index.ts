@@ -16745,10 +16745,10 @@ export function registerIpcHandlers(): void {
   .letterhead { text-align: center; padding-bottom: 14px; margin-bottom: 20px; border-bottom: 0.5px solid #ccc; }
   .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #111; margin: 0; padding-bottom: 6px; border-bottom: 1.5px solid #111; display: inline-block; }
   .letterhead .co-addr { font-size: 9pt; color: #555; margin-top: 6px; letter-spacing: 0.3px; }
-  .letter-date { margin-top: 20px; font-size: 10.5pt; }
-  .addressee { margin-top: 16px; font-size: 10.5pt; line-height: 1.5; }
-  .re-line { margin-top: 14px; font-size: 10.5pt; font-weight: 700; }
-  .salutation { margin-top: 14px; font-size: 11pt; }
+  .caption-block { margin-top: 24px; padding: 12px 0; text-align: center; border-top: 1px solid #1a1a1a; border-bottom: 1px solid #1a1a1a; }
+  .caption-title { font-size: 12pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; }
+  .caption-parties { font-size: 10pt; color: #444; margin-top: 4px; }
+  .caption-date { font-size: 9.5pt; color: #666; margin-top: 2px; }
   h2 { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12pt; margin-top: 18px; margin-bottom: 8px; color: #222; border-bottom: 1px solid #ccc; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
   .letter-body { margin-top: 12px; font-size: 10.5pt; }
   .letter-body p { margin: 8px 0; text-align: justify; }
@@ -16772,29 +16772,18 @@ export function registerIpcHandlers(): void {
     ${companyAddr ? `<p class="co-addr">${esc(companyAddr)}</p>` : ''}
   </div>
 
-  <!-- Date -->
-  <div class="letter-date">${signatures?.employee?.date
-    ? fmtDate(String(signatures.employee.date).length === 10 ? signatures.employee.date + 'T12:00:00' : signatures.employee.date)
-    : today}</div>
-
-  <!-- Addressee -->
-  <div class="addressee">
-    ${empName}<br/>
-    ${empTitle ? esc(empTitle) + '<br/>' : ''}
-    ${empAddr ? esc(empAddr) + '<br/>' : ''}
-    ${empEmail ? empEmail + '<br/>' : ''}
-    ${empPhone ? empPhone : ''}
+  <!-- Caption block -->
+  <div class="caption-block">
+    <p class="caption-title">Employment Agreement</p>
+    <p class="caption-parties">Between ${companyName} and ${empName}</p>
+    <p class="caption-date">Effective ${signatures?.employee?.date
+      ? fmtDate(String(signatures.employee.date).length === 10 ? signatures.employee.date + 'T12:00:00' : signatures.employee.date)
+      : (empStart || today)}</p>
   </div>
 
-  <!-- RE line -->
-  <div class="re-line">RE: Employment Agreement</div>
-
-  <!-- Salutation -->
-  <div class="salutation">Dear ${empName.split(' ')[0] || empName},</div>
-
-  <!-- Body opening -->
+  <!-- Body opening: contract recital -->
   <div class="letter-body">
-    <p>This letter constitutes a formal employment agreement between ${companyName} ("Employer") and ${empName} ("Employee"), effective as of ${empStart || today}. This Agreement sets forth the terms and conditions of your employment. By signing below, you acknowledge that you have read, understood, and agree to these terms.</p>
+    <p>This Agreement is made and entered into as of ${empStart || today}, by and between ${companyName} ("Employer") and ${empName}${empTitle ? `, ${empTitle}` : ''}${empAddr ? `, of ${esc(empAddr)}` : ''} ("Employee")${empEmail || empPhone ? ` (contactable at${empEmail ? ` ${empEmail}` : ''}${empEmail && empPhone ? ',' : ''}${empPhone ? ` ${empPhone}` : ''})` : ''} (collectively, the "Parties"). This Agreement sets forth the terms and conditions of the Employee's employment. The Parties agree as follows:</p>
   </div>
 
   <h2>Terms of Employment</h2>
