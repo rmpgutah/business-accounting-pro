@@ -16391,7 +16391,7 @@ export function registerIpcHandlers(): void {
 <head><meta charset="utf-8"><title>Employer Provided Equipment Agreement - ${empName}</title>
 <style>
   @page { margin: 0.85in 0.9in; size: Letter; }
-  body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
+  body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
   .container { max-width: 680px; margin: 0 auto; }
   /* ── Formal letterhead ── */
   .letterhead { text-align: center; padding-bottom: 14px; margin-bottom: 20px; border-bottom: 0.5px solid #ccc; }
@@ -16421,7 +16421,7 @@ export function registerIpcHandlers(): void {
   th { background: #f3f4f6; padding: 8px; border: 1px solid #d1d5db; text-align: left; font-weight: 600; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
   td { padding: 8px; border: 1px solid #d1d5db; }
   .terms { margin: 16px 0; }
-  .terms p { margin: 8px 0; text-align: justify; font-size: 10.5pt; }
+  .terms p { margin: 8px 0; text-align: justify; font-size: 10.5pt; padding-left: 28px; text-indent: -28px; }
   /* ── Signatures ── */
   .signature-section { margin-top: 36px; page-break-inside: avoid; }
   .signature-row { display: flex; justify-content: space-between; margin-top: 24px; }
