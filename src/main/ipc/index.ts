@@ -16740,7 +16740,7 @@ export function registerIpcHandlers(): void {
 <head><meta charset="utf-8"><title>Employee Agreement - ${empName}</title>
 <style>
   @page { margin: 0.85in 0.9in; size: Letter; }
-  body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
+  body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
   .container { max-width: 680px; margin: 0 auto; }
   .letterhead { text-align: center; padding-bottom: 14px; margin-bottom: 20px; border-bottom: 0.5px solid #ccc; }
   .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #111; margin: 0; padding-bottom: 6px; border-bottom: 1.5px solid #111; display: inline-block; }
@@ -16756,7 +16756,7 @@ export function registerIpcHandlers(): void {
   .info-table td { padding: 5px 10px; font-size: 10pt; border-bottom: 1px solid #eee; }
   .info-table td:first-child { font-weight: 600; width: 170px; color: #555; }
   .section { margin: 16px 0; }
-  .section p { margin: 8px 0; text-align: justify; font-size: 10.5pt; }
+  .section p { margin: 8px 0; text-align: justify; font-size: 10.5pt; padding-left: 28px; text-indent: -28px; }
   .signature-section { margin-top: 36px; page-break-inside: avoid; }
   .signature-row { display: flex; justify-content: space-between; margin-top: 24px; }
   .signature-field { flex: 1; }
