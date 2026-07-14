@@ -16311,20 +16311,25 @@ export function registerIpcHandlers(): void {
       let equipmentRows = '';
       let penaltySection = '';
       let totalValue = 0;
-      const dispositionLabel = (item: any): string => {
-        const map: Record<string, string> = {
-          in_use: 'In Use', returned_good: 'Returned', returned_damaged: 'Returned (Damaged)',
-          lost: 'Lost', stolen: 'Stolen', not_returned: 'Not Returned', retired: 'Retired',
-        };
+      const statusMap: Record<string, string> = {
+        in_use: 'In Use', returned_good: 'Returned', returned_damaged: 'Returned (Damaged)',
+        lost: 'Lost', stolen: 'Stolen', not_returned: 'Not Returned', retired: 'Retired',
+      };
+      const statusSeverity: Record<string, 'high' | 'medium' | 'none'> = {
+        in_use: 'none', returned_good: 'none', retired: 'none',
+        returned_damaged: 'medium', lost: 'medium',
+        stolen: 'high', not_returned: 'high',
+      };
+      const dispositionInfo = (item: any): { label: string; date: string; severity: 'high' | 'medium' | 'none' } => {
         const d = item.disposition || (item.return_date ? 'returned_good' : 'in_use');
-        let label = map[d] || 'In Use';
-        if ((item.return_date || item.disposition_date) && d !== 'in_use') {
-          label += ` · ${fmtDate(item.return_date || item.disposition_date)}`;
-        }
-        return label;
+        const label = statusMap[d] || 'In Use';
+        const severity = statusSeverity[d] || 'none';
+        const dateVal = item.return_date || item.disposition_date;
+        const date = (dateVal && d !== 'in_use') ? fmtDate(dateVal) : '—';
+        return { label, date, severity };
       };
       if (equipment.length === 0) {
-        equipmentRows = '<tr><td colspan="8" style="text-align:center;padding:16px;color:#6b7280;">No equipment assigned.</td></tr>';
+        equipmentRows = '<tr><td colspan="9" style="text-align:center;padding:16px;color:#6b7280;">No equipment assigned.</td></tr>';
       } else {
         const penaltyTypeLabel = (t: string, amt: number) => {
           const a = Number(amt) || 0;
@@ -16336,15 +16341,19 @@ export function registerIpcHandlers(): void {
         equipment.forEach((item: any, i: number) => {
           const val = Number(item.value) || 0;
           totalValue += val;
+          const disp = dispositionInfo(item);
+          const statusBg = disp.severity === 'high' ? '#fef2f2' : disp.severity === 'medium' ? '#fffbeb' : 'transparent';
+          const statusColor = disp.severity === 'high' ? '#dc2626' : disp.severity === 'medium' ? '#d97706' : '#374151';
           equipmentRows += `<tr>
             <td style="padding:8px;border:1px solid #d1d5db;">${i + 1}</td>
             <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.item_name)}</td>
-            <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.serial_number || '—')}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;word-break:break-all;">${esc(item.serial_number || '—')}</td>
             <td style="padding:8px;border:1px solid #d1d5db;">${esc(item.model || '—')}</td>
             <td style="padding:8px;border:1px solid #d1d5db;text-transform:capitalize;">${esc(item.condition || 'good')}</td>
             <td style="padding:8px;border:1px solid #d1d5db;text-align:right;">${val > 0 ? fmtCurrency(val) : '—'}</td>
             <td style="padding:8px;border:1px solid #d1d5db;">${fmtDate(item.assigned_date)}</td>
-            <td style="padding:8px;border:1px solid #d1d5db;">${esc(dispositionLabel(item))}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;background:${statusBg};color:${statusColor};font-weight:${disp.severity === 'none' ? '400' : '700'};">${esc(disp.label)}</td>
+            <td style="padding:8px;border:1px solid #d1d5db;">${disp.date}</td>
           </tr>`;
 
           // Penalties defined for this item.
@@ -16382,34 +16391,44 @@ export function registerIpcHandlers(): void {
 <head><meta charset="utf-8"><title>Employer Provided Equipment Agreement - ${empName}</title>
 <style>
   @page { margin: 0.85in 0.9in; size: Letter; }
-  body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
+  body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
   .container { max-width: 680px; margin: 0 auto; }
   /* ── Formal letterhead ── */
-  .letterhead { text-align: center; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 2px solid #111; }
-  .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #111; margin: 0; }
-  .letterhead .co-addr { font-size: 9pt; color: #555; margin-top: 2px; letter-spacing: 0.3px; }
-  /* ── Date + addressee + RE + salutation ── */
-  .letter-date { margin-top: 20px; font-size: 10.5pt; }
-  .addressee { margin-top: 16px; font-size: 10.5pt; line-height: 1.5; }
-  .re-line { margin-top: 14px; font-size: 10.5pt; font-weight: 700; }
-  .salutation { margin-top: 14px; font-size: 11pt; }
+  .letterhead { text-align: center; padding-bottom: 14px; margin-bottom: 20px; border-bottom: 0.5px solid #ccc; }
+  .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #111; margin: 0; padding-bottom: 6px; border-bottom: 1.5px solid #111; display: inline-block; }
+  .letterhead .co-addr { font-size: 9pt; color: #555; margin-top: 6px; letter-spacing: 0.3px; }
+  /* ── Caption block ── */
+  .caption-block { margin-top: 24px; padding: 12px 0; text-align: center; border-top: 1px solid #1a1a1a; border-bottom: 1px solid #1a1a1a; }
+  .caption-title { font-size: 12pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; }
+  .caption-parties { font-size: 10pt; color: #444; margin-top: 4px; }
+  .caption-date { font-size: 9.5pt; color: #666; margin-top: 2px; }
   /* ── Section headings ── */
-  h2 { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12pt; margin-top: 22px; margin-bottom: 8px; color: #222; border-bottom: 1px solid #ccc; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
+  h2 { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12pt; margin-top: 18px; margin-bottom: 8px; color: #222; border-bottom: 1px solid #ccc; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
   /* ── Body + terms ── */
   .letter-body { margin-top: 12px; font-size: 10.5pt; }
   .letter-body p { margin: 8px 0; text-align: justify; }
   table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+  .equip-table { table-layout: fixed; }
+  .equip-table col.c-num { width: 4%; }
+  .equip-table col.c-item { width: 16%; }
+  .equip-table col.c-serial { width: 13%; }
+  .equip-table col.c-model { width: 10%; }
+  .equip-table col.c-cond { width: 10%; }
+  .equip-table col.c-value { width: 10%; }
+  .equip-table col.c-date { width: 12%; }
+  .equip-table col.c-status { width: 15%; }
+  .equip-table col.c-statusdate { width: 10%; }
   th { background: #f3f4f6; padding: 8px; border: 1px solid #d1d5db; text-align: left; font-weight: 600; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
   td { padding: 8px; border: 1px solid #d1d5db; }
   .terms { margin: 16px 0; }
-  .terms p { margin: 8px 0; text-align: justify; font-size: 10.5pt; }
+  .terms p { margin: 8px 0; text-align: justify; font-size: 10.5pt; padding-left: 28px; text-indent: -28px; }
   /* ── Signatures ── */
   .signature-section { margin-top: 36px; page-break-inside: avoid; }
   .signature-row { display: flex; justify-content: space-between; margin-top: 24px; }
   .signature-field { flex: 1; }
   .signature-line { border-top: 1px solid #374151; margin-top: 36px; padding-top: 4px; font-size: 10pt; }
   /* ── Footer ── */
-  .footer { margin-top: 36px; text-align: center; font-size: 8.5pt; color: #999; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; border-top: 1px solid #ddd; padding-top: 8px; }
+  .footer { margin-top: 36px; text-align: center; font-size: 8.5pt; color: #999; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; border-top: 0.5px solid #ccc; padding-top: 8px; }
   /* ── Penalty table ── */
   .penalty-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; table-layout: fixed; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
   .penalty-table th { background: #1f2937; color: #fff; padding: 7px 8px; border: 1px solid #374151; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -16427,35 +16446,30 @@ export function registerIpcHandlers(): void {
     ${companyAddr ? `<p class="co-addr">${esc(companyAddr)}</p>` : ''}
   </div>
 
-  <!-- Date -->
-  <div class="letter-date">${signatures?.employee?.date
-    ? fmtDate(String(signatures.employee.date).length === 10 ? signatures.employee.date + 'T12:00:00' : signatures.employee.date)
-    : today}</div>
-
-  <!-- Addressee -->
-  <div class="addressee">
-    ${empName}<br/>
-    ${empTitle ? esc(empTitle) + '<br/>' : ''}
-    ${empAddr ? esc(empAddr) + '<br/>' : ''}
+  <!-- Caption block -->
+  <div class="caption-block">
+    <p class="caption-title">Employer Provided Equipment Agreement</p>
+    <p class="caption-parties">Between ${companyName} and ${empName}</p>
+    <p class="caption-date">Effective ${signatures?.employee?.date
+      ? fmtDate(String(signatures.employee.date).length === 10 ? signatures.employee.date + 'T12:00:00' : signatures.employee.date)
+      : (empStart || today)}</p>
   </div>
 
-  <!-- RE line -->
-  <div class="re-line">RE: Employer Provided Equipment Agreement</div>
-
-  <!-- Salutation -->
-  <div class="salutation">Dear ${empName.split(' ')[0] || empName},</div>
-
-  <!-- Body opening -->
+  <!-- Body opening: contract recital -->
   <div class="letter-body">
-    <p>This letter constitutes a formal agreement between ${companyName} ("Employer") and ${empName} ("Employee"), effective as of ${empStart || today}, regarding the issuance, use, care, and return of company-owned equipment. By acknowledging this document, the Employee agrees to the terms and conditions set forth herein.</p>
+    <p>This Agreement is made and entered into as of ${empStart || today}, by and between ${companyName} ("Employer") and ${empName}${empTitle ? `, ${empTitle}` : ''}${empAddr ? `, of ${esc(empAddr)}` : ''} ("Employee"), regarding the issuance, use, care, and return of company-owned equipment (this "Agreement"). The parties agree as follows:</p>
   </div>
 
   <h2>Equipment Issued</h2>
   <p>The Employer has issued the following equipment to the Employee for business use. The Employee acknowledges receipt of the items listed below and agrees to the terms set forth in this Agreement.</p>
-  <table>
+  <table class="equip-table">
+    <colgroup>
+      <col class="c-num" /><col class="c-item" /><col class="c-serial" /><col class="c-model" />
+      <col class="c-cond" /><col class="c-value" /><col class="c-date" /><col class="c-status" /><col class="c-statusdate" />
+    </colgroup>
     <thead>
       <tr>
-        <th style="width:40px;">#</th>
+        <th>#</th>
         <th>Item</th>
         <th>Serial #</th>
         <th>Model</th>
@@ -16463,11 +16477,12 @@ export function registerIpcHandlers(): void {
         <th style="text-align:right;">Value</th>
         <th>Date Issued</th>
         <th>Status</th>
+        <th>Status Date</th>
       </tr>
     </thead>
     <tbody>
       ${equipmentRows}
-      ${totalValue > 0 ? `<tr><td colspan="5" style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">Total Equipment Value</td><td style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">${fmtCurrency(totalValue)}</td><td colspan="2" style="border:1px solid #d1d5db;"></td></tr>` : ''}
+      ${totalValue > 0 ? `<tr><td colspan="5" style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">Total Equipment Value</td><td style="padding:8px;border:1px solid #d1d5db;text-align:right;font-weight:700;">${fmtCurrency(totalValue)}</td><td colspan="3" style="border:1px solid #d1d5db;"></td></tr>` : ''}
     </tbody>
   </table>
 
@@ -16617,26 +16632,33 @@ export function registerIpcHandlers(): void {
 
     <p><strong>16. Acknowledgment of Receipt &amp; Condition.</strong> BY SIGNING BELOW, THE EMPLOYEE ACKNOWLEDGES THAT THEY HAVE RECEIVED THE EQUIPMENT LISTED IN THE SCHEDULE ABOVE AND CONFIRMS THAT SUCH EQUIPMENT IS IN THE CONDITION INDICATED. THE EMPLOYEE FURTHER ACKNOWLEDGES THAT THEY HAVE PERSONALLY INSPECTED EACH ITEM AND VERIFIED ITS FUNCTIONALITY, INCLUDING BUT NOT LIMITED TO: POWER-ON OPERATION, SCREEN INTEGRITY, KEYBOARD/INPUT FUNCTIONALITY, PORT FUNCTIONALITY, AND BATTERY CONDITION. ANY DISCREPANCIES OR DEFECTS MUST BE REPORTED IN WRITING WITHIN THREE (3) BUSINESS DAYS OF RECEIPT; FAILURE TO DO SO CONSTITUTES THE EMPLOYEE'S UNQUALIFIED ACCEPTANCE OF THE EQUIPMENT IN THE CONDITION DESCRIBED. THE EMPLOYEE FURTHER ACKNOWLEDGES HAVING READ AND UNDERSTOOD THE MONETARY PENALTY SCHEDULE IN SECTION 5, THE SEPARATION CHARGEBACK IN SECTION 13, THE SOFTWARE MISCONDUCT TERMS IN SECTION 14, AND THE WAGE-LAW AND GOVERNING-LAW TERMS IN SECTION 15, AND AGREES TO ALL PENALTIES AND CHARGEBACKS DESCRIBED THEREIN.</p>
 
-    <p><strong>14. Governing Law &amp; Jurisdiction.</strong> This Agreement shall be governed by and construed in accordance with the laws of ${esc(employee.state || 'the state in which the Employer\'s principal place of business is located')}, without regard to its conflict of laws principles. The parties hereby submit to the exclusive personal jurisdiction and venue of the state and federal courts located in that state for any dispute arising out of or relating to this Agreement, and the Employee waives any objection to such jurisdiction or venue based on forum non conveniens or lack of personal jurisdiction. The Employee specifically consents to the jurisdiction of small claims court for recovery of any unpaid penalties or replacement costs not to exceed that court's jurisdictional limit.</p>
+    <p><strong>17. Governing Law &amp; Jurisdiction.</strong> This Agreement shall be governed by and construed in accordance with the laws of ${esc(employee.state || 'the state in which the Employer\'s principal place of business is located')}, without regard to its conflict of laws principles. The parties hereby submit to the exclusive personal jurisdiction and venue of the state and federal courts located in that state for any dispute arising out of or relating to this Agreement, and the Employee waives any objection to such jurisdiction or venue based on forum non conveniens or lack of personal jurisdiction. The Employee specifically consents to the jurisdiction of small claims court for recovery of any unpaid penalties or replacement costs not to exceed that court's jurisdictional limit.</p>
 
-    <p><strong>15. Entire Agreement &amp; Amendments.</strong> This Agreement, together with the Equipment Schedule above and any referenced Employer policies, constitutes the entire agreement between the parties with respect to the subject matter hereof and supersedes all prior or contemporaneous understandings, agreements, representations, and communications, whether written or oral. This Agreement may not be amended, modified, or supplemented except by a written instrument signed by both parties. The Employee acknowledges that no representation or promise not expressly set forth in this Agreement has been made by the Employer.</p>
+    <p><strong>18. Entire Agreement &amp; Amendments.</strong> This Agreement, together with the Equipment Schedule above and any referenced Employer policies, constitutes the entire agreement between the parties with respect to the subject matter hereof and supersedes all prior or contemporaneous understandings, agreements, representations, and communications, whether written or oral. This Agreement may not be amended, modified, or supplemented except by a written instrument signed by both parties. The Employee acknowledges that no representation or promise not expressly set forth in this Agreement has been made by the Employer.</p>
 
-    <p><strong>16. Severability &amp; Waiver.</strong> If any provision of this Agreement is held to be invalid, illegal, or unenforceable by a court of competent jurisdiction, such provision shall be enforced to the maximum extent permitted by law, and the remaining provisions shall continue in full force and effect. The failure of either party to enforce any provision of this Agreement shall not be construed as a waiver of such provision or the right to enforce it in the future. No waiver shall be effective unless made in writing and signed by the party against whom enforcement is sought. Any waiver of a penalty under Section 5 shall not constitute a waiver of any future penalty or of the Employer's right to enforce the penalty schedule.</p>
+    <p><strong>19. Severability &amp; Waiver.</strong> If any provision of this Agreement is held to be invalid, illegal, or unenforceable by a court of competent jurisdiction, such provision shall be enforced to the maximum extent permitted by law, and the remaining provisions shall continue in full force and effect. The failure of either party to enforce any provision of this Agreement shall not be construed as a waiver of such provision or the right to enforce it in the future. No waiver shall be effective unless made in writing and signed by the party against whom enforcement is sought. Any waiver of a penalty under Section 5 shall not constitute a waiver of any future penalty or of the Employer's right to enforce the penalty schedule.</p>
 
-    <p><strong>17. Acknowledgment of Penalties.</strong> THE EMPLOYEE ACKNOWLEDGES THAT THEY HAVE READ THE MONETARY PENALTY SCHEDULE IN SECTION 5 OF THIS AGREEMENT AND UNDERSTAND THE SPECIFIC PENALTY AMOUNTS THAT MAY BE ASSESSED FOR VIOLATIONS. THE EMPLOYEE AGREES THAT THE PENALTIES SET FORTH THEREIN ARE REASONABLE AND PROPORTIONATE TO THE POTENTIAL HARM CAUSED BY EACH TYPE OF VIOLATION. THE EMPLOYEE FURTHER AGREES THAT THE EMPLOYER MAY DEDUCT ANY UNPAID PENALTIES AND REPLACEMENT COSTS FROM THE EMPLOYEE'S FINAL COMPENSATION AND MAY REPORT ANY UNPAID OBLIGATIONS TO CREDIT BUREAUS OR COLLECTION AGENCIES.</p>
+    <p><strong>20. Acknowledgment of Penalties.</strong> THE EMPLOYEE ACKNOWLEDGES THAT THEY HAVE READ THE MONETARY PENALTY SCHEDULE IN SECTION 5 OF THIS AGREEMENT AND UNDERSTAND THE SPECIFIC PENALTY AMOUNTS THAT MAY BE ASSESSED FOR VIOLATIONS. THE EMPLOYEE AGREES THAT THE PENALTIES SET FORTH THEREIN ARE REASONABLE AND PROPORTIONATE TO THE POTENTIAL HARM CAUSED BY EACH TYPE OF VIOLATION. THE EMPLOYEE FURTHER AGREES THAT THE EMPLOYER MAY DEDUCT ANY UNPAID PENALTIES AND REPLACEMENT COSTS FROM THE EMPLOYEE'S FINAL COMPENSATION AND MAY REPORT ANY UNPAID OBLIGATIONS TO CREDIT BUREAUS OR COLLECTION AGENCIES.</p>
   </div>
 
   <h2>Equipment Schedule &mdash; Detailed Itemization</h2>
   <p>The following equipment has been issued to the Employee. The Employee acknowledges receipt and confirms the condition of each item as indicated at the time of issuance.</p>
-  <table>
+  <table class="equip-table">
+    <colgroup>
+      <col class="c-num" /><col class="c-item" /><col class="c-serial" /><col class="c-model" />
+      <col class="c-cond" /><col class="c-value" /><col class="c-date" /><col class="c-status" /><col class="c-statusdate" />
+    </colgroup>
     <thead>
       <tr>
-        <th style="width:40px;">#</th>
+        <th>#</th>
         <th>Item Description</th>
         <th>Serial Number</th>
         <th>Model / SKU</th>
         <th>Condition at Issuance</th>
+        <th style="text-align:right;">Value</th>
         <th>Date Issued</th>
+        <th>Status</th>
+        <th>Status Date</th>
       </tr>
     </thead>
     <tbody>
@@ -16718,28 +16740,28 @@ export function registerIpcHandlers(): void {
 <head><meta charset="utf-8"><title>Employee Agreement - ${empName}</title>
 <style>
   @page { margin: 0.85in 0.9in; size: Letter; }
-  body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
+  body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
   .container { max-width: 680px; margin: 0 auto; }
-  .letterhead { text-align: center; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 2px solid #111; }
-  .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #111; margin: 0; }
-  .letterhead .co-addr { font-size: 9pt; color: #555; margin-top: 2px; letter-spacing: 0.3px; }
-  .letter-date { margin-top: 20px; font-size: 10.5pt; }
-  .addressee { margin-top: 16px; font-size: 10.5pt; line-height: 1.5; }
-  .re-line { margin-top: 14px; font-size: 10.5pt; font-weight: 700; }
-  .salutation { margin-top: 14px; font-size: 11pt; }
-  h2 { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12pt; margin-top: 22px; margin-bottom: 8px; color: #222; border-bottom: 1px solid #ccc; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
+  .letterhead { text-align: center; padding-bottom: 14px; margin-bottom: 20px; border-bottom: 0.5px solid #ccc; }
+  .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #111; margin: 0; padding-bottom: 6px; border-bottom: 1.5px solid #111; display: inline-block; }
+  .letterhead .co-addr { font-size: 9pt; color: #555; margin-top: 6px; letter-spacing: 0.3px; }
+  .caption-block { margin-top: 24px; padding: 12px 0; text-align: center; border-top: 1px solid #1a1a1a; border-bottom: 1px solid #1a1a1a; }
+  .caption-title { font-size: 12pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; }
+  .caption-parties { font-size: 10pt; color: #444; margin-top: 4px; }
+  .caption-date { font-size: 9.5pt; color: #666; margin-top: 2px; }
+  h2 { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12pt; margin-top: 18px; margin-bottom: 8px; color: #222; border-bottom: 1px solid #ccc; padding-bottom: 4px; text-transform: uppercase; letter-spacing: 0.8px; }
   .letter-body { margin-top: 12px; font-size: 10.5pt; }
   .letter-body p { margin: 8px 0; text-align: justify; }
   .info-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
   .info-table td { padding: 5px 10px; font-size: 10pt; border-bottom: 1px solid #eee; }
   .info-table td:first-child { font-weight: 600; width: 170px; color: #555; }
   .section { margin: 16px 0; }
-  .section p { margin: 8px 0; text-align: justify; font-size: 10.5pt; }
+  .section p { margin: 8px 0; text-align: justify; font-size: 10.5pt; padding-left: 28px; text-indent: -28px; }
   .signature-section { margin-top: 36px; page-break-inside: avoid; }
   .signature-row { display: flex; justify-content: space-between; margin-top: 24px; }
   .signature-field { flex: 1; }
   .signature-line { border-top: 1px solid #374151; margin-top: 36px; padding-top: 4px; font-size: 10pt; }
-  .footer { margin-top: 36px; text-align: center; font-size: 8.5pt; color: #999; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; border-top: 1px solid #ddd; padding-top: 8px; }
+  .footer { margin-top: 36px; text-align: center; font-size: 8.5pt; color: #999; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; border-top: 0.5px solid #ccc; padding-top: 8px; }
   @media print { body { padding: 0; } }
 </style></head>
 <body>
@@ -16750,29 +16772,18 @@ export function registerIpcHandlers(): void {
     ${companyAddr ? `<p class="co-addr">${esc(companyAddr)}</p>` : ''}
   </div>
 
-  <!-- Date -->
-  <div class="letter-date">${signatures?.employee?.date
-    ? fmtDate(String(signatures.employee.date).length === 10 ? signatures.employee.date + 'T12:00:00' : signatures.employee.date)
-    : today}</div>
-
-  <!-- Addressee -->
-  <div class="addressee">
-    ${empName}<br/>
-    ${empTitle ? esc(empTitle) + '<br/>' : ''}
-    ${empAddr ? esc(empAddr) + '<br/>' : ''}
-    ${empEmail ? empEmail + '<br/>' : ''}
-    ${empPhone ? empPhone : ''}
+  <!-- Caption block -->
+  <div class="caption-block">
+    <p class="caption-title">Employment Agreement</p>
+    <p class="caption-parties">Between ${companyName} and ${empName}</p>
+    <p class="caption-date">Effective ${signatures?.employee?.date
+      ? fmtDate(String(signatures.employee.date).length === 10 ? signatures.employee.date + 'T12:00:00' : signatures.employee.date)
+      : (empStart || today)}</p>
   </div>
 
-  <!-- RE line -->
-  <div class="re-line">RE: Employment Agreement</div>
-
-  <!-- Salutation -->
-  <div class="salutation">Dear ${empName.split(' ')[0] || empName},</div>
-
-  <!-- Body opening -->
+  <!-- Body opening: contract recital -->
   <div class="letter-body">
-    <p>This letter constitutes a formal employment agreement between ${companyName} ("Employer") and ${empName} ("Employee"), effective as of ${empStart || today}. This Agreement sets forth the terms and conditions of your employment. By signing below, you acknowledge that you have read, understood, and agree to these terms.</p>
+    <p>This Agreement is made and entered into as of ${empStart || today}, by and between ${companyName} ("Employer") and ${empName}${empTitle ? `, ${empTitle}` : ''}${empAddr ? `, of ${esc(empAddr)}` : ''} ("Employee")${empEmail || empPhone ? ` (contactable at${empEmail ? ` ${empEmail}` : ''}${empEmail && empPhone ? ',' : ''}${empPhone ? ` ${empPhone}` : ''})` : ''} (collectively, the "Parties"). This Agreement sets forth the terms and conditions of the Employee's employment. The Parties agree as follows:</p>
   </div>
 
   <h2>Terms of Employment</h2>

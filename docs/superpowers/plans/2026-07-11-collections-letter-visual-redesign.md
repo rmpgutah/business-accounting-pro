@@ -496,7 +496,7 @@ Expected: exits 0.
 Start the app (`npm run dev`), open the Payroll/HR module, select (or create) an employee with at least 2–3 equipment items including at least one with an 11+ digit serial number and one marked Stolen or Returned (Damaged) (to exercise the color-coded status path), then generate both agreements from the existing UI flow (`EmployeeForm.tsx`'s existing "generate agreement" actions — do not add new UI, this plan only touches the HTML generators). Confirm:
 
 1. Equipment Agreement: section numbers read 1 through 20 with no repeats (spot-check that both the two "Governing Law" style clauses show as 17 and the two "Acknowledgment" style clauses show as 16 and 20, not both as 16 or both as 17).
-2. Employment Agreement: the final clause reads "30. Governing Law, Venue & Severability."
+2. Employment Agreement: unchanged by this pass (Task 2 was retired — no defect existed) — the final clause still correctly reads "31. Governing Law, Venue & Severability." as the 31st sequential clause.
 3. Both equipment tables (summary + detailed itemization) render within the page margins with no horizontal overflow, even with the long serial number.
 4. The Detailed Itemization table now shows Value and Status/Status Date columns with correct headers (previously missing).
 5. A Stolen/Not-Returned item's Status cell has a light red background; a Returned (Damaged)/Lost item has a light amber background; a normal Returned/In-Use item has no background tint.
