@@ -19,43 +19,57 @@ export function esc(s: unknown): string {
 export function classicStyles(): string {
   return `
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  @page { size: letter; margin: 0.5in 0.55in; }
+  @page { size: letter; margin: 0.3in 0.4in; }
   body { font-family: ${CLASSIC_FONT}; color: #000; background: #fff;
-    font-size: 12px; line-height: 1.4;
+    font-size: 11px; line-height: 1.25;
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .doc-frame { border: 2px solid #000; position: relative; }
   .doc-header { display: flex; border-bottom: 2px solid #000; }
-  .doc-header .co { flex: 1; padding: 10px 14px; border-right: 2px solid #000; }
-  .doc-header .co-name { font-size: 17px; font-weight: bold; letter-spacing: 0.5px; }
-  .doc-logo { max-height: 44px; max-width: 200px; width: auto; height: auto;
-    object-fit: contain; display: block; margin-bottom: 5px; filter: grayscale(1); }
-  .doc-header .co-detail { font-size: 11px; margin-top: 4px; line-height: 1.4; }
-  .doc-header .doc-meta { width: 220px; padding: 10px 14px; text-align: right; }
-  .doc-title { font-size: 27px; font-weight: bold; letter-spacing: 3px; text-transform: uppercase; }
-  .doc-number { font-size: 12px; margin-top: 5px; }
+  .doc-header .co { flex: 1; padding: 6px 10px; border-right: 2px solid #000; }
+  .doc-header .co-name { font-size: 15px; font-weight: bold; letter-spacing: 0.5px; }
+  .doc-logo { max-height: 38px; max-width: 180px; width: auto; height: auto;
+    object-fit: contain; display: block; margin-bottom: 4px; filter: grayscale(1); }
+  .doc-header .co-detail { font-size: 10px; margin-top: 2px; line-height: 1.25; }
+  .doc-header .doc-meta { width: 200px; padding: 6px 10px; text-align: right; }
+  .doc-title { font-size: 22px; font-weight: bold; letter-spacing: 2.5px; text-transform: uppercase; }
+  .doc-number { font-size: 11px; margin-top: 3px; }
   .meta-strip { width: 100%; border-collapse: collapse; border-bottom: 2px solid #000;
-    font-size: 11px; text-align: center; }
-  .meta-strip td { border-right: 1px solid #000; padding: 5px 6px; }
+    font-size: 10px; text-align: center; }
+  .meta-strip td { border-right: 1px solid #000; padding: 3px 5px; }
   .meta-strip td:last-child { border-right: none; }
-  .meta-strip .ml { font-weight: bold; letter-spacing: 1px; font-size: 10px; text-transform: uppercase; }
-  .meta-strip .mv { margin-top: 2px; }
+  .meta-strip .ml { font-weight: bold; letter-spacing: 0.8px; font-size: 9px; text-transform: uppercase; }
+  .meta-strip .mv { margin-top: 1px; }
   .box-row { display: flex; border-bottom: 2px solid #000; }
-  .box-row .box { flex: 1; padding: 7px 12px; border-right: 1px solid #000; }
+  .box-row .box { flex: 1; padding: 5px 9px; border-right: 1px solid #000; }
   .box-row .box:last-child { border-right: none; }
-  .sec-label { font-size: 10px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
-  table.ruled { width: 100%; border-collapse: collapse; font-size: 11px; }
-  table.ruled th { background: #000; color: #fff; border: 1px solid #000; padding: 5px 8px;
-    text-align: left; letter-spacing: 0.5px; text-transform: uppercase; font-size: 10px; }
-  table.ruled td { border: 1px solid #000; padding: 5px 8px; }
+  .sec-label { font-size: 9px; font-weight: bold; letter-spacing: 0.8px; text-transform: uppercase; }
+  table.ruled { width: 100%; border-collapse: collapse; font-size: 10px; }
+  table.ruled th { background: #000; color: #fff; border: 1px solid #000; padding: 3px 7px;
+    text-align: left; letter-spacing: 0.4px; text-transform: uppercase; font-size: 9px; }
+  table.ruled td { border: 1px solid #000; padding: 3px 7px; }
   table.ruled td.num { text-align: right; font-variant-numeric: tabular-nums; }
   table.ruled td.ctr { text-align: center; }
-  .totals { border-collapse: collapse; font-size: 12px; width: 262px; }
-  .totals td { padding: 4px 10px; text-align: right; border-bottom: 1px solid #000; }
-  .totals td.val { border-left: 1px solid #000; font-variant-numeric: tabular-nums; width: 96px; }
+  /* The table's own 1px outer edge border sits flush against doc-frame's 2px
+     border with nothing to collapse into (they're different elements), so
+     it stacked to a visibly thicker ~3px line — drop the redundant edges. */
+  table.ruled tr th:first-child, table.ruled tr td:first-child { border-left: none; }
+  table.ruled tr th:last-child, table.ruled tr td:last-child { border-right: none; }
+  /* Total width (270px) = line-items Qty + Unit Price + Amount (60+100+110), and
+     td.val (110px) = Amount, so both the box's left edge and its internal
+     label|value divider land on the same x as the line-items table's dividers. */
+  /* Row/divider borders here are 2px, matching every other section-separator
+     line in the document — this table has no table-level border to fall back
+     on (just per-cell border-bottom/border-left), and thinner hairlines on a
+     borderless table were reported invisible in some PDF viewers. */
+  .totals { border-collapse: collapse; font-size: 11px; width: 270px; }
+  .totals tr { height: 24px; }
+  .totals td { box-sizing: border-box; height: 24px; padding: 0 9px; text-align: right;
+    vertical-align: middle; line-height: 1.15; border-bottom: 2px solid #000; }
+  .totals td.val { border-left: 2px solid #000; font-variant-numeric: tabular-nums; width: 110px; }
   .totals tr.grand td { background: #000; color: #fff; font-weight: bold; letter-spacing: 1px;
-    padding: 6px 10px; border-bottom: none; }
-  .totals tr.grand td.val { border-left: 1px solid #fff; }
-  .footer-bar { border-top: 2px solid #000; padding: 5px 14px; font-size: 10px;
+    border-bottom: none; }
+  .totals tr.grand td.val { border-left: 2px solid #fff; }
+  .footer-bar { border-top: 2px solid #000; padding: 3px 10px; font-size: 9px;
     text-align: center; letter-spacing: 0.3px; }
   .draft-wm { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-30deg);
     font-size: 90px; font-weight: bold; color: rgba(0,0,0,0.07); letter-spacing: 12px;

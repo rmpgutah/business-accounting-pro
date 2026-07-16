@@ -772,14 +772,18 @@ export function generateInvoiceHTML(
     parties +
     paymentNote +
     itemsTableHTML +
-    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;">${totals}</div>` +
+    // No right padding — the totals box's right edge must sit flush against
+    // the frame, same as the line-items table's rightmost column above it.
+    `<div style="display:flex;justify-content:flex-end;padding:10px 0 10px 16px;">${totals}</div>` +
     scheduleHTML +
     qrSection +
     notesHTML +
     quoteSigHTML +
     creditNoteHTML +
     lateFeeNote +
-    footerBar(footerLine);
+    (notesHTML && !quoteSigHTML && !creditNoteHTML && !lateFeeNote
+      ? footerBar(footerLine).replace('class="footer-bar"', 'class="footer-bar" style="border-top:none;"')
+      : footerBar(footerLine));
 
   const bodyInner =
     (letterheadSrc && letterheadPos === 'top' ? letterheadHTML : '') +
@@ -1290,7 +1294,7 @@ export function generatePayStubHTML(
     `<div class="sec-label" style="margin-bottom:6px;">Tax Rate Analysis</div>` +
     effRateTable +
     `</div>` +
-    `<div style="padding:10px 16px 14px;border-bottom:2px solid #000;display:flex;justify-content:flex-end;">` +
+    `<div style="padding:10px 0 14px 16px;border-bottom:2px solid #000;display:flex;justify-content:flex-end;">` +
     totals +
     `</div>` +
     directDepositBox +
@@ -1320,7 +1324,8 @@ export function generatePayStubHTML(
     calcDetailTable +
     `</div>` +
     noticesHtml +
-    footerBar(`${cesc(coName)} · Pay Period ${cesc(stub.period_start)} – ${cesc(stub.period_end)} · Confidential Employee Pay Information — Retain for Tax Records`);
+    footerBar(`${cesc(coName)} · Pay Period ${cesc(stub.period_start)} – ${cesc(stub.period_end)} · Confidential Employee Pay Information — Retain for Tax Records`)
+      .replace('class="footer-bar"', 'class="footer-bar" style="border-top:none;"');
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pay Statement — ${cesc(stub.employee_name)}</title>` +
     `<style>${classicStyles()}</style></head><body>` +
@@ -1396,8 +1401,10 @@ export function generateReportHTML(
   const dataTable = `<div style="padding:0;">${ruledTable(ruledCols, tableRows)}</div>`;
 
   // ── Summary section (replaces colored flex rows) ──
+  // No border-top — dataTable (a table.ruled) already ends in its own 1px
+  // bottom border; adding another here would double the line to ~2px.
   const summaryHTML = summary && summary.length > 0
-    ? `<div style="display:flex;justify-content:flex-end;padding:10px 16px;border-top:1px solid #000;">` +
+    ? `<div style="display:flex;justify-content:flex-end;padding:10px 0 10px 16px;">` +
       totalsBox(summary.map((s, i) => ({
         label: s.label,
         value: s.value,
@@ -1633,7 +1640,9 @@ export function generateDebtPortfolioReportHTML(
     top10Section +
     riskSection +
     collectorsSection +
-    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;border-top:1px solid #000;">${portfolioTotals}</div>` +
+    // No border-top — the preceding section (aging/stage/top10/risk/collectors)
+    // always ends in its own 2px bottom border; another here would double it.
+    `<div style="display:flex;justify-content:flex-end;padding:10px 0 10px 16px;">${portfolioTotals}</div>` +
     footerBar(footerLine);
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Debt Portfolio — ${cesc(companyName)}</title>` +
@@ -2516,7 +2525,9 @@ export function generateExpenseReportHTML(
     catHTML +
     detailTitle +
     detailTable +
-    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;border-top:1px solid #000;">${totals}</div>` +
+    // No border-top — detailTable (a table.ruled) already ends in its own 1px
+    // bottom border; adding another here would double the line.
+    `<div style="display:flex;justify-content:flex-end;padding:10px 0 10px 16px;">${totals}</div>` +
     footerBar(footerLine);
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expense Report — ${cesc(companyName)}</title>` +
@@ -3012,7 +3023,9 @@ export function generateBillHTML(
     { label: 'Qty',        align: 'right', width: '60px' },
     { label: 'Unit Price', align: 'right', width: '100px' },
     { label: 'Account',    align: 'right', width: '130px' },
-    { label: 'Amount',     align: 'right', width: '100px' },
+    // 110px matches the shared .totals td.val width, so the totals box's
+    // label|value divider below lines up with this column's left border.
+    { label: 'Amount',     align: 'right', width: '110px' },
   ];
   const lineRows: string[][] = (lineItems || []).map((l: any) => {
     const qty    = Number(l.quantity || 0);
@@ -3041,8 +3054,10 @@ export function generateBillHTML(
     allocByAcct[label].total += amt;
   });
   const allocEntries = Object.values(allocByAcct).sort((a, b) => b.total - a.total);
+  // No border-top — itemsTable (a table.ruled) already ends in its own 1px
+  // bottom border; adding another here would double the line to ~2px.
   const allocationHTML = allocEntries.length > 1
-    ? `<div style="padding:10px 16px;border-top:1px solid #000;">` +
+    ? `<div style="padding:10px 16px;">` +
       `<div class="sec-label" style="margin-bottom:6px;">Account Allocation</div>` +
       ruledTable(
         [{ label: 'Account' }, { label: 'Amount', align: 'right', width: '110px' }],
@@ -3085,9 +3100,13 @@ export function generateBillHTML(
     parties +
     itemsTable +
     allocationHTML +
-    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;">${totals}</div>` +
+    // No right padding — the totals box's right edge must sit flush against
+    // the frame, same as the line-items table's rightmost column above it.
+    `<div style="display:flex;justify-content:flex-end;padding:10px 0 10px 16px;">${totals}</div>` +
     notesHTML +
-    footerBar(footerLine);
+    (notesHTML
+      ? footerBar(footerLine).replace('class="footer-bar"', 'class="footer-bar" style="border-top:none;"')
+      : footerBar(footerLine));
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Bill ${cesc(bill.bill_number || '')}</title>` +
     `<style>${classicStyles()}</style></head><body>` +
@@ -3208,7 +3227,9 @@ export function generatePurchaseOrderHTML(
       : approaching
         ? `APPROACHING — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`
         : `ON TRACK — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining`;
-    return `<div style="padding:7px 16px;border-top:1px solid #000;border-bottom:1px solid #000;font-size:10px;">` +
+    // No border-top — parties (a box-row) already ends in its own 2px bottom
+    // border; adding another here would stack a doubled line.
+    return `<div style="padding:7px 16px;border-bottom:1px solid #000;font-size:10px;">` +
       `<span class="sec-label">Delivery Timeline</span>&nbsp;&nbsp;` +
       `Ordered ${cesc(fmtDateMaybe(orderRaw))} &nbsp;&middot;&nbsp; ` +
       `Expected ${cesc(fmtDateMaybe(expectedRaw))} &nbsp;&middot;&nbsp; ` +
@@ -3224,7 +3245,9 @@ export function generatePurchaseOrderHTML(
     { label: 'Unit',       align: 'center', width: '60px' },
     { label: 'Unit Price', align: 'right',  width: '90px' },
     { label: 'Tax %',      align: 'right',  width: '60px' },
-    { label: 'Line Total', align: 'right',  width: '100px' },
+    // 110px matches the shared .totals td.val width, so the totals box's
+    // label|value divider below lines up with this column's left border.
+    { label: 'Line Total', align: 'right',  width: '110px' },
   ];
   const lineRows: string[][] = (lineItems || []).map((l: any) => {
     const qty     = Number(l.quantity || 0);
@@ -3297,7 +3320,9 @@ export function generatePurchaseOrderHTML(
     parties +
     deliveryTimelineHTML +
     itemsTable +
-    `<div style="display:flex;justify-content:flex-end;padding:10px 16px;">${totals}</div>` +
+    // No right padding — the totals box's right edge must sit flush against
+    // the frame, same as the line-items table's rightmost column above it.
+    `<div style="display:flex;justify-content:flex-end;padding:10px 0 10px 16px;">${totals}</div>` +
     termsHTML +
     notesHTML +
     sigHTML +
@@ -3426,7 +3451,7 @@ export function generateExpenseReceiptHTML(
   addDetail(expense.currency && expense.currency !== 'USD', 'Currency', String(expense.currency));
   addDetail(exch !== 1,               'Exchange Rate', exch.toFixed(4));
   addDetail(miles > 0,                'Mileage',       `${miles.toFixed(1)} mi @ $${Number(expense.mileage_rate || 0.7).toFixed(2)}`);
-  addDetail(expense.merchant_location,'Location',      String(expense.merchant_location));
+  // Merchant location is already in the meta strip — skip here to avoid duplication.
   addDetail(Number(expense.shipping_amount || 0) > 0, 'Shipping', fmt(Number(expense.shipping_amount || 0)));
   addDetail(expense.is_recurring,     'Recurring',     'Yes');
   addDetail(expense.created_at,       'Submitted',     expense.created_at ? fmtDateMaybe(expense.created_at) : '—');
@@ -3508,13 +3533,20 @@ export function generateExpenseReceiptHTML(
 
   // ── Reimbursement + Totals: reimbursement fills left, totals hugs right edge ──
   const reimbLabel = String(reimbStatus).toUpperCase().replace('_', ' ');
+  // Every other section title in this document (VENDOR, DESCRIPTION,
+  // DETAILS & CLASSIFICATION) is pinned to the top-left of its box — keep
+  // REIMBURSEMENT consistent with that instead of centering it, even though
+  // the totals table beside it is taller.
   const reimbTotalsRow =
     `<div class="box-row">` +
       `<div class="box">` +
         `<div class="sec-label">Reimbursement</div>` +
         `<div style="margin-top:4px;font-size:13px;font-weight:700;">${cesc(reimbLabel)}</div>` +
       `</div>` +
-      `<div style="border-left:1px solid #000;">` +
+      // No border-left here — .box already contributes a 1px border-right;
+      // adding another 1px on this side would double the line to 2px, out
+      // of step with every other 1px rule in the document.
+      `<div>` +
         totals +
       `</div>` +
     `</div>`;
@@ -3528,6 +3560,12 @@ export function generateExpenseReceiptHTML(
   const footerLine = [company?.name || '', `Expense ${numberHtml}`, `Generated ${generated}`].filter(Boolean).join(' · ');
 
   // ── Assemble ──
+  // reimbTotalsRow (a box-row) already carries a 2px border-bottom; footerBar's
+  // own 2px border-top would stack directly against it with no receipt image
+  // in between, doubling that line to 4px vs every other 2px rule on the page.
+  const footerHtml = receiptSection
+    ? footerBar(footerLine)
+    : footerBar(footerLine).replace('class="footer-bar"', 'class="footer-bar" style="border-top:none;"');
   const inner =
     header +
     meta +
@@ -3536,7 +3574,7 @@ export function generateExpenseReceiptHTML(
     linesHTML +
     reimbTotalsRow +
     receiptSection +
-    footerBar(footerLine);
+    footerHtml;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Expense Record ${cesc(numberHtml)}</title>` +
     `<style>${classicStyles()}</style></head><body>` +
