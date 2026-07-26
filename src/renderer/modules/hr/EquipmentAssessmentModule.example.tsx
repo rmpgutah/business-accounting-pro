@@ -6,9 +6,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import EquipmentAssessmentTemplate from '@/renderer/components/EquipmentAssessmentTemplate';
-import api from '@/renderer/lib/api';
-import { EquipmentAssessment } from '@/shared/types/equipment-assessment';
+import EquipmentAssessmentTemplate from '../../components/EquipmentAssessmentTemplate';
+import api from '../../lib/api';
+import type { EquipmentAssessment } from '../../../shared/types/equipment-assessment';
 
 // Example 1: Creating a new assessment from scratch
 export const NewAssessmentExample = () => {

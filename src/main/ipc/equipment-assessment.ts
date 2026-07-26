@@ -1,7 +1,7 @@
 import { ipcMain, dialog } from 'electron';
 import * as db from '../database';
-import { generateEquipmentAssessmentPDF, loadAndFillPDF } from '../../renderer/lib/pdf-templates/equipment-assessment';
-import { EquipmentAssessment } from '@/shared/types/equipment-assessment';
+import { generateEquipmentAssessmentPDF, loadAndFillPDF } from '../services/equipment-assessment-pdf';
+import type { EquipmentAssessment } from '../../shared/types/equipment-assessment';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';

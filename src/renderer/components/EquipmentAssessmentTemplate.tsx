@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { EquipmentAssessment, EquipmentItem, AssessedCharge } from '@/shared/types/equipment-assessment';
-import { generateEquipmentAssessmentPDF } from '@/renderer/lib/pdf-templates/equipment-assessment';
+import type { EquipmentAssessment, EquipmentItem, AssessedCharge } from '../../shared/types/equipment-assessment';
+import api from '../lib/api';
 
 interface EquipmentAssessmentTemplateProps {
   data: EquipmentAssessment;
@@ -50,13 +50,10 @@ export const EquipmentAssessmentTemplate: React.FC<EquipmentAssessmentTemplatePr
   const handleGeneratePDF = async () => {
     setIsGeneratingPDF(true);
     try {
-      const pdfBytes = await generateEquipmentAssessmentPDF(data, {
-        fillableFields: true,
-        editable: true,
-      });
+      const pdfBytes = await api.equipmentAssessmentGeneratePDF(data);
 
       // Download PDF
-      const blob = new Blob([Buffer.from(pdfBytes)], { type: 'application/pdf' });
+      const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

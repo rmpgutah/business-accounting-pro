@@ -1,5 +1,5 @@
 import { PDFDocument, PDFPage, rgb, PDFFont } from 'pdf-lib';
-import { EquipmentAssessment } from '@/shared/types/equipment-assessment';
+import type { EquipmentAssessment } from '../../shared/types/equipment-assessment';
 
 const MARGIN = 40;
 const LINE_HEIGHT = 20;
@@ -164,7 +164,7 @@ export async function generateEquipmentAssessmentPDF(
   yPos -= 8;
 
   // Equipment items
-  data.equipment.forEach((item, idx) => {
+  data.equipment.forEach((item: any, idx: number) => {
     const itemNum = idx + 1;
     page.drawText(`${itemNum}.`, { x: MARGIN, y: yPos, size: 9, font });
     page.drawText(item.itemName, { x: MARGIN + 20, y: yPos, size: 9, font });
@@ -177,7 +177,7 @@ export async function generateEquipmentAssessmentPDF(
 
     // History (if present)
     if (item.history && item.history.length > 0) {
-      item.history.forEach((event) => {
+      item.history.forEach((event: string) => {
         page.drawText(`  ${event}`, {
           x: MARGIN + 30,
           y: yPos,
@@ -234,7 +234,7 @@ export async function generateEquipmentAssessmentPDF(
   yPos -= 8;
 
   // Charges
-  data.assessedCharges.forEach((charge) => {
+  data.assessedCharges.forEach((charge: any) => {
     page.drawText(charge.tier, { x: chargeColX[0], y: yPos, size: 8, font });
     page.drawText(charge.description, { x: chargeColX[1], y: yPos, size: 8, font });
     page.drawText(charge.basis, {
