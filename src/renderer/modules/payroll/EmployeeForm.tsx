@@ -1376,12 +1376,23 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
     return genHtml(type, sigs);
   };
 
+  // Matches the `@page { margin: 0.85in 0.9in; size: Letter; }` declared in
+  // the agreement templates (src/main/ipc/index.ts) — Chromium's printToPDF
+  // ignores in-page @page rules, so the real margins/size must be passed
+  // here explicitly. Preview and Save PDF must use the SAME options or the
+  // two views paginate differently (Preview previously fell back to A4).
+  const AGREEMENT_PDF_OPTIONS = {
+    pageSize: 'Letter' as const,
+    printBackground: true,
+    margins: { top: 0.85, bottom: 0.85, left: 0.9, right: 0.9 },
+  };
+
   const handleGenerate = async (type: AgreementType) => {
     const setLoading = type === 'equipment' ? setGeneratingEquip : setGeneratingEmp;
     setLoading(true);
     try {
       const html = await getLatestHtml(type);
-      if (html) await api.printPreview(html, AGREEMENT_TITLE[type]);
+      if (html) await api.printPreview(html, AGREEMENT_TITLE[type], AGREEMENT_PDF_OPTIONS);
     } catch (err: any) {
       alert('Failed to generate document: ' + (err?.message || 'Unknown error'));
     } finally { setLoading(false); }
@@ -1396,7 +1407,7 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
         await api.saveToPDF(html, AGREEMENT_TITLE[type], {
           doctype: type === 'equipment' ? 'EquipAgreement' : 'EmployeeAgreement',
           identifier: employeeId,
-          pdfOptions: { pageSize: 'Letter', printBackground: true },
+          pdfOptions: AGREEMENT_PDF_OPTIONS,
           openAfterSave: true,
         });
       }
