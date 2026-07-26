@@ -38,7 +38,7 @@
   "license": "ISC",
   "type": "commonjs",
   "overrides": {
-    "js-yaml": ">=4.2.0"
+    "js-yaml": ">=4.3.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",
@@ -72,10 +72,9 @@
     "electron": "^41.8.0",
     "electron-builder": "^26.15.3",
     "lucide-react": "^1.21.0",
-    "postcss": "^8.5.15",
+    "postcss": "^8.5.23",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.0",
     "recharts": "^3.8.1",
     "tailwindcss": "^4.2.2",
     "terser": "^5.48.0",
