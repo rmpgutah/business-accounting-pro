@@ -3710,6 +3710,20 @@ const api = {
     invoke('copilot:threads:save', { threadId, title, messages }),
   copilotThreadsDelete: (threadId: string) =>
     invoke('copilot:threads:delete', { threadId }),
+
+  // ─── Equipment Assessments ───────────────────────────────
+  equipmentAssessmentGeneratePDF: (data: any) =>
+    invoke('equipment-assessment:generate-pdf', data),
+  equipmentAssessmentSave: (data: any): Promise<{ id: string; created: boolean }> =>
+    invoke('equipment-assessment:save', data),
+  equipmentAssessmentLoad: (assessmentId: string): Promise<any> =>
+    invoke('equipment-assessment:load', assessmentId),
+  equipmentAssessmentList: (): Promise<any[]> =>
+    invoke('equipment-assessment:list'),
+  equipmentAssessmentDelete: (assessmentId: string): Promise<boolean> =>
+    invoke('equipment-assessment:delete', assessmentId),
+  equipmentAssessmentExportPDF: (data: any): Promise<string | null> =>
+    invoke('equipment-assessment:export-pdf', data),
 };
 
 export default api;

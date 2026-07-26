@@ -18,6 +18,7 @@ import { registerEntityGraphIpc, recordRelationBidirectional } from '../integrat
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
+import { registerEquipmentAssessmentIpc } from './equipment-assessment';
 import { registerDebtWaveIpc } from './debt-wave';
 import { registerTaxIpc } from './tax';
 import { registerComplianceIpc } from './compliance';
@@ -1448,6 +1449,7 @@ export function registerIpcHandlers(): void {
   registerExpenseDebtIpc(ipcMain, { scheduleAutoBackup });
   registerHrPortalIpc(ipcMain, { scheduleAutoBackup });
   registerDebtWaveIpc(ipcMain, { scheduleAutoBackup });
+  registerEquipmentAssessmentIpc();
 
   // ─── A7: Line-item snippets (reusable templates) ──────
   ipcMain.handle('snippets:list', (_event, opts?: { category?: string }) => {

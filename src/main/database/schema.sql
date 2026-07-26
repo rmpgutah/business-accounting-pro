@@ -1325,3 +1325,38 @@ CREATE INDEX IF NOT EXISTS idx_esign_signatures_doc ON esign_signatures(document
 CREATE INDEX IF NOT EXISTS idx_esign_permissions_doc ON esign_permissions(document_id);
 CREATE INDEX IF NOT EXISTS idx_esign_audit_doc ON esign_audit_log(document_id);
 CREATE INDEX IF NOT EXISTS idx_esign_audit_created ON esign_audit_log(created_at);
+
+-- Equipment Assessment Statements (formal documents with charges for loss/damage)
+CREATE TABLE IF NOT EXISTS equipment_assessments (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  document_id TEXT NOT NULL UNIQUE,
+  executed_date TEXT NOT NULL,
+  governing_law TEXT DEFAULT '',
+  penalty_schedule_version TEXT DEFAULT '',
+
+  -- Parties
+  employer_name TEXT NOT NULL DEFAULT '',
+  employer_address TEXT NOT NULL DEFAULT '',
+  employee_name TEXT NOT NULL DEFAULT '',
+  employee_address TEXT NOT NULL DEFAULT '',
+
+  -- Equipment and charges (stored as JSON for flexibility)
+  equipment_json TEXT DEFAULT '[]',
+  charges_json TEXT DEFAULT '[]',
+
+  -- Aggregates
+  total_equipment_value REAL DEFAULT 0,
+  total_assessed REAL DEFAULT 0,
+
+  -- Audit trail
+  notes TEXT DEFAULT '',
+  content_seal TEXT DEFAULT '', -- SHA256 hash for immutability verification
+
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_equipment_assessments_company ON equipment_assessments(company_id);
+CREATE INDEX IF NOT EXISTS idx_equipment_assessments_document ON equipment_assessments(document_id);
+CREATE INDEX IF NOT EXISTS idx_equipment_assessments_created ON equipment_assessments(created_at);
