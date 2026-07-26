@@ -16392,7 +16392,11 @@ export function registerIpcHandlers(): void {
 <style>
   @page { margin: 0.85in 0.9in; size: Letter; }
   body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
-  .container { max-width: 680px; margin: 0 auto; }
+  /* Fills whatever printable width Chromium actually lays out (set via the
+     printToPDF margins in EmployeeForm.tsx, since @page is cosmetic-only
+     here) — a fixed px max-width previously left the table pressed against
+     the right edge on Letter paper instead of centered with even margins. */
+  .container { width: 100%; margin: 0 auto; }
   /* ── Formal letterhead ── */
   .letterhead { text-align: center; padding-bottom: 14px; margin-bottom: 20px; border-bottom: 0.5px solid #ccc; }
   .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #111; margin: 0; padding-bottom: 6px; border-bottom: 1.5px solid #111; display: inline-block; }
@@ -16741,7 +16745,11 @@ export function registerIpcHandlers(): void {
 <style>
   @page { margin: 0.85in 0.9in; size: Letter; }
   body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; }
-  .container { max-width: 680px; margin: 0 auto; }
+  /* Fills whatever printable width Chromium actually lays out (set via the
+     printToPDF margins in EmployeeForm.tsx, since @page is cosmetic-only
+     here) — a fixed px max-width previously left the table pressed against
+     the right edge on Letter paper instead of centered with even margins. */
+  .container { width: 100%; margin: 0 auto; }
   .letterhead { text-align: center; padding-bottom: 14px; margin-bottom: 20px; border-bottom: 0.5px solid #ccc; }
   .letterhead .co-name { font-size: 18pt; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #111; margin: 0; padding-bottom: 6px; border-bottom: 1.5px solid #111; display: inline-block; }
   .letterhead .co-addr { font-size: 9pt; color: #555; margin-top: 6px; letter-spacing: 0.3px; }
