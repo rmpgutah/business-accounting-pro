@@ -68,7 +68,7 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.5.0",
-    "concurrently": "^10.0.3",
+    "concurrently": "^10.0.4",
     "electron": "^41.8.0",
     "electron-builder": "^26.15.3",
     "lucide-react": "^1.21.0",
