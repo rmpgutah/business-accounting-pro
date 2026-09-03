@@ -82,9 +82,9 @@ const SmartMatchView: React.FC = () => {
       // Only show transactions that had at least one candidate.
       setItems(results.filter((r) => r.candidates.length > 0));
     } finally { setLoading(false); }
-  }, []);
+  }, [activeCompany]);
 
-  useEffect(() => { load(); }, [load, activeCompany?.id]);
+  useEffect(() => { load(); }, [load]);
 
   const apply = async (txn: TxnWithMatches, candidate: MatchCandidate) => {
     setApplyingId(txn.id);

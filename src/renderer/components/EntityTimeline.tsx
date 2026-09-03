@@ -78,7 +78,7 @@ const EntityTimeline: React.FC<Props> = ({ entityType, entityId, limit = 50, com
   }, [activeCompany?.id, entityType, entityId, limit]);
 
   return (
-    <div className={compact ? '' : 'block-card p-4'} style={{ borderRadius: compact ? 0 : 2 }}>
+    <div className={compact ? '' : 'block-card p-4'}>
       {!compact && (
         <div className="flex items-center gap-2 pb-2 mb-3 border-b border-border-primary">
           <Activity size={14} className="text-accent-blue" />

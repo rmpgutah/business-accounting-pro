@@ -176,7 +176,7 @@ const RelatedPanel: React.FC<Props> = ({ entityType, entityId, only, hide, compa
   if (!activeCompany || !entityId) return null;
 
   return (
-    <div className={compact ? 'space-y-2' : 'block-card p-4 space-y-3'} style={{ borderRadius: compact ? 0 : 2 }}>
+    <div className={compact ? 'space-y-2' : 'block-card p-4 space-y-3'}>
       {!compact && (
         <div className="flex items-center gap-2 pb-2 border-b border-border-primary">
           <Link2 size={14} className="text-accent-blue" />

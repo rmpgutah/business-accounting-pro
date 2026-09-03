@@ -916,6 +916,8 @@ export function registerIpcHandlers(): void {
         run(`DELETE FROM invoice_debt_links WHERE invoice_id = ?`);
         run(`DELETE FROM invoice_reminders WHERE invoice_id = ?`);
         run(`DELETE FROM invoice_payment_schedule WHERE invoice_id = ?`);
+        run(`DELETE FROM invoice_coupon_redemptions WHERE invoice_id = ?`);
+        run(`DELETE FROM payment_intents WHERE invoice_id = ?`);
         // invoice_line_items has ON DELETE CASCADE, no manual cleanup needed
         break;
       case 'clients':
