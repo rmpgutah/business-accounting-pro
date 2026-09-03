@@ -102,7 +102,7 @@ export const PasswordStrengthMeter: React.FC<{ password: string }> = ({ password
             flex: 1,
             height: 4,
             background: 'var(--color-bg-secondary)',
-            borderRadius: 2,
+            borderRadius: 'var(--app-radius)',
             overflow: 'hidden',
           }}
         >

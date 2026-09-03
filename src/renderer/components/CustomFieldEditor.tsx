@@ -128,14 +128,14 @@ const CustomFieldEditor: React.FC = () => {
         <select className="block-select w-auto" value={entityType} onChange={e => setEntityType(e.target.value)}>
           {ENTITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        <button type="button" onClick={startNew} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+        <button type="button" onClick={startNew} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
           <Plus size={12} /> New Field
         </button>
         <button
           type="button"
           onClick={() => setShowStats(!showStats)}
           className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1 ml-auto"
-          style={{ borderRadius: '3px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <BarChart2 size={12} /> {showStats ? 'Hide' : 'Show'} fill-rate
         </button>
@@ -147,10 +147,10 @@ const CustomFieldEditor: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="text-xs font-semibold text-text-primary">{draft.id ? 'Edit field' : 'New field'}</div>
             <div className="flex gap-1">
-              <button type="button" onClick={handleSave} className="px-2 py-1 bg-accent-green text-white text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+              <button type="button" onClick={handleSave} className="px-2 py-1 bg-accent-primary text-white text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
                 <Save size={12} /> Save
               </button>
-              <button type="button" onClick={() => setDraft(null)} className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+              <button type="button" onClick={() => setDraft(null)} className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
                 <X size={12} /> Cancel
               </button>
             </div>
@@ -266,7 +266,7 @@ const CustomFieldEditor: React.FC = () => {
                     <div className="inline-flex gap-1">
                       <button type="button" onClick={() => handleBulkFill(f)} className="text-text-muted hover:text-text-primary" title="Bulk-fill"><Wand2 size={12} /></button>
                       <button type="button" onClick={() => startEdit(f)} className="text-text-muted hover:text-text-primary" title="Edit"><Edit2 size={12} /></button>
-                      <button type="button" onClick={() => handleDelete(f)} className="text-text-muted hover:text-accent-red" title="Delete"><Trash2 size={12} /></button>
+                      <button type="button" onClick={() => handleDelete(f)} className="text-text-muted hover:text-accent-expense" title="Delete"><Trash2 size={12} /></button>
                     </div>
                   </td>
                 </tr>

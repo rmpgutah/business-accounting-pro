@@ -223,13 +223,13 @@ const TagManager: React.FC = () => {
       {tab === 'tags' && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <button type="button" onClick={handleCreateTag} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+            <button type="button" onClick={handleCreateTag} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
               <Plus size={12} /> New Tag
             </button>
-            <button type="button" onClick={handleExport} className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+            <button type="button" onClick={handleExport} className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
               <Download size={12} /> Export CSV
             </button>
-            <button type="button" onClick={handleImport} className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+            <button type="button" onClick={handleImport} className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
               <Upload size={12} /> Import CSV
             </button>
             <label className="text-xs text-text-muted flex items-center gap-1 ml-auto">
@@ -263,8 +263,8 @@ const TagManager: React.FC = () => {
                         <button type="button" onClick={() => handleAssignGroup(t)} className="text-text-muted hover:text-text-primary" title="Group">G</button>
                         <button type="button" onClick={() => handleMerge(t)} className={`hover:text-text-primary ${mergeMode.source === t.id ? 'text-accent-amber' : 'text-text-muted'}`} title="Merge"><Merge size={12} /></button>
                         {(t as any).deleted_at
-                          ? <button type="button" onClick={() => handleRestore(t)} className="text-text-muted hover:text-accent-green" title="Restore"><RefreshCw size={12} /></button>
-                          : <button type="button" onClick={() => handleSoftDelete(t)} className="text-text-muted hover:text-accent-red" title="Delete"><Trash2 size={12} /></button>}
+                          ? <button type="button" onClick={() => handleRestore(t)} className="text-text-muted hover:text-accent-income" title="Restore"><RefreshCw size={12} /></button>
+                          : <button type="button" onClick={() => handleSoftDelete(t)} className="text-text-muted hover:text-accent-expense" title="Delete"><Trash2 size={12} /></button>}
                       </div>
                     </td>
                   </tr>
@@ -278,7 +278,7 @@ const TagManager: React.FC = () => {
 
       {tab === 'groups' && (
         <div className="space-y-2">
-          <button type="button" onClick={handleCreateGroup} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+          <button type="button" onClick={handleCreateGroup} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
             <Plus size={12} /> New Group
           </button>
           <div className="block-card">
@@ -296,7 +296,7 @@ const TagManager: React.FC = () => {
                     <td className="py-1 px-2 text-text-primary">{g.name}</td>
                     <td className="py-1 px-2 text-text-muted">{g.allow_multiple ? 'Multi-select' : 'Single-select'}</td>
                     <td className="py-1 px-2 text-right">
-                      <button type="button" onClick={() => handleDeleteGroup(g)} className="text-text-muted hover:text-accent-red"><Trash2 size={12} /></button>
+                      <button type="button" onClick={() => handleDeleteGroup(g)} className="text-text-muted hover:text-accent-expense"><Trash2 size={12} /></button>
                     </td>
                   </tr>
                 ))}
@@ -309,7 +309,7 @@ const TagManager: React.FC = () => {
 
       {tab === 'rules' && (
         <div className="space-y-2">
-          <button type="button" onClick={handleCreateRule} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+          <button type="button" onClick={handleCreateRule} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
             <Plus size={12} /> New Rule
           </button>
           <p className="text-[11px] text-text-muted">Rules apply on entity create/update. Condition JSON shape: {`{"all": [{"field":"status","op":"=","value":"overdue"}]}`}</p>
@@ -336,7 +336,7 @@ const TagManager: React.FC = () => {
                         <input type="checkbox" checked={!!r.is_active} onChange={() => handleToggleRule(r)} />
                       </td>
                       <td className="py-1 px-2 text-right">
-                        <button type="button" onClick={() => handleDeleteRule(r)} className="text-text-muted hover:text-accent-red"><Trash2 size={12} /></button>
+                        <button type="button" onClick={() => handleDeleteRule(r)} className="text-text-muted hover:text-accent-expense"><Trash2 size={12} /></button>
                       </td>
                     </tr>
                   );

@@ -175,9 +175,7 @@ const TopBar: React.FC = () => {
         className="flex items-center justify-between h-14 px-4 shrink-0"
         style={{
           background: 'var(--color-bg-secondary)',
-          backdropFilter: 'blur(20px) saturate(1.5)',
-          WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
-          borderBottom: '1px solid var(--structure)',
+          borderBottom: '1px solid var(--color-border-primary)',
           paddingLeft: navigator.userAgent.includes('Mac') ? '80px' : '16px',
           // @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property
           WebkitAppRegion: 'drag',

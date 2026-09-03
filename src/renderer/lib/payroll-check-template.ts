@@ -34,6 +34,11 @@ function maskSSN(ssn: string | undefined | null): string {
   return d.length >= 4 ? '***-**-' + d.slice(-4) : ssn;
 }
 
+function maskAccount(acct: string | undefined | null): string {
+  if (!acct) return ''; const d = acct.replace(/\D/g, '');
+  return d.length >= 4 ? '••••' + d.slice(-4) : acct;
+}
+
 // Real, embedded type system (loaded in the print-preview window). Fraunces =
 // refined serif for the company letterhead; IBM Plex Sans = technical body for
 // the dense stub data; IBM Plex Mono = tabular figures for amounts + bank line.
@@ -53,10 +58,13 @@ const CSS = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: var(--font-body); font-size: 10px; color: var(--ink); background:#fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .pg { width: 8.5in; height: 11in; position: relative; background:#fff; }
+/* .chk/.stb height MUST be exactly 11in/3 (not the rounded 3.667in) — three
+   sections at 3.667in sum to 11.001in, 0.001in past the page boundary, which
+   is enough for the PDF paginator to spill a whole blank trailing page. */
 
 /* Check face — secure-document paper with a subtle guilloché texture */
 .chk {
-  height: 3.667in; padding: 0.18in 0.42in 0.3in; position: relative; overflow: hidden;
+  height: calc(11in / 3); padding: 0.18in 0.42in 0.3in; position: relative; overflow: hidden;
   display: flex; flex-direction: column; gap: 6px;
   background-color: var(--paper);
   /* Engine-turned security hatch — two fine diagonal rules cross into a
@@ -68,7 +76,7 @@ body { font-family: var(--font-body); font-size: 10px; color: var(--ink); backgr
 }
 /* engraved security frame */
 .chk::after { content:''; position:absolute; inset:0.09in; border:1px solid rgba(21,102,63,0.32); pointer-events:none; }
-.stb { height: 3.667in; padding: 0.06in 0.3in 0.04in; position: relative; overflow: hidden; background:#fff; }
+.stb { height: calc(11in / 3); padding: 0.06in 0.3in 0.04in; position: relative; overflow: hidden; background:#fff; }
 
 /* Check face */
 .chk-co { font-family: var(--font-display); font-size: 19px; font-weight: 700; letter-spacing: -0.2px; line-height: 1.04; color: var(--ink); }
@@ -77,21 +85,18 @@ body { font-family: var(--font-body); font-size: 10px; color: var(--ink); backgr
 /* MICR line — clean tabular mono with labeled sections.
    Real MICR encoding is pre-printed with magnetic ink on check stock;
    this line provides the human-readable reference only. */
-.micr-bar {
-  position: absolute; bottom: 0.15in; left: 0.42in; right: 0.42in;
-  display: flex; align-items: baseline; gap: 6px;
-  background: var(--paper); border-top: 1px solid var(--line); padding-top: 4px;
+.micr-readable {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--font-body); font-size: 6.5px; color: var(--ink-soft);
+  margin-top: 4px;
 }
-.micr-bar .micr-seg { display: inline-flex; align-items: baseline; gap: 3px; }
-.micr-bar .micr-lbl {
-  font-family: var(--font-body); font-size: 5.5px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.6px; color: var(--accent); margin-right: 1px;
-}
-.micr-bar .micr-num {
+.micr-readable strong { color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; font-size: 5.5px; margin-right: 2px; }
+.micr-line {
+  margin-top: 3px; border-top: 1px solid var(--line); padding-top: 4px;
   font-family: var(--font-mono); font-size: 13px; font-weight: 500;
   letter-spacing: 2px; font-variant-numeric: tabular-nums; color: var(--ink);
+  text-align: center;
 }
-.micr-bar .micr-spacer { width: 16px; }
 
 /* Stub header */
 .stb-hdr { display: flex; justify-content: space-between; align-items: center; background: var(--ink); color: #fff; padding: 3px 8px; margin-bottom: 4px; }
@@ -225,7 +230,7 @@ export function generatePaycheckHTML(
     try { dedItems = Object.entries(JSON.parse(stub.deduction_detail)).map(([k, v]) => [k, Number(v)]); } catch {}
   }
   const voidWM = isVoid ? '<div class="void-wm">VOID</div>' : '';
-  const ddBanner = isDD ? `<div style="position:absolute;top:0.14in;left:50%;transform:translateX(-50%);font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">*** NON-NEGOTIABLE — DIRECT DEPOSIT ***</div>` : '';
+  const ddBanner = isDD ? `<div style="text-align:center;font-size:7px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--ink-soft);">*** NON-NEGOTIABLE — DIRECT DEPOSIT ***</div>` : '';
 
   // ── Info grid (shared) ──
   const infoGrid = `
@@ -328,10 +333,8 @@ export function generatePaycheckHTML(
           </div>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent);">Check No.</div>
-          <div class="chk-num">${chk}</div>
           ${coFraction ? `<div style="font-size:7.5px;margin-top:1px;color:var(--ink-soft);">${coFraction}</div>` : ''}
-          <div style="border-bottom:1px solid var(--ink);padding:3px 10px 2px;text-align:center;margin-top:6px;">
+          <div style="border-bottom:1px solid var(--ink);padding:3px 10px 2px;text-align:center;">
             <div style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent);">Date</div>
             <div style="font-size:10px;font-weight:600;">${payDate}</div>
           </div>
@@ -367,6 +370,12 @@ export function generatePaycheckHTML(
           <span style="font-size:6.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--accent);">Authorized Signature</span>
         </div>
       </div>
+    </div>
+    <!-- Check no. / routing / account — human-readable, sits directly above the MICR line -->
+    <div class="micr-readable">
+      <div><strong>Check No.</strong>${chk}</div>
+      <div><strong>Routing</strong>${coRouting || '—'}</div>
+      <div><strong>Account</strong>${maskAccount(coAcct) || '—'}</div>
     </div>
     <!-- MICR E-13B line — clear band, no labels -->
     <div class="micr-line${hasMicrFont() ? '' : ' fallback'}">${

@@ -400,7 +400,7 @@ export function BulletGraph({
             width: 3,
             backgroundColor: ACCENT_GREEN,
             transform: 'translateX(-50%)',
-            borderRadius: 2,
+            borderRadius: 'var(--app-radius)',
           }}
         />
       </div>

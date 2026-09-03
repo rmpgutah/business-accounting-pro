@@ -199,10 +199,11 @@ const Sidebar: React.FC = () => {
         }`}
         style={isActive ? {
           color: 'var(--accent-primary)',
-          background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-primary) 10%, transparent))',
-          boxShadow: 'inset -2px 0 0 var(--accent-primary)',
-        } : undefined}
-        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+          background: 'var(--color-bg-secondary)',
+          borderLeft: '3px solid var(--accent-primary)',
+          paddingLeft: sidebarCollapsed ? undefined : '0.625rem',
+        } : { borderLeft: '3px solid transparent' }}
+        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--color-bg-hover)'; }}
         onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = ''; }}
         title={sidebarCollapsed ? item.label : undefined}
       >
@@ -223,10 +224,8 @@ const Sidebar: React.FC = () => {
         sidebarCollapsed ? 'w-16' : 'w-56'
       }`}
       style={{
-        background: 'var(--color-bg-secondary)',
-        backdropFilter: 'blur(20px) saturate(1.5)',
-        WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
-        borderColor: 'var(--structure)',
+        background: 'var(--color-bg-primary)',
+        borderColor: 'var(--color-border-primary)',
       }}
     >
       {/* Brand accent bar at the very top */}
@@ -261,7 +260,7 @@ const Sidebar: React.FC = () => {
             {!sidebarCollapsed && (
               <div className="px-4 pt-2.5 pb-1 flex items-center gap-1">
                 <Banknote size={9} className="text-accent-warning" />
-                <span className="text-[10px] font-semibold text-text-muted" style={{ letterSpacing: '0.04em' }}>
+                <span className="text-[10px] font-semibold text-text-muted" style={{ letterSpacing: '0.08em', fontSize: '0.625rem' }}>
                   FINANCE
                 </span>
               </div>
@@ -277,7 +276,7 @@ const Sidebar: React.FC = () => {
             {!sidebarCollapsed && (
               <div className="px-4 pt-2.5 pb-1 flex items-center gap-1">
                 <Pin size={9} className="text-accent-blue" />
-                <span className="text-[10px] font-semibold text-text-muted" style={{ letterSpacing: '0.04em' }}>
+                <span className="text-[10px] font-semibold text-text-muted" style={{ letterSpacing: '0.08em', fontSize: '0.625rem' }}>
                   PINNED
                 </span>
               </div>

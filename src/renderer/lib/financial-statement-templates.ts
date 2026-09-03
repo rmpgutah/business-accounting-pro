@@ -533,7 +533,7 @@ export function generateExpenseByCategoryHTML(
   const categoryTable = ruledTable(columns, tableRows);
 
   // ── KPI summary box ──
-  const kpiHtml =
+  const kpiHtml = (
     `<div style="display:flex;gap:0;border:1px solid #000;margin-bottom:12px;">` +
     [
       { label: 'Total Expenses', value: `$${fmt(opts.totalExpenses)}` },
@@ -546,7 +546,8 @@ export function generateExpenseByCategoryHTML(
       `<div style="font-size:9px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;margin-top:4px;color:#555;">${esc(k.label)}</div>` +
       `</div>`
     ).join('') +
-    `</div>`.replace(/border-right:1px solid #000;<\/div><\/div>$/, `border-right:none;</div></div>`);
+    `</div>`
+  ).replace(/border-right:1px solid #000;<\/div><\/div>$/, `border-right:none;</div></div>`);
 
   // ── Vendor spend table (if provided) ──
   let vendorSection = '';

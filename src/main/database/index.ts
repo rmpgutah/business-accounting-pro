@@ -9859,7 +9859,12 @@ export function queryAll(
 
   let sql = `SELECT * FROM ${table}`;
   if (conditions.length > 0) sql += ` WHERE ${conditions.join(' AND ')}`;
-  if (sort) sql += ` ORDER BY ${sort.field} ${sort.dir.toUpperCase()}`;
+  if (sort) {
+    // Sanitize sort params: field must be an identifier-safe name, dir must be ASC/DESC.
+    const safeField = /^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(sort.field) ? sort.field : 'id';
+    const safeDir = sort.dir?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+    sql += ` ORDER BY ${safeField} ${safeDir}`;
+  }
   if (limit) sql += ` LIMIT ${limit}`;
   if (offset) sql += ` OFFSET ${offset}`;
 

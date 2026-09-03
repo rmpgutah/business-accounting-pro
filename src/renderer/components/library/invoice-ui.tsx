@@ -193,7 +193,7 @@ export function AgingBar({
                 style={{
                   width: 9,
                   height: 9,
-                  borderRadius: 2,
+                  borderRadius: 'var(--app-radius)',
                   background: b.color,
                   flexShrink: 0,
                 }}
