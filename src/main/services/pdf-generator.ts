@@ -25,41 +25,41 @@ const fmt = (n: number) =>
 // Classic styles mirrored from src/renderer/lib/classic-styles.ts (main process can't import renderer module).
 const CLASSIC_CSS = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
-@page { size: letter; margin: 0.5in 0.55in; }
+@page { size: letter; margin: 0.65in 0.6in; }
 body { font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #000; background: #fff;
-  font-size: 12px; line-height: 1.4;
+  font-size: 11px; line-height: 1.45;
   -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .doc-frame { border: 2px solid #000; position: relative; }
-.doc-header { display: flex; border-bottom: 2px solid #000; }
-.doc-header .co { flex: 1; padding: 14px 16px; border-right: 2px solid #000; }
-.doc-header .co-name { font-size: 17px; font-weight: bold; letter-spacing: 0.5px; }
-.doc-header .co-detail { font-size: 11px; margin-top: 5px; line-height: 1.5; }
+.doc-header { display: flex; border-bottom: 1.5px solid #000; }
+.doc-header .co { flex: 1; padding: 14px 16px; border-right: 1.5px solid #000; }
+.doc-header .co-name { font-size: 16px; font-weight: bold; letter-spacing: 0.5px; }
+.doc-header .co-detail { font-size: 10.5px; margin-top: 5px; line-height: 1.5; }
 .doc-header .doc-meta { width: 230px; padding: 14px 16px; text-align: right; }
-.doc-title { font-size: 27px; font-weight: bold; letter-spacing: 3px; text-transform: uppercase; }
-.doc-number { font-size: 12px; margin-top: 6px; }
-.meta-strip { width: 100%; border-collapse: collapse; border-bottom: 2px solid #000;
-  font-size: 11px; text-align: center; }
-.meta-strip td { border-right: 1px solid #000; padding: 7px 6px; }
+.doc-title { font-size: 24px; font-weight: bold; letter-spacing: 4px; text-transform: uppercase; }
+.doc-number { font-size: 11px; margin-top: 6px; }
+.meta-strip { width: 100%; border-collapse: collapse; border-bottom: 1.5px solid #000;
+  font-size: 10px; text-align: center; }
+.meta-strip td { border-right: 1px solid #000; padding: 6px 6px; }
 .meta-strip td:last-child { border-right: none; }
-.meta-strip .ml { font-weight: bold; letter-spacing: 1px; font-size: 10px; text-transform: uppercase; }
+.meta-strip .ml { font-weight: bold; letter-spacing: 1px; font-size: 9px; text-transform: uppercase; }
 .meta-strip .mv { margin-top: 3px; }
-.box-row { display: flex; border-bottom: 2px solid #000; }
+.box-row { display: flex; border-bottom: 1.5px solid #000; }
 .box-row .box { flex: 1; padding: 10px 16px; border-right: 1px solid #000; }
 .box-row .box:last-child { border-right: none; }
-.sec-label { font-size: 10px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
-table.ruled { width: 100%; border-collapse: collapse; font-size: 11px; }
+.sec-label { font-size: 9px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; }
+table.ruled { width: 100%; border-collapse: collapse; font-size: 10.5px; }
 table.ruled th { background: #000; color: #fff; border: 1px solid #000; padding: 7px 8px;
-  text-align: left; letter-spacing: 0.5px; text-transform: uppercase; font-size: 10px; }
+  text-align: left; letter-spacing: 1px; text-transform: uppercase; font-size: 9.5px; }
 table.ruled td { border: 1px solid #000; padding: 7px 8px; }
 table.ruled td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .totals-tbl { border-collapse: collapse; font-size: 12px; width: 262px; }
-.totals-tbl td { padding: 6px 12px; text-align: right; border-bottom: 1px solid #000; }
+.totals-tbl td { padding: 5px 12px; text-align: right; border-bottom: 1px solid #000; }
 .totals-tbl td.val { border-left: 1px solid #000; font-variant-numeric: tabular-nums; width: 96px; }
 .totals-tbl tr.grand td { background: #000; color: #fff; font-weight: bold; letter-spacing: 1px;
   padding: 9px 12px; border-bottom: none; }
-.totals-tbl tr.grand td.val { border-left: 1px solid #fff; }
-.footer-bar { border-top: 2px solid #000; padding: 8px 16px; font-size: 10px;
-  text-align: center; letter-spacing: 0.3px; }
+.totals-tbl tr.grand td.val { border-left: 1px solid #fff; font-variant-numeric: tabular-nums; }
+.footer-bar { border-top: 1px solid #ccc; padding: 8px 16px; font-size: 9.5px;
+  text-align: center; letter-spacing: 0.5px; }
 .draft-wm { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-30deg);
   font-size: 90px; font-weight: bold; color: rgba(0,0,0,0.07); letter-spacing: 12px;
   pointer-events: none; z-index: 0; }
