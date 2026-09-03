@@ -87,7 +87,7 @@ const EntityChip: React.FC<Props> = ({ type, id, label, bare, variant = 'badge',
       disabled={!isClickable}
       title={isClickable ? `Open ${type}` : type}
       className={className ?? `${baseStyle} ${isClickable ? 'cursor-pointer hover:bg-accent-blue/20' : 'cursor-default'} transition-colors`}
-      style={{ borderRadius: 2 }}
+      style={{ borderRadius: 'var(--app-radius)' }}
     >
       <span className="truncate">{display}</span>
       {isClickable && !bare && variant === 'badge' && <ExternalLink size={10} className="shrink-0 opacity-70" />}

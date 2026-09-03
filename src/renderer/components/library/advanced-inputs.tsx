@@ -237,7 +237,7 @@ export function Stepper({
           className="block-input text-center font-mono text-sm"
           style={{
             width: 64,
-            borderRadius: 0,
+            borderRadius: 'var(--app-radius)',
             borderLeft: 'none',
             borderRight: 'none',
           }}

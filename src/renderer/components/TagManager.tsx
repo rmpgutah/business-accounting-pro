@@ -263,8 +263,8 @@ const TagManager: React.FC = () => {
                         <button type="button" onClick={() => handleAssignGroup(t)} className="text-text-muted hover:text-text-primary" title="Group">G</button>
                         <button type="button" onClick={() => handleMerge(t)} className={`hover:text-text-primary ${mergeMode.source === t.id ? 'text-accent-amber' : 'text-text-muted'}`} title="Merge"><Merge size={12} /></button>
                         {(t as any).deleted_at
-                          ? <button type="button" onClick={() => handleRestore(t)} className="text-text-muted hover:text-accent-green" title="Restore"><RefreshCw size={12} /></button>
-                          : <button type="button" onClick={() => handleSoftDelete(t)} className="text-text-muted hover:text-accent-red" title="Delete"><Trash2 size={12} /></button>}
+                          ? <button type="button" onClick={() => handleRestore(t)} className="text-text-muted hover:text-accent-income" title="Restore"><RefreshCw size={12} /></button>
+                          : <button type="button" onClick={() => handleSoftDelete(t)} className="text-text-muted hover:text-accent-expense" title="Delete"><Trash2 size={12} /></button>}
                       </div>
                     </td>
                   </tr>
@@ -296,7 +296,7 @@ const TagManager: React.FC = () => {
                     <td className="py-1 px-2 text-text-primary">{g.name}</td>
                     <td className="py-1 px-2 text-text-muted">{g.allow_multiple ? 'Multi-select' : 'Single-select'}</td>
                     <td className="py-1 px-2 text-right">
-                      <button type="button" onClick={() => handleDeleteGroup(g)} className="text-text-muted hover:text-accent-red"><Trash2 size={12} /></button>
+                      <button type="button" onClick={() => handleDeleteGroup(g)} className="text-text-muted hover:text-accent-expense"><Trash2 size={12} /></button>
                     </td>
                   </tr>
                 ))}
@@ -336,7 +336,7 @@ const TagManager: React.FC = () => {
                         <input type="checkbox" checked={!!r.is_active} onChange={() => handleToggleRule(r)} />
                       </td>
                       <td className="py-1 px-2 text-right">
-                        <button type="button" onClick={() => handleDeleteRule(r)} className="text-text-muted hover:text-accent-red"><Trash2 size={12} /></button>
+                        <button type="button" onClick={() => handleDeleteRule(r)} className="text-text-muted hover:text-accent-expense"><Trash2 size={12} /></button>
                       </td>
                     </tr>
                   );

@@ -194,7 +194,7 @@ const FileInput: React.FC<RendererProps> = ({ value, onChange, disabled }) => {
         {meta?.filename ? 'Replace' : 'Choose file'}
       </button>
       {meta?.filename && <span className="text-[11px] text-text-muted">{meta.filename} ({Math.round((meta.size || 0) / 1024)} KB)</span>}
-      {meta?.filename && <button type="button" onClick={() => onChange(null)} className="text-[11px] text-accent-red">Remove</button>}
+      {meta?.filename && <button type="button" onClick={() => onChange(null)} className="text-[11px] text-accent-expense">Remove</button>}
     </div>
   );
 };
@@ -332,7 +332,7 @@ export const CustomFieldsSection: React.FC<CustomFieldsSectionProps> = ({
             {fields.map(def => (
               <div key={def.id}>
                 <label className="block text-[11px] text-text-muted mb-0.5">
-                  {def.label}{def.required ? <span className="text-accent-red"> *</span> : null}
+                  {def.label}{def.required ? <span className="text-accent-expense"> *</span> : null}
                 </label>
                 <CustomFieldRenderer
                   def={def}
