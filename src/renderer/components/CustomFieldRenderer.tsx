@@ -234,7 +234,7 @@ export const CustomFieldRenderer: React.FC<RendererProps> = ({ def, value, onCha
             <button
               type="button" key={c} disabled={disabled} onClick={() => toggle(c)}
               className={`px-2 py-0.5 text-[11px] border ${arr.includes(c) ? 'bg-accent-blue text-white border-accent-blue' : 'bg-bg-tertiary border-border-primary text-text-muted'}`}
-              style={{ borderRadius: '3px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >{c}</button>
           ))}
         </div>
