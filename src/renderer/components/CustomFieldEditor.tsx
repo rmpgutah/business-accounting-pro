@@ -128,14 +128,14 @@ const CustomFieldEditor: React.FC = () => {
         <select className="block-select w-auto" value={entityType} onChange={e => setEntityType(e.target.value)}>
           {ENTITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        <button type="button" onClick={startNew} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+        <button type="button" onClick={startNew} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
           <Plus size={12} /> New Field
         </button>
         <button
           type="button"
           onClick={() => setShowStats(!showStats)}
           className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1 ml-auto"
-          style={{ borderRadius: '3px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <BarChart2 size={12} /> {showStats ? 'Hide' : 'Show'} fill-rate
         </button>

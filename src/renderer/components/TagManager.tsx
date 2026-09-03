@@ -223,13 +223,13 @@ const TagManager: React.FC = () => {
       {tab === 'tags' && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <button type="button" onClick={handleCreateTag} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+            <button type="button" onClick={handleCreateTag} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
               <Plus size={12} /> New Tag
             </button>
-            <button type="button" onClick={handleExport} className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+            <button type="button" onClick={handleExport} className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
               <Download size={12} /> Export CSV
             </button>
-            <button type="button" onClick={handleImport} className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+            <button type="button" onClick={handleImport} className="px-2 py-1 bg-bg-tertiary border border-border-primary text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
               <Upload size={12} /> Import CSV
             </button>
             <label className="text-xs text-text-muted flex items-center gap-1 ml-auto">
@@ -278,7 +278,7 @@ const TagManager: React.FC = () => {
 
       {tab === 'groups' && (
         <div className="space-y-2">
-          <button type="button" onClick={handleCreateGroup} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+          <button type="button" onClick={handleCreateGroup} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
             <Plus size={12} /> New Group
           </button>
           <div className="block-card">
@@ -309,7 +309,7 @@ const TagManager: React.FC = () => {
 
       {tab === 'rules' && (
         <div className="space-y-2">
-          <button type="button" onClick={handleCreateRule} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: '3px' }}>
+          <button type="button" onClick={handleCreateRule} className="px-2 py-1 bg-accent-blue text-white text-xs flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
             <Plus size={12} /> New Rule
           </button>
           <p className="text-[11px] text-text-muted">Rules apply on entity create/update. Condition JSON shape: {`{"all": [{"field":"status","op":"=","value":"overdue"}]}`}</p>
