@@ -1104,7 +1104,7 @@ export default function SettingsModule() {
                     <button onClick={async () => {
                       if (confirm('Delete this macro?')) {
                         await api.deleteMacro(m.id);
-                        api.listMacros().then(setMacros);
+                        api.listMacros().then(setMacros).catch(() => {});
                       }
                     }} className="text-text-muted hover:text-accent-expense">
                       <Trash2 size={12} />
@@ -1225,7 +1225,7 @@ export default function SettingsModule() {
       <MacroRecorder
         isOpen={macroOpen}
         onClose={() => setMacroOpen(false)}
-        onSaved={() => api.listMacros().then(setMacros)}
+        onSaved={() => api.listMacros().then(setMacros).catch(() => {})}
       />
     </div>
   );

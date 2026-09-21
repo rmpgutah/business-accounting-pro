@@ -64,6 +64,8 @@ const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
         // interest_rate stored as decimal (0.065); display as percent (6.5)
         _rate_display: ((res.loan.interest_rate || 0) * 100).toFixed(3),
       });
+    }).catch((err: any) => {
+      toast.error('Load failed: ' + (err?.message || 'Unknown error'));
     }).finally(() => setLoading(false));
   }, [loanId, toast]);
 

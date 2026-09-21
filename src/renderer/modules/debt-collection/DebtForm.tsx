@@ -217,10 +217,10 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
                   default_payment_terms: client.default_payment_terms,
                 });
               }
-            });
+            }).catch(() => {});
           }
         }
-      });
+      }).catch(() => {});
     }
   }, []);
 
