@@ -1671,7 +1671,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             )}
             {/* Feature 3 — budget cap warning */}
             {capWarning && (
-              <div className="mt-1.5 flex items-center gap-1.5 text-[11px]" style={{ color: capWarning.over ? '#dc2626' : '#d97706' }}>
+              <div className="mt-1.5 flex items-center gap-1.5 text-[11px]" style={{ color: capWarning.over ? 'var(--color-accent-expense)' : 'var(--color-accent-warning)' }}>
                 <AlertTriangle size={12} />
                 <span>
                   {capWarning.over

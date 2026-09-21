@@ -64,8 +64,8 @@ const AGING_COLORS: Record<string, string> = {
 const CHART_GRID_STROKE = CHART_GRID;
 const CHART_TICK_FILL = CHART_AXIS;
 const TOOLTIP_STYLE = {
-  backgroundColor: '#1a1a1a',
-  border: '1px solid #2e2e2e',
+  backgroundColor: 'var(--color-bg-tertiary)',
+  border: '1px solid var(--color-border-secondary)',
   borderRadius: 'var(--app-radius)',
 };
 
@@ -730,7 +730,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                 return (
                   <div key={a.bucket} className="flex flex-col items-center" style={{ width: `${100 / agingData.length}%`, maxWidth: 120 }}>
                     <div className="text-[10px] font-mono text-text-muted mb-1">{formatCurrency(a.total)}</div>
-                    <div style={{ height: `${height}px`, width: '60%', background: AGING_COLORS[a.bucket] || '#6b7280', borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease' }} />
+                    <div style={{ height: `${height}px`, width: '60%', background: AGING_COLORS[a.bucket] || 'var(--color-text-muted)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease' }} />
                     <div className="text-[10px] text-text-muted mt-1 text-center">{a.bucket}</div>
                     <div className="text-[10px] text-text-secondary">{a.count} debts</div>
                   </div>

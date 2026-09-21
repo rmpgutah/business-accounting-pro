@@ -1169,7 +1169,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           </div>
         )}
         {form.invoice_type === 'proforma' && (
-          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(234,179,8,0.08)', border: '1px solid #d97706', borderRadius: 'var(--app-radius)', fontSize: 12, color: '#d97706', fontWeight: 600 }}>
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--color-accent-warning-bg)', border: '1px solid var(--color-accent-warning)', borderRadius: 'var(--app-radius)', fontSize: 12, color: 'var(--color-accent-warning)', fontWeight: 600 }}>
             Proforma — this invoice is preliminary and not a final billing document
           </div>
         )}

@@ -379,7 +379,7 @@ const Form941View: React.FC<{ data: any }> = ({ data }) => {
       </div>
 
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           Part 1 — Quarterly Wages &amp; Taxes
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -452,7 +452,7 @@ const ScheduleCView: React.FC<{ data: any }> = ({ data }) => {
       </div>
 
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           Part I — Income
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -688,7 +688,7 @@ const ScheduleSEView: React.FC<{ data: any }> = ({ data }) => {
       )}
 
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           Part I — Self-Employment Income
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -748,7 +748,7 @@ const SalesTaxView: React.FC<{ data: any }> = ({ data }) => {
       </div>
 
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           By Tax Rate
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -867,7 +867,7 @@ const W3View: React.FC<{ data: any }> = ({ data }) => {
       )}
 
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           Attached W-2s ({w2s.length})
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1048,7 +1048,7 @@ const Misc1099View: React.FC<{ forms: any[] }> = ({ forms }) => {
       </div>
 
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           Recipients ({forms.length})
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1314,7 +1314,7 @@ const Generic1099View: React.FC<{ forms: any[]; variant: string; amountKey: stri
       </div>
 
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           {variant} Recipients ({forms.length})
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1412,7 +1412,7 @@ const Form1096View: React.FC<{ data: any }> = ({ data }) => {
         )}
       </div>
       <div className="block-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '8px 12px', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.4 }}>
           1099 Forms Summary
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
