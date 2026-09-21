@@ -2082,7 +2082,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
             </span>
             <span
               className="font-mono text-lg"
-              style={{ color: form.bill_type === 'credit_memo' && total > 0 ? '#22c55e' : 'var(--color-text-primary)' }}
+              style={{ color: form.bill_type === 'credit_memo' && total > 0 ? 'var(--color-accent-income)' : 'var(--color-text-primary)' }}
             >
               {form.bill_type === 'credit_memo' && total > 0
                 ? `(${formatCurrency(Math.abs(total))}) CR`
@@ -2502,7 +2502,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
             <div
               style={{
                 background: 'rgba(248,113,113,0.08)',
-                border: '1px solid #ef4444',
+                border: '1px solid var(--color-accent-expense)',
                 borderRadius: 'var(--app-radius)',
                 padding: '10px 14px',
                 marginBottom: '14px',
@@ -2510,7 +2510,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
             >
               <ul style={{ margin: 0, padding: '0 0 0 14px', listStyle: 'disc' }}>
                 {payErrors.map((e, i) => (
-                  <li key={i} style={{ color: '#ef4444', fontSize: '12px', lineHeight: '1.6' }}>
+                  <li key={i} style={{ color: 'var(--color-accent-expense)', fontSize: '12px', lineHeight: '1.6' }}>
                     {e}
                   </li>
                 ))}
@@ -2980,7 +2980,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
                       : 0
                   }%`,
                   height: '100%',
-                  background: '#ef4444',
+                  background: 'var(--color-accent-expense)',
                 }}
               />
             </div>
@@ -3008,7 +3008,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
                       : 0
                   }%`,
                   height: '100%',
-                  background: '#f97316',
+                  background: 'var(--color-accent-warning)',
                 }}
               />
             </div>
@@ -3032,7 +3032,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
                 style={{
                   width: `100%`,
                   height: '100%',
-                  background: '#eab308',
+                  background: 'var(--color-accent-warning)',
                 }}
               />
             </div>

@@ -172,7 +172,7 @@ const MissingPane: React.FC<{ rows: any[]; onGenerate: (ft: 'W-4' | 'W-9' | 'I-9
               <td style={{ padding: '8px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>{r.person_type}</td>
               <td style={{ padding: '8px 10px', fontSize: 11 }}>
                 {r.required_forms.map((f: string) => (
-                  <span key={f} style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#fef2f2', color: '#991b1b', marginRight: 4 }}>{f}</span>
+                  <span key={f} style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: 'var(--color-accent-expense-bg)', color: 'var(--color-accent-expense)', marginRight: 4 }}>{f}</span>
                 ))}
               </td>
               <td style={{ padding: '8px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>{r.hire_date || '—'}</td>
@@ -270,7 +270,7 @@ const AllPane: React.FC<{ rows: any[] }> = ({ rows }) => {
               <td style={{ padding: '8px 10px', fontSize: 11, color: 'var(--color-text-muted)' }}>{r.effective_date || '—'}</td>
               <td style={{ padding: '8px 10px', fontSize: 11 }}>{r.expires_at || 'Never'}</td>
               <td style={{ padding: '8px 10px', fontSize: 10 }}>
-                <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontWeight: 700, background: r.status === 'current' ? '#ecfdf5' : '#fef2f2', color: r.status === 'current' ? '#065f46' : '#991b1b' }}>
+                <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontWeight: 700, background: r.status === 'current' ? 'var(--color-accent-income-bg)' : 'var(--color-accent-expense-bg)', color: r.status === 'current' ? 'var(--color-accent-income)' : 'var(--color-accent-expense)' }}>
                   {formatStatus(r.status || '').label}
                 </span>
               </td>

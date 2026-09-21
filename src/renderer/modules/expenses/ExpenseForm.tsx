@@ -578,7 +578,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   // Feature 4 — auto-suggestion based on vendor history
   useEffect(() => {
     if (!form.vendor_id) { setSuggestedCategoryId(''); return; }
-    suggestCategoryForVendor(form.vendor_id).then(id => setSuggestedCategoryId(id || ''));
+    suggestCategoryForVendor(form.vendor_id).then(id => setSuggestedCategoryId(id || '')).catch(() => {});
   }, [form.vendor_id]);
 
   // IntelligenceService smart-default: auto-fill category when vendor changes
@@ -641,7 +641,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   // Feature 8 — usage stats for selected category in current month
   useEffect(() => {
     if (!activeCompany || !form.category_id) { setCategoryUsage({ count: 0, total: 0 }); return; }
-    categoryMonthlyUsage(activeCompany.id, form.category_id).then(setCategoryUsage);
+    categoryMonthlyUsage(activeCompany.id, form.category_id).then(setCategoryUsage).catch(() => {});
   }, [activeCompany, form.category_id]);
 
   // Feature 5 — suggest the category's default expense account. Re-suggests on
@@ -1671,7 +1671,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             )}
             {/* Feature 3 — budget cap warning */}
             {capWarning && (
-              <div className="mt-1.5 flex items-center gap-1.5 text-[11px]" style={{ color: capWarning.over ? '#dc2626' : '#d97706' }}>
+              <div className="mt-1.5 flex items-center gap-1.5 text-[11px]" style={{ color: capWarning.over ? 'var(--color-accent-expense)' : 'var(--color-accent-warning)' }}>
                 <AlertTriangle size={12} />
                 <span>
                   {capWarning.over

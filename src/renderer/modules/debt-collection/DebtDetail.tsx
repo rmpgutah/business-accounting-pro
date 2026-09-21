@@ -844,7 +844,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             )}
             {/* Feature 10: Currency */}
             {debt.currency && debt.currency !== 'USD' && (
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: '#6366f122', color: '#a78bfa' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-purple-bg)', color: 'var(--color-accent-purple)' }}>
                 {debt.currency}
               </span>
             )}
