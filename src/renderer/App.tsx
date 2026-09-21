@@ -34,6 +34,8 @@ const EmailModule = lazy(() => import('./modules/email'));
 const NotificationsModule = lazy(() => import('./modules/notifications'));
 const AuditModule = lazy(() => import('./modules/audit'));
 const MultiCompanyModule = lazy(() => import('./modules/multi-company'));
+const CompaniesModule = lazy(() => import('./modules/companies'));
+const HrToolsModule = lazy(() => import('./modules/hr'));
 const ApiModule = lazy(() => import('./modules/api'));
 const PortalModule = lazy(() => import('./modules/portal'));
 const MobileModule = lazy(() => import('./modules/mobile'));
@@ -78,6 +80,7 @@ const MODULE_NAMES: Record<string, string> = {
   notifications: 'Notifications',
   'audit-trail': 'Audit Trail',
   companies: 'Multi-Company',
+  hr: 'HR Tools',
   'api-integrations': 'API & Integrations',
   'client-portal': 'Client Portal',
   mobile: 'Mobile',
@@ -131,7 +134,8 @@ const ModuleView: React.FC = () => {
       case 'email': return <EmailModule />;
       case 'notifications': return <NotificationsModule />;
       case 'audit-trail': return <AuditModule />;
-      case 'companies': return <MultiCompanyModule />;
+      case 'companies': return <CompaniesModule />;
+      case 'hr': return <HrToolsModule />;
       case 'api-integrations': return <ApiModule />;
       case 'client-portal': return <PortalModule />;
       case 'mobile': return <MobileModule />;

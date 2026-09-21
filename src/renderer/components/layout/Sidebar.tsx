@@ -42,6 +42,7 @@ import {
   PenTool,
   Car,
   Bot,
+  Users2,
   type LucideIcon,
 } from 'lucide-react';
 import { useAppStore } from '../../stores/appStore';
@@ -75,6 +76,7 @@ const sections: NavSection[] = [
     title: 'OPERATIONS',
     items: [
       { id: 'payroll', label: 'Human Resources', icon: Users },
+      { id: 'hr', label: 'HR Tools', icon: Users2 },
       { id: 'time-tracking', label: 'Time Tracking', icon: Clock },
       { id: 'projects', label: 'Projects', icon: FolderKanban },
       { id: 'inventory', label: 'Inventory', icon: Package },
