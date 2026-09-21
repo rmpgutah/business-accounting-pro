@@ -525,7 +525,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Wallet size={18} className="text-accent-blue" />
           </div>
@@ -558,13 +558,13 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
         </div>
       </div>
 
-      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
-      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: 'var(--app-radius)' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: 'var(--app-radius)' }}>{opError}</div>}
 
       {/* Inline KPI row */}
       {budgets.length > 0 && (
         <div className="grid grid-cols-4 gap-3">
-          <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="stat-label text-text-muted">Active</div>
@@ -575,7 +575,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
               <Target size={18} className="text-accent-blue opacity-60 mt-1" />
             </div>
           </div>
-          <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="stat-label text-text-muted">Budgeted</div>
@@ -586,7 +586,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
               <TrendingUp size={18} className="text-accent-blue opacity-60 mt-1" />
             </div>
           </div>
-          <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="stat-label text-text-muted">Actual</div>
@@ -597,7 +597,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
               <TrendingUp size={18} className="text-accent-expense opacity-60 mt-1" />
             </div>
           </div>
-          <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="stat-label text-text-muted">Over Budget</div>
@@ -654,7 +654,7 @@ const BudgetList: React.FC<BudgetListProps> = ({ onNew, onSelect }) => {
 
       {/* Batch Action Bar */}
       {selectedIds.size > 0 && (
-        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'rgba(59,130,246,0.3)' }}>
+        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)', borderColor: 'rgba(59,130,246,0.3)' }}>
           <span className="text-xs font-semibold text-text-primary">
             {selectedIds.size} budget{selectedIds.size !== 1 ? 's' : ''} selected
           </span>

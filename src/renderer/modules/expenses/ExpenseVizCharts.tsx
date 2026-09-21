@@ -47,7 +47,7 @@ export const SpendingTimeline: React.FC<{ expenses: VizExpense[] }> = ({ expense
   const meanY = cy(mean);
 
   return (
-    <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+    <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
       <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3 pb-2 border-b border-border-primary/40">Spending Over Time</h3>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
         {[0.25, 0.5, 0.75, 1].map((f) => {
@@ -155,7 +155,7 @@ export const SpendingHeatmap: React.FC<{ expenses: VizExpense[] }> = ({ expenses
   const peakLabel = peakDay ? new Date(peakDay + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
 
   return (
-    <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+    <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-border-primary/40">
         <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Daily Spending Heatmap</h3>
         <span className="flex items-center gap-1.5 text-[9px] text-text-muted">

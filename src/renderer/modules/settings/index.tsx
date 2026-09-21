@@ -40,7 +40,7 @@ const SectionCard: React.FC<{
     <div className="flex items-center gap-3">
       <div
         className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
-        style={{ borderRadius: '6px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         <Icon size={16} className="text-accent-blue" />
       </div>
@@ -112,7 +112,7 @@ const VpsBackup: React.FC = () => {
     <SectionCard icon={Cloud} title="Cloud Backup" description="Sync your database to your secure VPS">
       {result && (
         <div style={{
-          padding: '10px 14px', marginBottom: '12px', borderRadius: '6px',
+          padding: '10px 14px', marginBottom: '12px', borderRadius: 'var(--app-radius)',
           background: result.type === 'success' ? 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
           border: `1px solid ${result.type === 'success' ? 'color-mix(in srgb, var(--color-accent-income) 20%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 20%, transparent)'}`,
           color: result.type === 'success' ? 'var(--color-accent-income)' : 'var(--color-accent-expense)',
@@ -228,7 +228,7 @@ const DangerZone: React.FC = () => {
       <div className="flex items-center gap-3 mb-4">
         <div
           className="w-8 h-8 flex items-center justify-center shrink-0"
-          style={{ borderRadius: '6px', background: 'color-mix(in srgb, var(--color-accent-expense) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-expense) 20%, transparent)' }}
+          style={{ borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-expense) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-expense) 20%, transparent)' }}
         >
           <AlertTriangle size={16} className="text-accent-expense" />
         </div>
@@ -585,7 +585,7 @@ export default function SettingsModule() {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <SettingsIcon size={18} className="text-accent-blue" />
           </div>
@@ -780,7 +780,7 @@ export default function SettingsModule() {
           {companyForm.signature_image && (
             <div className="mb-3">
               <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Current Saved Signature</div>
-              <div style={{ border: '1px solid var(--color-border-primary)', borderRadius: '6px', background: 'var(--color-bg-secondary)', padding: '8px', display: 'inline-block' }}>
+              <div style={{ border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', background: 'var(--color-bg-secondary)', padding: '8px', display: 'inline-block' }}>
                 <img
                   src={companyForm.signature_image}
                   alt="Saved signature"
@@ -848,7 +848,7 @@ export default function SettingsModule() {
         {taxRatesError && (
           <div
             className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             {taxRatesError}
           </div>
@@ -931,7 +931,7 @@ export default function SettingsModule() {
         {emailError && (
           <div
             className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-2"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             {emailError}
           </div>
@@ -979,7 +979,7 @@ export default function SettingsModule() {
                 className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                   stripeConfig.stripe_test_mode ? 'translate-x-5' : 'translate-x-0'
                 }`}
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               />
             </div>
             <span className="text-sm text-text-secondary">
@@ -1035,7 +1035,7 @@ export default function SettingsModule() {
                   className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                     backupConfig.auto_backup ? 'translate-x-5' : 'translate-x-0'
                   }`}
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 />
               </div>
               <span className="text-sm text-text-secondary">
@@ -1087,7 +1087,7 @@ export default function SettingsModule() {
             Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border-primary text-[10px] font-mono" style={{ borderRadius: '4px' }}>⌘K</kbd> anywhere in the app to open the command palette.
           </div>
           <div>
-            <button onClick={() => setMacroOpen(true)} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: '6px' }}>
+            <button onClick={() => setMacroOpen(true)} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: 'var(--app-radius)' }}>
               <Plus size={12} /> Record New Macro
             </button>
           </div>
@@ -1096,7 +1096,7 @@ export default function SettingsModule() {
               <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-2">Saved Macros</label>
               <div className="space-y-1.5">
                 {macros.map((m: any) => (
-                  <div key={m.id} className="flex items-center justify-between p-2 bg-bg-tertiary border border-border-primary text-xs" style={{ borderRadius: '6px' }}>
+                  <div key={m.id} className="flex items-center justify-between p-2 bg-bg-tertiary border border-border-primary text-xs" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div>
                       <div className="text-text-primary font-medium">{m.name}</div>
                       {m.description && <div className="text-text-muted text-[10px]">{m.description}</div>}
@@ -1180,7 +1180,7 @@ export default function SettingsModule() {
         </div>
 
         {/* Seed/Reset Button */}
-        <button onClick={handleSeedYear} className="block-btn-primary px-3 py-1.5 text-xs font-semibold mt-3" style={{ borderRadius: '6px' }}>
+        <button onClick={handleSeedYear} className="block-btn-primary px-3 py-1.5 text-xs font-semibold mt-3" style={{ borderRadius: 'var(--app-radius)' }}>
           Reset {taxYear} to Defaults
         </button>
       </SectionCard>
@@ -1213,7 +1213,7 @@ export default function SettingsModule() {
               className="block-input" placeholder="8810" />
           </Field>
         </div>
-        <button onClick={handleSaveUtahConfig} className="block-btn-primary px-3 py-1.5 text-xs font-semibold mt-3" style={{ borderRadius: '6px' }}>
+        <button onClick={handleSaveUtahConfig} className="block-btn-primary px-3 py-1.5 text-xs font-semibold mt-3" style={{ borderRadius: 'var(--app-radius)' }}>
           Save Utah Config
         </button>
       </SectionCard>

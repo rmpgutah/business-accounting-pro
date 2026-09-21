@@ -141,14 +141,14 @@ const IncomeByMonth: React.FC = () => {
       {error && <ErrorBanner message={error} onDismiss={() => setError('')} />}
 
       {/* Controls */}
-      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-3">
           <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Year</label>
           <select className="block-select" value={year} onChange={(e) => setYear(Number(e.target.value))} style={{ width: 'auto' }}>
             {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
-        <button onClick={handlePrint} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: '6px' }} title="Print">
+        <button onClick={handlePrint} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: 'var(--app-radius)' }} title="Print">
           <Printer size={15} />
         </button>
       </div>
@@ -161,7 +161,7 @@ const IncomeByMonth: React.FC = () => {
           { label: 'Net Income', value: formatCurrency(totals.totalNet), accent: totals.totalNet >= 0 ? 'text-accent-income' : 'text-accent-expense' },
           { label: 'Margin', value: `${totals.totalMargin.toFixed(1)}%`, accent: 'text-accent-blue' },
         ].map((card) => (
-          <div key={card.label} className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div key={card.label} className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{card.label}</div>
             <div className={`text-lg font-bold ${card.accent} mt-1 font-mono`}>{card.value}</div>
           </div>
@@ -173,7 +173,7 @@ const IncomeByMonth: React.FC = () => {
       ) : (
         <>
           {/* Bar chart */}
-          <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-6" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-4">Monthly Revenue</h3>
             <div className="flex items-end gap-2 h-40">
               {data.map((row, i) => {
@@ -211,7 +211,7 @@ const IncomeByMonth: React.FC = () => {
           </div>
 
           {/* Table */}
-          <div className="block-card overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-bg-tertiary border-b border-border-primary">

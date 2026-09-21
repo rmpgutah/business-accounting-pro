@@ -26,7 +26,7 @@ function Control({ opt }: { opt: CustomizationOption }) {
         style={{
           width: 38,
           height: 22,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           background: on ? 'var(--color-accent-blue)' : 'var(--color-bg-tertiary)',
           border: '1px solid var(--color-border-primary)',
           transition: 'background 0.15s',
@@ -104,7 +104,7 @@ function Control({ opt }: { opt: CustomizationOption }) {
           type="color"
           value={v}
           onChange={(e) => setValue(key, e.target.value)}
-          style={{ width: 34, height: 26, borderRadius: 6, background: 'transparent', border: 'none', cursor: 'pointer' }}
+          style={{ width: 34, height: 26, borderRadius: 'var(--app-radius)', background: 'transparent', border: 'none', cursor: 'pointer' }}
           aria-label={opt.label}
         />
         <span className="text-[10px] font-mono text-text-muted">{v}</span>
@@ -207,7 +207,7 @@ export default function CustomizationCenter() {
             onClick={() => setActiveSection(s.section)}
             className="w-full text-left px-3 py-2 text-sm flex items-center justify-between"
             style={{
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               background: s.section === activeSection ? 'var(--color-bg-tertiary)' : 'transparent',
               color: s.section === activeSection ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
             }}
@@ -292,7 +292,7 @@ export default function CustomizationCenter() {
                     key={opt.id}
                     className="flex items-center justify-between gap-4 px-3 py-2"
                     style={{
-                      borderRadius: 6,
+                      borderRadius: 'var(--app-radius)',
                       background: isEdited ? 'rgba(96,165,250,0.04)' : 'transparent',
                     }}
                   >

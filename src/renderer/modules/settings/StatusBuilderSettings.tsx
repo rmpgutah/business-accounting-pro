@@ -127,7 +127,7 @@ const StatusBuilderSettings: React.FC = () => {
   return (
     <div className="block-card space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: '6px' }}>
+        <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: 'var(--app-radius)' }}>
           <GitBranch size={16} className="text-accent-blue" />
         </div>
         <div>
@@ -149,7 +149,7 @@ const StatusBuilderSettings: React.FC = () => {
         {/* Statuses table */}
         <div className="space-y-2">
           {statuses.map(s => (
-            <div key={s.id} className="p-2 border border-border-primary text-xs" style={{ borderRadius: '6px' }}>
+            <div key={s.id} className="p-2 border border-border-primary text-xs" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="grid grid-cols-12 gap-2 items-center">
                 <div className="col-span-2">
                   <span className="inline-flex items-center gap-1 px-2 py-1" style={{ borderRadius: '4px', background: s.color + '22', color: s.color, border: `1px solid ${s.color}` }}>
@@ -240,7 +240,7 @@ const WorkflowDiagram: React.FC<{ statuses: CustomStatus[]; transitions: StatusT
     : statuses.slice(0, -1).map((s, i) => ({ from: s.key, to: statuses[i + 1].key }));
 
   return (
-    <div className="border border-border-primary p-2 overflow-auto" style={{ borderRadius: '6px', maxHeight: 280 }}>
+    <div className="border border-border-primary p-2 overflow-auto" style={{ borderRadius: 'var(--app-radius)', maxHeight: 280 }}>
       <svg width={width} height={height} style={{ minWidth: width }}>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">

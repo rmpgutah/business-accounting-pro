@@ -348,7 +348,7 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
     <div className="space-y-4">
       {error && <ErrorBanner message={error} title="Failed to load accounts" onDismiss={() => setError('')} />}
       {rebuildMessage && (
-        <div className="flex items-center justify-between px-4 py-2.5 text-xs text-accent-income bg-accent-income/10 border border-accent-income/20" style={{ borderRadius: '6px' }}>
+        <div className="flex items-center justify-between px-4 py-2.5 text-xs text-accent-income bg-accent-income/10 border border-accent-income/20" style={{ borderRadius: 'var(--app-radius)' }}>
           <span>{rebuildMessage}</span>
           <button onClick={() => setRebuildMessage('')} className="text-accent-income/60 hover:text-accent-income text-xs font-bold">Dismiss</button>
         </div>
@@ -357,12 +357,12 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
       {/* Stat strip: counts by type */}
       <div className="grid grid-cols-6 gap-2">
         {ACCOUNT_TYPE_ORDER.map(t => (
-          <div key={t} className="block-card px-3 py-2 border border-border-primary" style={{ borderRadius: '6px' }}>
+          <div key={t} className="block-card px-3 py-2 border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <p className="text-[9px] text-text-muted uppercase tracking-wider font-bold">{TYPE_LABELS[t]}</p>
             <p className={`text-lg font-bold font-mono ${TYPE_ACCENT[t]}`}>{counts[t]}</p>
           </div>
         ))}
-        <div className="block-card px-3 py-2 border border-border-primary" style={{ borderRadius: '6px' }}>
+        <div className="block-card px-3 py-2 border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
           <p className="text-[9px] text-text-muted uppercase tracking-wider font-bold">Total</p>
           <p className="text-lg font-bold font-mono text-text-primary">{accounts.filter(a => a.is_active).length}</p>
         </div>
@@ -372,7 +372,7 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           {/* Search */}
-          <div className="flex items-center gap-1 px-2 py-1 border border-border-primary bg-bg-primary" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center gap-1 px-2 py-1 border border-border-primary bg-bg-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <Search size={12} className="text-text-muted" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Fuzzy search code or name..."
               className="bg-transparent outline-none text-xs text-text-primary w-48 placeholder:text-text-muted" />
@@ -380,7 +380,7 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
 
           {/* Status filter */}
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: '6px' }}>
+            className="px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <option value="active">Active only</option>
             <option value="archived">Archived only</option>
             <option value="all">All</option>
@@ -388,22 +388,22 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
 
           {/* Type filter */}
           <select value={filterType} onChange={(e) => setFilterType(e.target.value as any)}
-            className="px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: '6px' }}>
+            className="px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <option value="all">All types</option>
             {ACCOUNT_TYPE_ORDER.map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
           </select>
 
           <button onClick={() => setFilterHasActivity(!filterHasActivity)}
             className={`px-2 py-1 text-xs border ${filterHasActivity ? 'border-accent-blue text-accent-blue' : 'border-border-primary text-text-secondary'}`}
-            style={{ borderRadius: '6px' }} title="Has activity in last 90 days">Active 90d</button>
+            style={{ borderRadius: 'var(--app-radius)' }} title="Has activity in last 90 days">Active 90d</button>
 
           <button onClick={() => setFilterPinnedOnly(!filterPinnedOnly)}
             className={`px-2 py-1 text-xs border flex items-center gap-1 ${filterPinnedOnly ? 'border-accent-blue text-accent-blue' : 'border-border-primary text-text-secondary'}`}
-            style={{ borderRadius: '6px' }}><Pin size={10} /> Pinned</button>
+            style={{ borderRadius: 'var(--app-radius)' }}><Pin size={10} /> Pinned</button>
 
           {/* Group filter */}
           <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}
-            className="px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: '6px' }} title="Filter by group">
+            className="px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: 'var(--app-radius)' }} title="Filter by group">
             <option value="">All groups</option>
             {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
@@ -411,10 +411,10 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
           {/* Deleted toggle */}
           <button onClick={() => setShowDeleted(!showDeleted)}
             className={`px-2 py-1 text-xs border ${showDeleted ? 'border-accent-expense text-accent-expense' : 'border-border-primary text-text-secondary'}`}
-            style={{ borderRadius: '6px' }}>{showDeleted ? 'View: Deleted' : 'View Deleted'}</button>
+            style={{ borderRadius: 'var(--app-radius)' }}>{showDeleted ? 'View: Deleted' : 'View Deleted'}</button>
 
           {/* View mode */}
-          <div className="flex border border-border-primary" style={{ borderRadius: '6px' }}>
+          <div className="flex border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <button onClick={() => setViewMode('flat')}
               className={`px-2 py-1 text-xs flex items-center gap-1 ${viewMode === 'flat' ? 'bg-accent-blue text-white' : 'text-text-secondary'}`}>
               <ListIcon size={11} /> Flat
@@ -441,29 +441,29 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
             <RefreshCw size={12} className={rebuilding ? 'animate-spin' : ''} />
             {rebuilding ? 'Rebuilding...' : 'Rebuild GL'}
           </button>
-          <button onClick={() => setShowTemplatePicker(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>
+          <button onClick={() => setShowTemplatePicker(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
             <Layers size={12} /> Apply Template
           </button>
-          <button onClick={handleExportCsv} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>
+          <button onClick={handleExportCsv} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
             <Download size={12} /> Export CSV
           </button>
-          <button onClick={() => setShowImport(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>
+          <button onClick={() => setShowImport(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
             <Upload size={12} /> Import CSV
           </button>
-          <button onClick={() => setShowCloseDialog(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}
+          <button onClick={() => setShowCloseDialog(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}
             title="Year-end close to Retained Earnings">
             <Calendar size={12} /> Close Year
           </button>
-          <button onClick={() => setShowGroups(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }} title="Account groups">Groups</button>
-          <button onClick={() => setShowFxRevalue(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }} title="FX revaluation">FX</button>
-          <button onClick={() => setShowIIF(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>IIF</button>
-          <button onClick={() => setShowXero(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>Xero</button>
-          <button onClick={() => setShowTxf(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>TXF</button>
-          <button onClick={() => setShowSplit(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>Split</button>
-          <button onClick={() => setShowOpeningTb(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>TB Import</button>
-          <button onClick={() => setShowClassify(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>Rules</button>
-          <button onClick={() => setShowSnapshot(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: '6px' }}>Snapshot</button>
-          <button onClick={onNewAccount} className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold" style={{ borderRadius: '6px' }}>
+          <button onClick={() => setShowGroups(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }} title="Account groups">Groups</button>
+          <button onClick={() => setShowFxRevalue(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }} title="FX revaluation">FX</button>
+          <button onClick={() => setShowIIF(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>IIF</button>
+          <button onClick={() => setShowXero(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>Xero</button>
+          <button onClick={() => setShowTxf(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>TXF</button>
+          <button onClick={() => setShowSplit(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>Split</button>
+          <button onClick={() => setShowOpeningTb(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>TB Import</button>
+          <button onClick={() => setShowClassify(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>Rules</button>
+          <button onClick={() => setShowSnapshot(true)} className="flex items-center gap-1 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>Snapshot</button>
+          <button onClick={onNewAccount} className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold" style={{ borderRadius: 'var(--app-radius)' }}>
             <Plus size={14} /> New Account
           </button>
         </div>
@@ -471,21 +471,21 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
 
       {/* Bulk actions toolbar */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-accent-blue/10 border border-accent-blue/30" style={{ borderRadius: '6px' }}>
+        <div className="flex items-center gap-2 px-3 py-2 bg-accent-blue/10 border border-accent-blue/30" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="text-xs text-accent-blue font-bold">{selected.size} selected</span>
-          <button onClick={() => handleBulkActivate(true)} className="px-2 py-1 text-xs border border-border-primary hover:border-accent-blue" style={{ borderRadius: '6px' }}>Activate</button>
-          <button onClick={() => handleBulkActivate(false)} className="px-2 py-1 text-xs border border-border-primary hover:border-accent-blue" style={{ borderRadius: '6px' }}>Deactivate</button>
+          <button onClick={() => handleBulkActivate(true)} className="px-2 py-1 text-xs border border-border-primary hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>Activate</button>
+          <button onClick={() => handleBulkActivate(false)} className="px-2 py-1 text-xs border border-border-primary hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>Deactivate</button>
           {selected.size === 2 && (
-            <button onClick={() => setShowMergeDialog(true)} className="flex items-center gap-1 px-2 py-1 text-xs border border-border-primary hover:border-accent-blue" style={{ borderRadius: '6px' }}>
+            <button onClick={() => setShowMergeDialog(true)} className="flex items-center gap-1 px-2 py-1 text-xs border border-border-primary hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
               <GitMerge size={11} /> Merge
             </button>
           )}
           {selected.size >= 2 && selected.size <= 4 && (
-            <button onClick={() => setShowCompare(true)} className="px-2 py-1 text-xs border border-border-primary hover:border-accent-blue" style={{ borderRadius: '6px' }}>
+            <button onClick={() => setShowCompare(true)} className="px-2 py-1 text-xs border border-border-primary hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
               Compare
             </button>
           )}
-          <button onClick={() => setShowQrLabels(true)} className="flex items-center gap-1 px-2 py-1 text-xs border border-border-primary hover:border-accent-blue" style={{ borderRadius: '6px' }}>
+          <button onClick={() => setShowQrLabels(true)} className="flex items-center gap-1 px-2 py-1 text-xs border border-border-primary hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
             <Tag size={11} /> Print Labels
           </button>
           <button onClick={() => setSelected(new Set())} className="ml-auto px-2 py-1 text-xs text-text-muted hover:text-text-primary">Clear</button>
@@ -493,7 +493,7 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
       )}
 
       {/* Table */}
-      <div className="block-table bg-bg-secondary border border-border-primary overflow-hidden" style={{ borderRadius: '6px' }}>
+      <div className="block-table bg-bg-secondary border border-border-primary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -643,7 +643,7 @@ const AccountRow: React.FC<{
           <ComplianceBadges tagsJson={account.compliance_tags} />
           {isDormant && <span className="text-[9px] bg-accent-expense/20 text-accent-expense px-1 py-0.5 font-bold" style={{ borderRadius: '3px' }}>DORMANT</span>}
           {account.deleted_at ? <span className="text-[9px] bg-accent-expense/20 text-accent-expense px-1 py-0.5 font-bold" style={{ borderRadius: '3px' }}>DELETED</span>
-            : !account.is_active && <span className="ml-1 text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5" style={{ borderRadius: '6px' }}>Archived</span>}
+            : !account.is_active && <span className="ml-1 text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5" style={{ borderRadius: 'var(--app-radius)' }}>Archived</span>}
         </div>
         {(account.monthly_cap || 0) > 0 && <BudgetRibbon account={account as any} />}
       </td>
@@ -691,7 +691,7 @@ const TemplatePicker: React.FC<{ companyId: string; onClose: () => void; onAppli
   };
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/50">
-      <div className="bg-bg-elevated border border-border-primary w-full max-w-lg" style={{ borderRadius: '6px' }}>
+      <div className="bg-bg-elevated border border-border-primary w-full max-w-lg" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
           <h2 className="text-sm font-bold">Apply Standard Chart of Accounts</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary text-lg">&times;</button>
@@ -701,7 +701,7 @@ const TemplatePicker: React.FC<{ companyId: string; onClose: () => void; onAppli
           {COA_TEMPLATES.map(tpl => (
             <button key={tpl.id} onClick={() => apply(tpl.id)} disabled={applying}
               className="w-full text-left px-3 py-2 border border-border-primary hover:border-accent-blue disabled:opacity-50"
-              style={{ borderRadius: '6px' }}>
+              style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="text-sm font-bold">{tpl.name}</div>
               <div className="text-xs text-text-muted">{tpl.description}</div>
               <div className="text-[10px] text-text-muted mt-1">{tpl.accounts.length} accounts</div>
@@ -728,7 +728,7 @@ const MergeDialog: React.FC<{ accounts: Account[]; onClose: () => void; onDone: 
   };
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/50">
-      <div className="bg-bg-elevated border border-border-primary w-full max-w-md" style={{ borderRadius: '6px' }}>
+      <div className="bg-bg-elevated border border-border-primary w-full max-w-md" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
           <h2 className="text-sm font-bold">Merge Accounts</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary text-lg">&times;</button>
@@ -736,14 +736,14 @@ const MergeDialog: React.FC<{ accounts: Account[]; onClose: () => void; onDone: 
         <div className="p-4 space-y-3">
           <p className="text-xs text-text-secondary">Choose which account to keep. The other account will be merged into it and then deleted.</p>
           {accounts.map(a => (
-            <label key={a.id} className="flex items-center gap-2 px-3 py-2 border border-border-primary cursor-pointer" style={{ borderRadius: '6px' }}>
+            <label key={a.id} className="flex items-center gap-2 px-3 py-2 border border-border-primary cursor-pointer" style={{ borderRadius: 'var(--app-radius)' }}>
               <input type="radio" checked={targetId === a.id} onChange={() => setTargetId(a.id)} />
               <span className="font-mono text-xs">{a.code}</span>
               <span className="text-sm">{a.name}</span>
               <span className="ml-auto text-[10px] text-text-muted">{targetId === a.id ? 'KEEP' : 'MERGE INTO TARGET'}</span>
             </label>
           ))}
-          <button onClick={doMerge} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>
+          <button onClick={doMerge} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>
             {busy ? 'Merging...' : 'Merge Accounts'}
           </button>
         </div>
@@ -769,7 +769,7 @@ const OpeningBalanceDialog: React.FC<{ account: Account; companyId: string; onCl
   };
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/50">
-      <div className="bg-bg-elevated border border-border-primary w-full max-w-md" style={{ borderRadius: '6px' }}>
+      <div className="bg-bg-elevated border border-border-primary w-full max-w-md" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
           <h2 className="text-sm font-bold">Set Opening Balance: {account.code} {account.name}</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary text-lg">&times;</button>
@@ -778,15 +778,15 @@ const OpeningBalanceDialog: React.FC<{ account: Account; companyId: string; onCl
           <div>
             <label className="block text-[10px] font-semibold uppercase mb-1">Amount</label>
             <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)}
-              className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+              className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
           </div>
           <div>
             <label className="block text-[10px] font-semibold uppercase mb-1">Date</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+              className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
           </div>
           <p className="text-[10px] text-text-muted">A balanced journal entry will be created with offsetting Opening Balance Equity. This account will be auto-created if missing.</p>
-          <button onClick={submit} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>
+          <button onClick={submit} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>
             {busy ? 'Posting...' : 'Post Opening Balance'}
           </button>
         </div>
@@ -810,7 +810,7 @@ const CloseYearDialog: React.FC<{ companyId: string; onClose: () => void; onDone
   };
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/50">
-      <div className="bg-bg-elevated border border-border-primary w-full max-w-md" style={{ borderRadius: '6px' }}>
+      <div className="bg-bg-elevated border border-border-primary w-full max-w-md" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
           <h2 className="text-sm font-bold">Year-End Close to Retained Earnings</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary text-lg">&times;</button>
@@ -819,10 +819,10 @@ const CloseYearDialog: React.FC<{ companyId: string; onClose: () => void; onDone
           <div>
             <label className="block text-[10px] font-semibold uppercase mb-1">Period End Date</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+              className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
           </div>
           <p className="text-[10px] text-text-muted">All revenue and expense net balances through this date will be transferred to Retained Earnings.</p>
-          <button onClick={submit} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>
+          <button onClick={submit} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>
             {busy ? 'Posting...' : 'Post Closing Entry'}
           </button>
         </div>
@@ -866,7 +866,7 @@ const CompareDialog: React.FC<{ accounts: Account[]; companyId: string; onClose:
   }, [accounts, companyId]);
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/50">
-      <div className="bg-bg-elevated border border-border-primary w-full max-w-2xl" style={{ borderRadius: '6px' }}>
+      <div className="bg-bg-elevated border border-border-primary w-full max-w-2xl" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
           <h2 className="text-sm font-bold">Account Comparison</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary text-lg">&times;</button>
@@ -922,14 +922,14 @@ const QrLabelsDialog: React.FC<{ accounts: Account[]; onClose: () => void }> = (
   };
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/50">
-      <div className="bg-bg-elevated border border-border-primary w-full max-w-md" style={{ borderRadius: '6px' }}>
+      <div className="bg-bg-elevated border border-border-primary w-full max-w-md" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
           <h2 className="text-sm font-bold">Print Account Labels</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary text-lg">&times;</button>
         </div>
         <div className="p-4 space-y-3">
           <p className="text-xs text-text-secondary">Generate a printable label sheet for {accounts.length} selected account(s). Each label shows the account code, name, and a deep-link reference (bap://account/&lt;id&gt;).</p>
-          <button onClick={print} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>
+          <button onClick={print} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>
             Generate Labels
           </button>
         </div>

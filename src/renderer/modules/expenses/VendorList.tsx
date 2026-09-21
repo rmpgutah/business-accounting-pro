@@ -114,7 +114,7 @@ const VendorList: React.FC<VendorListProps> = ({ onNew, onEdit, onView }) => {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Building2 size={18} className="text-accent-purple" />
           </div>

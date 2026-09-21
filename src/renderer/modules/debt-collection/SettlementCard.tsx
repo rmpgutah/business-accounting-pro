@@ -131,11 +131,11 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
         </button>
       </div>
 
-      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20 mb-3" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
-      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mb-3" style={{ borderRadius: '6px' }}>{opError}</div>}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20 mb-3" style={{ borderRadius: 'var(--app-radius)' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mb-3" style={{ borderRadius: 'var(--app-radius)' }}>{opError}</div>}
 
       {showForm && (
-        <div className="grid grid-cols-2 gap-3 mb-4 p-4 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+        <div className="grid grid-cols-2 gap-3 mb-4 p-4 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
           <div>
             <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
               Offer Amount
@@ -208,7 +208,7 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
                 style={{
                   padding: '10px 12px',
                   background: 'var(--color-bg-tertiary)',
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   border: '1px solid var(--color-border-primary)',
                 }}
               >
@@ -227,7 +227,7 @@ const SettlementCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
                       fontWeight: 600,
                       color: badge.color,
                       padding: '2px 8px',
-                      borderRadius: 6,
+                      borderRadius: 'var(--app-radius)',
                       background: badge.bg,
                     }}
                   >

@@ -150,7 +150,7 @@ export default function ComponentLibrary() {
           </h2>
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {g.items.map(([name, Comp]) => (
-              <div key={name} className="block-card p-4 flex flex-col gap-3" style={{ borderRadius: 6 }}>
+              <div key={name} className="block-card p-4 flex flex-col gap-3" style={{ borderRadius: 'var(--app-radius)' }}>
                 <span className="text-[10px] font-mono text-text-muted uppercase tracking-wide">{name}</span>
                 {/* Containment sandbox: some library components are full-screen
                     fixed/absolute overlays (modals, toasts, loaders). A CSS

@@ -641,7 +641,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
           style={{
             background: 'rgba(248,113,113,0.08)',
             border: '1px solid #ef4444',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             padding: '12px 16px',
           }}
         >
@@ -782,7 +782,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
 
           {/* Account Context — shown when a known entity is selected */}
           {form.debtor_type !== 'custom' && selectedAccountInfo && (
-            <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--color-bg-tertiary)', borderRadius: 6, border: '1px solid var(--color-border-primary)' }}>
+            <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)' }}>
               <div className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Account Details</div>
               <div className="grid grid-cols-3 gap-3">
                 {form.debtor_type === 'client' && (
@@ -1125,7 +1125,7 @@ const DebtForm: React.FC<DebtFormProps> = ({ debtId, debtType, onBack, onSaved }
               <div className="col-span-2">
                 <div
                   className="flex items-center gap-2 px-4 py-3 bg-bg-tertiary border border-border-secondary text-sm text-text-secondary"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   <span className="text-text-muted uppercase text-xs font-semibold tracking-wider">
                     Statute Expires:

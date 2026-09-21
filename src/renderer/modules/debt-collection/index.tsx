@@ -51,7 +51,7 @@ const TabBtn: React.FC<{
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
         : 'text-text-muted hover:text-text-secondary transition-colors'
     }`}
-    style={{ borderRadius: '6px 6px 0 0' }}
+    style={{ borderRadius: 'var(--app-radius) var(--app-radius) 0 0' }}
   >
     {icon}
     {label}
@@ -207,7 +207,7 @@ const DebtCollectionModule: React.FC = () => {
           <button
             onClick={() => setShowSettings(true)}
             className="flex items-center justify-center w-8 h-8 text-text-muted hover:text-text-primary transition-colors"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Escalation Settings"
           >
             <Settings size={16} />

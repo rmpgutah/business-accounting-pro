@@ -259,7 +259,7 @@ const RecurringTransactions: React.FC = () => {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <RefreshCw size={18} className="text-accent-blue" />
           </div>
@@ -300,13 +300,13 @@ const RecurringTransactions: React.FC = () => {
 
       {/* Process feedback */}
       {processFeedback && (
-        <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>
+        <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: 'var(--app-radius)' }}>
           {processFeedback}
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex items-center border border-border-primary" style={{ borderRadius: '6px', width: 'fit-content' }}>
+      <div className="flex items-center border border-border-primary" style={{ borderRadius: 'var(--app-radius)', width: 'fit-content' }}>
         <button
           className={`px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 ${
             tab === 'templates'
@@ -421,7 +421,7 @@ const RecurringTransactions: React.FC = () => {
                     className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                       formData.is_active ? 'translate-x-5' : 'translate-x-0'
                     }`}
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                   />
                 </div>
                 <span className="text-sm text-text-secondary">
@@ -535,7 +535,7 @@ const RecurringTransactions: React.FC = () => {
                       <td>
                         <span
                           className={`font-mono text-xs px-2 py-0.5 ${nextDueColor(t.next_date)} ${nextDueBg(t.next_date)}`}
-                          style={{ borderRadius: '6px' }}
+                          style={{ borderRadius: 'var(--app-radius)' }}
                         >
                           {t.next_date ? format(parseISO(t.next_date), 'MMM d, yyyy') : '-'}
                         </span>

@@ -254,7 +254,7 @@ const DeductionsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
       </div>
 
       {showForm && (
-        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Name *</label>
@@ -581,7 +581,7 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
       </div>
 
       {showForm && (
-        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Item Name *</label>
@@ -694,7 +694,7 @@ const EquipmentPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
 
                 {/* Penalty assessment (only when the outcome triggers penalties) */}
                 {!clean && (
-                  <div className="mt-3 p-3" style={{ borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-expense) 25%, transparent)' }}>
+                  <div className="mt-3 p-3" style={{ borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-expense) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-expense) 25%, transparent)' }}>
                     {assessment.lines.length === 0 ? (
                       <p className="text-[11px] text-text-muted">No penalties match this outcome. Define a penalty above with “Applies To” set to <b>{DISPOSITIONS.find(d=>d.value===form.disposition)?.label}</b> or <b>Any issue</b>, or enter an amount manually below.</p>
                     ) : (
@@ -839,14 +839,14 @@ const PerformanceReviewsPanel: React.FC<{ employeeId: string }> = ({ employeeId 
         </button>
       </div>
       {showForm && (
-        <div className="block-card p-4 space-y-3" style={{ borderRadius: 6 }}>
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="grid grid-cols-3 gap-3">
             <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Review Date</label><input type="date" className="block-input" value={form.review_date} onChange={e => setForm(f => ({...f, review_date: e.target.value}))} /></div>
             <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Review Period</label><input className="block-input" placeholder="e.g. Q1 2026, Annual 2025" value={form.review_period} onChange={e => setForm(f => ({...f, review_period: e.target.value}))} /></div>
             <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Reviewer</label><input className="block-input" placeholder="Manager / supervisor name" value={form.reviewer_name} onChange={e => setForm(f => ({...f, reviewer_name: e.target.value}))} /></div>
           </div>
           <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Overall Rating (1-5)</label>
-            <div className="flex gap-1">{[1,2,3,4,5].map(n => (<button key={n} type="button" onClick={() => setForm(f => ({...f, overall_rating: n}))} className={`w-9 h-9 text-sm font-bold transition-colors ${form.overall_rating >= n ? 'text-white' : 'text-text-muted'}`} style={{ borderRadius: 6, background: form.overall_rating >= n ? (n <= 2 ? 'var(--color-accent-expense)' : n === 3 ? 'var(--color-accent-blue)' : 'var(--color-accent-income)') : 'var(--color-border-primary)', border: '1px solid var(--color-border-primary)' }}>{n}</button>))}
+            <div className="flex gap-1">{[1,2,3,4,5].map(n => (<button key={n} type="button" onClick={() => setForm(f => ({...f, overall_rating: n}))} className={`w-9 h-9 text-sm font-bold transition-colors ${form.overall_rating >= n ? 'text-white' : 'text-text-muted'}`} style={{ borderRadius: 'var(--app-radius)', background: form.overall_rating >= n ? (n <= 2 ? 'var(--color-accent-expense)' : n === 3 ? 'var(--color-accent-blue)' : 'var(--color-accent-income)') : 'var(--color-border-primary)', border: '1px solid var(--color-border-primary)' }}>{n}</button>))}
               <span className="text-xs text-text-muted ml-2 self-center">{RATING_LABELS[form.overall_rating]}</span>
             </div>
           </div>
@@ -913,7 +913,7 @@ const DisciplinaryPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => 
         </button>
       </div>
       {showForm && (
-        <div className="block-card p-4 space-y-3" style={{ borderRadius: 6 }}>
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="grid grid-cols-3 gap-3">
             <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Incident Date</label><input type="date" className="block-input" value={form.incident_date} onChange={e => setForm(f => ({...f, incident_date: e.target.value}))} /></div>
             <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Severity</label>
@@ -976,7 +976,7 @@ const CompensationHistoryPanel: React.FC<{ employeeId: string; currentRate: numb
         </button>
       </div>
       {showForm && (
-        <div className="block-card p-4 space-y-3" style={{ borderRadius: 6 }}>
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="grid grid-cols-3 gap-3">
             <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Effective Date</label><input type="date" className="block-input" value={form.change_date} onChange={e => setForm(f => ({...f, change_date: e.target.value}))} /></div>
             <div><label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Change Type</label>
@@ -1024,7 +1024,7 @@ const PtoSummaryPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
         <>
           <div className="grid grid-cols-3 gap-3">
             {balances.map((b: any) => (
-              <div key={b.id} className="block-card p-3 text-center" style={{ borderRadius: 6 }}>
+              <div key={b.id} className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                 <p className="text-lg font-bold font-mono text-text-primary">{Number(b.available_hours || 0).toFixed(1)}h</p>
                 <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">{(b.pto_type || 'PTO').replace(/_/g, ' ')}</p>
                 {Number(b.used_hours) > 0 && <p className="text-[10px] text-text-muted mt-1">{Number(b.used_hours).toFixed(1)}h used</p>}
@@ -1094,7 +1094,7 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
           {(['onboarding', 'offboarding'] as const).map(p => (
             <button key={p} onClick={() => setPhase(p)}
               className={`px-3 py-1 text-xs font-semibold capitalize ${phase === p ? 'text-white' : 'text-text-secondary'}`}
-              style={{ borderRadius: 6, background: phase === p ? 'color-mix(in srgb, var(--color-accent-blue) 80%, transparent)' : 'var(--color-border-primary)' }}>
+              style={{ borderRadius: 'var(--app-radius)', background: phase === p ? 'color-mix(in srgb, var(--color-accent-blue) 80%, transparent)' : 'var(--color-border-primary)' }}>
               {p}
             </button>
           ))}
@@ -1103,7 +1103,7 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
 
       {/* Progress bar */}
       {data && (
-        <div className="block-card p-3" style={{ borderRadius: 6 }}>
+        <div className="block-card p-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between text-xs mb-1.5">
             <span className="text-text-muted font-semibold uppercase tracking-wider">{data.done} of {data.total} complete</span>
             <span className={`font-bold font-mono ${pct === 100 ? 'text-accent-income' : 'text-accent-blue'}`}>{pct}%</span>
@@ -1121,7 +1121,7 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
           {[...grouped.entries()].map(([category, steps]) => (
             <div key={category}>
               <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider px-1 mb-1">{category}</div>
-              <div className="block-card overflow-hidden" style={{ borderRadius: 6 }}>
+              <div className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                 {steps.map((step: any, i: number) => (
                   <div key={step.key}
                     className="flex items-center gap-3 px-3 py-2 transition-colors"
@@ -1130,7 +1130,7 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                       background: step.done ? 'color-mix(in srgb, var(--color-accent-income) 4%, transparent)' : undefined,
                     }}>
                     {step.auto ? (
-                      <span className={`w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0 ${step.done ? 'text-accent-income' : 'text-text-muted'}`} style={{ borderRadius: 6, border: `1.5px solid ${step.done ? 'var(--color-accent-income)' : 'var(--color-border-primary)'}` }}>
+                      <span className={`w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0 ${step.done ? 'text-accent-income' : 'text-text-muted'}`} style={{ borderRadius: 'var(--app-radius)', border: `1.5px solid ${step.done ? 'var(--color-accent-income)' : 'var(--color-border-primary)'}` }}>
                         {step.done ? '✓' : ''}
                       </span>
                     ) : (
@@ -1224,7 +1224,7 @@ const CredentialsPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
       </div>
 
       {showForm && (
-        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Type</label>
@@ -1440,7 +1440,7 @@ const AgreementsPanel: React.FC<{ employeeId: string; employeeName: string }> = 
     const busy = type === 'equipment' ? generatingEquip : generatingEmp;
     const sig = signed[type];
     return (
-      <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-2">
           <Icon size={18} className={iconColor} />
           <div>
@@ -1540,7 +1540,7 @@ const ESignModal: React.FC<{
   };
 
   const sigPreview = (name: string) => name.trim() ? (
-    <div className="mt-2 px-3 py-2" style={{ borderRadius: 6, background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-primary)' }}>
+    <div className="mt-2 px-3 py-2" style={{ borderRadius: 'var(--app-radius)', background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-primary)' }}>
       <span style={{ fontFamily: CURSIVE, fontSize: 24, color: 'var(--color-text-primary)' }}>{name}</span>
     </div>
   ) : null;
@@ -1553,12 +1553,12 @@ const ESignModal: React.FC<{
             <PenTool size={16} className="text-accent-income" />
             <span className="text-sm font-bold text-text-primary">E-Sign Document</span>
           </div>
-          <button onClick={onClose} className="p-1 text-text-muted hover:text-text-primary" style={{ borderRadius: '6px' }}><X size={16} /></button>
+          <button onClick={onClose} className="p-1 text-text-muted hover:text-text-primary" style={{ borderRadius: 'var(--app-radius)' }}><X size={16} /></button>
         </div>
         <p className="text-xs text-text-muted">{title}</p>
 
         {/* Employee signature */}
-        <div className="p-3" style={{ borderRadius: 6, border: '1px solid var(--color-border-primary)' }}>
+        <div className="p-3" style={{ borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)' }}>
           <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-2">Employee Signature</label>
           <div className="grid gap-2" style={{ gridTemplateColumns: '2fr 1fr' }}>
             <input className="block-input" value={empName} onChange={(e) => setEmpName(e.target.value)} placeholder="Employee full legal name" autoFocus />
@@ -1573,7 +1573,7 @@ const ESignModal: React.FC<{
           Add employer / authorized representative signature
         </label>
         {addEmployer && (
-          <div className="p-3" style={{ borderRadius: 6, border: '1px solid var(--color-border-primary)' }}>
+          <div className="p-3" style={{ borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)' }}>
             <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-2">Employer Signature</label>
             <div className="grid gap-2" style={{ gridTemplateColumns: '2fr 1fr' }}>
               <input className="block-input" value={emprName} onChange={(e) => setEmprName(e.target.value)} placeholder="Authorized representative name" />
@@ -1870,13 +1870,13 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
 
       {/* Error */}
       {error && (
-        <div className="block-card bg-accent-expense/10 border-accent-expense text-accent-expense text-sm px-4 py-3" style={{ borderRadius: '6px' }}>
+        <div className="block-card bg-accent-expense/10 border-accent-expense text-accent-expense text-sm px-4 py-3" style={{ borderRadius: 'var(--app-radius)' }}>
           {error}
         </div>
       )}
 
       {/* Form */}
-      <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-6" style={{ borderRadius: 'var(--app-radius)' }}>
         {/* Tab bar */}
         <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--color-border-primary)', marginBottom: 20 }}>
           {(['general', 'hr', 'banking', 'deductions', 'equipment', 'hr-suite'] as const).map((tab) => (
@@ -2158,7 +2158,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employeeId, onBack, onSaved
             {form.type === 'employee' && (
               <div className="block-card space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: '6px' }}>
+                  <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: 'var(--app-radius)' }}>
                     <FileText size={16} className="text-accent-blue" />
                   </div>
                   <div>

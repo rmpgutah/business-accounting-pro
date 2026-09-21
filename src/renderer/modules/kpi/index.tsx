@@ -57,7 +57,7 @@ const MarginTooltip: React.FC<any> = ({ active, payload, label }) => {
       style={{
         backgroundColor: 'var(--color-bg-elevated)',
         border: '1px solid var(--hairline)',
-        borderRadius: '6px',
+        borderRadius: 'var(--app-radius)',
       }}
     >
       <p className="text-text-muted mb-1">{label}</p>
@@ -380,7 +380,7 @@ const KPIDashboard: React.FC = () => {
         <button
           onClick={handlePrint}
           className="no-print flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-bg-secondary text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
           title="Print KPI dashboard"
         >
           <Printer size={13} />
@@ -416,7 +416,7 @@ const KPIDashboard: React.FC = () => {
               width: '100%',
               height: '6px',
               backgroundColor: 'var(--color-bg-tertiary)',
-              borderRadius: '6px',
+              borderRadius: 'var(--app-radius)',
               marginTop: '0.5rem',
             }}
           >
@@ -425,7 +425,7 @@ const KPIDashboard: React.FC = () => {
                 width: `${Math.min(utilizationRate, 100)}%`,
                 height: '100%',
                 backgroundColor: utilizationColor,
-                borderRadius: '6px',
+                borderRadius: 'var(--app-radius)',
                 transition: 'width 0.4s ease',
               }}
             />
@@ -465,7 +465,7 @@ const KPIDashboard: React.FC = () => {
       </div>
 
       {/* ─── Gross Margin Trend Chart ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-5" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp size={14} className="text-accent-income" />
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -546,7 +546,7 @@ const KPIDashboard: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {segments.filter(s => s.value > 0).map(s => (
                     <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: '6px', background: s.color, flexShrink: 0 }} />
+                      <div style={{ width: 10, height: 10, borderRadius: 'var(--app-radius)', background: s.color, flexShrink: 0 }} />
                       <div style={{ flex: 1, fontSize: '12px', color: 'var(--color-text-secondary)' }}>{s.label}</div>
                       <div style={{ fontSize: '12px', fontVariantNumeric: 'tabular-nums', color: s.color, fontWeight: 600 }}>{formatCurrency(s.value)}</div>
                       <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', width: 36, textAlign: 'right' }}>{((s.value/total)*100).toFixed(0)}%</div>
@@ -629,7 +629,7 @@ const KPIDashboard: React.FC = () => {
                 width: '100%',
                 height: '6px',
                 backgroundColor: 'var(--color-bg-tertiary)',
-                borderRadius: '6px',
+                borderRadius: 'var(--app-radius)',
                 marginTop: '0.5rem',
               }}
             >
@@ -638,7 +638,7 @@ const KPIDashboard: React.FC = () => {
                   width: `${Math.min(currentRatio / 3, 1) * 100}%`,
                   height: '100%',
                   backgroundColor: currentRatioColor,
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   transition: 'width 0.4s ease',
                 }}
               />
@@ -683,7 +683,7 @@ const KPIDashboard: React.FC = () => {
                 width: '100%',
                 height: '6px',
                 backgroundColor: 'var(--color-bg-tertiary)',
-                borderRadius: '6px',
+                borderRadius: 'var(--app-radius)',
                 marginTop: '0.5rem',
               }}
             >
@@ -692,7 +692,7 @@ const KPIDashboard: React.FC = () => {
                   width: `${Math.min(runway / 24, 1) * 100}%`,
                   height: '100%',
                   backgroundColor: runwayColor,
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   transition: 'width 0.4s ease',
                 }}
               />
@@ -702,7 +702,7 @@ const KPIDashboard: React.FC = () => {
       </div>
 
       {/* ─── Bottom Row: Top Clients ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-5" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-2 mb-4">
           <Users size={14} className="text-accent-purple" />
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -733,7 +733,7 @@ const KPIDashboard: React.FC = () => {
                     width: '100%',
                     height: '8px',
                     backgroundColor: 'var(--color-bg-tertiary)',
-                    borderRadius: '6px',
+                    borderRadius: 'var(--app-radius)',
                   }}
                 >
                   <div
@@ -741,7 +741,7 @@ const KPIDashboard: React.FC = () => {
                       width: `${(client.total_revenue / maxClientRevenue) * 100}%`,
                       height: '100%',
                       backgroundColor: 'var(--color-accent-purple)',
-                      borderRadius: '6px',
+                      borderRadius: 'var(--app-radius)',
                       transition: 'width 0.4s ease',
                     }}
                   />

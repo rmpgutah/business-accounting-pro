@@ -162,14 +162,14 @@ const SalesTaxReport: React.FC = () => {
       {error && <ErrorBanner message={error} onDismiss={() => setError('')} />}
 
       {/* Controls */}
-      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-3">
           <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">From</label>
           <input type="date" className="block-input" style={{ width: 'auto' }} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">To</label>
           <input type="date" className="block-input" style={{ width: 'auto' }} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
-        <button onClick={handlePrint} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: '6px' }} title="Print">
+        <button onClick={handlePrint} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: 'var(--app-radius)' }} title="Print">
           <Printer size={15} />
         </button>
       </div>
@@ -182,7 +182,7 @@ const SalesTaxReport: React.FC = () => {
           { label: 'Tax Paid', value: formatCurrency(totals.totalPaid), accent: 'text-accent-income' },
           { label: 'Net Due', value: formatCurrency(totals.totalNetDue), accent: totals.totalNetDue > 0 ? 'text-accent-expense' : 'text-accent-income' },
         ].map((card) => (
-          <div key={card.label} className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div key={card.label} className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{card.label}</div>
             <div className={`text-lg font-bold ${card.accent} mt-1 font-mono`}>{card.value}</div>
           </div>
@@ -194,7 +194,7 @@ const SalesTaxReport: React.FC = () => {
       ) : data.length === 0 ? (
         <div className="flex items-center justify-center h-64 text-text-muted text-sm">No sales tax data found for this period.</div>
       ) : (
-        <div className="block-card overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-bg-tertiary border-b border-border-primary">

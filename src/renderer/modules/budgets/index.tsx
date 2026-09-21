@@ -299,7 +299,7 @@ const BudgetModule: React.FC = () => {
           <div
             className="block-card p-3 flex items-start gap-3"
             style={{
-              borderRadius: '6px',
+              borderRadius: 'var(--app-radius)',
               borderColor: 'color-mix(in srgb, var(--color-accent-expense) 40%, transparent)',
               background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
             }}
@@ -323,7 +323,7 @@ const BudgetModule: React.FC = () => {
 
         {/* 6 KPI cards */}
         <div className="grid grid-cols-3 gap-4 report-summary-tiles">
-          <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="stat-label text-text-muted">Total Budgets</div>
@@ -334,7 +334,7 @@ const BudgetModule: React.FC = () => {
               <Target size={20} className="text-accent-blue opacity-60 mt-1" />
             </div>
           </div>
-          <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="stat-label text-text-muted">Active</div>
@@ -345,7 +345,7 @@ const BudgetModule: React.FC = () => {
               <Activity size={20} className="text-accent-blue opacity-60 mt-1" />
             </div>
           </div>
-          <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="stat-label text-text-muted">Total Budgeted</div>
@@ -359,7 +359,7 @@ const BudgetModule: React.FC = () => {
               />
             </div>
           </div>
-          <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="stat-label text-text-muted">Total Actual</div>
@@ -373,7 +373,7 @@ const BudgetModule: React.FC = () => {
               />
             </div>
           </div>
-          <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="stat-label text-text-muted">Total Variance</div>
@@ -397,7 +397,7 @@ const BudgetModule: React.FC = () => {
               />
             </div>
           </div>
-          <div className="stat-card" style={{ borderRadius: '6px' }}>
+          <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="stat-label text-text-muted">Over Budget</div>
@@ -449,7 +449,7 @@ const BudgetModule: React.FC = () => {
                       style={{
                         height: 8,
                         background: 'var(--color-bg-tertiary)',
-                        borderRadius: '6px',
+                        borderRadius: 'var(--app-radius)',
                         overflow: 'hidden',
                         position: 'relative',
                       }}
@@ -585,7 +585,7 @@ const BudgetModule: React.FC = () => {
                           flex: 1,
                           height: 10,
                           background: 'var(--color-bg-tertiary)',
-                          borderRadius: '6px',
+                          borderRadius: 'var(--app-radius)',
                           overflow: 'hidden',
                         }}
                       >
@@ -613,7 +613,7 @@ const BudgetModule: React.FC = () => {
                           flex: 1,
                           height: 10,
                           background: 'var(--color-bg-tertiary)',
-                          borderRadius: '6px',
+                          borderRadius: 'var(--app-radius)',
                           overflow: 'hidden',
                         }}
                       >
@@ -701,7 +701,7 @@ const BudgetModule: React.FC = () => {
       <div className="flex items-center gap-3">
         <div
           className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <Wallet size={18} className="text-accent-blue" />
         </div>

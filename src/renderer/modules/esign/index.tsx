@@ -218,7 +218,7 @@ const EsignModule: React.FC = () => {
 
         {activeTab === 'create' ? (
           /* Create Document Form */
-          <div className="block-card p-6 space-y-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-6 space-y-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h2 className="text-sm font-bold text-text-primary">New E-Sign Document</h2>
             <div>
               <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Title *</label>
@@ -272,7 +272,7 @@ const EsignModule: React.FC = () => {
             {loading ? (
               <div className="flex items-center justify-center h-32"><span className="text-text-muted text-sm font-mono">Loading...</span></div>
             ) : filteredDocs.length === 0 ? (
-              <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                 <PenTool size={32} className="mx-auto text-text-muted mb-2" />
                 <p className="text-text-muted text-sm">No e-sign documents yet.</p>
                 <button className="block-btn-primary inline-flex items-center gap-1.5 mt-3 text-xs px-3 py-1.5" onClick={() => setActiveTab('create')}>
@@ -280,7 +280,7 @@ const EsignModule: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="block-card" style={{ borderRadius: '6px', overflow: 'hidden' }}>
+              <div className="block-card" style={{ borderRadius: 'var(--app-radius)', overflow: 'hidden' }}>
                 <table className="block-table">
                   <thead>
                     <tr>
@@ -339,7 +339,7 @@ const EsignModule: React.FC = () => {
 
       {/* Verify Alert */}
       {verifyResult && (
-        <div className={`block-card p-3 flex items-center gap-2 text-sm ${verifyResult.verified ? 'text-accent-income' : 'text-accent-expense'}`} style={{ borderRadius: '6px' }}>
+        <div className={`block-card p-3 flex items-center gap-2 text-sm ${verifyResult.verified ? 'text-accent-income' : 'text-accent-expense'}`} style={{ borderRadius: 'var(--app-radius)' }}>
           {verifyResult.verified ? <ShieldCheck size={16} /> : <ShieldOff size={16} />}
           {verifyResult.verified
             ? 'Document verified — content hash matches and signatures are valid.'
@@ -353,7 +353,7 @@ const EsignModule: React.FC = () => {
         {/* Main Content */}
         <div className="col-span-2 space-y-4">
           {/* Document Info */}
-          <div className="block-card p-4 space-y-2" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4 space-y-2" style={{ borderRadius: 'var(--app-radius)' }}>
             {selectedDoc.description && (
               <p className="text-sm text-text-muted">{selectedDoc.description}</p>
             )}
@@ -366,7 +366,7 @@ const EsignModule: React.FC = () => {
           </div>
 
           {/* Document Content Preview */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Document Content</h3>
             <div className="bg-bg-secondary p-4 rounded text-sm whitespace-pre-wrap font-mono text-text-primary leading-relaxed" style={{ maxHeight: '400px', overflow: 'auto' }}>
               {selectedDoc.content || 'No content'}
@@ -374,14 +374,14 @@ const EsignModule: React.FC = () => {
           </div>
 
           {/* Signatures */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">Signatures ({selectedDoc.signatures?.length || 0})</h3>
             {(!selectedDoc.signatures || selectedDoc.signatures.length === 0) ? (
               <p className="text-sm text-text-muted">No signatures yet.</p>
             ) : (
               <div className="space-y-2">
                 {selectedDoc.signatures.map((sig: any) => (
-                  <div key={sig.id} className="flex items-center gap-3 bg-bg-secondary p-3 rounded" style={{ borderRadius: '6px' }}>
+                  <div key={sig.id} className="flex items-center gap-3 bg-bg-secondary p-3 rounded" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div className="w-8 h-8 rounded-full bg-accent-income/20 flex items-center justify-center">
                       <ShieldCheck size={14} className="text-accent-income" />
                     </div>
@@ -399,7 +399,7 @@ const EsignModule: React.FC = () => {
           </div>
 
           {/* Audit Log */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <History size={12} /> Audit Trail
             </h3>
@@ -436,7 +436,7 @@ const EsignModule: React.FC = () => {
         {/* Sidebar - Actions */}
         <div className="space-y-4">
           {/* Actions Card */}
-          <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider">Actions</h3>
 
             {selectedDoc.status !== 'signed' && selectedDoc.status !== 'revoked' && (
@@ -482,7 +482,7 @@ const EsignModule: React.FC = () => {
           </div>
 
           {/* Verification Status Card */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Verification</h3>
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between">
@@ -505,7 +505,7 @@ const EsignModule: React.FC = () => {
           </div>
 
           {/* Permissions Summary */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Permissions</h3>
             {(!selectedDoc.permissions || selectedDoc.permissions.length === 0) ? (
               <p className="text-xs text-text-muted">No custom permissions set. Only admins can edit.</p>
@@ -526,7 +526,7 @@ const EsignModule: React.FC = () => {
       {/* Sign Dialog */}
       {showSignDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSignDialog(false)}>
-          <div className="block-card p-6 w-full max-w-md mx-4" style={{ borderRadius: '6px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-6 w-full max-w-md mx-4" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-bold text-text-primary">Sign Document</h2>
               <button className="text-text-muted hover:text-text-primary" onClick={() => setShowSignDialog(false)}><X size={16} /></button>
@@ -564,7 +564,7 @@ const EsignModule: React.FC = () => {
       {/* Permissions Dialog */}
       {showPermDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowPermDialog(false)}>
-          <div className="block-card p-6 w-full max-w-lg mx-4" style={{ borderRadius: '6px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-6 w-full max-w-lg mx-4" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-bold text-text-primary">Manage Permissions</h2>
               <button className="text-text-muted hover:text-text-primary" onClick={() => setShowPermDialog(false)}><X size={16} /></button>

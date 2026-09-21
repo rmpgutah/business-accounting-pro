@@ -214,7 +214,7 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
             padding: 12,
             background: 'color-mix(in srgb, var(--color-accent-income) 6%, transparent)',
             border: '1px solid color-mix(in srgb, var(--color-accent-income) 20%, transparent)',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
           }}>
             <Stat label="Interest Saved" value={fmt$(scenario.interest_saved, cur)} color="var(--color-accent-income)" highlight />
             <Stat label="Months Saved" value={String(scenario.months_saved)} color="var(--color-accent-income)" highlight />
@@ -481,7 +481,7 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
           marginTop: 10, padding: '8px 10px',
           background: 'var(--color-accent-blue-bg)',
           border: '1px solid color-mix(in srgb, var(--color-accent-blue) 20%, transparent)',
-          borderRadius: 6, fontSize: 11,
+          borderRadius: 'var(--app-radius)', fontSize: 11,
         }}>
           <div style={{ color: 'var(--color-text-muted)', fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 }}>
             Auto-split preview (daily accrual on save · monthly proxy shown here)
@@ -504,7 +504,7 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
         </label>
 
         {manualSplit && (
-          <div style={{ marginTop: 8, padding: 10, background: 'var(--color-bg-secondary)', borderRadius: 6, border: '1px solid var(--color-border-primary)' }}>
+          <div style={{ marginTop: 8, padding: 10, background: 'var(--color-bg-secondary)', borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
               <Field label="Principal Portion">
                 <input type="number" step="0.01" className="block-input"
@@ -722,7 +722,7 @@ const PaymentEditModal: React.FC<{
           marginTop: 12, padding: '8px 10px',
           background: balanced ? 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
           border: '1px solid ' + (balanced ? 'color-mix(in srgb, var(--color-accent-income) 30%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 30%, transparent)'),
-          borderRadius: 6, fontSize: 11,
+          borderRadius: 'var(--app-radius)', fontSize: 11,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <div>
@@ -815,7 +815,7 @@ const SkipPaymentModal: React.FC<{
 
         {/* What will be skipped */}
         <div style={{
-          padding: '10px 14px', marginBottom: 12, borderRadius: 6,
+          padding: '10px 14px', marginBottom: 12, borderRadius: 'var(--app-radius)',
           background: 'color-mix(in srgb, var(--color-accent-warning) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-warning) 25%, transparent)',
         }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--color-text-muted)', marginBottom: 4 }}>

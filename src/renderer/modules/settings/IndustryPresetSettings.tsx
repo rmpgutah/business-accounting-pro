@@ -170,7 +170,7 @@ export const IndustryPresetSettings: React.FC = () => {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 6 }}>
+        <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
           <Sparkles size={18} className="text-accent-blue" />
         </div>
         <div>
@@ -198,7 +198,7 @@ export const IndustryPresetSettings: React.FC = () => {
             background: resultMsg.type === 'ok' ? 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
             border: `1px solid ${resultMsg.type === 'ok' ? 'color-mix(in srgb, var(--color-accent-income) 25%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 25%, transparent)'}`,
             color: resultMsg.type === 'ok' ? 'var(--color-accent-income)' : 'var(--color-accent-expense)',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
           }}
         >
           {resultMsg.msg}
@@ -210,7 +210,7 @@ export const IndustryPresetSettings: React.FC = () => {
         <div className="text-xs text-text-muted uppercase tracking-wider mb-2">Current Preset</div>
         {currentPreset ? (
           <div className="flex items-center gap-3">
-            <div style={{ width: 36, height: 36, background: 'var(--color-accent-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
+            <div style={{ width: 36, height: 36, background: 'var(--color-accent-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--app-radius)' }}>
               {(() => { const Icon = getIcon(currentPreset.icon); return <Icon size={18} color="white" />; })()}
             </div>
             <div className="flex-1">
@@ -248,7 +248,7 @@ export const IndustryPresetSettings: React.FC = () => {
                 }}
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <div style={{ width: 28, height: 28, background: selected ? 'var(--color-accent-blue)' : 'var(--color-bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
+                  <div style={{ width: 28, height: 28, background: selected ? 'var(--color-accent-blue)' : 'var(--color-bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--app-radius)' }}>
                     <Icon size={14} color={selected ? 'white' : 'var(--color-text-muted)'} />
                   </div>
                   <span className="text-sm font-semibold text-text-primary">{p.label}</span>

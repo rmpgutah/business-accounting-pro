@@ -340,7 +340,7 @@ const TaxForms: React.FC<Props> = ({ onBack }) => {
         padding: 12,
         border: '1px dashed var(--color-border-primary)',
         background: 'rgba(217, 119, 6, 0.05)',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         fontSize: 11,
         color: 'var(--color-text-muted)',
       }}>
@@ -672,7 +672,7 @@ const ScheduleSEView: React.FC<{ data: any }> = ({ data }) => {
           <Stat label="Total SE Tax" value={fmt$(data.line12_total_se_tax)} highlight color="var(--color-accent-expense)" />
         </div>
         {!noTaxOwed && (
-          <div style={{ marginTop: 10, padding: 10, background: 'rgba(22, 163, 74, 0.08)', border: '1px solid rgba(22, 163, 74, 0.3)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-primary)' }}>
+          <div style={{ marginTop: 10, padding: 10, background: 'rgba(22, 163, 74, 0.08)', border: '1px solid rgba(22, 163, 74, 0.3)', borderRadius: 'var(--app-radius)', fontSize: 11, color: 'var(--color-text-primary)' }}>
             <strong>Don't forget:</strong> Line 13 deductible half ({fmt$(data.line13_deductible_half)}) is an above-the-line deduction on Form 1040 Schedule 1 line 15. Reduces your AGI even without itemizing — one of the most-missed deductions in DIY filing.
           </div>
         )}
@@ -736,7 +736,7 @@ const SalesTaxView: React.FC<{ data: any }> = ({ data }) => {
           <Stat label="Net Remittance" value={fmt$(data.net_remittance)} highlight color="var(--color-accent-expense)" />
         </div>
         {Math.abs(data.total_variance) > 1 && (
-          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-primary)' }}>
+          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 'var(--app-radius)', fontSize: 11, color: 'var(--color-text-primary)' }}>
             <strong>⚠ Variance:</strong> Tax collected ({fmt$(data.total_tax_collected)}) differs from tax due ({fmt$(data.total_tax_due)}) by {fmt$(data.total_variance)}. Review invoices for rate or rounding issues.
           </div>
         )}
@@ -812,7 +812,7 @@ const W3View: React.FC<{ data: any }> = ({ data }) => {
           <Stat label="Total SS+Medicare" value={fmt$(data.box4_total_ss_tax + data.box6_total_medicare_tax)} />
         </div>
         {data.warnings && data.warnings.length > 0 && (
-          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-primary)' }}>
+          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 'var(--app-radius)', fontSize: 11, color: 'var(--color-text-primary)' }}>
             <strong>⚠ Reconciliation:</strong>
             <ul style={{ margin: '4px 0 0 18px' }}>{data.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}</ul>
           </div>
@@ -924,7 +924,7 @@ const Form940View: React.FC<{ data: any }> = ({ data }) => {
           <Stat label={data.line14_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line14_balance_due > 0 ? data.line14_balance_due : data.line15_overpayment)} color={data.line14_balance_due > 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
         </div>
         {data.warnings.length > 0 && (
-          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11, color: 'var(--color-text-primary)' }}>
+          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 'var(--app-radius)', fontSize: 11, color: 'var(--color-text-primary)' }}>
             <strong>⚠ Notes:</strong>
             <ul style={{ margin: '4px 0 0 18px' }}>{data.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}</ul>
           </div>
@@ -1112,7 +1112,7 @@ const Form944View: React.FC<{ data: any }> = ({ data }) => {
           <Stat label={data.line11_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line11_balance_due > 0 ? data.line11_balance_due : data.line12a_overpayment)} color={data.line11_balance_due > 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
         </div>
         {data.warnings.length > 0 && (
-          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
+          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 'var(--app-radius)', fontSize: 11 }}>
             <strong>⚠ Notes:</strong>
             <ul style={{ margin: '4px 0 0 18px' }}>{data.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}</ul>
           </div>
@@ -1190,7 +1190,7 @@ const Form945View: React.FC<{ data: any }> = ({ data }) => {
           <Stat label={data.line5_balance_due > 0 ? 'Balance Due' : 'Overpayment'} value={fmt$(data.line5_balance_due > 0 ? data.line5_balance_due : data.line6a_overpayment)} color={data.line5_balance_due > 0 ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
         </div>
         {data.warnings.length > 0 && (
-          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
+          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 'var(--app-radius)', fontSize: 11 }}>
             <strong>⚠ Notes:</strong>
             <ul style={{ margin: '4px 0 0 18px' }}>{data.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}</ul>
           </div>
@@ -1363,7 +1363,7 @@ const W2CView: React.FC<{ corrections: any[] }> = ({ corrections }) => {
         <li>Note the original (incorrect) values and the new (correct) values</li>
         <li>Submit corrections via api.taxW2C(year, [{`{employee_id, box1_wages_tips, ...}`}])</li>
       </ol>
-      <div style={{ marginTop: 12, padding: 10, background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 6, fontSize: 11 }}>
+      <div style={{ marginTop: 12, padding: 10, background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 'var(--app-radius)', fontSize: 11 }}>
         <strong>Note:</strong> A dedicated W-2c correction UI is queued for a future wave. For now this is API-only access.
       </div>
     </div>;
@@ -1379,7 +1379,7 @@ const W2CView: React.FC<{ corrections: any[] }> = ({ corrections }) => {
             {c.changed_fields?.length || 0} field(s) changed
           </div>
           {c.warnings?.length > 0 && (
-            <div style={{ padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11, marginBottom: 8 }}>
+            <div style={{ padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 'var(--app-radius)', fontSize: 11, marginBottom: 8 }}>
               {c.warnings.map((w: string, j: number) => <div key={j}>⚠ {w}</div>)}
             </div>
           )}
@@ -1405,7 +1405,7 @@ const Form1096View: React.FC<{ data: any }> = ({ data }) => {
           <Stat label="Total Reported (Box 5)" value={fmt$(data.total_reported)} color="var(--color-accent-expense)" />
         </div>
         {data.warnings.length > 0 && (
-          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
+          <div style={{ marginTop: 10, padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 'var(--app-radius)', fontSize: 11 }}>
             <strong>⚠ Notes:</strong>
             <ul style={{ margin: '4px 0 0 18px' }}>{data.warnings.map((w: string, i: number) => <li key={i}>{w}</li>)}</ul>
           </div>
@@ -1472,7 +1472,7 @@ const ScheduleSection: React.FC<{ title: string; rows: Array<[string, string, an
 const ScheduleWarnings: React.FC<{ warnings: string[] }> = ({ warnings }) => {
   if (!warnings || warnings.length === 0) return null;
   return (
-    <div style={{ padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 6, fontSize: 11 }}>
+    <div style={{ padding: 10, background: 'rgba(217, 119, 6, 0.08)', border: '1px solid rgba(217, 119, 6, 0.3)', borderRadius: 'var(--app-radius)', fontSize: 11 }}>
       <strong>⚠ Notes:</strong>
       <ul style={{ margin: '4px 0 0 18px' }}>{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
     </div>
@@ -1704,7 +1704,7 @@ const Form1040ESView: React.FC<{ data: any }> = ({ data }) => {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
           {(data.vouchers || []).map((v: any) => (
-            <div key={v.voucher_number} style={{ border: '2px solid var(--color-border-primary)', borderRadius: 6, padding: 12 }}>
+            <div key={v.voucher_number} style={{ border: '2px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', padding: 12 }}>
               <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--color-text-muted)' }}>Voucher {v.voucher_number} of 4</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-primary)', marginTop: 2 }}>Due {v.due_date_label}</div>
               <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-accent-expense)', marginTop: 6 }}>{fmt$(v.amount)}</div>

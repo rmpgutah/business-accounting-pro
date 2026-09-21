@@ -139,7 +139,7 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div
           className="block-card p-5 space-y-4"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <h3 className="text-sm font-bold text-text-primary">
             {isEditing ? 'Edit Bank Account' : 'Add Bank Account'}
@@ -148,7 +148,7 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
           {error && (
             <div
               className="px-3 py-2 text-xs text-accent-expense bg-accent-expense/10 border border-accent-expense/20"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               {error}
             </div>
@@ -250,7 +250,7 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
             type="submit"
             disabled={saving}
             className="block-btn-primary flex items-center gap-1.5 px-4 py-2 text-xs font-semibold"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Save size={14} />
             {saving ? 'Saving...' : isEditing ? 'Update Account' : 'Add Account'}
@@ -259,7 +259,7 @@ const BankAccountForm: React.FC<BankAccountFormProps> = ({
             type="button"
             onClick={onCancel}
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <X size={14} />
             Cancel

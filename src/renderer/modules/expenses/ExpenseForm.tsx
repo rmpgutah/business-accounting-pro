@@ -1450,7 +1450,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               independently if both are set. Tax is computed on pre-discount
               subtotal so this doesn't reduce the taxable base. */}
           <div className="col-span-3">
-            <details className="block-card p-2" style={{ borderRadius: 6 }}>
+            <details className="block-card p-2" style={{ borderRadius: 'var(--app-radius)' }}>
               <summary className="cursor-pointer text-xs font-semibold text-text-muted uppercase tracking-wider select-none">
                 Discount
                 {(parseFloat(form.discount_amount) > 0 || parseFloat(form.discount_percent) > 0) && (
@@ -1554,7 +1554,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               right buckets. */}
           {loans.length > 0 && (
             <div className="col-span-3">
-              <details className="block-card p-2" style={{ borderRadius: 6 }} open={!!form.related_loan_id}>
+              <details className="block-card p-2" style={{ borderRadius: 'var(--app-radius)' }} open={!!form.related_loan_id}>
                 <summary className="cursor-pointer text-xs font-semibold text-text-muted uppercase tracking-wider select-none">
                   Linked to Loan
                   {form.related_loan_id && (
@@ -2229,10 +2229,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               {selectedVendor && (
                 <div className="col-span-3 flex items-center gap-3 mt-1">
                   {selectedVendor.is_1099_eligible ? (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>1099-RELEVANT</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>1099-RELEVANT</span>
                   ) : null}
                   {selectedVendor.is_1099_eligible && selectedVendor.w9_status !== 'collected' && selectedVendor.w9_status !== 'on_file' && (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-expense-bg)', color: 'var(--color-accent-expense)' }}
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-expense-bg)', color: 'var(--color-accent-expense)' }}
                       title="1099-eligible vendor without a W-9 on file — backup withholding may apply">
                       MISSING W-9 — BACKUP WITHHOLDING WARNING
                     </span>
@@ -2251,7 +2251,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
 
           {/* Feature 21 — lost receipt affidavit */}
           {requiresAffidavit && (
-            <div className="col-span-3 border border-accent-expense/40 p-4" style={{ borderRadius: '6px', background: 'rgba(220,38,38,0.06)' }}>
+            <div className="col-span-3 border border-accent-expense/40 p-4" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(220,38,38,0.06)' }}>
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle size={14} className="text-accent-expense" />
                 <span className="text-xs font-bold uppercase tracking-wider text-accent-expense">Lost Receipt Affidavit Required</span>
@@ -2315,7 +2315,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
               OCR accuracy *before* committing them — safer than the
               "Scan Receipt (OCR)" button which immediately applies. */}
           {receiptPath && (
-            <div className="col-span-3 border border-border-secondary p-3" style={{ borderRadius: '6px', background: 'var(--color-bg-tertiary)' }}>
+            <div className="col-span-3 border border-border-secondary p-3" style={{ borderRadius: 'var(--app-radius)', background: 'var(--color-bg-tertiary)' }}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
                   <Sparkles size={12} className="text-accent-blue" />

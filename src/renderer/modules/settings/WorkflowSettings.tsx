@@ -83,7 +83,7 @@ const WorkflowSettings: React.FC = () => {
   return (
     <div className="block-card space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: '6px' }}>
+        <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: 'var(--app-radius)' }}>
           <Workflow size={16} className="text-accent-blue" />
         </div>
         <div>
@@ -99,7 +99,7 @@ const WorkflowSettings: React.FC = () => {
           <p className="text-xs text-text-muted">No automation schedules yet.</p>
         )}
         {schedules.map(s => (
-          <div key={s.id} className="grid grid-cols-12 gap-2 items-center text-xs p-2 border border-border-primary" style={{ borderRadius: '6px' }}>
+          <div key={s.id} className="grid grid-cols-12 gap-2 items-center text-xs p-2 border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <select className="block-select text-xs col-span-3" value={s.template_key} onChange={e => updateField(s.id, 'template_key', e.target.value)}>
               {templates.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>

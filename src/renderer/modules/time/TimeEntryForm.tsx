@@ -209,7 +209,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
     >
       <div
         className="block-card-elevated w-full max-w-lg"
-        style={{ borderRadius: '6px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
@@ -222,7 +222,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
           <button
             onClick={onClose}
             className="p-1 hover:bg-bg-hover transition-colors text-text-muted hover:text-text-primary"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <X size={16} />
           </button>
@@ -255,7 +255,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                     ? 'bg-accent-blue text-white'
                     : 'bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors'
                 }`}
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 Time Range
               </button>
@@ -266,7 +266,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
                     ? 'bg-accent-blue text-white'
                     : 'bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors'
                 }`}
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 Duration
               </button>
@@ -424,7 +424,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
         {formError && (
           <div
             className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mt-4"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             {formError}
           </div>
@@ -435,7 +435,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
           <button
             onClick={onClose}
             className="block-btn px-4 py-2 text-xs font-semibold"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             Cancel
           </button>
@@ -443,7 +443,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({
             onClick={handleSave}
             disabled={saving}
             className="block-btn-primary px-4 py-2 text-xs font-semibold"
-            style={{ borderRadius: '6px', opacity: saving ? 0.6 : 1 }}
+            style={{ borderRadius: 'var(--app-radius)', opacity: saving ? 0.6 : 1 }}
           >
             {saving ? 'Saving...' : isEditing ? 'Update Entry' : 'Create Entry'}
           </button>

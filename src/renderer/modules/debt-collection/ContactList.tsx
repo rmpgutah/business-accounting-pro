@@ -110,12 +110,12 @@ const ContactList: React.FC<ContactListProps> = ({ debtId, onAdd, onEdit }) => {
               <div
                 key={c.id}
                 className="flex items-center gap-3 px-3 py-2.5 border-b border-border-primary last:border-b-0 hover:bg-bg-tertiary transition-colors"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 {/* Role badge */}
                 <span
                   className={`text-[10px] font-semibold px-1.5 py-0.5 flex-shrink-0 ${badgeStyle}`}
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   {roleLabel(c.role)}
                 </span>
@@ -150,7 +150,7 @@ const ContactList: React.FC<ContactListProps> = ({ debtId, onAdd, onEdit }) => {
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button
                     className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                     onClick={() => onEdit(c.id)}
                     title="Edit contact"
                   >
@@ -158,7 +158,7 @@ const ContactList: React.FC<ContactListProps> = ({ debtId, onAdd, onEdit }) => {
                   </button>
                   <button
                     className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-accent-expense transition-colors"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                     onClick={() => handleDelete(c.id, c.name)}
                     title="Delete contact"
                   >

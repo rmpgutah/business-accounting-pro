@@ -573,7 +573,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
       {/* F27: Gap detection banner */}
       {gaps.length > 0 && (
         <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/30 text-xs"
-             style={{ borderRadius: '6px' }}>
+             style={{ borderRadius: 'var(--app-radius)' }}>
           <AlertTriangle size={14} className="text-yellow-600" />
           <span className="text-text-primary">
             <strong>{gaps.length}</strong> gap{gaps.length !== 1 ? 's' : ''} in entry-number sequence:
@@ -586,7 +586,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
       {/* F3: Batch progress modal */}
       {batchProgress && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-bg-elevated border border-border-primary px-6 py-4 w-80 shadow-xl" style={{ borderRadius: '6px' }}>
+          <div className="bg-bg-elevated border border-border-primary px-6 py-4 w-80 shadow-xl" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-sm font-semibold mb-2">{batchProgress.label}</div>
             <div className="text-xs text-text-secondary mb-2">{batchProgress.done} of {batchProgress.total}</div>
             <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '4px' }}>
@@ -605,16 +605,16 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
             <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search entries..."
               className="block-input w-full pl-8 pr-3 py-1.5 text-xs bg-bg-primary border border-border-primary text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-blue"
-              style={{ borderRadius: '6px' }} />
+              style={{ borderRadius: 'var(--app-radius)' }} />
           </div>
           <div className="flex items-center gap-2">
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
               className="block-input px-2 py-1.5 text-xs bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-              style={{ borderRadius: '6px' }} />
+              style={{ borderRadius: 'var(--app-radius)' }} />
             <span className="text-text-muted text-xs">to</span>
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
               className="block-input px-2 py-1.5 text-xs bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-              style={{ borderRadius: '6px' }} />
+              style={{ borderRadius: 'var(--app-radius)' }} />
           </div>
           <button onClick={() => setShowAdvanced((v) => !v)}
             className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary">
@@ -631,47 +631,47 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
         <div className="flex items-center gap-2">
           <button onClick={undoRecent} title="Undo last N posted entries"
             className="block-btn flex items-center gap-1 px-2 py-1.5 text-xs"
-            style={{ borderRadius: '6px' }}>
+            style={{ borderRadius: 'var(--app-radius)' }}>
             <Undo2 size={12} /> Undo recent
           </button>
           <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportFile} />
           <button onClick={() => fileInputRef.current?.click()}
             className="block-btn flex items-center gap-1 px-2 py-1.5 text-xs"
-            style={{ borderRadius: '6px' }}>
+            style={{ borderRadius: 'var(--app-radius)' }}>
             <Upload size={12} /> Import CSV
           </button>
           <button onClick={exportSelected}
             className="block-btn flex items-center gap-1 px-2 py-1.5 text-xs"
-            style={{ borderRadius: '6px' }}>
+            style={{ borderRadius: 'var(--app-radius)' }}>
             <Download size={12} /> Export CSV
           </button>
           <button onClick={onNewEntry}
             className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-            style={{ borderRadius: '6px' }}>
+            style={{ borderRadius: 'var(--app-radius)' }}>
             <Plus size={14} /> New Entry
           </button>
         </div>
       </div>
 
       {showAdvanced && (
-        <div className="grid grid-cols-5 gap-2 p-3 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+        <div className="grid grid-cols-5 gap-2 p-3 bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
           <div>
             <label className="block text-[10px] font-semibold text-text-muted uppercase mb-1">Min Amount</label>
             <input type="number" value={amountMin} onChange={(e) => setAmountMin(e.target.value)}
               className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary"
-              style={{ borderRadius: '6px' }} />
+              style={{ borderRadius: 'var(--app-radius)' }} />
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-text-muted uppercase mb-1">Max Amount</label>
             <input type="number" value={amountMax} onChange={(e) => setAmountMax(e.target.value)}
               className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary"
-              style={{ borderRadius: '6px' }} />
+              style={{ borderRadius: 'var(--app-radius)' }} />
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-text-muted uppercase mb-1">Account</label>
             <select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}
               className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary"
-              style={{ borderRadius: '6px' }}>
+              style={{ borderRadius: 'var(--app-radius)' }}>
               <option value="">Any</option>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
             </select>
@@ -680,7 +680,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
             <label className="block text-[10px] font-semibold text-text-muted uppercase mb-1">Status</label>
             <select value={postedFilter} onChange={(e) => setPostedFilter(e.target.value as any)}
               className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary"
-              style={{ borderRadius: '6px' }}>
+              style={{ borderRadius: 'var(--app-radius)' }}>
               <option value="all">All</option>
               <option value="posted">Posted</option>
               <option value="unposted">Unposted</option>
@@ -690,7 +690,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
             <label className="block text-[10px] font-semibold text-text-muted uppercase mb-1">Has Attachment</label>
             <select value={hasAttachmentFilter} onChange={(e) => setHasAttachmentFilter(e.target.value as any)}
               className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary"
-              style={{ borderRadius: '6px' }}>
+              style={{ borderRadius: 'var(--app-radius)' }}>
               <option value="all">All</option>
               <option value="yes">With attachment</option>
               <option value="no">Without</option>
@@ -702,14 +702,14 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
       {/* Selection action bar */}
       {selectionCount > 0 && (
         <div className="flex items-center justify-between p-2 bg-accent-blue/10 border border-accent-blue/30 text-xs"
-             style={{ borderRadius: '6px' }}>
+             style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="text-text-primary font-semibold">{selectionCount} selected</span>
           <div className="flex items-center gap-2">
-            <button onClick={bulkPost} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: '6px' }}>Post all</button>
-            <button onClick={bulkChangeClass} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: '6px' }}>Set class</button>
-            <button onClick={bulkChangeReference} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: '6px' }}>Set reference</button>
-            <button onClick={exportSelected} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: '6px' }}>Export CSV</button>
-            <button onClick={bulkDelete} className="block-btn px-3 py-1 text-xs text-accent-expense" style={{ borderRadius: '6px' }}>Delete</button>
+            <button onClick={bulkPost} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: 'var(--app-radius)' }}>Post all</button>
+            <button onClick={bulkChangeClass} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: 'var(--app-radius)' }}>Set class</button>
+            <button onClick={bulkChangeReference} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: 'var(--app-radius)' }}>Set reference</button>
+            <button onClick={exportSelected} className="block-btn px-3 py-1 text-xs" style={{ borderRadius: 'var(--app-radius)' }}>Export CSV</button>
+            <button onClick={bulkDelete} className="block-btn px-3 py-1 text-xs text-accent-expense" style={{ borderRadius: 'var(--app-radius)' }}>Delete</button>
             <button onClick={() => setSelectedIds(new Set())} className="text-text-muted hover:text-text-primary">Clear</button>
           </div>
         </div>
@@ -723,7 +723,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
           <div role="dialog" aria-modal="true" aria-labelledby="je-import-preview-title"
                onClick={(e) => e.stopPropagation()}
                className="bg-bg-elevated border border-border-primary w-full max-w-2xl shadow-xl"
-               style={{ borderRadius: '6px' }}>
+               style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="px-5 py-3 border-b border-border-primary flex items-center justify-between">
               <h3 id="je-import-preview-title" className="text-sm font-bold">Import preview — {importPreview.length} rows</h3>
               <button onClick={() => setImportPreview(null)} aria-label="Close import preview" className="text-text-muted hover:text-text-primary">×</button>
@@ -755,15 +755,15 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
               {importPreview.length > 50 && <p className="text-[10px] text-text-muted mt-2">…and {importPreview.length - 50} more</p>}
             </div>
             <div className="flex justify-end gap-2 px-5 py-3 border-t border-border-primary">
-              <button onClick={() => setImportPreview(null)} className="block-btn px-3 py-1.5 text-xs" style={{ borderRadius: '6px' }}>Cancel</button>
-              <button onClick={commitImport} className="block-btn-primary px-3 py-1.5 text-xs" style={{ borderRadius: '6px' }}>Import</button>
+              <button onClick={() => setImportPreview(null)} className="block-btn px-3 py-1.5 text-xs" style={{ borderRadius: 'var(--app-radius)' }}>Cancel</button>
+              <button onClick={commitImport} className="block-btn-primary px-3 py-1.5 text-xs" style={{ borderRadius: 'var(--app-radius)' }}>Import</button>
             </div>
           </div>
         </div>
       )}
 
       {/* Table */}
-      <div className="block-table bg-bg-secondary border border-border-primary overflow-hidden" style={{ borderRadius: '6px' }}>
+      <div className="block-table bg-bg-secondary border border-border-primary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-bg-tertiary border-b border-border-primary">

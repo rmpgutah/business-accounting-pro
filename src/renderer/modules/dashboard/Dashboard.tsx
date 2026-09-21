@@ -215,7 +215,7 @@ const AreaTooltip: React.FC<any> = ({ active, payload, label }) => {
       style={{
         backgroundColor: CHART_TOOLTIP_BG,
         border: `1px solid ${CHART_TOOLTIP_BORDER}`,
-        borderRadius: '6px',
+        borderRadius: 'var(--app-radius)',
       }}
     >
       <p className="text-text-muted mb-1">{label}</p>
@@ -237,7 +237,7 @@ const PieTooltip: React.FC<any> = ({ active, payload }) => {
       style={{
         backgroundColor: CHART_TOOLTIP_BG,
         border: `1px solid ${CHART_TOOLTIP_BORDER}`,
-        borderRadius: '6px',
+        borderRadius: 'var(--app-radius)',
       }}
     >
       <p className="text-text-primary font-semibold">{name}</p>
@@ -254,7 +254,7 @@ const ForecastTooltip: React.FC<any> = ({ active, payload, label }) => {
       style={{
         backgroundColor: CHART_TOOLTIP_BG,
         border: `1px solid ${CHART_TOOLTIP_BORDER}`,
-        borderRadius: '6px',
+        borderRadius: 'var(--app-radius)',
       }}
     >
       <p className="text-text-muted mb-1">{label}</p>
@@ -336,7 +336,7 @@ const StatCard: React.FC<StatCardProps & { onClick?: () => void }> = ({
       className={`block-card py-6 px-5 border-l-4 ${accentClass} ${
         onClick ? 'cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200' : ''
       }`}
-      style={{ borderRadius: '6px' }}
+      style={{ borderRadius: 'var(--app-radius)' }}
       onClick={onClick}
     >
       <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
@@ -405,7 +405,7 @@ const QuickAction: React.FC<QuickActionExtendedProps> = ({ icon, label, descript
   <button
     onClick={onClick}
     className={`block-card flex flex-col items-start gap-3 p-5 hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200 cursor-pointer text-left ${accentClass ? `border-l-4 ${accentClass}` : ''}`}
-    style={{ borderRadius: '6px' }}
+    style={{ borderRadius: 'var(--app-radius)' }}
   >
     <span className="text-text-secondary">{icon}</span>
     <div>
@@ -878,11 +878,11 @@ const Dashboard: React.FC = () => {
             {format(new Date(), 'EEEE, MMMM d, yyyy')}
           </p>
         </div>
-        <div className="flex gap-2 items-center" style={{ borderRadius: '6px' }}>
+        <div className="flex gap-2 items-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <button
             onClick={handlePrint}
             className="no-print flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-bg-secondary text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Print this dashboard"
           >
             <Printer size={13} />
@@ -897,7 +897,7 @@ const Dashboard: React.FC = () => {
                   ? 'bg-accent-blue text-white'
                   : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
               }`}
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               {p}
             </button>
@@ -989,7 +989,7 @@ const Dashboard: React.FC = () => {
       {/* ─── Quick Metrics Row ─── */}
       {isOn('quick-metrics') && (
       <div className="grid grid-cols-4 gap-5">
-        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+        <div className="block-card py-5 px-5" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-2 mb-3">
             <CalendarCheck size={16} className="text-accent-blue" />
             <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
@@ -1002,7 +1002,7 @@ const Dashboard: React.FC = () => {
           <span className="text-[11px] text-text-muted mt-1 block">This month</span>
         </div>
 
-        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+        <div className="block-card py-5 px-5" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-2 mb-3">
             <Timer size={16} className="text-accent-warning" />
             <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
@@ -1016,7 +1016,7 @@ const Dashboard: React.FC = () => {
           <span className="text-[11px] text-text-muted mt-1 block">Last 6 months</span>
         </div>
 
-        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+        <div className="block-card py-5 px-5" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-2 mb-3">
             {quickMetrics.revenueGrowthPct == null ? (
               <TrendingUp size={16} className="text-text-muted" />
@@ -1050,7 +1050,7 @@ const Dashboard: React.FC = () => {
           </span>
         </div>
 
-        <div className="block-card py-5 px-5" style={{ borderRadius: '6px' }}>
+        <div className="block-card py-5 px-5" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-2 mb-3">
             <Crown size={16} className="text-accent-purple" />
             <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
@@ -1074,7 +1074,7 @@ const Dashboard: React.FC = () => {
         {/* Debt Collection */}
         <div
           className="block-card py-6 px-5 border-l-4 border-l-accent-expense cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
           onClick={() => setModule('debt-collection')}
         >
           <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
@@ -1091,7 +1091,7 @@ const Dashboard: React.FC = () => {
         {/* Bills / AP */}
         <div
           className="block-card py-6 px-5 border-l-4 border-l-accent-warning cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
           onClick={() => setModule('bills')}
         >
           <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
@@ -1108,7 +1108,7 @@ const Dashboard: React.FC = () => {
         {/* Payroll */}
         <div
           className="block-card py-6 px-5 border-l-4 border-l-accent-purple cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
           onClick={() => setModule('payroll')}
         >
           <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
@@ -1132,7 +1132,7 @@ const Dashboard: React.FC = () => {
 
       {/* ─── Revenue vs Expenses AreaChart (12 months) ─── */}
       {isOn('revenue-trend') && (
-      <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-6" style={{ borderRadius: 'var(--app-radius)' }}>
         <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
           Revenue vs Expenses
         </h2>
@@ -1213,7 +1213,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-2 gap-6">
         {/* Income Sources PieChart */}
         {isOn('income-pie') && (
-        <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-6" style={{ borderRadius: 'var(--app-radius)' }}>
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
             Income Sources
           </h2>
@@ -1264,7 +1264,7 @@ const Dashboard: React.FC = () => {
 
         {/* Cash Flow Forecast */}
         {isOn('cash-forecast') && (
-        <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-6" style={{ borderRadius: 'var(--app-radius)' }}>
           <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
             Cash Flow Forecast
           </h2>
@@ -1352,7 +1352,7 @@ const Dashboard: React.FC = () => {
 
       {/* ─── Expense Category Treemap ─── */}
       {isOn('expense-treemap') && (
-      <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-6" style={{ borderRadius: 'var(--app-radius)' }}>
         <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-1">
           Expense Breakdown
         </h2>
@@ -1442,7 +1442,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-2 gap-6">
         {/* Left Column: Recent Activity (Enhanced) */}
         {isOn('activity') && (
-        <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-6" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
               <Activity size={16} className="text-text-muted" />
@@ -1453,7 +1453,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-2 no-print">
               <select
                 className="block-select text-[10px] py-0.5 px-2"
-                style={{ width: 'auto', minWidth: '100px', borderRadius: '6px', height: '24px' }}
+                style={{ width: 'auto', minWidth: '100px', borderRadius: 'var(--app-radius)', height: '24px' }}
                 value={activityFilter}
                 onChange={(e) => setActivityFilter(e.target.value)}
               >
@@ -1531,7 +1531,7 @@ const Dashboard: React.FC = () => {
                       style={{
                         backgroundColor: badge.bg,
                         color: badge.text,
-                        borderRadius: '6px',
+                        borderRadius: 'var(--app-radius)',
                         minWidth: 56,
                         textAlign: 'center',
                       }}
@@ -1557,7 +1557,7 @@ const Dashboard: React.FC = () => {
         <div className="space-y-6">
           {/* Upcoming Due */}
           {isOn('upcoming-due') && (
-          <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-6" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-center gap-2 mb-5">
               <AlertTriangle size={16} className="text-text-muted" />
               <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
@@ -1584,7 +1584,7 @@ const Dashboard: React.FC = () => {
                           width: 8,
                           height: 8,
                           backgroundColor: color,
-                          borderRadius: '6px',
+                          borderRadius: 'var(--app-radius)',
                           flexShrink: 0,
                         }}
                       />
@@ -1616,7 +1616,7 @@ const Dashboard: React.FC = () => {
 
           {/* Top Clients */}
           {isOn('top-clients') && (
-          <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-6" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-center gap-2 mb-5">
               <BarChart3 size={16} className="text-text-muted" />
               <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wider">
@@ -1661,7 +1661,7 @@ const Dashboard: React.FC = () => {
 
       {/* ─── Intelligence Alerts ─── */}
       {anomalies.length > 0 && (
-        <div className="col-span-full border-2 border-orange-500 bg-accent-warning-bg p-6" style={{ borderRadius: '6px' }}>
+        <div className="col-span-full border-2 border-orange-500 bg-accent-warning-bg p-6" style={{ borderRadius: 'var(--app-radius)' }}>
           <h2 className="text-sm font-black uppercase tracking-wider text-accent-warning mb-4">
             Intelligence Alerts
           </h2>

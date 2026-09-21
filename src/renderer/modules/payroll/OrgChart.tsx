@@ -44,7 +44,7 @@ const OrgChartNode: React.FC<{ node: OrgNode; onSelect: (id: string) => void; de
   <div style={{ marginLeft: depth === 0 ? 0 : 20 }}>
     <button
       className="block-card p-2.5 flex items-center gap-2 w-full text-left hover:border-accent-blue transition-colors"
-      style={{ borderRadius: '6px' }}
+      style={{ borderRadius: 'var(--app-radius)' }}
       onClick={() => onSelect(node.id)}
     >
       <Users size={14} className="text-accent-blue shrink-0" />

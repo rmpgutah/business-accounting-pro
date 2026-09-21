@@ -27,7 +27,7 @@ interface AccountLite {
 
 const dialogShell = (title: string, children: React.ReactNode, onClose: () => void, max: string = 'max-w-lg') => (
   <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/50">
-    <div className={`bg-bg-elevated border border-border-primary w-full ${max}`} style={{ borderRadius: '6px' }}>
+    <div className={`bg-bg-elevated border border-border-primary w-full ${max}`} style={{ borderRadius: 'var(--app-radius)' }}>
       <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
         <h2 className="text-sm font-bold">{title}</h2>
         <button onClick={onClose} className="text-text-muted hover:text-text-primary text-lg">&times;</button>
@@ -78,13 +78,13 @@ export const GroupsDialog: React.FC<{ companyId: string; accounts: AccountLite[]
     <>
       <div className="flex gap-2">
         <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New group name (e.g. Tax-Sensitive)"
-          className="block-input flex-1 px-3 py-1.5 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
-        <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} className="w-10 h-8 border border-border-primary" style={{ borderRadius: '6px' }} />
-        <button onClick={create} className="block-btn-primary px-3 py-1.5 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>Add</button>
+          className="block-input flex-1 px-3 py-1.5 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
+        <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} className="w-10 h-8 border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
+        <button onClick={create} className="block-btn-primary px-3 py-1.5 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>Add</button>
       </div>
       {groups.length === 0 && <p className="text-xs text-text-muted">No groups yet.</p>}
       {groups.map(g => (
-        <div key={g.id} className="border border-border-primary p-2" style={{ borderRadius: '6px' }}>
+        <div key={g.id} className="border border-border-primary p-2" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-block w-3 h-3" style={{ background: g.color || '#888', borderRadius: '50%' }} />
             <strong className="text-xs">{g.name}</strong>
@@ -132,14 +132,14 @@ export const PermissionsDialog: React.FC<{ companyId: string; account: AccountLi
     <>
       <div className="flex gap-2 items-center">
         <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Role (e.g. accountant)"
-          className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+          className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
         <label className="text-[10px] flex items-center gap-1"><input type="checkbox" checked={canView} onChange={(e) => setCanView(e.target.checked)} /> View</label>
         <label className="text-[10px] flex items-center gap-1"><input type="checkbox" checked={canPost} onChange={(e) => setCanPost(e.target.checked)} /> Post</label>
-        <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>Add</button>
+        <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>Add</button>
       </div>
       <p className="text-[10px] text-text-muted">No rule = unrestricted. Rules are checked when JE is posted.</p>
       {perms.map(p => (
-        <div key={p.id} className="flex items-center gap-2 border border-border-primary px-2 py-1" style={{ borderRadius: '6px' }}>
+        <div key={p.id} className="flex items-center gap-2 border border-border-primary px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
           <strong className="text-xs">{p.role}</strong>
           <span className="text-[10px]">view: {p.can_view ? 'yes' : 'no'}</span>
           <span className="text-[10px]">post: {p.can_post ? 'yes' : 'no'}</span>
@@ -179,14 +179,14 @@ export const WatchlistDialog: React.FC<{ companyId: string; account: AccountLite
     <>
       <div className="flex gap-2 items-center">
         <input type="number" value={threshold} onChange={(e) => setThreshold(e.target.value)} placeholder="Threshold $"
-          className="block-input w-24 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+          className="block-input w-24 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
         <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Notify email (optional)"
-          className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
-        <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>Add</button>
+          className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
+        <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>Add</button>
       </div>
-      <button onClick={checkNow} className="px-3 py-1 text-xs border border-border-primary" style={{ borderRadius: '6px' }}>Run Check Now</button>
+      <button onClick={checkNow} className="px-3 py-1 text-xs border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>Run Check Now</button>
       {watches.map(w => (
-        <div key={w.id} className="flex items-center gap-2 border border-border-primary px-2 py-1" style={{ borderRadius: '6px' }}>
+        <div key={w.id} className="flex items-center gap-2 border border-border-primary px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="text-xs">Threshold: ${Number(w.threshold_amount).toFixed(2)}</span>
           {w.notify_email && <span className="text-[10px] text-text-muted">→ {w.notify_email}</span>}
           <button onClick={() => del(w.id)} className="ml-auto text-[10px] text-accent-expense">Remove</button>
@@ -212,11 +212,11 @@ export const AliasesDialog: React.FC<{ account: AccountLite; onClose: () => void
     <>
       <div className="flex gap-2">
         <input value={v} onChange={(e) => setV(e.target.value)} placeholder="Alternate name"
-          className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
-        <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>Add</button>
+          className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
+        <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>Add</button>
       </div>
       {aliases.map(a => (
-        <div key={a.id} className="flex items-center gap-2 border border-border-primary px-2 py-1" style={{ borderRadius: '6px' }}>
+        <div key={a.id} className="flex items-center gap-2 border border-border-primary px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="text-xs">{a.alias}</span>
           <button onClick={() => del(a.id)} className="ml-auto text-[10px] text-accent-expense">Remove</button>
         </div>
@@ -247,14 +247,14 @@ export const FxRevalueDialog: React.FC<{ companyId: string; onClose: () => void;
     <>
       <div>
         <label className="block text-[10px] uppercase font-bold mb-1">As-of Date</label>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
       </div>
       <div>
         <label className="block text-[10px] uppercase font-bold mb-1">Rates (one per line, CCY=rate)</label>
         <textarea value={ratesText} onChange={(e) => setRatesText(e.target.value)} rows={5}
-          className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: '6px' }} />
+          className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: 'var(--app-radius)' }} />
       </div>
-      <button onClick={submit} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>{busy ? 'Working...' : 'Post Revaluation JE'}</button>
+      <button onClick={submit} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>{busy ? 'Working...' : 'Post Revaluation JE'}</button>
     </>
   ), onClose);
 };
@@ -295,12 +295,12 @@ export const AccountCommentsPanel: React.FC<{ accountId: string }> = ({ accountI
       <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Comments</label>
       <div className="flex gap-2 mb-2">
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a comment..."
-          className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
-        <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>Post</button>
+          className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
+        <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>Post</button>
       </div>
       <div className="space-y-1 max-h-40 overflow-y-auto">
         {comments.map(c => (
-          <div key={c.id} className="flex items-start gap-2 text-[11px] border border-border-primary px-2 py-1" style={{ borderRadius: '6px' }}>
+          <div key={c.id} className="flex items-start gap-2 text-[11px] border border-border-primary px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex-1">
               <div className="text-text-secondary">{c.body}</div>
               <div className="text-[9px] text-text-muted">{c.created_at}</div>
@@ -342,10 +342,10 @@ export const IIFImportDialog: React.FC<{ companyId: string; onClose: () => void;
     <>
       <p className="text-[10px] text-text-muted">Paste the contents of a .iif file. Only !ACCNT lines are parsed.</p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} placeholder="!HDR..."
-        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: '6px' }} />
+        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: 'var(--app-radius)' }} />
       <div className="flex gap-2">
-        <button onClick={parse} className="px-3 py-1 text-xs border border-border-primary" style={{ borderRadius: '6px' }}>Parse</button>
-        {preview.length > 0 && <button onClick={commit} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>Import {preview.length}</button>}
+        <button onClick={parse} className="px-3 py-1 text-xs border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>Parse</button>
+        {preview.length > 0 && <button onClick={commit} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>Import {preview.length}</button>}
       </div>
       {preview.length > 0 && (
         <ul className="text-[11px] max-h-40 overflow-y-auto">
@@ -395,10 +395,10 @@ export const XeroImportDialog: React.FC<{ companyId: string; onClose: () => void
     <>
       <p className="text-[10px] text-text-muted">Paste a Xero Chart of Accounts CSV export. Columns: *Code, *Name, *Type, Description.</p>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8}
-        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: '6px' }} />
+        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: 'var(--app-radius)' }} />
       <div className="flex gap-2">
-        <button onClick={parse} className="px-3 py-1 text-xs border border-border-primary" style={{ borderRadius: '6px' }}>Parse</button>
-        {preview.length > 0 && <button onClick={commit} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>Import {preview.length}</button>}
+        <button onClick={parse} className="px-3 py-1 text-xs border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>Parse</button>
+        {preview.length > 0 && <button onClick={commit} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>Import {preview.length}</button>}
       </div>
       {preview.length > 0 && (
         <ul className="text-[11px] max-h-40 overflow-y-auto">
@@ -426,8 +426,8 @@ export const TxfExportDialog: React.FC<{ companyId: string; onClose: () => void 
     <>
       <p className="text-[10px] text-text-muted">Generates a .txf file using the tax_line field on revenue/expense accounts.</p>
       <input type="number" value={year} onChange={(e) => setYear(parseInt(e.target.value, 10))}
-        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
-      <button onClick={exec} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>Generate .txf</button>
+        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
+      <button onClick={exec} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>Generate .txf</button>
     </>
   ), onClose);
 };
@@ -466,7 +466,7 @@ export const MergePreview: React.FC<{ source: AccountLite; target: AccountLite }
   useEffect(() => { api.accountsMergePreview(source.id).then(setData); }, [source.id]);
   if (!data) return <p className="text-[10px] text-text-muted">Loading impact...</p>;
   return (
-    <div className="border border-accent-blue/30 bg-accent-blue/5 p-2 text-[11px]" style={{ borderRadius: '6px' }}>
+    <div className="border border-accent-blue/30 bg-accent-blue/5 p-2 text-[11px]" style={{ borderRadius: 'var(--app-radius)' }}>
       <div className="font-bold mb-1">Merge impact preview</div>
       <ul className="space-y-0.5">
         <li>{data.journal_lines || 0} journal lines</li>
@@ -501,20 +501,20 @@ export const SplitDialog: React.FC<{ companyId: string; accounts: AccountLite[];
     <>
       <p className="text-[10px] text-text-muted">Move JE lines matching the description regex from a source account to a target account within a date range.</p>
       <label className="block text-[10px] uppercase font-bold">Source</label>
-      <select value={src} onChange={(e) => setSrc(e.target.value)} className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }}>
+      <select value={src} onChange={(e) => setSrc(e.target.value)} className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
         {accounts.map(a => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
       </select>
       <label className="block text-[10px] uppercase font-bold">Target</label>
-      <select value={tgt} onChange={(e) => setTgt(e.target.value)} className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }}>
+      <select value={tgt} onChange={(e) => setTgt(e.target.value)} className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
         {accounts.map(a => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
       </select>
       <div className="grid grid-cols-2 gap-2">
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="block-input px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="block-input px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="block-input px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="block-input px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
       </div>
       <input value={pat} onChange={(e) => setPat(e.target.value)} placeholder="Description regex (.* = all)"
-        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: '6px' }} />
-      <button onClick={exec} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>{busy ? 'Working...' : 'Move Matching Lines'}</button>
+        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: 'var(--app-radius)' }} />
+      <button onClick={exec} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>{busy ? 'Working...' : 'Move Matching Lines'}</button>
     </>
   ), onClose);
 };
@@ -534,8 +534,8 @@ export const RenumberDialog: React.FC<{ companyId: string; account: AccountLite;
     <>
       <p className="text-[10px] text-text-muted">Change the code on this account. All references use the internal id, so links remain intact. An audit-log entry is created.</p>
       <input value={code} onChange={(e) => setCode(e.target.value)}
-        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: '6px' }} />
-      <button onClick={exec} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>{busy ? 'Working...' : 'Apply'}</button>
+        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: 'var(--app-radius)' }} />
+      <button onClick={exec} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>{busy ? 'Working...' : 'Apply'}</button>
     </>
   ), onClose);
 };
@@ -560,10 +560,10 @@ export const OpeningTbImportDialog: React.FC<{ companyId: string; onClose: () =>
   return dialogShell('Import Opening Trial Balance', (
     <>
       <p className="text-[10px] text-text-muted">Paste rows of <code>account_code,balance</code>. One JE will be posted with offsetting Opening Balance Equity.</p>
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8}
-        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: '6px' }} />
-      <button onClick={exec} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>{busy ? 'Working...' : 'Post Opening JE'}</button>
+        className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: 'var(--app-radius)' }} />
+      <button onClick={exec} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>{busy ? 'Working...' : 'Post Opening JE'}</button>
     </>
   ), onClose);
 };
@@ -585,17 +585,17 @@ export const ClassifyRulesDialog: React.FC<{ companyId: string; accounts: Accoun
       <p className="text-[10px] text-text-muted">When an expense or bank txn description matches a regex, the linked account is suggested.</p>
       <div className="flex gap-2">
         <input value={pat} onChange={(e) => setPat(e.target.value)} placeholder="Regex (e.g. starbucks|coffee)"
-          className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: '6px' }} />
+          className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary font-mono" style={{ borderRadius: 'var(--app-radius)' }} />
         <select value={acc} onChange={(e) => setAcc(e.target.value)}
-          className="block-select px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }}>
+          className="block-select px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
           {accounts.map(a => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
         </select>
-        <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>Add</button>
+        <button onClick={add} className="block-btn-primary px-3 py-1 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>Add</button>
       </div>
       {rules.map(r => {
         const a = accounts.find(x => x.id === r.account_id);
         return (
-          <div key={r.id} className="flex items-center gap-2 border border-border-primary px-2 py-1" style={{ borderRadius: '6px' }}>
+          <div key={r.id} className="flex items-center gap-2 border border-border-primary px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
             <code className="text-[11px]">{r.pattern}</code>
             <span className="text-[10px] text-text-muted">→ {a ? `${a.code} ${a.name}` : r.account_id}</span>
             <button onClick={() => del(r.id)} className="ml-auto text-[10px] text-accent-expense">Remove</button>
@@ -621,8 +621,8 @@ export const SnapshotDialog: React.FC<{ companyId: string; onClose: () => void }
   return dialogShell('Snapshot Daily Balances', (
     <>
       <p className="text-[10px] text-text-muted">Records ending balances into account_balance_history for trend charts.</p>
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
-      <button onClick={exec} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: '6px' }}>{busy ? 'Snapshotting...' : 'Snapshot Now'}</button>
+      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
+      <button onClick={exec} disabled={busy} className="w-full block-btn-primary py-2 text-xs font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>{busy ? 'Snapshotting...' : 'Snapshot Now'}</button>
     </>
   ), onClose);
 };
@@ -641,7 +641,7 @@ export const ComplianceBadges: React.FC<{ tagsJson?: string }> = ({ tagsJson }) 
   return (
     <span className="inline-flex gap-1">
       {tags.map(t => (
-        <span key={t} className={`text-[8px] px-1 py-0.5 font-bold ${colors[t] || 'bg-bg-tertiary text-text-muted'}`} style={{ borderRadius: '6px' }}>{t}</span>
+        <span key={t} className={`text-[8px] px-1 py-0.5 font-bold ${colors[t] || 'bg-bg-tertiary text-text-muted'}`} style={{ borderRadius: 'var(--app-radius)' }}>{t}</span>
       ))}
     </span>
   );

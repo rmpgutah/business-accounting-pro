@@ -232,7 +232,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
                       ? 'border-accent-blue bg-accent-blue/5'
                       : 'border-border-primary hover:bg-bg-hover transition-colors'
                   }`}
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                   onClick={() => handleEdit(item)}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -272,7 +272,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({ onBack }) => {
 
         {/* Right: form */}
         <div className="col-span-3 flex flex-col overflow-y-auto">
-          <div className="block-card p-5 space-y-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-5 space-y-4" style={{ borderRadius: 'var(--app-radius)' }}>
             {/* Save errors surface here — replaces the silent console.error
                 that hid the schema/form mismatch for so long. */}
             {saveError && (

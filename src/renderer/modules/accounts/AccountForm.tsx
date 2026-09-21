@@ -254,18 +254,18 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
            tabIndex={-1}
            onClick={(e) => e.stopPropagation()}
            onKeyDown={trapFocusOnKeyDown(containerRef)}
-           className="bg-bg-elevated border border-border-primary w-full max-w-2xl shadow-xl" style={{ borderRadius: '6px' }}>
+           className="bg-bg-elevated border border-border-primary w-full max-w-2xl shadow-xl" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
           <h2 id="account-form-title" className="text-sm font-bold text-text-primary flex items-center gap-2">
             {isEdit ? 'Edit Account' : 'New Account'}
-            {isLocked && <span className="flex items-center gap-1 text-[10px] text-accent-expense bg-accent-expense/10 px-2 py-0.5" style={{ borderRadius: '6px' }}><Lock size={10} /> Locked</span>}
+            {isLocked && <span className="flex items-center gap-1 text-[10px] text-accent-expense bg-accent-expense/10 px-2 py-0.5" style={{ borderRadius: 'var(--app-radius)' }}><Lock size={10} /> Locked</span>}
           </h2>
           <button onClick={onClose} aria-label="Close account form" className="text-text-muted hover:text-text-primary"><X size={16} /></button>
         </div>
 
         <div className="px-5 py-4 space-y-4 max-h-[75vh] overflow-y-auto">
-          {errors._form && <div className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2" style={{ borderRadius: '6px' }}>{errors._form}</div>}
-          {isLocked && <div className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2" style={{ borderRadius: '6px' }}>This account is locked. Disable the lock toggle to edit.</div>}
+          {errors._form && <div className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>{errors._form}</div>}
+          {isLocked && <div className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>This account is locked. Disable the lock toggle to edit.</div>}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -273,9 +273,9 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
               <div className="flex gap-1">
                 <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder={RANGE_HINTS[type]}
                   className={`block-input flex-1 px-3 py-2 text-sm bg-bg-primary border ${errors.code ? 'border-accent-expense' : 'border-border-primary'} text-text-primary focus:outline-none focus:border-accent-blue`}
-                  style={{ borderRadius: '6px' }} disabled={isLocked} />
+                  style={{ borderRadius: 'var(--app-radius)' }} disabled={isLocked} />
                 <button type="button" onClick={suggestCode} title="Suggest next available code"
-                  className="px-2 border border-border-primary hover:border-accent-blue" style={{ borderRadius: '6px' }} disabled={isLocked}>
+                  className="px-2 border border-border-primary hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }} disabled={isLocked}>
                   <Sparkles size={14} className="text-accent-blue" />
                 </button>
               </div>
@@ -287,7 +287,7 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Account Type *</label>
               <select value={type} onChange={(e) => setType(e.target.value as AccountType)}
                 className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                style={{ borderRadius: '6px' }} disabled={isLocked}>
+                style={{ borderRadius: 'var(--app-radius)' }} disabled={isLocked}>
                 <option value="asset">Asset</option>
                 <option value="equity">Equity</option>
                 <option value="expense">Expense</option>
@@ -301,7 +301,7 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
             <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Account Name *</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Cash in Bank"
               className={`block-input w-full px-3 py-2 text-sm bg-bg-primary border ${errors.name ? 'border-accent-expense' : 'border-border-primary'} text-text-primary focus:outline-none focus:border-accent-blue`}
-              style={{ borderRadius: '6px' }} disabled={isLocked} />
+              style={{ borderRadius: 'var(--app-radius)' }} disabled={isLocked} />
             {errors.name && <p className="text-[10px] text-accent-expense mt-1">{errors.name}</p>}
           </div>
 
@@ -310,7 +310,7 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Subtype</label>
               <select value={subtype} onChange={(e) => setSubtype(e.target.value)}
                 className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                style={{ borderRadius: '6px' }} disabled={isLocked}>
+                style={{ borderRadius: 'var(--app-radius)' }} disabled={isLocked}>
                 <option value="">Select subtype...</option>
                 {SUBTYPES[type].map((st) => <option key={st} value={st}>{st}</option>)}
               </select>
@@ -320,7 +320,7 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Parent Account</label>
               <select value={parentAccountId} onChange={(e) => setParentAccountId(e.target.value)}
                 className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                style={{ borderRadius: '6px' }} disabled={isLocked}>
+                style={{ borderRadius: 'var(--app-radius)' }} disabled={isLocked}>
                 <option value="">None (top-level)</option>
                 {parentOptions.map((opt) => <option key={opt.id} value={opt.id}>{opt.code} - {opt.name}</option>)}
               </select>
@@ -336,12 +336,12 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
             </div>
             {previewMd ? (
               <div className="px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary min-h-[60px]"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(description) }} />
             ) : (
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Optional description..."
                 className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue resize-none"
-                style={{ borderRadius: '6px' }} disabled={isLocked} />
+                style={{ borderRadius: 'var(--app-radius)' }} disabled={isLocked} />
             )}
           </div>
 
@@ -354,7 +354,7 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
                   aria-label={c ? `Color ${c}` : 'No color'}
                   aria-pressed={color === c}
                   className={`w-6 h-6 border ${color === c ? 'border-accent-blue ring-2 ring-accent-blue/30' : 'border-border-primary'}`}
-                  style={{ background: c || 'transparent', borderRadius: '6px' }}
+                  style={{ background: c || 'transparent', borderRadius: 'var(--app-radius)' }}
                   title={c || 'No color'} />
               ))}
             </div>
@@ -378,9 +378,9 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
             {customFields.map((cf, i) => (
               <div key={i} className="flex gap-1 mb-1">
                 <input value={cf.key} onChange={(e) => { const nf = [...customFields]; nf[i].key = e.target.value; setCustomFields(nf); }}
-                  placeholder="Key" className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} disabled={isLocked} />
+                  placeholder="Key" className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} disabled={isLocked} />
                 <input value={cf.value} onChange={(e) => { const nf = [...customFields]; nf[i].value = e.target.value; setCustomFields(nf); }}
-                  placeholder="Value" className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} disabled={isLocked} />
+                  placeholder="Value" className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} disabled={isLocked} />
                 <button type="button" onClick={() => setCustomFields(customFields.filter((_, j) => j !== i))} disabled={isLocked}
                   className="px-2 text-text-muted hover:text-accent-expense">x</button>
               </div>
@@ -392,21 +392,21 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
             <div>
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Currency</label>
               <select value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={isLocked}
-                className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: '6px' }}>
+                className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Sub-ledger Type</label>
               <select value={subledgerType} onChange={(e) => setSubledgerType(e.target.value)} disabled={isLocked}
-                className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: '6px' }}>
+                className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                 {SUBLEDGER_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Bank Account Linkage</label>
               <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} disabled={isLocked}
-                className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: '6px' }}>
+                className="block-select w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                 <option value="">— None —</option>
                 {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
@@ -414,7 +414,7 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
             <div>
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Monthly Cap (budget)</label>
               <input type="number" step="0.01" value={monthlyCap} onChange={(e) => setMonthlyCap(e.target.value)} disabled={isLocked}
-                className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary" style={{ borderRadius: '6px' }} />
+                className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }} />
             </div>
             <div>
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Business Purpose</label>
@@ -434,7 +434,7 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
                 return (
                   <button key={t} type="button" disabled={isLocked} onClick={() => {
                     setComplianceTags(on ? complianceTags.filter(x => x !== t) : [...complianceTags, t]);
-                  }} className={`px-2 py-1 text-[10px] font-bold border ${on ? 'border-accent-blue text-accent-blue' : 'border-border-primary text-text-secondary'}`} style={{ borderRadius: '6px' }}>{t}</button>
+                  }} className={`px-2 py-1 text-[10px] font-bold border ${on ? 'border-accent-blue text-accent-blue' : 'border-border-primary text-text-secondary'}`} style={{ borderRadius: 'var(--app-radius)' }}>{t}</button>
                 );
               })}
             </div>
@@ -467,10 +467,10 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border-primary">
           <button onClick={onClose}
             className="px-4 py-1.5 text-xs font-semibold text-text-secondary bg-bg-tertiary border border-border-primary hover:bg-bg-hover"
-            style={{ borderRadius: '6px' }}>Cancel</button>
+            style={{ borderRadius: 'var(--app-radius)' }}>Cancel</button>
           <button onClick={handleSave} disabled={saving || isLocked}
             className="block-btn-primary flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
-            style={{ borderRadius: '6px' }}>
+            style={{ borderRadius: 'var(--app-radius)' }}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {isEdit ? 'Update' : 'Create'}
           </button>
@@ -483,9 +483,9 @@ const AccountForm: React.FC<AccountFormProps> = ({ account, onClose, onSaved }) 
 const ToggleRow: React.FC<{ label: string; value: boolean; onChange: (v: boolean) => void; icon?: React.ReactNode; disabled?: boolean }> = ({ label, value, onChange, icon, disabled }) => (
   <button type="button" onClick={() => !disabled && onChange(!value)} disabled={disabled}
     className="flex items-center gap-2 px-2 py-1.5 border border-border-primary hover:border-accent-blue text-xs text-text-secondary disabled:opacity-50"
-    style={{ borderRadius: '6px' }}>
-    {value ? <div className="w-7 h-3.5 bg-accent-blue flex items-center justify-end px-0.5" style={{ borderRadius: '6px' }}><div className="w-2.5 h-2.5 bg-bg-primary" style={{ borderRadius: '6px' }} /></div>
-      : <div className="w-7 h-3.5 bg-bg-tertiary flex items-center justify-start px-0.5" style={{ borderRadius: '6px' }}><div className="w-2.5 h-2.5 bg-text-muted" style={{ borderRadius: '6px' }} /></div>}
+    style={{ borderRadius: 'var(--app-radius)' }}>
+    {value ? <div className="w-7 h-3.5 bg-accent-blue flex items-center justify-end px-0.5" style={{ borderRadius: 'var(--app-radius)' }}><div className="w-2.5 h-2.5 bg-bg-primary" style={{ borderRadius: 'var(--app-radius)' }} /></div>
+      : <div className="w-7 h-3.5 bg-bg-tertiary flex items-center justify-start px-0.5" style={{ borderRadius: 'var(--app-radius)' }}><div className="w-2.5 h-2.5 bg-text-muted" style={{ borderRadius: 'var(--app-radius)' }} /></div>}
     {icon}
     {label}
   </button>

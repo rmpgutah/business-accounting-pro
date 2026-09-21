@@ -105,7 +105,7 @@ function RuleBuilder({
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   return (
-    <div className="block-card p-5 space-y-4" style={{ borderRadius: '6px' }}>
+    <div className="block-card p-5 space-y-4" style={{ borderRadius: 'var(--app-radius)' }}>
       <h3 className="text-sm font-bold text-text-primary">
         {initial ? 'Edit Automation' : 'New Automation Rule'}
       </h3>
@@ -482,9 +482,9 @@ const RulesTab: React.FC = () => {
               let parsed: any;
               try { parsed = JSON.parse(value); } catch { parsed = value; }
               return (
-                <div key={label} className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div key={label} className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2">{label}</p>
-                  <pre className="text-xs font-mono text-text-secondary overflow-x-auto whitespace-pre-wrap bg-bg-tertiary p-3" style={{ borderRadius: '6px' }}>
+                  <pre className="text-xs font-mono text-text-secondary overflow-x-auto whitespace-pre-wrap bg-bg-tertiary p-3" style={{ borderRadius: 'var(--app-radius)' }}>
                     {typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2)}
                   </pre>
                 </div>
@@ -492,7 +492,7 @@ const RulesTab: React.FC = () => {
             })}
 
             {/* Run log */}
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-4 py-3 border-b border-border-primary">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Run Log</p>
               </div>
@@ -563,7 +563,7 @@ const AutomationsModule: React.FC = () => {
                   ? 'bg-bg-primary text-text-primary border border-border-primary'
                   : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'
               }`}
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               {t.icon}
               {t.label}

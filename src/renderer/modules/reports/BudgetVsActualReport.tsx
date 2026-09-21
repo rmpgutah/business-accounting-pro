@@ -239,7 +239,7 @@ const BudgetVsActualReport: React.FC = () => {
       ) : comparison.length === 0 ? (
         <div className="flex items-center justify-center h-32 text-text-muted text-sm">No budget line data available.</div>
       ) : (
-        <div className="block-card overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-bg-tertiary/50">
@@ -267,13 +267,13 @@ const BudgetVsActualReport: React.FC = () => {
                       <span className="common-size-pct">{c.variance_pct}%</span>
                     </td>
                     <td className="px-4 py-2">
-                      <div className="w-full h-2 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
+                      <div className="w-full h-2 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                         <div
                           className="h-full"
                           style={{
                             width: `${Math.min(usagePct, 100)}%`,
                             background: barColor(c.variance_pct),
-                            borderRadius: '6px',
+                            borderRadius: 'var(--app-radius)',
                             transition: 'width 0.3s ease',
                           }}
                         />

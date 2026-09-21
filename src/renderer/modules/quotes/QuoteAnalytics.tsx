@@ -71,7 +71,7 @@ const KpiCard: React.FC<{
   icon?: React.ReactNode;
   accent?: string;
 }> = ({ label, value, hint, icon, accent = 'var(--color-accent-blue)' }) => (
-  <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+  <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
     <div className="flex items-start justify-between mb-2">
       <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
         {label}
@@ -355,7 +355,7 @@ const QuoteAnalytics: React.FC = () => {
         style={{
           background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
           border: '1px solid var(--color-accent-expense)',
-          borderRadius: '6px',
+          borderRadius: 'var(--app-radius)',
           padding: '12px 16px',
           color: 'var(--color-accent-expense)',
           fontSize: '13px',
@@ -426,7 +426,7 @@ const QuoteAnalytics: React.FC = () => {
                 contentStyle={{
                   background: 'var(--color-bg-elevated)',
                   border: '1px solid var(--color-border-primary)',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   fontSize: '12px',
                 }}
                 formatter={(v: any, key: any) =>
@@ -481,7 +481,7 @@ const QuoteAnalytics: React.FC = () => {
                   contentStyle={{
                     background: 'var(--color-bg-elevated)',
                     border: '1px solid var(--color-border-primary)',
-                    borderRadius: '6px',
+                    borderRadius: 'var(--app-radius)',
                     fontSize: '12px',
                   }}
                 />
@@ -524,7 +524,7 @@ const QuoteAnalytics: React.FC = () => {
                     contentStyle={{
                       background: 'var(--color-bg-elevated)',
                       border: '1px solid var(--color-border-primary)',
-                      borderRadius: '6px',
+                      borderRadius: 'var(--app-radius)',
                       fontSize: '12px',
                     }}
                   />
@@ -599,7 +599,7 @@ const QuoteAnalytics: React.FC = () => {
                   contentStyle={{
                     background: 'var(--color-bg-elevated)',
                     border: '1px solid var(--color-border-primary)',
-                    borderRadius: '6px',
+                    borderRadius: 'var(--app-radius)',
                     fontSize: '12px',
                   }}
                   formatter={(v: any) => formatCurrency(Number(v))}
@@ -638,7 +638,7 @@ const QuoteAnalytics: React.FC = () => {
                   contentStyle={{
                     background: 'var(--color-bg-elevated)',
                     border: '1px solid var(--color-border-primary)',
-                    borderRadius: '6px',
+                    borderRadius: 'var(--app-radius)',
                     fontSize: '12px',
                   }}
                 />
@@ -670,7 +670,7 @@ const QuoteAnalytics: React.FC = () => {
                   contentStyle={{
                     background: 'var(--color-bg-elevated)',
                     border: '1px solid var(--color-border-primary)',
-                    borderRadius: '6px',
+                    borderRadius: 'var(--app-radius)',
                     fontSize: '12px',
                   }}
                   formatter={(v: any, key: any) =>

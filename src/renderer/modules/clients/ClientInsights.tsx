@@ -114,7 +114,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
       style={{
         background: 'rgba(15, 15, 20, 0.92)',
         border: '1px solid var(--hairline)',
-        borderRadius: '6px',
+        borderRadius: 'var(--app-radius)',
         padding: '8px 12px',
       }}
     >
@@ -135,7 +135,7 @@ const PieTooltip = ({ active, payload }: any) => {
       style={{
         background: 'rgba(15, 15, 20, 0.92)',
         border: '1px solid var(--hairline)',
-        borderRadius: '6px',
+        borderRadius: 'var(--app-radius)',
         padding: '8px 12px',
       }}
     >
@@ -556,7 +556,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="stat-card border-l-2 border-l-accent-income" style={{ borderRadius: '6px' }}>
+        <div className="stat-card border-l-2 border-l-accent-income" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-1">
             <DollarSign size={12} className="text-text-muted" />
             <span className="stat-label">Lifetime Value</span>
@@ -564,7 +564,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
           <span className="stat-value text-accent-income">{formatCurrency(data.lifetime_value)}</span>
         </div>
 
-        <div className="stat-card border-l-2 border-l-accent-warning" style={{ borderRadius: '6px' }}>
+        <div className="stat-card border-l-2 border-l-accent-warning" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-1">
             <AlertTriangle size={12} className="text-text-muted" />
             <span className="stat-label">Outstanding</span>
@@ -572,7 +572,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
           <span className="stat-value text-accent-warning">{formatCurrency(data.outstanding)}</span>
         </div>
 
-        <div className="stat-card border-l-2 border-l-accent-blue" style={{ borderRadius: '6px' }}>
+        <div className="stat-card border-l-2 border-l-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-1">
             <Clock size={12} className="text-text-muted" />
             <span className="stat-label">Avg Payment Days</span>
@@ -582,7 +582,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
           </span>
         </div>
 
-        <div className="stat-card border-l-2 border-l-accent-purple" style={{ borderRadius: '6px' }}>
+        <div className="stat-card border-l-2 border-l-accent-purple" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-1">
             <FolderKanban size={12} className="text-text-muted" />
             <span className="stat-label">Active Projects</span>
@@ -593,21 +593,21 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
 
       {/* Feature 43: Profitability Analysis */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="stat-label">Revenue</span>
           <span className="stat-value text-accent-income">{formatCurrency(profitability.revenue)}</span>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="stat-label">Expenses</span>
           <span className="stat-value text-accent-expense">{formatCurrency(profitability.expenses)}</span>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="stat-label">Net Profit</span>
           <span className={`stat-value ${profitability.profit >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
             {formatCurrency(profitability.profit)}
           </span>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="stat-label">Margin</span>
           <span className={`stat-value ${profitability.margin >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
             {profitability.margin.toFixed(1)}%
@@ -618,7 +618,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
       {/* Feature 47-48: Engagement Score + Churn Risk + Feature 45: Success Rate */}
       <div className="grid grid-cols-3 gap-4">
         {/* Engagement Score */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-2">
             <Zap size={12} className="text-text-muted" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Engagement Score</span>
@@ -629,20 +629,20 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
           </div>
           <div className="text-xs font-semibold mt-1" style={{ color: engagement.color }}>{engagement.label}</div>
           {/* Score bar */}
-          <div className="mt-2 h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
-            <div className="h-full transition-all" style={{ width: `${engagement.score}%`, background: engagement.color, borderRadius: '6px' }} />
+          <div className="mt-2 h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
+            <div className="h-full transition-all" style={{ width: `${engagement.score}%`, background: engagement.color, borderRadius: 'var(--app-radius)' }} />
           </div>
         </div>
 
         {/* Churn Risk */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-2">
             <AlertTriangle size={12} className="text-text-muted" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Churn Risk</span>
           </div>
           <span
             className="inline-block text-xs font-bold uppercase tracking-wider px-3 py-1 mt-1"
-            style={{ color: churnRisk.color, background: churnRisk.bg, borderRadius: '6px' }}
+            style={{ color: churnRisk.color, background: churnRisk.bg, borderRadius: 'var(--app-radius)' }}
           >
             {churnRisk.label}
           </span>
@@ -655,7 +655,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
         </div>
 
         {/* Invoice Success Rate */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-2">
             <CheckCircle size={12} className="text-text-muted" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Invoice Success Rate</span>
@@ -665,8 +665,8 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
           </div>
           <p className="text-xs text-text-muted mt-1">{totalInvoiceCount} total invoices</p>
           {/* Progress bar */}
-          <div className="mt-2 h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
-            <div className="h-full transition-all" style={{ width: `${invoiceSuccessRate}%`, background: 'var(--color-accent-income)', borderRadius: '6px' }} />
+          <div className="mt-2 h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
+            <div className="h-full transition-all" style={{ width: `${invoiceSuccessRate}%`, background: 'var(--color-accent-income)', borderRadius: 'var(--app-radius)' }} />
           </div>
         </div>
       </div>
@@ -677,7 +677,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
         <div
           className="col-span-2 block-card"
           style={{
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             background: 'rgba(255,255,255,0.02)',
           }}
         >
@@ -721,7 +721,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
         <div
           className="block-card"
           style={{
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             background: 'rgba(255,255,255,0.02)',
           }}
         >
@@ -752,7 +752,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
       {/* Feature 44: Revenue Trend (YoY) + Feature 46: Payment Method Distribution */}
       <div className="grid grid-cols-2 gap-4">
         {/* Revenue Trend */}
-        <div className="block-card p-4" style={{ borderRadius: '6px', background: 'rgba(255,255,255,0.02)' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(255,255,255,0.02)' }}>
           <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">
             Revenue Trend (This Year vs Last Year)
           </h4>
@@ -773,7 +773,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
         </div>
 
         {/* Payment Methods Pie */}
-        <div className="block-card p-4" style={{ borderRadius: '6px', background: 'rgba(255,255,255,0.02)' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(255,255,255,0.02)' }}>
           <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">
             Payment Methods
           </h4>
@@ -807,7 +807,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
       {/* Feature 49-50: Project Performance + Time Summary */}
       <div className="grid grid-cols-2 gap-4">
         {/* Project Stats */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-3">
             <FolderKanban size={12} className="text-text-muted" />
             <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">Project Performance</h4>
@@ -833,7 +833,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
         </div>
 
         {/* Time Summary */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-3">
             <Clock size={12} className="text-text-muted" />
             <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">Time & Materials</h4>
@@ -861,7 +861,7 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
 
       {/* Feature 51: Comparative Performance */}
       {comparative && (
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-3">
             <Target size={12} className="text-text-muted" />
             <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider">Comparative Performance vs Portfolio Average</h4>

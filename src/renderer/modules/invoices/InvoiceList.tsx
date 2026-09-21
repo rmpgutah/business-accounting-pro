@@ -678,7 +678,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
 
       {/* Feedback */}
       {feedback && (
-        <div className={`text-xs px-3 py-2 border ${feedback.type === 'success' ? 'text-accent-income bg-accent-income/10 border-accent-income/20' : 'text-accent-blue bg-accent-blue/10 border-accent-blue/20'}`} style={{ borderRadius: '6px' }}>
+        <div className={`text-xs px-3 py-2 border ${feedback.type === 'success' ? 'text-accent-income bg-accent-income/10 border-accent-income/20' : 'text-accent-blue bg-accent-blue/10 border-accent-blue/20'}`} style={{ borderRadius: 'var(--app-radius)' }}>
           {feedback.message}
         </div>
       )}
@@ -829,7 +829,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '10px 16px', background: 'var(--color-accent-expense-bg)',
-          border: '1px solid var(--color-accent-expense)', borderRadius: 6,
+          border: '1px solid var(--color-accent-expense)', borderRadius: 'var(--app-radius)',
         }}>
           <span style={{ fontSize: 13, color: 'var(--color-accent-expense)', fontWeight: 600 }}>
             {candidates.length} overdue invoice{candidates.length !== 1 ? 's' : ''} eligible for debt collection
@@ -855,7 +855,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       {/* Convert Modal */}
       {showConvertModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="block-card p-6" style={{ width: 560, maxHeight: '80vh', overflowY: 'auto', borderRadius: 6 }}>
+          <div className="block-card p-6" style={{ width: 560, maxHeight: '80vh', overflowY: 'auto', borderRadius: 'var(--app-radius)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <h3 className="text-sm font-bold text-text-primary">Overdue Invoices — Send to Collections</h3>
               <button className="block-btn text-xs py-1 px-2" onClick={() => setShowConvertModal(false)}>Close</button>
@@ -919,7 +919,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                   ? 'bg-accent-blue text-white'
                   : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
               }`}
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               {tab.label}
             </button>
@@ -1075,7 +1075,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                           display: 'inline-block',
                           width: 8,
                           height: 8,
-                          borderRadius: 6,
+                          borderRadius: 'var(--app-radius)',
                           background: riskColor(inv),
                         }}
                       />
@@ -1085,7 +1085,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                         {inv.invoice_number}
                         {inv.invoice_type && inv.invoice_type !== 'standard' && (
                           <span style={{
-                            fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, textTransform: 'uppercase',
+                            fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', textTransform: 'uppercase',
                             background: 'var(--color-bg-elevated)',
                             color: TYPE_BADGE_COLORS[inv.invoice_type] || 'var(--color-text-muted)',
                           }}>
@@ -1127,12 +1127,12 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={badge.className}>{badge.label}</span>
                         {(inv as any).dunning_stage > 0 && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'var(--color-accent-warning-bg)', color: 'var(--color-accent-warning)' }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-warning-bg)', color: 'var(--color-accent-warning)' }}>
                             {['', 'REMIND', 'FIRM', 'FINAL', 'COLLECT'][(inv as any).dunning_stage] || `D${(inv as any).dunning_stage}`}
                           </span>
                         )}
                         {(inv as any).late_fee_applied === 1 && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'var(--color-accent-expense-bg)', color: 'var(--color-accent-expense)' }}>FEE</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-expense-bg)', color: 'var(--color-accent-expense)' }}>FEE</span>
                         )}
                       </div>
                     </td>
@@ -1164,7 +1164,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
             background: 'var(--color-bg-elevated)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             minWidth: '500px',
           }}
         >
@@ -1185,7 +1185,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             className="block-btn-success flex items-center gap-1.5 text-xs"
             onClick={handleBatchMarkPaid}
             disabled={batchLoading}
-            style={{ background: 'var(--color-accent-income)', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
+            style={{ background: 'var(--color-accent-income)', color: '#fff', border: 'none', borderRadius: 'var(--app-radius)', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
           >
             <CheckCircle size={13} />
             Mark as Paid
@@ -1194,7 +1194,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleExportSelected}
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export CSV
@@ -1215,7 +1215,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               setTimeout(() => setFeedback(null), 4000);
             }}
             disabled={batchLoading}
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
           >
             <FileText size={13} />
             Export PDF
@@ -1226,7 +1226,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             onClick={handleBulkSendReminders}
             disabled={batchLoading}
             title="Schedule reminders for selected invoices"
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Bell size={13} />
             Send Reminders
@@ -1237,7 +1237,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             onClick={handleBulkApplyLateFee}
             disabled={batchLoading}
             title="Apply late fees to all eligible invoices"
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
           >
             <DollarSign size={13} />
             Apply Late Fee
@@ -1247,7 +1247,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             <button
               className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
               onClick={() => setShowBulkTag(true)}
-              style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
             >
               <TagIcon size={13} />
               Tag
@@ -1267,14 +1267,14 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 className="text-xs font-semibold"
                 onClick={handleBulkTag}
                 disabled={batchLoading || !bulkTagText.trim()}
-                style={{ background: 'var(--color-accent-blue)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-blue)', color: '#fff', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Apply
               </button>
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => { setShowBulkTag(false); setBulkTagText(''); }}
-                style={{ background: 'transparent', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid var(--hairline)', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>
@@ -1287,7 +1287,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             onClick={handleBatchExportZip}
             disabled={batchLoading || selectedIds.size === 0}
             title={`Export ${selectedIds.size} invoice${selectedIds.size === 1 ? '' : 's'} as a ZIP archive (one PDF per invoice)`}
-            style={{ background: 'transparent', border: '1px solid var(--color-accent-blue)', color: 'var(--color-accent-blue)', borderRadius: '6px', padding: '6px 12px', cursor: batchLoading ? 'wait' : 'pointer', opacity: batchLoading ? 0.6 : 1 }}
+            style={{ background: 'transparent', border: '1px solid var(--color-accent-blue)', color: 'var(--color-accent-blue)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: batchLoading ? 'wait' : 'pointer', opacity: batchLoading ? 0.6 : 1 }}
           >
             <Download size={13} />
             Export ZIP
@@ -1297,7 +1297,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -1309,14 +1309,14 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => setShowDeleteConfirm(false)}
-                style={{ background: 'transparent', border: '1px solid var(--hairline)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid var(--hairline)', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

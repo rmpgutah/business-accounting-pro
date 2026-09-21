@@ -211,7 +211,7 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
               color: toneColor,
               background: `${toneColor}1a`,
               border: `1px solid ${toneColor}40`,
-              borderRadius: '6px',
+              borderRadius: 'var(--app-radius)',
             }}
           >
             {info.label}
@@ -274,7 +274,7 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
         style={{
           background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
           border: '1px solid var(--color-accent-expense)',
-          borderRadius: '6px',
+          borderRadius: 'var(--app-radius)',
           padding: '12px 16px',
           color: 'var(--color-accent-expense)',
           fontSize: '13px',
@@ -293,7 +293,7 @@ const QuoteFollowUp: React.FC<QuoteFollowUpProps> = ({ onView, refreshKey = 0 })
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Bell size={18} className="text-accent-blue" />
           </div>

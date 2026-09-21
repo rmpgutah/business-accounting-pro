@@ -76,7 +76,7 @@ const PtoDashboard: React.FC = () => {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {policies.map(p => (
-              <div key={p.id} style={{ display: 'flex', gap: 16, padding: '8px 12px', background: 'var(--color-bg-secondary)', borderRadius: '6px', fontSize: '12px', alignItems: 'center' }}>
+              <div key={p.id} style={{ display: 'flex', gap: 16, padding: '8px 12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--app-radius)', fontSize: '12px', alignItems: 'center' }}>
                 <div style={{ fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>{p.name}</div>
                 <div style={{ color: 'var(--color-text-muted)' }}>{p.accrual_rate}h / {p.accrual_unit.replace(/_/g, ' ')}</div>
                 {p.cap_hours != null && <div style={{ color: 'var(--color-text-muted)' }}>Cap: {p.cap_hours}h</div>}

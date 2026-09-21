@@ -624,7 +624,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
           <span className={badge.className}>{badge.label}</span>
           {invoice.invoice_type && invoice.invoice_type !== 'standard' && (
             <span style={{
-              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase',
+              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', textTransform: 'uppercase',
               background: (INVOICE_TYPE_COLORS[invoice.invoice_type] || 'var(--color-text-muted)') + '22',
               color: INVOICE_TYPE_COLORS[invoice.invoice_type] || 'var(--color-text-muted)',
             }}>
@@ -632,12 +632,12 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
             </span>
           )}
           {invoice.currency && invoice.currency !== 'USD' && (
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '2px 6px', borderRadius: 6, background: 'var(--color-bg-tertiary)' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '2px 6px', borderRadius: 'var(--app-radius)', background: 'var(--color-bg-tertiary)' }}>
               {invoice.currency}
             </span>
           )}
           {debtLink && (
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-accent-expense)', background: 'var(--color-accent-expense-bg)', padding: '2px 8px', borderRadius: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-accent-expense)', background: 'var(--color-accent-expense-bg)', padding: '2px 8px', borderRadius: 'var(--app-radius)' }}>
               In Collections
             </span>
           )}
@@ -1008,7 +1008,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
         return (
           <div
             className="flex items-center justify-between px-4 py-3"
-            style={{ background: bg, border: `1px solid ${border}`, borderRadius: 6 }}
+            style={{ background: bg, border: `1px solid ${border}`, borderRadius: 'var(--app-radius)' }}
           >
             <div className="flex items-center gap-2">
               <Calendar size={16} style={{ color }} />
@@ -1373,7 +1373,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                 >
                   <span
                     style={{
-                      width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                      width: 22, height: 22, borderRadius: 'var(--app-radius)', flexShrink: 0,
                       background: `${color}22`, color, display: 'flex',
                       alignItems: 'center', justifyContent: 'center',
                     }}

@@ -310,7 +310,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
             <h1 className="text-lg font-bold text-text-primary">Pay Stub</h1>
           </div>
           {/* Feature 7: Direct deposit / check indicator */}
-          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 ${isDirectDeposit ? 'text-accent-blue bg-accent-blue/10' : 'text-text-muted bg-bg-tertiary'}`} style={{ borderRadius: '6px' }}>
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 ${isDirectDeposit ? 'text-accent-blue bg-accent-blue/10' : 'text-text-muted bg-bg-tertiary'}`} style={{ borderRadius: 'var(--app-radius)' }}>
             {isDirectDeposit ? 'Direct Deposit' : 'Check'}
           </span>
         </div>
@@ -349,7 +349,7 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
       </div>
 
       {/* Pay Stub Document */}
-      <div className="block-card p-0 overflow-hidden max-w-2xl mx-auto" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-0 overflow-hidden max-w-2xl mx-auto" style={{ borderRadius: 'var(--app-radius)' }}>
         {/* Document Header */}
         <div className="bg-bg-tertiary px-6 py-4 border-b border-border-primary">
           <div className="flex justify-between items-start">

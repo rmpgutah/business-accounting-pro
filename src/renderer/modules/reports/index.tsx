@@ -155,11 +155,11 @@ const QuickStats: React.FC = () => {
           <div
             key={c.label}
             className="block-card p-4 flex items-center gap-3"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <div
               className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <Icon size={16} className={c.accent} />
             </div>
@@ -268,7 +268,7 @@ const ReportsModule: React.FC = () => {
           <button
             onClick={() => setActiveReport(null)}
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Back to reports"
           >
             <ArrowLeft size={16} className="text-text-secondary" />
@@ -276,7 +276,7 @@ const ReportsModule: React.FC = () => {
         ) : (
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <BarChart3 size={18} className="text-accent-blue" />
           </div>
@@ -312,7 +312,7 @@ const ReportsModule: React.FC = () => {
                     key={id}
                     onClick={() => handleSelect(id)}
                     className="block-card px-4 py-2 text-xs font-semibold text-text-primary hover:bg-bg-hover transition-colors cursor-pointer flex items-center gap-2"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                   >
                     <Star size={12} className="text-accent-warning fill-accent-warning" />
                     {REPORT_TITLES[id]}
@@ -335,7 +335,7 @@ const ReportsModule: React.FC = () => {
                     key={id}
                     onClick={() => handleSelect(id)}
                     className="block-card px-4 py-2 text-xs font-medium text-text-secondary hover:bg-bg-hover transition-colors cursor-pointer flex items-center gap-2"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                   >
                     <Clock size={12} className="text-text-muted" />
                     {REPORT_TITLES[id]}

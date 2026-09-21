@@ -452,7 +452,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
           className={`fixed top-4 right-4 z-50 px-4 py-3 text-sm font-semibold border ${
             toast.ok ? 'bg-bg-elevated border-accent-income text-accent-income' : 'bg-bg-elevated border-accent-expense text-accent-expense'
           }`}
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           {toast.msg}
         </div>
@@ -461,7 +461,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <Boxes size={18} className="text-accent-blue" />
           </div>
           <div>
@@ -534,7 +534,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
               { label: 'Acquired YTD', value: String(stats.acquiredYear), icon: <Plus size={14} />, color: 'text-accent-blue' },
               { label: 'Disposed YTD', value: String(stats.disposedYear), icon: <XCircle size={14} />, color: stats.disposedYear > 0 ? 'text-accent-expense' : 'text-text-muted' },
             ].map((k) => (
-              <div key={k.label} className="block-card p-3" style={{ borderRadius: '6px' }}>
+              <div key={k.label} className="block-card p-3" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className={k.color}>{k.icon}</span>
                   <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{k.label}</span>
@@ -546,7 +546,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Upcoming Depreciation */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
                 <Calendar size={14} className="text-accent-blue" /> Depreciation Schedule (Next 12 Months)
               </h3>
@@ -562,8 +562,8 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
                           <span className="text-text-secondary font-mono">{u.month}</span>
                           <span className="font-mono text-text-muted">{fmt.format(u.total)}</span>
                         </div>
-                        <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
-                          <div className="h-full bg-accent-expense transition-all" style={{ width: `${(u.total / max) * 100}%`, borderRadius: '6px' }} />
+                        <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
+                          <div className="h-full bg-accent-expense transition-all" style={{ width: `${(u.total / max) * 100}%`, borderRadius: 'var(--app-radius)' }} />
                         </div>
                       </div>
                     ))}
@@ -573,7 +573,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
             </div>
 
             {/* Assets by Category */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
                 <Layers size={14} className="text-accent-blue" /> Assets by Category
               </h3>
@@ -598,7 +598,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Disposal Tracker */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
                 <XCircle size={14} className="text-accent-expense" /> Disposal Tracker
               </h3>
@@ -624,7 +624,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
             </div>
 
             {/* Aging Assets */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
                 <Clock size={14} className="text-accent-warning" /> Aging Assets (5+ Years)
               </h3>
@@ -658,16 +658,16 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Section 179 Tracker */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-2 flex items-center gap-2">
                 <Shield size={14} className="text-accent-blue" /> Section 179 (2026)
               </h3>
               <div className="text-2xl font-bold text-text-primary font-mono">{fmt.format(section179Total)}</div>
               <div className="text-xs text-text-muted mb-2">of {fmt.format(SECTION_179_CAP_2026)} cap</div>
-              <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
+              <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div
                   className="h-full bg-accent-income transition-all"
-                  style={{ width: `${Math.min((section179Total / SECTION_179_CAP_2026) * 100, 100)}%`, borderRadius: '6px' }}
+                  style={{ width: `${Math.min((section179Total / SECTION_179_CAP_2026) * 100, 100)}%`, borderRadius: 'var(--app-radius)' }}
                 />
               </div>
               <p className="text-[10px] text-text-muted mt-2">
@@ -676,7 +676,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
             </div>
 
             {/* Bonus Depreciation */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-2 flex items-center gap-2">
                 <TrendingDown size={14} className="text-accent-expense" /> Bonus Depreciation (40%)
               </h3>
@@ -688,7 +688,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
             </div>
 
             {/* Warranty Alerts */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-2 flex items-center gap-2">
                 <AlertTriangle size={14} className="text-accent-warning" /> Warranty Expiring (90d)
               </h3>
@@ -732,7 +732,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Status tabs */}
-        <div className="flex border border-border-primary" style={{ borderRadius: '6px' }}>
+        <div className="flex border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
           {STATUS_TABS.map((s) => (
             <button
               key={s}
@@ -764,7 +764,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
 
       {/* Bulk Action Bar */}
       {selectedIds.size > 0 && (
-        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'var(--color-accent-blue)' }}>
+        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)', borderColor: 'var(--color-accent-blue)' }}>
           <span className="text-xs font-semibold text-text-primary">
             {selectedIds.size} asset{selectedIds.size !== 1 ? 's' : ''} selected
           </span>
@@ -1224,7 +1224,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
 
             {/* Preview */}
             {annualDep > 0 && (
-              <div className="bg-bg-tertiary border border-border-primary p-3 space-y-2" style={{ borderRadius: '6px' }}>
+              <div className="bg-bg-tertiary border border-border-primary p-3 space-y-2" style={{ borderRadius: 'var(--app-radius)' }}>
                 <p className="text-xs font-bold text-text-muted uppercase tracking-wider">Depreciation Preview</p>
                 <div className="flex justify-between">
                   <span className="text-xs text-text-secondary">Annual:</span>
@@ -1389,7 +1389,7 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
           className={`fixed top-4 right-4 z-50 px-4 py-3 text-sm font-semibold border ${
             toast.ok ? 'bg-bg-elevated border-accent-income text-accent-income' : 'bg-bg-elevated border-accent-expense text-accent-expense'
           }`}
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           {toast.msg}
         </div>
@@ -1629,7 +1629,7 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
                   contentStyle={{
                     backgroundColor: 'var(--color-bg-elevated)',
                     border: '1px solid var(--color-border-primary)',
-                    borderRadius: '6px',
+                    borderRadius: 'var(--app-radius)',
                     fontSize: '12px',
                   }}
                   formatter={(v) => fmt.format(Number(v))}

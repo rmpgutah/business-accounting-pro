@@ -653,7 +653,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <FileCheck size={18} className="text-accent-blue" />
           </div>
@@ -707,7 +707,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
           <div
             key={s.label}
             className="block-card p-3"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
               {s.label}
@@ -1091,7 +1091,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                             }}
                             className="flex items-center gap-1 px-2 py-1 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors"
                             title="View"
-                            style={{ borderRadius: '6px' }}
+                            style={{ borderRadius: 'var(--app-radius)' }}
                           >
                             <Eye size={12} />
                           </button>
@@ -1100,7 +1100,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                           onClick={(e) => handleDuplicate(q.id, e)}
                           className="flex items-center gap-1 px-2 py-1 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors"
                           title="Duplicate"
-                          style={{ borderRadius: '6px' }}
+                          style={{ borderRadius: 'var(--app-radius)' }}
                         >
                           <Copy size={12} />
                         </button>
@@ -1110,7 +1110,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                             className="flex items-center gap-1 px-2 py-1 text-xs font-bold uppercase"
                             title="Convert to Invoice"
                             style={{
-                              borderRadius: '6px',
+                              borderRadius: 'var(--app-radius)',
                               background: 'var(--color-accent-blue-bg)',
                               border: '1px solid color-mix(in srgb, var(--color-accent-blue) 25%, transparent)',
                               color: 'var(--color-accent-blue)',
@@ -1150,7 +1150,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
             background: 'var(--color-bg-elevated)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             minWidth: '320px',
           }}
         >
@@ -1168,7 +1168,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                   background: 'var(--color-accent-blue-bg)',
                   border: '1px solid color-mix(in srgb, var(--color-accent-blue) 40%, transparent)',
                   color: 'var(--color-accent-blue)',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   padding: '6px 12px',
                   cursor: 'pointer',
                 }}
@@ -1183,7 +1183,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                   background: 'transparent',
                   border: '1px solid var(--color-border-secondary)',
                   color: 'var(--color-text-secondary)',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   padding: '6px 12px',
                   cursor: 'pointer',
                 }}
@@ -1198,7 +1198,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                   background: 'transparent',
                   border: '1px solid var(--color-border-secondary)',
                   color: 'var(--color-text-secondary)',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   padding: '6px 12px',
                   cursor: 'pointer',
                 }}
@@ -1212,7 +1212,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                   background: 'transparent',
                   border: '1px solid var(--color-border-secondary)',
                   color: 'var(--color-text-secondary)',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   padding: '6px 12px',
                   cursor: 'pointer',
                 }}
@@ -1226,7 +1226,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                   background: 'transparent',
                   border: '1px solid var(--color-accent-expense)',
                   color: 'var(--color-accent-expense)',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   padding: '6px 12px',
                   cursor: 'pointer',
                 }}
@@ -1246,7 +1246,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                   background: 'var(--color-accent-expense)',
                   color: '#fff',
                   border: 'none',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   padding: '5px 10px',
                   cursor: 'pointer',
                 }}
@@ -1259,7 +1259,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 style={{
                   background: 'transparent',
                   border: '1px solid var(--color-border-secondary)',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   padding: '5px 10px',
                   cursor: 'pointer',
                 }}
@@ -1284,7 +1284,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                   background: 'var(--color-accent-blue)',
                   color: '#fff',
                   border: 'none',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   padding: '5px 10px',
                   cursor: 'pointer',
                 }}
@@ -1300,7 +1300,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 style={{
                   background: 'transparent',
                   border: '1px solid var(--color-border-secondary)',
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   padding: '5px 10px',
                   cursor: 'pointer',
                 }}

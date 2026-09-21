@@ -832,22 +832,22 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 {/* NOTE: SQLite stores booleans as 0/1 integers. Use ternaries or
                     !! coercion — a bare `{flag && <X/>}` renders a literal "0" when
                     flag is the integer 0 (the stray-0 bug fixed here). */}
-                {exp.is_recurring ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>RECURRING</span> : null}
-                {(!!exp.is_reimbursable && !exp.reimbursed) ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>REIMBURSE</span> : null}
-                {exp.reimbursed ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>REIMBURSED</span> : null}
-                {matchHint ? <span title="A bank transaction matches this expense" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#06b6d422', color: '#06b6d4' }}><Banknote size={10} style={{ display: 'inline', marginRight: 2 }} />MATCH?</span> : null}
+                {exp.is_recurring ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>RECURRING</span> : null}
+                {(!!exp.is_reimbursable && !exp.reimbursed) ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>REIMBURSE</span> : null}
+                {exp.reimbursed ? <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>REIMBURSED</span> : null}
+                {matchHint ? <span title="A bank transaction matches this expense" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: '#06b6d422', color: '#06b6d4' }}><Banknote size={10} style={{ display: 'inline', marginRight: 2 }} />MATCH?</span> : null}
                 {exp.custom_fields && exp.custom_fields !== '{}' && <span title="Has detailed info"><FileText size={12} className="text-accent-blue shrink-0" /></span>}
-                {exp.flagged_for_review ? <span title={exp.flag_reason || 'Flagged for review'} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>FLAGGED</span> : null}
-                {exp.auto_categorized ? <span title="Auto-categorized" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-purple) 13%, transparent)', color: 'var(--color-accent-purple)' }}>AUTO</span> : null}
-                {(exp as any).related_debt_id ? <span title={`Collection cost${(exp as any).is_recoverable ? ' (recoverable from debtor)' : ''}`} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>DEBT{(exp as any).is_recoverable ? '·R' : ''}</span> : null}
-                {Number((exp as any).allocation_count) > 0 ? <span title={`Split across ${(exp as any).allocation_count} allocation target${Number((exp as any).allocation_count) !== 1 ? 's' : ''}`} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#0ea5e922', color: '#38bdf8' }}>SPLIT×{(exp as any).allocation_count}</span> : null}
-                {isAnomaly ? <span title="Unusually high amount for this vendor" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 20%, transparent)', color: 'var(--color-accent-expense)' }}>ANOMALY</span> : null}
-                {isRecent ? <span title="Added in the last 3 days" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>NEW</span> : null}
+                {exp.flagged_for_review ? <span title={exp.flag_reason || 'Flagged for review'} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>FLAGGED</span> : null}
+                {exp.auto_categorized ? <span title="Auto-categorized" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-purple) 13%, transparent)', color: 'var(--color-accent-purple)' }}>AUTO</span> : null}
+                {(exp as any).related_debt_id ? <span title={`Collection cost${(exp as any).is_recoverable ? ' (recoverable from debtor)' : ''}`} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>DEBT{(exp as any).is_recoverable ? '·R' : ''}</span> : null}
+                {Number((exp as any).allocation_count) > 0 ? <span title={`Split across ${(exp as any).allocation_count} allocation target${Number((exp as any).allocation_count) !== 1 ? 's' : ''}`} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: '#0ea5e922', color: '#38bdf8' }}>SPLIT×{(exp as any).allocation_count}</span> : null}
+                {isAnomaly ? <span title="Unusually high amount for this vendor" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-expense) 20%, transparent)', color: 'var(--color-accent-expense)' }}>ANOMALY</span> : null}
+                {isRecent ? <span title="Added in the last 3 days" style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>NEW</span> : null}
                 {/* Capture #2: receipt thumbnail with hover preview */}
                 {exp.receipt_path ? (
                   <span className="relative group inline-flex" title={exp.receipt_path.split(/[/\\]/).pop()}>
                     <span className="inline-flex"><ReceiptThumb path={exp.receipt_path} sizePx={20} /></span>
-                    <span className="hidden group-hover:block absolute z-50 left-6 top-0 border border-border-primary bg-bg-secondary p-1" style={{ borderRadius: 6 }}>
+                    <span className="hidden group-hover:block absolute z-50 left-6 top-0 border border-border-primary bg-bg-secondary p-1" style={{ borderRadius: 'var(--app-radius)' }}>
                       <ReceiptThumb path={exp.receipt_path} sizePx={180} />
                     </span>
                   </span>
@@ -994,7 +994,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Receipt size={18} className="text-accent-blue" />
           </div>
@@ -1286,27 +1286,27 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
       {/* Inline Summary Stats */}
       {filtered.length > 0 && (
         <div className="grid grid-cols-6 gap-3 mb-4">
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total</div>
             <div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(summaryStats.total)}</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg</div>
             <div className="text-lg font-mono font-bold text-text-primary mt-0.5">{formatCurrency(summaryStats.avg)}</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Count</div>
             <div className="text-lg font-mono font-bold text-text-primary mt-0.5">{filtered.length}</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Tax Deductible</div>
             <div className="text-lg font-mono font-bold text-accent-income mt-0.5">{formatCurrency(summaryStats.taxDed)}</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Billable</div>
             <div className="text-lg font-mono font-bold text-accent-blue mt-0.5">{formatCurrency(summaryStats.billable)}</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Largest</div>
             <div className="text-lg font-mono font-bold text-accent-expense mt-0.5">{formatCurrency(summaryStats.max)}</div>
           </div>
@@ -1453,7 +1453,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
             background: 'rgba(18,20,28,0.80)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             minWidth: '420px',
           }}
         >
@@ -1474,7 +1474,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={() => setShowBulkEdit(true)}
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '6px 12px' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-secondary)', borderRadius: 'var(--app-radius)', padding: '6px 12px' }}
           >
             <Edit size={13} /> Bulk Edit
           </button>
@@ -1510,7 +1510,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 alert(e?.message || 'Bulk link failed');
               }
             }}
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '6px 12px' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-secondary)', borderRadius: 'var(--app-radius)', padding: '6px 12px' }}
             title="Link selected expenses to a debt-collection case as collection costs"
           >
             <Scale size={13} /> Link to Debt
@@ -1527,7 +1527,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               if (v === 'paid') setBulkStatusConfirm('paid');
               else handleBulkStatus(v);
             }}
-            style={{ background: 'var(--color-bg-elevated)', color: 'var(--color-text-primary)', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '6px 10px' }}
+            style={{ background: 'var(--color-bg-elevated)', color: 'var(--color-text-primary)', border: '1px solid var(--color-border-secondary)', borderRadius: 'var(--app-radius)', padding: '6px 10px' }}
           >
             <option value="">Change status…</option>
             <option value="pending">Pending</option>
@@ -1545,7 +1545,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               e.target.value = '';
               if (id) handleBatchRecategorize(id);
             }}
-            style={{ background: 'var(--color-bg-elevated)', color: 'var(--color-text-primary)', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '6px 10px' }}
+            style={{ background: 'var(--color-bg-elevated)', color: 'var(--color-text-primary)', border: '1px solid var(--color-border-secondary)', borderRadius: 'var(--app-radius)', padding: '6px 10px' }}
             title="Re-categorize selected"
           >
             <option value="">Re-categorize...</option>
@@ -1558,7 +1558,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleExportSelected}
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-secondary)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export CSV
@@ -1569,7 +1569,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBulkAutoCategorize}
             disabled={batchLoading}
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-purple) 40%, transparent)', color: 'var(--color-accent-purple)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-purple) 40%, transparent)', color: 'var(--color-accent-purple)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
             title="Auto-categorize via vendor history"
           >
             Auto-Cat
@@ -1578,7 +1578,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBulkFlag}
             disabled={batchLoading}
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-expense) 40%, transparent)', color: 'var(--color-accent-expense)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-expense) 40%, transparent)', color: 'var(--color-accent-expense)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
             title="Flag selected for review"
           >
             Flag
@@ -1587,7 +1587,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBulkMarkDeductible}
             disabled={batchLoading}
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-income) 40%, transparent)', color: 'var(--color-accent-income)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-income) 40%, transparent)', color: 'var(--color-accent-income)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
             title="Mark as tax deductible"
           >
             Tax-Ded
@@ -1596,7 +1596,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBulkConvertUSD}
             disabled={batchLoading}
-            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-blue) 40%, transparent)', color: 'var(--color-accent-blue)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'var(--color-bg-elevated)', border: '1px solid color-mix(in srgb, var(--color-accent-blue) 40%, transparent)', color: 'var(--color-accent-blue)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
             title="Convert to USD"
           >
             → USD
@@ -1606,7 +1606,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -1618,14 +1618,14 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => setShowDeleteConfirm(false)}
-                style={{ background: 'transparent', border: '1px solid var(--color-border-secondary)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid var(--color-border-secondary)', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

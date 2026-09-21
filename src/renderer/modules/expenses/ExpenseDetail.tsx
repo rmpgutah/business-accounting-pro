@@ -674,7 +674,7 @@ table{width:100%;border-collapse:collapse;}
             <img
               src={`file://${expense.receipt_path}`}
               alt="Receipt"
-              style={{ maxWidth: '100%', maxHeight: 480, borderRadius: 6, border: '1px solid var(--color-border-primary)' }}
+              style={{ maxWidth: '100%', maxHeight: 480, borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)' }}
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             />
           ) : (

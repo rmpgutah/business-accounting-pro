@@ -138,18 +138,18 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ onNew, onEdit }) => {
         <button
           className="block-btn-primary inline-flex items-center gap-1.5 text-xs px-3 py-1.5 font-semibold"
           onClick={onNew}
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <Plus size={12} /> New Workflow
         </button>
       </div>
 
       {loading ? (
-        <div className="block-card p-6 text-xs text-text-muted italic" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-6 text-xs text-text-muted italic" style={{ borderRadius: 'var(--app-radius)' }}>
           Loading workflows…
         </div>
       ) : workflows.length === 0 ? (
-        <div className="block-card p-6" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-6" style={{ borderRadius: 'var(--app-radius)' }}>
           <EmptyState
             icon={GitBranch}
             message="No workflows yet"
@@ -159,7 +159,7 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ onNew, onEdit }) => {
           />
         </div>
       ) : (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <table className="block-table">
             <thead>
               <tr>
@@ -193,7 +193,7 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ onNew, onEdit }) => {
                     </td>
                     <td>
                       <span className="inline-block border border-border-secondary text-text-secondary text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 font-mono"
-                            style={{ borderRadius: '6px' }}>
+                            style={{ borderRadius: 'var(--app-radius)' }}>
                         {eventType}
                       </span>
                     </td>
@@ -208,7 +208,7 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ onNew, onEdit }) => {
                             ? 'border-accent-income text-accent-income hover:bg-accent-income/10'
                             : 'border-border-secondary text-text-muted hover:bg-bg-hover'
                         }`}
-                        style={{ borderRadius: '6px' }}
+                        style={{ borderRadius: 'var(--app-radius)' }}
                         title={wf.is_active ? 'Click to deactivate' : 'Click to activate'}
                       >
                         {wf.is_active ? 'Active' : 'Inactive'}
@@ -222,7 +222,7 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ onNew, onEdit }) => {
                         <button
                           className="block-btn inline-flex items-center gap-1 text-[10px] px-2 py-1"
                           onClick={() => onEdit(wf.id)}
-                          style={{ borderRadius: '6px' }}
+                          style={{ borderRadius: 'var(--app-radius)' }}
                           title="Edit workflow"
                         >
                           <Pencil size={10} /> Edit

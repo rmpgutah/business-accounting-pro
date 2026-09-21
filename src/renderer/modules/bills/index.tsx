@@ -655,7 +655,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
               ? 'text-accent-income bg-accent-income/10 border-accent-income/20'
               : 'text-accent-expense bg-accent-expense/10 border-accent-expense/20'
           }`}
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           {opMessage.text}
         </div>
@@ -666,7 +666,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
         <div
           className="block-card p-3 flex items-start gap-3"
           style={{
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             borderColor: 'rgba(239,68,68,0.4)',
             background: 'rgba(239,68,68,0.08)',
           }}
@@ -691,7 +691,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
       {/* Stat Cards */}
       <div className="grid grid-cols-4 gap-4 report-summary-tiles">
         {/* Total Unpaid */}
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Total Unpaid</div>
@@ -704,7 +704,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
         </div>
 
         {/* Overdue */}
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Overdue</div>
@@ -717,7 +717,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
         </div>
 
         {/* Due Soon */}
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Due in 7 Days</div>
@@ -730,7 +730,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
         </div>
 
         {/* Paid This Month */}
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Paid This Month</div>
@@ -756,7 +756,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                   ? 'bg-accent-blue text-white'
                   : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
               }`}
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               {tab.label}
             </button>
@@ -791,7 +791,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
 
       {/* Smart filters panel */}
       {showFilters && (
-        <div className="block-card p-3 grid grid-cols-5 gap-3" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 grid grid-cols-5 gap-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div>
             <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">
               Min Amount
@@ -862,7 +862,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
         <div
           className="block-card p-3 flex items-center justify-between"
           style={{
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             borderColor: 'rgba(59,130,246,0.3)',
           }}
         >
@@ -1034,7 +1034,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                       <div className="flex items-center gap-1">
                         <button
                           className="block-btn text-xs py-1 px-2"
-                          style={{ borderRadius: '6px' }}
+                          style={{ borderRadius: 'var(--app-radius)' }}
                           onClick={() => onView(bill.id)}
                         >
                           View
@@ -1042,7 +1042,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                         {canPay && (
                           <button
                             className="block-btn-primary text-xs py-1 px-2 inline-flex items-center gap-1"
-                            style={{ borderRadius: '6px' }}
+                            style={{ borderRadius: 'var(--app-radius)' }}
                             onClick={() => onView(bill.id)}
                             title="Open bill to record payment"
                           >
@@ -1440,7 +1440,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="block-btn p-2" title="Back" style={{ borderRadius: '6px' }}>
+          <button onClick={onBack} className="block-btn p-2" title="Back" style={{ borderRadius: 'var(--app-radius)' }}>
             <ArrowLeft size={16} />
           </button>
           <h1 className="module-title text-text-primary">
@@ -1566,7 +1566,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
                 onClick={() => updateField('bill_type', bt)}
                 className="text-left p-2 transition-colors"
                 style={{
-                  borderRadius: '6px',
+                  borderRadius: 'var(--app-radius)',
                   border: '1px solid var(--color-border-primary)',
                   background: active ? 'var(--color-accent-blue)' : 'var(--color-bg-tertiary)',
                   color: active ? '#fff' : 'var(--color-text-primary)',
@@ -1715,7 +1715,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
           <div className="flex gap-2">
             <button
               className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               onClick={addLine}
               title="Add line item"
             >
@@ -1724,7 +1724,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
             </button>
             <button
               className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               onClick={() => setLines((prev) => [...prev, newLineDraft('section')])}
               title="Add section header"
             >
@@ -1733,7 +1733,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
             </button>
             <button
               className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               onClick={() => setLines((prev) => [...prev, newLineDraft('note')])}
               title="Add note"
             >
@@ -1742,7 +1742,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
             </button>
             <button
               className="block-btn flex items-center gap-1.5 text-xs py-1 px-2"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               onClick={() => setLines((prev) => [...prev, newLineDraft('subtotal')])}
               title="Add subtotal row"
             >
@@ -2034,7 +2034,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
               type="number"
               step="0.01"
               className="block-input text-right font-mono w-24"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               value={form.tax_pct}
               onChange={(e) => updateField('tax_pct', parseFloat(e.target.value) || 0)}
               title="Applied to lines that don't have an override"
@@ -2052,7 +2052,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
               type="number"
               step="0.01"
               className="block-input text-right font-mono w-24"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               value={form.discount}
               onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
             />
@@ -2064,7 +2064,7 @@ const BillForm: React.FC<BillFormProps> = ({ billId, onBack, onSaved }) => {
               type="number"
               step="0.01"
               className="block-input text-right font-mono w-24"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               value={form.shipping_amount}
               onChange={(e) => updateField('shipping_amount', parseFloat(e.target.value) || 0)}
             />
@@ -2249,7 +2249,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="block-btn p-2" title="Back" style={{ borderRadius: '6px' }}>
+          <button onClick={onBack} className="block-btn p-2" title="Back" style={{ borderRadius: 'var(--app-radius)' }}>
             <ArrowLeft size={16} />
           </button>
           <h1 className="module-title text-text-primary">{bill.bill_number}</h1>
@@ -2258,21 +2258,21 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
         <div className="module-actions">
           <button
             className="block-btn flex items-center gap-2"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             onClick={handlePreview}
           >
             <Eye size={14} /> Preview
           </button>
           <button
             className="block-btn flex items-center gap-2"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             onClick={handlePrint}
           >
             <Printer size={14} /> Print
           </button>
           <button
             className="block-btn flex items-center gap-2"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             onClick={handleSavePDF}
           >
             <Download size={14} /> Save PDF
@@ -2285,7 +2285,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
           </button>
           <button
             className="block-btn flex items-center gap-2"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             onClick={() => onEdit(billId)}
           >
             <Edit size={14} />
@@ -2503,7 +2503,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
               style={{
                 background: 'rgba(248,113,113,0.08)',
                 border: '1px solid #ef4444',
-                borderRadius: '6px',
+                borderRadius: 'var(--app-radius)',
                 padding: '10px 14px',
                 marginBottom: '14px',
               }}
@@ -2527,7 +2527,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
                 min={0.01}
                 step="0.01"
                 className="block-input font-mono"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
               />
@@ -2539,7 +2539,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
               <input
                 type="date"
                 className="block-input font-mono"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
                 value={payDate}
                 onChange={(e) => setPayDate(e.target.value)}
               />
@@ -2588,7 +2588,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
               <input
                 type="text"
                 className="block-input font-mono"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
                 placeholder="Check #, ACH ID..."
                 value={payReference}
                 onChange={(e) => setPayReference(e.target.value)}
@@ -2599,7 +2599,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
           <div className="flex justify-end">
             <button
               className="block-btn-primary flex items-center gap-2"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               disabled={payLoading}
               onClick={handleRecordPayment}
             >
@@ -2812,7 +2812,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
     <div className="p-6 space-y-5 overflow-y-auto h-full">
       {/* 6 KPI cards */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Total Outstanding</div>
@@ -2826,7 +2826,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
             />
           </div>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Overdue Amount</div>
@@ -2840,7 +2840,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
             />
           </div>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">This Month Bills</div>
@@ -2854,7 +2854,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
             />
           </div>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Avg Days to Pay</div>
@@ -2868,7 +2868,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
             />
           </div>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Due in 7 Days</div>
@@ -2879,7 +2879,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
             <Clock size={20} className="text-accent-blue opacity-60 mt-1" />
           </div>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Top Vendors</div>
@@ -2953,7 +2953,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
         </div>
 
         {/* Cash flow impact */}
-        <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">
             Cash Flow Impact (Upcoming Bills)
           </div>
@@ -2968,7 +2968,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
               style={{
                 height: 8,
                 background: 'var(--color-bg-tertiary)',
-                borderRadius: '6px',
+                borderRadius: 'var(--app-radius)',
                 overflow: 'hidden',
               }}
             >
@@ -2996,7 +2996,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
               style={{
                 height: 8,
                 background: 'var(--color-bg-tertiary)',
-                borderRadius: '6px',
+                borderRadius: 'var(--app-radius)',
                 overflow: 'hidden',
               }}
             >
@@ -3024,7 +3024,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
               style={{
                 height: 8,
                 background: 'var(--color-bg-tertiary)',
-                borderRadius: '6px',
+                borderRadius: 'var(--app-radius)',
                 overflow: 'hidden',
               }}
             >
@@ -3080,7 +3080,7 @@ const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
                           width: 100,
                           height: 8,
                           background: 'var(--color-bg-tertiary)',
-                          borderRadius: '6px',
+                          borderRadius: 'var(--app-radius)',
                           overflow: 'hidden',
                           verticalAlign: 'middle',
                           marginRight: 6,

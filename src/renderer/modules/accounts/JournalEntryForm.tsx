@@ -808,14 +808,14 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
 
   // ─── Render ─────────────────────────────────────────
   const sourceChip = entry?.source_type && entry?.source_id ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-accent-blue/15 text-accent-blue" style={{ borderRadius: '6px' }}>
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-accent-blue/15 text-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
       Posted from {entry.source_type} {entry.source_id.slice(0, 8)}
     </span>
   ) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 bg-black/50">
-      <div className="bg-bg-elevated border border-border-primary w-full max-w-4xl shadow-xl" style={{ borderRadius: '6px' }}>
+      <div className="bg-bg-elevated border border-border-primary w-full max-w-4xl shadow-xl" style={{ borderRadius: 'var(--app-radius)' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-primary">
           <div className="flex items-center gap-3">
@@ -827,7 +827,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
             )}
             {sourceChip}
             {isLocked && (
-              <span className="px-2 py-0.5 text-[10px] font-semibold bg-accent-income/15 text-accent-income" style={{ borderRadius: '6px' }}>
+              <span className="px-2 py-0.5 text-[10px] font-semibold bg-accent-income/15 text-accent-income" style={{ borderRadius: 'var(--app-radius)' }}>
                 POSTED — read-only
               </span>
             )}
@@ -859,23 +859,23 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
 
         {/* Action toolbar */}
         <div className="px-5 py-2 border-b border-border-primary flex items-center gap-2 text-[11px] flex-wrap">
-          <button onClick={() => setShowPreview(true)} className="block-btn flex items-center gap-1 px-2 py-1" style={{ borderRadius: '6px' }}>
+          <button onClick={() => setShowPreview(true)} className="block-btn flex items-center gap-1 px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
             <Eye size={11} /> Preview
           </button>
-          <button onClick={printWithSignature} className="block-btn flex items-center gap-1 px-2 py-1" style={{ borderRadius: '6px' }}>
+          <button onClick={printWithSignature} className="block-btn flex items-center gap-1 px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
             <FileText size={11} /> Cover sheet
           </button>
           {(isRecurring || isReversing) && (
-            <button onClick={() => setShowSchedule(true)} className="block-btn flex items-center gap-1 px-2 py-1" style={{ borderRadius: '6px' }}>
+            <button onClick={() => setShowSchedule(true)} className="block-btn flex items-center gap-1 px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
               <Repeat size={11} /> Schedule
             </button>
           )}
           {isEdit && (
-            <button onClick={() => setShowVersions((v) => !v)} className="block-btn flex items-center gap-1 px-2 py-1" style={{ borderRadius: '6px' }}>
+            <button onClick={() => setShowVersions((v) => !v)} className="block-btn flex items-center gap-1 px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
               <History size={11} /> Versions ({versions.length})
             </button>
           )}
-          <button onClick={() => setShowCopyPicker(true)} className="block-btn flex items-center gap-1 px-2 py-1" style={{ borderRadius: '6px' }}>
+          <button onClick={() => setShowCopyPicker(true)} className="block-btn flex items-center gap-1 px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
             <ListPlus size={11} /> Copy lines from JE
           </button>
           <span className="mx-2 text-text-muted">|</span>
@@ -892,7 +892,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
           style={isLocked ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
         >
           {errors._form && (
-            <div className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2" style={{ borderRadius: '6px' }}>
+            <div className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>
               {errors._form}
             </div>
           )}
@@ -912,7 +912,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
             if (duplicateWarning) warnings.push(duplicateWarning);
             if (warnings.length === 0) return null;
             return (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 text-xs px-3 py-2" style={{ borderRadius: '6px' }}>
+              <div className="bg-yellow-500/10 border border-yellow-500/30 text-xs px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="font-semibold mb-1 flex items-center gap-1"><AlertTriangle size={12} /> Warnings</div>
                 <ul className="list-disc ml-5 space-y-0.5 text-text-secondary">
                   {warnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -923,7 +923,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
 
           {/* F12: Source-doc inline preview */}
           {sourceDoc && (
-            <div className="bg-bg-tertiary border border-border-primary px-3 py-2 text-xs flex items-center gap-3" style={{ borderRadius: '6px' }}>
+            <div className="bg-bg-tertiary border border-border-primary px-3 py-2 text-xs flex items-center gap-3" style={{ borderRadius: 'var(--app-radius)' }}>
               <span className="font-semibold text-text-primary">
                 {sourceDoc._table === 'invoices' ? 'Invoice' : sourceDoc._table === 'bills' ? 'Bill' : 'Expense'}{' '}
                 {sourceDoc.invoice_number || sourceDoc.bill_number || sourceDoc.expense_number || sourceDoc.id?.slice(0, 8)}
@@ -943,14 +943,14 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Date *</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
                 className={`block-input w-full px-3 py-2 text-sm bg-bg-primary border ${errors.date ? 'border-accent-expense' : 'border-border-primary'} text-text-primary focus:outline-none focus:border-accent-blue`}
-                style={{ borderRadius: '6px' }} />
+                style={{ borderRadius: 'var(--app-radius)' }} />
             </div>
             <div className="col-span-2">
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Description *</label>
               <input type="text" value={description} onChange={(e) => setDescription(e.target.value)}
                 placeholder="Entry description"
                 className={`block-input w-full px-3 py-2 text-sm bg-bg-primary border ${errors.description ? 'border-accent-expense' : 'border-border-primary'} text-text-primary focus:outline-none focus:border-accent-blue`}
-                style={{ borderRadius: '6px' }} />
+                style={{ borderRadius: 'var(--app-radius)' }} />
             </div>
             <div className="relative">
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Reference</label>
@@ -961,7 +961,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                 placeholder="e.g. INV-001"
                 list="je-ref-suggestions"
                 className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                style={{ borderRadius: '6px' }} />
+                style={{ borderRadius: 'var(--app-radius)' }} />
               <datalist id="je-ref-suggestions">
                 {referenceSuggestions.filter((r) => !reference || r.toLowerCase().includes(reference.toLowerCase())).slice(0, 20).map((r) => (
                   <option key={r} value={r} />
@@ -976,14 +976,14 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
               <input type="text" value={klass} onChange={(e) => setKlass(e.target.value)}
                 placeholder="e.g. Sales, R&D"
                 className="block-input w-full px-3 py-2 text-sm bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                style={{ borderRadius: '6px' }} />
+                style={{ borderRadius: 'var(--app-radius)' }} />
             </div>
             <div>
               <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Use Template</label>
               <select onChange={(e) => { if (e.target.value) applyTemplate(e.target.value); e.target.value = ''; }}
                 defaultValue=""
                 className="block-select w-full px-2 py-2 text-xs bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                style={{ borderRadius: '6px' }}>
+                style={{ borderRadius: 'var(--app-radius)' }}>
                 <option value="">— pick a template —</option>
                 {JE_TEMPLATES.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
@@ -998,7 +998,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
               {isRecurring && (
                 <select value={recurFrequency} onChange={(e) => setRecurFrequency(e.target.value as any)}
                   className="block-select px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary"
-                  style={{ borderRadius: '6px' }}>
+                  style={{ borderRadius: 'var(--app-radius)' }}>
                   <option value="weekly">Weekly</option>
                   <option value="biweekly">Biweekly</option>
                   <option value="monthly">Monthly</option>
@@ -1015,7 +1015,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
               {isReversing && (
                 <input type="date" value={reverseOnDate} onChange={(e) => setReverseOnDate(e.target.value)}
                   className="block-input px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary"
-                  style={{ borderRadius: '6px' }} />
+                  style={{ borderRadius: 'var(--app-radius)' }} />
               )}
             </div>
           </div>
@@ -1038,7 +1038,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
 
             {errors.lines && <p className="text-[10px] text-accent-expense mb-2">{errors.lines}</p>}
 
-            <div className="border border-border-primary overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="border border-border-primary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-bg-tertiary border-b border-border-primary">
@@ -1073,7 +1073,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                         <select value={line.account_id}
                           onChange={(e) => updateLine(line.key, 'account_id', e.target.value)}
                           className="block-select w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                          style={{ borderRadius: '6px' }}>
+                          style={{ borderRadius: 'var(--app-radius)' }}>
                           <option value="">Select account...</option>
                           {renderAccountOptions()}
                         </select>
@@ -1085,7 +1085,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                           onKeyDown={(e) => handleCellKeyDown(e, idx, false)}
                           placeholder="0.00"
                           className="block-input w-full px-2 py-1 text-xs text-right font-mono bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                          style={{ borderRadius: '6px' }} />
+                          style={{ borderRadius: 'var(--app-radius)' }} />
                       </td>
                       <td className="px-2 py-1.5">
                         <input type="text" inputMode="decimal" value={line.credit}
@@ -1094,7 +1094,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                           onKeyDown={(e) => handleCellKeyDown(e, idx, false)}
                           placeholder="0.00"
                           className="block-input w-full px-2 py-1 text-xs text-right font-mono bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                          style={{ borderRadius: '6px' }} />
+                          style={{ borderRadius: 'var(--app-radius)' }} />
                       </td>
                       <td className="px-2 py-1.5">
                         <input type="text" value={line.description}
@@ -1102,7 +1102,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                           onKeyDown={(e) => handleCellKeyDown(e, idx, true)}
                           placeholder="Line memo"
                           className="block-input w-full px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary focus:outline-none focus:border-accent-blue"
-                          style={{ borderRadius: '6px' }} />
+                          style={{ borderRadius: 'var(--app-radius)' }} />
                       </td>
                       <td className="px-2 py-1.5 text-center">
                         <div className="flex items-center justify-end gap-1">
@@ -1127,7 +1127,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
 
           {errors.balance && (
             <div className="bg-accent-expense/10 border border-accent-expense/30 text-accent-expense text-xs px-3 py-2 flex items-center gap-2"
-                 style={{ borderRadius: '6px' }}>
+                 style={{ borderRadius: 'var(--app-radius)' }}>
               <AlertTriangle size={14} /> {errors.balance}
             </div>
           )}
@@ -1180,7 +1180,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                   <input type="text" value={newComment} onChange={(e) => setNewComment(e.target.value)}
                     placeholder="Add a comment..."
                     className="block-input flex-1 px-2 py-1 text-xs bg-bg-primary border border-border-primary text-text-primary"
-                    style={{ borderRadius: '6px' }} />
+                    style={{ borderRadius: 'var(--app-radius)' }} />
                   <button onClick={addComment} className="block-btn px-2 py-1 text-xs">Post</button>
                 </div>
               </div>
@@ -1214,7 +1214,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
         {/* F2: Schedule preview modal */}
         {showSchedule && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-bg-elevated border border-border-primary w-96 shadow-xl" style={{ borderRadius: '6px' }}>
+            <div className="bg-bg-elevated border border-border-primary w-96 shadow-xl" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-4 py-2 border-b border-border-primary flex items-center justify-between">
                 <h3 className="text-sm font-bold">Schedule preview — next 12</h3>
                 <button onClick={() => setShowSchedule(false)} className="text-text-muted">×</button>
@@ -1238,7 +1238,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
         {/* F8: Preview modal (read-only print-style) */}
         {showPreview && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-bg-elevated border border-border-primary w-full max-w-3xl shadow-xl" style={{ borderRadius: '6px' }}>
+            <div className="bg-bg-elevated border border-border-primary w-full max-w-3xl shadow-xl" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-4 py-2 border-b border-border-primary flex items-center justify-between">
                 <h3 className="text-sm font-bold">Preview</h3>
                 <button onClick={() => setShowPreview(false)} className="text-text-muted">×</button>
@@ -1255,7 +1255,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
         {/* F10: Copy lines picker */}
         {showCopyPicker && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-bg-elevated border border-border-primary w-full max-w-xl shadow-xl" style={{ borderRadius: '6px' }}>
+            <div className="bg-bg-elevated border border-border-primary w-full max-w-xl shadow-xl" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-4 py-2 border-b border-border-primary flex items-center justify-between">
                 <h3 className="text-sm font-bold">Copy lines from another entry</h3>
                 <button onClick={() => setShowCopyPicker(false)} className="text-text-muted">×</button>
@@ -1280,7 +1280,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
         {/* F13: Smart auto-balance suggestions */}
         {showSuggestions && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-bg-elevated border border-border-primary w-96 shadow-xl" style={{ borderRadius: '6px' }}>
+            <div className="bg-bg-elevated border border-border-primary w-96 shadow-xl" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-4 py-2 border-b border-border-primary flex items-center justify-between">
                 <h3 className="text-sm font-bold">Balance suggestions</h3>
                 <button onClick={() => setShowSuggestions(false)} className="text-text-muted">×</button>
@@ -1323,12 +1323,12 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
           <div className="flex items-center gap-2">
             <button onClick={onClose}
               className="px-4 py-1.5 text-xs font-semibold text-text-secondary bg-bg-tertiary border border-border-primary hover:bg-bg-hover transition-colors"
-              style={{ borderRadius: '6px' }}>
+              style={{ borderRadius: 'var(--app-radius)' }}>
               Cancel
             </button>
             <button onClick={handleSave} disabled={saving || !isBalanced || isLocked}
               className="block-btn-primary flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
-              style={{ borderRadius: '6px' }}>
+              style={{ borderRadius: 'var(--app-radius)' }}>
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               {isEdit ? 'Update Entry' : 'Save Entry'}
             </button>

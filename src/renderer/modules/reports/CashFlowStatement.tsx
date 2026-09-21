@@ -41,7 +41,7 @@ const KPICard: React.FC<{
 }> = ({ label, value, subtitle, borderColor, isText }) => (
   <div
     className={`block-card p-3 border-l-4 ${borderColor}`}
-    style={{ borderRadius: '6px' }}
+    style={{ borderRadius: 'var(--app-radius)' }}
   >
     <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
       {label}
@@ -468,7 +468,7 @@ const CashFlowStatement: React.FC = () => {
   const ChartTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
-      <div className="block-card p-2 text-xs" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-2 text-xs" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="font-semibold text-text-primary">{label}</div>
         {payload.map((p: any, i: number) => (
           <div key={i} className="text-text-secondary">
@@ -486,7 +486,7 @@ const CashFlowStatement: React.FC = () => {
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"
-        style={{ borderRadius: '6px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         <div className="flex items-center gap-3">
           <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">
@@ -515,7 +515,7 @@ const CashFlowStatement: React.FC = () => {
                 key={p}
                 onClick={() => setPreset(p)}
                 className="px-2 py-1 text-[10px] font-semibold bg-bg-tertiary text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 {p}
               </button>
@@ -527,7 +527,7 @@ const CashFlowStatement: React.FC = () => {
             className={`flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold transition-colors ${
               method === 'indirect' ? 'text-accent-blue bg-accent-blue/10' : 'text-text-muted bg-bg-tertiary hover:text-text-primary hover:bg-bg-hover'
             }`}
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Toggle Direct / Indirect Method"
             onClick={() => setMethod(m => m === 'direct' ? 'indirect' : 'direct')}
           >
@@ -556,7 +556,7 @@ const CashFlowStatement: React.FC = () => {
               await api.printPreview(html, `Cash Flow Statement — ${startDate} to ${endDate}`);
             }}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Print / Save PDF"
           >
             <Printer size={15} />
@@ -564,7 +564,7 @@ const CashFlowStatement: React.FC = () => {
           <button
             onClick={handleExportCSV}
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Export CSV"
           >
             <Download size={15} />
@@ -597,7 +597,7 @@ const CashFlowStatement: React.FC = () => {
 
           {/* ─── Monthly Cash Flow Trend ─────────────── */}
           {monthlyCashFlow.length > 0 && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">
                 Monthly Net Cash Flow ({startDate.slice(0, 4)})
               </div>
@@ -634,7 +634,7 @@ const CashFlowStatement: React.FC = () => {
           {/* ─── Cash Flow Table ──────────────────────── */}
           <div
             className="block-card overflow-hidden"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             {/* Report header */}
             <div className="px-6 py-4 border-b border-border-primary bg-bg-tertiary/50 text-center">
@@ -770,7 +770,7 @@ const CashFlowStatement: React.FC = () => {
 
           {/* ─── Cash Balance Projection ─────────────── */}
           {projection && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">
                 Cash Balance Projection (Year-End Estimate)
               </div>

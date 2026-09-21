@@ -126,7 +126,7 @@ const ReimbursementRun: React.FC = () => {
     <div className="space-y-4">
       <div className="module-header">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 6 }}>
+          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <Wallet size={18} className="text-accent-blue" />
           </div>
           <div>

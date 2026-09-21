@@ -152,7 +152,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ debtId, contactId, onClose, o
               aria-label="Close"
               onClick={onClose}
               className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <X size={16} />
             </button>

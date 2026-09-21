@@ -230,7 +230,7 @@ const TrashSettings: React.FC = () => {
           <div style={{
             padding: 12,
             border: '1px dashed var(--color-border-primary)',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             background: 'color-mix(in srgb, var(--color-accent-warning) 5%, transparent)',
             fontSize: 11,
             color: 'var(--color-text-muted)',

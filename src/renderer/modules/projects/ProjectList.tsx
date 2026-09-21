@@ -71,14 +71,14 @@ const BudgetBar: React.FC<{ spent: number; budget: number }> = ({ spent, budget 
       </div>
       <div
         className="w-full h-1.5 bg-bg-tertiary overflow-hidden"
-        style={{ borderRadius: '6px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         <div
           className="h-full transition-all duration-300"
           style={{
             width: `${pct}%`,
             backgroundColor: barColor,
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
           }}
         />
       </div>
@@ -374,7 +374,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
           { label: 'Hours', value: kpis.totalHours.toFixed(1), icon: <Clock size={14} />, color: 'text-text-primary' },
           { label: 'Completion', value: `${kpis.completionRate.toFixed(0)}%`, icon: <CheckCircle2 size={14} />, color: 'text-accent-blue' },
         ].map((k) => (
-          <div key={k.label} className="block-card p-3" style={{ borderRadius: '6px' }}>
+          <div key={k.label} className="block-card p-3" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-center gap-1.5 mb-1">
               <span className={k.color}>{k.icon}</span>
               <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{k.label}</span>
@@ -395,7 +395,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
                 ? 'bg-accent-blue text-white'
                 : 'bg-bg-secondary text-text-muted hover:text-text-primary transition-colors'
             }`}
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             {tab.label}
             <span className="ml-1.5 opacity-60">
@@ -431,7 +431,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
 
       {/* Batch Action Bar */}
       {selectedIds.size > 0 && (
-        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'rgba(59,130,246,0.3)' }}>
+        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)', borderColor: 'rgba(59,130,246,0.3)' }}>
           <span className="text-xs font-semibold text-text-primary">
             {selectedIds.size} project{selectedIds.size !== 1 ? 's' : ''} selected
           </span>
@@ -500,7 +500,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
               <div
                 key={project.id}
                 className="block-card p-0 overflow-hidden cursor-pointer hover:bg-bg-hover transition-colors"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
                 onClick={() => onSelectProject(project.id)}
               >
                 {/* Card Header */}

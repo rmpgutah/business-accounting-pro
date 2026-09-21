@@ -108,7 +108,7 @@ const NumberingSettings: React.FC = () => {
   return (
     <div className="block-card space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: '6px' }}>
+        <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: 'var(--app-radius)' }}>
           <Hash size={16} className="text-accent-blue" />
         </div>
         <div>
@@ -118,7 +118,7 @@ const NumberingSettings: React.FC = () => {
       </div>
       <div className="border-t border-border-primary pt-4 space-y-3">
         {sequences.map(seq => (
-          <div key={seq.id} className="p-3 border border-border-primary" style={{ borderRadius: '6px' }}>
+          <div key={seq.id} className="p-3 border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm font-semibold text-text-primary">{ENTITY_LABELS[seq.entity_type] || seq.entity_type}</div>
               <div className="text-xs text-text-muted">

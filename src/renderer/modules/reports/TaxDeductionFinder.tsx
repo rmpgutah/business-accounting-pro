@@ -151,7 +151,7 @@ const TaxDeductionFinder: React.FC<Props> = ({ onBack }) => {
             marginTop: 16,
             padding: 12,
             border: '1px dashed var(--color-border-primary)',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             background: 'rgba(217, 119, 6, 0.05)',
             fontSize: 11,
             color: 'var(--color-text-muted)',

@@ -234,13 +234,13 @@ const Notifications: React.FC = () => {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary relative"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Bell size={18} className="text-accent-blue" />
             {unreadCount > 0 && (
               <span
                 className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center text-[10px] font-bold text-white bg-accent-expense"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
@@ -255,7 +255,7 @@ const Notifications: React.FC = () => {
         </div>
         <div className="module-actions">
           {/* Filter tabs */}
-          <div className="flex items-center border border-border-primary" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <button
               className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                 filter === 'all'
@@ -327,7 +327,7 @@ const Notifications: React.FC = () => {
                 <label
                   key={key}
                   className="flex items-center gap-3 p-2 border border-border-primary cursor-pointer hover:bg-bg-hover transition-colors"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   <div
                     className={`w-10 h-5 flex items-center rounded p-0.5 cursor-pointer transition-colors ${
@@ -339,7 +339,7 @@ const Notifications: React.FC = () => {
                       className={`w-4 h-4 bg-bg-secondary rounded transform transition-transform ${
                         preferences[key] !== false ? 'translate-x-5' : 'translate-x-0'
                       }`}
-                      style={{ borderRadius: '6px' }}
+                      style={{ borderRadius: 'var(--app-radius)' }}
                     />
                   </div>
                   <div className="flex items-center gap-2 flex-1">
@@ -361,7 +361,7 @@ const Notifications: React.FC = () => {
               ? 'bg-bg-elevated text-text-primary border-border-primary'
               : 'text-text-muted border-transparent hover:text-text-secondary transition-colors'
           }`}
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
           onClick={() => setCategoryFilter('')}
         >
           All Types
@@ -377,7 +377,7 @@ const Notifications: React.FC = () => {
                   ? 'bg-bg-elevated text-text-primary border-border-primary'
                   : 'text-text-muted border-transparent hover:text-text-secondary transition-colors'
               }`}
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               onClick={() => setCategoryFilter(categoryFilter === key ? '' : key as CategoryFilter)}
             >
               <config.icon size={12} className={config.color} />
@@ -423,7 +423,7 @@ const Notifications: React.FC = () => {
                 {/* Icon */}
                 <div
                   className="w-8 h-8 shrink-0 flex items-center justify-center bg-bg-tertiary border border-border-primary mt-0.5"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   <IconComponent size={16} className={iconColor} />
                 </div>
@@ -442,7 +442,7 @@ const Notifications: React.FC = () => {
                     {!n.is_read && (
                       <span
                         className="w-2 h-2 bg-accent-blue shrink-0"
-                        style={{ borderRadius: '6px' }}
+                        style={{ borderRadius: 'var(--app-radius)' }}
                       />
                     )}
                   </div>

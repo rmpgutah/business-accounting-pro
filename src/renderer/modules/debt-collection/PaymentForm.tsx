@@ -244,7 +244,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
             <div className="flex items-center gap-3">
               <div
                 className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 <DollarSign size={16} className="text-accent-income" />
               </div>
@@ -361,7 +361,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ debtId, editId, onClose, onSa
               {parsedAmount > 0 && debt && (
                 <div
                   className="bg-bg-tertiary border border-border-primary p-4 space-y-2"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
                     Payment Allocation

@@ -62,7 +62,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 border ${cls}`}
-      style={{ borderRadius: '6px' }}
+      style={{ borderRadius: 'var(--app-radius)' }}
     >
       {icon}
       {status || '—'}
@@ -131,7 +131,7 @@ const WorkflowExecutionLog: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {/* Tab toggle */}
-          <div className="inline-flex border border-border-secondary" style={{ borderRadius: '6px' }}>
+          <div className="inline-flex border border-border-secondary" style={{ borderRadius: 'var(--app-radius)' }}>
             <button
               type="button"
               className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 transition-colors ${
@@ -173,7 +173,7 @@ const WorkflowExecutionLog: React.FC = () => {
             className="block-btn text-xs px-3 py-1.5"
             onClick={load}
             disabled={loading}
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
@@ -183,7 +183,7 @@ const WorkflowExecutionLog: React.FC = () => {
       <p className="text-[10px] text-text-muted">Auto-refreshes every 30 seconds.</p>
 
       {tab === 'executions' ? (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           {executions.length === 0 ? (
             <div className="p-4 text-xs text-text-muted italic">
               {loading ? 'Loading executions…' : 'No executions recorded yet.'}
@@ -226,7 +226,7 @@ const WorkflowExecutionLog: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           {events.length === 0 ? (
             <div className="p-4 text-xs text-text-muted italic">
               {loading ? 'Loading events…' : 'No events recorded yet.'}
@@ -277,7 +277,7 @@ const WorkflowExecutionLog: React.FC = () => {
                           <td colSpan={4} className="bg-bg-tertiary">
                             <pre
                               className="text-[11px] font-mono text-text-secondary overflow-x-auto whitespace-pre-wrap p-3"
-                              style={{ borderRadius: '6px' }}
+                              style={{ borderRadius: 'var(--app-radius)' }}
                             >
                               {parsedPayload == null
                                 ? '(no payload)'

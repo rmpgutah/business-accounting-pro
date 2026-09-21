@@ -221,7 +221,7 @@ const LoanForm: React.FC<Props> = ({ loanId, onSaved, onCancel }) => {
           marginTop: 16, padding: '12px 14px',
           background: 'var(--color-accent-blue-bg)',
           border: '1px solid var(--color-accent-blue-bg)',
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
         }}>
           <div style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--color-text-muted)' }}>
             Live Preview · {freqLabel} Payment (excludes escrow)

@@ -81,7 +81,7 @@ const HrAnalytics: React.FC = () => {
                     contentStyle={{
                       background: 'var(--color-bg-elevated)',
                       border: '1px solid var(--color-border-primary)',
-                      borderRadius: '6px',
+                      borderRadius: 'var(--app-radius)',
                       fontSize: '12px',
                     }}
                   />

@@ -284,7 +284,7 @@ const APAgingReport: React.FC = () => {
       {error && <ErrorBanner message={error} title="Failed to load AP Aging" onDismiss={() => setError('')} />}
 
       {/* Controls */}
-      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)' }}>
         <span className="text-xs text-text-muted font-semibold uppercase tracking-wider">
           As of {format(new Date(), 'MMM d, yyyy')}
         </span>
@@ -306,7 +306,7 @@ const APAgingReport: React.FC = () => {
               { label: 'Past Due', value: formatCurrency(pastDueAmt), color: 'text-accent-expense' },
               { label: 'Weighted Avg Days', value: `${weightedAvgDays}`, color: 'text-accent-blue' },
             ].map(c => (
-              <div key={c.label} className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+              <div key={c.label} className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                 <p className={`text-xl font-bold font-mono ${c.color}`}>{c.value}</p>
                 <p className="text-[10px] text-text-muted uppercase tracking-wider font-semibold mt-1">{c.label}</p>
               </div>
@@ -315,9 +315,9 @@ const APAgingReport: React.FC = () => {
 
           {/* Aging Distribution Visual */}
           {grandTotal > 0 && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Aging Distribution</h3>
-              <div className="flex h-6 overflow-hidden" style={{ borderRadius: '6px' }}>
+              <div className="flex h-6 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                 {(Object.keys(BUCKET_LABELS) as BucketKey[]).map(k => {
                   const pct = (bucketTotals[k] / grandTotal) * 100;
                   if (pct <= 0) return null;
@@ -343,19 +343,19 @@ const APAgingReport: React.FC = () => {
           )}
 
           {/* Grand total */}
-          <div className="block-card p-4 flex items-center justify-between report-grand-total-row" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4 flex items-center justify-between report-grand-total-row" style={{ borderRadius: 'var(--app-radius)' }}>
             <span className="text-xs font-bold text-text-primary uppercase tracking-wider">Total Outstanding Payables</span>
             <span className="text-lg font-bold font-mono text-accent-expense">{formatCurrency(grandTotal)}</span>
           </div>
 
           {/* Change 43-44: Vendor Drill-down Table with Priority */}
           {entries.length === 0 ? (
-            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <p className="text-sm text-text-secondary font-medium">No outstanding bills</p>
               <p className="text-xs text-text-muted mt-1">All bills are fully paid.</p>
             </div>
           ) : (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <table className="block-table">
                 <thead>
                   <tr>

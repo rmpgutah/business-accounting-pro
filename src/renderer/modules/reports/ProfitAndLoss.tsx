@@ -66,7 +66,7 @@ const KPICard: React.FC<{
 }> = ({ label, value, subtitle, borderColor }) => (
   <div
     className={`block-card p-3 border-l-4 ${borderColor}`}
-    style={{ borderRadius: '6px' }}
+    style={{ borderRadius: 'var(--app-radius)' }}
   >
     <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
       {label}
@@ -82,7 +82,7 @@ const KPICard: React.FC<{
 
 // ─── Ratio Box ──────────────────────────────────────────
 const RatioBox: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+  <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
     <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{label}</div>
     <div className="text-sm font-bold text-text-primary font-mono mt-1">{value}</div>
   </div>
@@ -636,7 +636,7 @@ const ProfitAndLoss: React.FC = () => {
   const ChartTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
-      <div className="block-card p-2 text-xs" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-2 text-xs" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="font-semibold text-text-primary">{label}</div>
         {payload.map((p: any, i: number) => (
           <div key={i} className="text-text-secondary">
@@ -659,7 +659,7 @@ const ProfitAndLoss: React.FC = () => {
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"
-        style={{ borderRadius: '6px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         <div className="flex items-center gap-3">
           <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">
@@ -688,7 +688,7 @@ const ProfitAndLoss: React.FC = () => {
                 key={p}
                 onClick={() => setPreset(p)}
                 className="px-2 py-1 text-[10px] font-semibold bg-bg-tertiary text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 {p}
               </button>
@@ -699,7 +699,7 @@ const ProfitAndLoss: React.FC = () => {
           {annualizationFactor && (
             <button
               className={`p-2 transition-colors ${showAnnualized ? 'text-accent-blue bg-accent-blue/10' : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'}`}
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               title="Annualized Projection"
               onClick={() => setShowAnnualized(v => !v)}
             >
@@ -708,7 +708,7 @@ const ProfitAndLoss: React.FC = () => {
           )}
           <button
             className={`p-2 transition-colors ${compareYoY ? 'text-accent-blue bg-accent-blue/10' : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'}`}
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Year-over-Year Comparison"
             onClick={() => setCompareYoY(v => !v)}
           >
@@ -716,7 +716,7 @@ const ProfitAndLoss: React.FC = () => {
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Export CSV"
             onClick={handleExportCSV}
           >
@@ -724,7 +724,7 @@ const ProfitAndLoss: React.FC = () => {
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Print Report"
             onClick={handlePrintReport}
           >
@@ -732,7 +732,7 @@ const ProfitAndLoss: React.FC = () => {
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Save PDF"
             onClick={handleSaveReportPDF}
           >
@@ -768,7 +768,7 @@ const ProfitAndLoss: React.FC = () => {
 
           {/* ─── Revenue Trend Sparkline ───────────────── */}
           {monthlyRevenue.length > 0 && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">
                 Monthly Revenue Trend ({startDate.slice(0, 4)})
               </div>
@@ -805,7 +805,7 @@ const ProfitAndLoss: React.FC = () => {
           {/* ─── P&L Table ─────────────────────────────── */}
           <div
             className="block-card overflow-hidden"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             {/* Report header */}
             <div className="px-6 py-4 border-b border-border-primary bg-bg-tertiary/50 text-center">
@@ -1036,7 +1036,7 @@ const ProfitAndLoss: React.FC = () => {
           {/* ─── Charts Section ────────────────────────── */}
           <div className="grid grid-cols-2 gap-4">
             {/* Revenue vs Expenses Bar Chart */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">
                 Revenue vs Expenses
               </div>
@@ -1070,7 +1070,7 @@ const ProfitAndLoss: React.FC = () => {
 
             {/* Expense Breakdown Pie Chart */}
             {expensePieData.length > 0 && (
-              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">
                   Expense Breakdown (Top 10)
                 </div>
@@ -1095,7 +1095,7 @@ const ProfitAndLoss: React.FC = () => {
                       contentStyle={{
                         background: 'var(--color-bg-secondary)',
                         border: '1px solid var(--color-border-primary)',
-                        borderRadius: '6px',
+                        borderRadius: 'var(--app-radius)',
                         fontSize: '11px',
                       }}
                     />

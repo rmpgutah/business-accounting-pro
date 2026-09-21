@@ -138,7 +138,7 @@ const ComplianceDocs: React.FC<Props> = ({ onBack }) => {
         marginTop: 16, padding: 12,
         border: '1px dashed var(--color-border-primary)',
         background: 'rgba(217, 119, 6, 0.05)',
-        borderRadius: 6, fontSize: 11, color: 'var(--color-text-muted)',
+        borderRadius: 'var(--app-radius)', fontSize: 11, color: 'var(--color-text-muted)',
       }}>
         <strong>Compliance reminders:</strong> W-4 is collected at hire and refreshed when an employee has a life event. W-9 should be re-verified annually for active 1099 vendors. I-9 must be on file within 3 business days of the employee's first day, and retained for 3 years after hire OR 1 year after termination — whichever is later.
       </div>

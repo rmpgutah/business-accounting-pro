@@ -492,7 +492,7 @@ const FinancialStatements: React.FC = () => {
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${tab === t.id ? 'text-white' : 'text-text-secondary hover:text-text-primary'}`}
-              style={{ borderRadius: '6px', background: tab === t.id ? 'var(--color-accent-blue)' : 'var(--color-border-primary)' }}>
+              style={{ borderRadius: 'var(--app-radius)', background: tab === t.id ? 'var(--color-accent-blue)' : 'var(--color-border-primary)' }}>
               {t.label}
             </button>
           ))}
@@ -505,34 +505,34 @@ const FinancialStatements: React.FC = () => {
       </div>
 
       {/* Controls: preset, dates, compare, common-size */}
-      <div className="block-card p-4 flex items-center gap-4 flex-wrap" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex items-center gap-4 flex-wrap" style={{ borderRadius: 'var(--app-radius)' }}>
         <FileSpreadsheet size={16} className="text-text-muted" />
         <div className="flex items-center gap-2">
           <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">Period</label>
-          <select value={presetId} onChange={(e) => applyPreset(e.target.value)} className="bg-bg-tertiary border border-border-primary text-text-primary text-xs px-3 py-1.5" style={{ borderRadius: '6px' }}>
+          <select value={presetId} onChange={(e) => applyPreset(e.target.value)} className="bg-bg-tertiary border border-border-primary text-text-primary text-xs px-3 py-1.5" style={{ borderRadius: 'var(--app-radius)' }}>
             {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
         </div>
         {tab === 'balance-sheet' ? (
           <div className="flex items-center gap-2">
             <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">As of</label>
-            <input type="date" value={asOfDate} onChange={(e) => { setAsOfDate(e.target.value); setPresetId('custom'); }} className="bg-bg-tertiary border border-border-primary text-text-primary text-xs px-3 py-1.5 font-mono" style={{ borderRadius: '6px' }} />
+            <input type="date" value={asOfDate} onChange={(e) => { setAsOfDate(e.target.value); setPresetId('custom'); }} className="bg-bg-tertiary border border-border-primary text-text-primary text-xs px-3 py-1.5 font-mono" style={{ borderRadius: 'var(--app-radius)' }} />
           </div>
         ) : (
           <>
             <div className="flex items-center gap-2">
               <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">From</label>
-              <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPresetId('custom'); }} className="bg-bg-tertiary border border-border-primary text-text-primary text-xs px-3 py-1.5 font-mono" style={{ borderRadius: '6px' }} />
+              <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPresetId('custom'); }} className="bg-bg-tertiary border border-border-primary text-text-primary text-xs px-3 py-1.5 font-mono" style={{ borderRadius: 'var(--app-radius)' }} />
             </div>
             <div className="flex items-center gap-2">
               <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">To</label>
-              <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPresetId('custom'); }} className="bg-bg-tertiary border border-border-primary text-text-primary text-xs px-3 py-1.5 font-mono" style={{ borderRadius: '6px' }} />
+              <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPresetId('custom'); }} className="bg-bg-tertiary border border-border-primary text-text-primary text-xs px-3 py-1.5 font-mono" style={{ borderRadius: 'var(--app-radius)' }} />
             </div>
           </>
         )}
         <div className="flex items-center gap-2">
           <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">Compare</label>
-          <select value={compareMode} onChange={(e) => setCompareMode(e.target.value as CompareMode)} className="bg-bg-tertiary border border-border-primary text-text-primary text-xs px-3 py-1.5" style={{ borderRadius: '6px' }}>
+          <select value={compareMode} onChange={(e) => setCompareMode(e.target.value as CompareMode)} className="bg-bg-tertiary border border-border-primary text-text-primary text-xs px-3 py-1.5" style={{ borderRadius: 'var(--app-radius)' }}>
             <option value="none">None</option>
             <option value="prior-period">Prior Period</option>
             <option value="prior-year">Prior Year</option>
@@ -549,7 +549,7 @@ const FinancialStatements: React.FC = () => {
       {loading ? (
         <div className="flex items-center justify-center h-64 text-text-muted text-sm font-mono">Loading statement...</div>
       ) : (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="px-6 py-4 border-b border-border-primary" style={{ background: 'var(--color-bg-elevated)' }}>
             <h2 className="text-sm font-bold text-text-primary">{companyName}</h2>
             <p className="text-xs text-text-muted mt-0.5">
