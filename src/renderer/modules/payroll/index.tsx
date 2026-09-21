@@ -610,12 +610,12 @@ const PayrollModule: React.FC = () => {
               <>
                 {/* KPI Cards */}
                 <div className="grid grid-cols-4 gap-4">
-                  <div className="block-card p-4 border-l-2 border-l-accent-blue" style={{ borderRadius: '6px' }}>
+                  <div className="block-card p-4 border-l-2 border-l-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
                     <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">YTD Payroll Cost</span>
                     <p className="text-2xl font-mono text-text-primary mt-1">{fmt.format(summaryData.ytdGross + summaryData.ytdTaxes)}</p>
                     <span className="text-xs text-text-muted">Gross + taxes in {new Date().getFullYear()}</span>
                   </div>
-                  <div className="block-card p-4 border-l-2 border-l-accent-income" style={{ borderRadius: '6px' }}>
+                  <div className="block-card p-4 border-l-2 border-l-accent-income" style={{ borderRadius: 'var(--app-radius)' }}>
                     <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Last Pay Run</span>
                     <p className="text-2xl font-mono text-text-primary mt-1">
                       {summaryData.lastRun ? fmt.format(summaryData.lastRun.total_net ?? 0) : '--'}
@@ -624,12 +624,12 @@ const PayrollModule: React.FC = () => {
                       {summaryData.lastRun ? formatDate(summaryData.lastRun.pay_date) : 'No runs yet'}
                     </span>
                   </div>
-                  <div className="block-card p-4 border-l-2 border-l-accent-purple" style={{ borderRadius: '6px' }}>
+                  <div className="block-card p-4 border-l-2 border-l-accent-purple" style={{ borderRadius: 'var(--app-radius)' }}>
                     <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Active Employees</span>
                     <p className="text-2xl font-mono text-text-primary mt-1">{summaryData.activeEmployees}</p>
                     <span className="text-xs text-text-muted">{summaryData.uniqueEmployees} paid this year</span>
                   </div>
-                  <div className="block-card p-4 border-l-2 border-l-accent-warning" style={{ borderRadius: '6px' }}>
+                  <div className="block-card p-4 border-l-2 border-l-accent-warning" style={{ borderRadius: 'var(--app-radius)' }}>
                     <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg Pay / Employee</span>
                     <p className="text-2xl font-mono text-text-primary mt-1">
                       {summaryData.uniqueEmployees > 0
@@ -644,7 +644,7 @@ const PayrollModule: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <button
                     className="block-btn-primary inline-flex items-center gap-1.5 text-xs"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                     onClick={() => {
                       setEditingRunId(null);
                       setShowRunner(true);
@@ -655,7 +655,7 @@ const PayrollModule: React.FC = () => {
                   </button>
                   <button
                     className="block-btn inline-flex items-center gap-1.5 text-xs"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                     onClick={() => {
                       setSelectedEmployeeId(null);
                       setShowEmployeeForm(true);
@@ -666,7 +666,7 @@ const PayrollModule: React.FC = () => {
                   </button>
                   <button
                     className="block-btn inline-flex items-center gap-1.5 text-xs"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                     onClick={() => setActiveTab('history')}
                   >
                     <FileText size={14} />
@@ -676,7 +676,7 @@ const PayrollModule: React.FC = () => {
 
                 {/* Recent Payroll Runs */}
                 {summaryData.recentRuns.length > 0 && (
-                  <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+                  <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div className="px-4 py-3 border-b border-border-primary">
                       <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Recent Payroll Runs</h3>
                     </div>
@@ -714,7 +714,7 @@ const PayrollModule: React.FC = () => {
 
                 {/* Payroll Cost Trend */}
                 {summaryData.monthlyTrend.length > 0 && (
-                  <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                  <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div className="flex items-center gap-2 mb-4">
                       <TrendingUp size={14} className="text-accent-blue" />
                       <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Payroll Cost Trend (Last 6 Months)</h3>
@@ -821,7 +821,7 @@ const PayrollModule: React.FC = () => {
                   }), { hours_regular: 0, hours_overtime: 0, gross: 0, federal: 0, state: 0, ss: 0, medicare: 0, deductions: 0, net: 0 }) : null;
 
                   return (
-                    <div key={run.id} className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+                    <div key={run.id} className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                       {/* Run Header */}
                       <div
                         className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-bg-hover transition-colors"
@@ -903,7 +903,7 @@ const PayrollModule: React.FC = () => {
                       {isExpanded && (
                         <div className="border-t border-border-primary bg-bg-tertiary/50">
                           {stubsError && (
-                            <div className="mx-4 mt-3 text-xs text-accent-expense bg-accent-expense/10 border border-accent-expense/20 px-3 py-2" style={{ borderRadius: '6px' }}>
+                            <div className="mx-4 mt-3 text-xs text-accent-expense bg-accent-expense/10 border border-accent-expense/20 px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>
                               {stubsError}
                             </div>
                           )}
@@ -916,19 +916,19 @@ const PayrollModule: React.FC = () => {
                               {/* Metric Summary Cards */}
                               {stubTotals && (
                                 <div className="grid grid-cols-4 gap-3 px-4 pt-4 pb-2">
-                                  <div className="bg-bg-secondary/80 px-3 py-2" style={{ borderRadius: '6px' }}>
+                                  <div className="bg-bg-secondary/80 px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>
                                     <span className="text-[9px] font-semibold text-text-muted uppercase tracking-wider">Employees</span>
                                     <p className="text-lg font-mono text-text-primary">{stubs.length}</p>
                                   </div>
-                                  <div className="bg-bg-secondary/80 px-3 py-2" style={{ borderRadius: '6px' }}>
+                                  <div className="bg-bg-secondary/80 px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>
                                     <span className="text-[9px] font-semibold text-text-muted uppercase tracking-wider">Gross Pay</span>
                                     <p className="text-lg font-mono text-text-primary">{fmt.format(stubTotals.gross)}</p>
                                   </div>
-                                  <div className="bg-bg-secondary/80 px-3 py-2" style={{ borderRadius: '6px' }}>
+                                  <div className="bg-bg-secondary/80 px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>
                                     <span className="text-[9px] font-semibold text-text-muted uppercase tracking-wider">Total Taxes</span>
                                     <p className="text-lg font-mono text-accent-expense">{fmt.format(stubTotals.federal + stubTotals.state + stubTotals.ss + stubTotals.medicare)}</p>
                                   </div>
-                                  <div className="bg-bg-secondary/80 px-3 py-2" style={{ borderRadius: '6px' }}>
+                                  <div className="bg-bg-secondary/80 px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>
                                     <span className="text-[9px] font-semibold text-text-muted uppercase tracking-wider">Net Pay</span>
                                     <p className="text-lg font-mono font-semibold text-accent-income">{fmt.format(stubTotals.net)}</p>
                                   </div>
@@ -937,7 +937,7 @@ const PayrollModule: React.FC = () => {
 
                               {/* Tax Breakdown Row */}
                               {stubTotals && (
-                                <div className="mx-4 mt-2 mb-2 bg-bg-secondary/50 px-3 py-2" style={{ borderRadius: '6px' }}>
+                                <div className="mx-4 mt-2 mb-2 bg-bg-secondary/50 px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>
                                   <span className="text-[9px] font-semibold text-text-muted uppercase tracking-wider">Tax Breakdown</span>
                                   <div className="flex items-center gap-6 mt-1">
                                     <div>
@@ -966,7 +966,7 @@ const PayrollModule: React.FC = () => {
 
                               {/* Employer Cost Row */}
                               {stubTotals && (
-                                <div className="mx-4 mb-3 bg-bg-secondary/50 px-3 py-2" style={{ borderRadius: '6px' }}>
+                                <div className="mx-4 mb-3 bg-bg-secondary/50 px-3 py-2" style={{ borderRadius: 'var(--app-radius)' }}>
                                   <span className="text-[9px] font-semibold text-text-muted uppercase tracking-wider">Employer Cost</span>
                                   <div className="flex items-center gap-6 mt-1">
                                     <div>

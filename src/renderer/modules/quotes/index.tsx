@@ -81,7 +81,7 @@ const TabBtn: React.FC<{
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
         : 'text-text-muted hover:text-text-secondary transition-colors'
     }`}
-    style={{ borderRadius: '6px 6px 0 0' }}
+    style={{ borderRadius: 'var(--app-radius) var(--app-radius) 0 0' }}
   >
     {icon}
     {label}
@@ -104,7 +104,7 @@ const KpiCard: React.FC<{
     purple: 'var(--color-accent-purple)',
   };
   return (
-    <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+    <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
       <div className="flex items-start justify-between mb-2">
         <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
           {label}
@@ -568,7 +568,7 @@ ${topClients
                   <>
                     <div
                       className="flex w-full overflow-hidden"
-                      style={{ height: '24px', borderRadius: '6px', border: '1px solid var(--hairline)' }}
+                      style={{ height: '24px', borderRadius: 'var(--app-radius)', border: '1px solid var(--hairline)' }}
                     >
                       {[
                         { key: 'draft', count: stats.draft_count, color: 'var(--color-text-muted)', label: 'Draft' },
@@ -660,7 +660,7 @@ ${topClients
                             style={{
                               height: '20px',
                               background: 'var(--color-bg-secondary)',
-                              borderRadius: '6px',
+                              borderRadius: 'var(--app-radius)',
                               overflow: 'hidden',
                             }}
                           >
@@ -669,7 +669,7 @@ ${topClients
                                 width: `${pct}%`,
                                 height: '100%',
                                 background: stage.color,
-                                borderRadius: '6px',
+                                borderRadius: 'var(--app-radius)',
                                 transition: 'width 200ms ease',
                               }}
                             />
@@ -801,7 +801,7 @@ const PipelineBoard: React.FC<PipelineBoardProps> = ({ onView, onNew, refreshKey
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <GitBranch size={18} className="text-accent-blue" />
           </div>

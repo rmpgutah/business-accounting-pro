@@ -110,7 +110,7 @@ const KpiCard: React.FC<{
   icon?: React.ReactNode;
   accent?: string;
 }> = ({ label, value, hint, icon, accent = 'var(--color-accent-blue)' }) => (
-  <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+  <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
     <div className="flex items-start justify-between mb-2">
       <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
         {label}
@@ -441,7 +441,7 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
           style={{
             background: 'rgba(var(--color-accent-expense-rgb, 239,68,68),0.08)',
             border: '1px solid var(--color-accent-expense)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             padding: '12px 16px',
             color: 'var(--color-accent-expense)',
             fontSize: '13px',
@@ -490,7 +490,7 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
               {quote.quote_number}
             </h2>
             {statusBadge && (
-              <span className={statusBadge.className} style={{ borderRadius: '6px' }}>
+              <span className={statusBadge.className} style={{ borderRadius: 'var(--app-radius)' }}>
                 {statusBadge.label}
               </span>
             )}
@@ -534,7 +534,7 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
               onClick={handleConvert}
               disabled={busy}
               style={{
-                borderRadius: '6px',
+                borderRadius: 'var(--app-radius)',
                 background: 'var(--color-accent-blue-bg)',
                 border: '1px solid color-mix(in srgb, var(--color-accent-blue) 25%, transparent)',
                 color: 'var(--color-accent-blue)',
@@ -604,7 +604,7 @@ const QuoteDetail: React.FC<QuoteDetailProps> = ({ quoteId, onBack, onEdit }) =>
           style={{
             background: 'color-mix(in srgb, var(--color-accent-warning) 10%, transparent)',
             border: '1px solid color-mix(in srgb, var(--color-accent-warning) 35%, transparent)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             padding: '10px 14px',
             color: 'var(--color-accent-warning)',
             fontSize: '13px',

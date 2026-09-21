@@ -35,7 +35,7 @@ export const ReceiptThumb: React.FC<{ path: string; onClick?: () => void; sizePx
   return (
     <div onClick={onClick}
       className="border border-border-primary flex items-center justify-center bg-bg-tertiary cursor-pointer hover:border-accent-blue overflow-hidden"
-      style={{ width: sizePx, height: sizePx, borderRadius: 6 }}
+      style={{ width: sizePx, height: sizePx, borderRadius: 'var(--app-radius)' }}
       title={path.split(/[/\\]/).pop()}>
       {isImage ? (
         <img src={`file://${path}`} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'cover' }} alt="receipt"
@@ -100,7 +100,7 @@ export const ReceiptZone: React.FC<ReceiptZoneProps> = ({ primaryPath, onSetPrim
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
       className={`border ${dragOver ? 'border-accent-blue bg-accent-blue/5' : 'border-dashed border-border-secondary'} p-3`}
-      style={{ borderRadius: 6 }}>
+      style={{ borderRadius: 'var(--app-radius)' }}>
       <div className="flex flex-wrap items-center gap-3">
         {primaryPath && (
           <div className="relative">
@@ -124,7 +124,7 @@ export const ReceiptZone: React.FC<ReceiptZoneProps> = ({ primaryPath, onSetPrim
         ))}
         <button type="button" onClick={() => pickReceipt(false)}
           className="border border-border-secondary flex items-center justify-center text-text-muted text-xs cursor-pointer hover:border-accent-blue px-3"
-          style={{ width: 64, height: 64, borderRadius: 6 }}><Plus size={20} /></button>
+          style={{ width: 64, height: 64, borderRadius: 'var(--app-radius)' }}><Plus size={20} /></button>
         <span className="text-xs text-text-muted">Drag &amp; drop receipts here, or click + to browse. Click a thumbnail to replace.</span>
       </div>
     </div>
@@ -136,7 +136,7 @@ export const MileagePanel: React.FC<{ value: MileageState; onChange: (v: Mileage
   const computedMiles = value.odometer_end > value.odometer_start ? value.odometer_end - value.odometer_start : value.miles;
   const computedAmount = roundCents(computedMiles * value.mileage_rate);
   return (
-    <div className="border border-border-primary p-4 mb-4" style={{ borderRadius: 6, background: 'var(--color-bg-tertiary)' }}>
+    <div className="border border-border-primary p-4 mb-4" style={{ borderRadius: 'var(--app-radius)', background: 'var(--color-bg-tertiary)' }}>
       <div className="grid grid-cols-4 gap-3">
         <div><FieldLabel label="Odometer Start" /><input type="number" className="block-input" value={value.odometer_start || ''}
           onChange={e => onChange({ ...value, odometer_start: parseFloat(e.target.value) || 0 })} /></div>
@@ -156,7 +156,7 @@ export interface PerDiemState { per_diem_location: string; per_diem_days: number
 export const PerDiemPanel: React.FC<{ value: PerDiemState; onChange: (v: PerDiemState) => void }> = ({ value, onChange }) => {
   const computedAmount = roundCents(value.per_diem_days * value.per_diem_rate);
   return (
-    <div className="border border-border-primary p-4 mb-4" style={{ borderRadius: 6, background: 'var(--color-bg-tertiary)' }}>
+    <div className="border border-border-primary p-4 mb-4" style={{ borderRadius: 'var(--app-radius)', background: 'var(--color-bg-tertiary)' }}>
       <div className="grid grid-cols-3 gap-3">
         <div><FieldLabel label="Location" />
           <select className="block-select" value={value.per_diem_location} onChange={e => {
@@ -205,7 +205,7 @@ export const FuelPanel: React.FC<{ value: FuelState; onChange: (v: FuelState) =>
   const computedAmount = roundCents((value.fuel_gallons || 0) * (value.fuel_price_per_gallon || 0));
   const isElectric = value.fuel_grade === 'electric';
   return (
-    <div className="border border-border-primary p-4 mb-4" style={{ borderRadius: 6, background: 'var(--color-bg-tertiary)' }}>
+    <div className="border border-border-primary p-4 mb-4" style={{ borderRadius: 'var(--app-radius)', background: 'var(--color-bg-tertiary)' }}>
       <div className="grid grid-cols-3 gap-3">
         <div>
           <FieldLabel label="Fuel Grade" />
@@ -426,7 +426,7 @@ export const NotesMemoField: React.FC<{ value: string; onChange: (v: string) => 
           {/* Formatting toolbar — WYSIWYG-style buttons that wrap selected
               text with markdown markers. Users don't need to know markdown
               syntax; they select text and click Bold/Italic/Underline. */}
-          <div className="flex items-center gap-0.5 mb-1 px-1 py-0.5" style={{ borderRadius: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border-primary)' }}>
+          <div className="flex items-center gap-0.5 mb-1 px-1 py-0.5" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border-primary)' }}>
             <TB icon={<span style={{ fontWeight: 800, fontSize: 13 }}>B</span>} before="**" after="**" title="Bold (wrap with **)" label="Bold" />
             <TB icon={<span style={{ fontStyle: 'italic', fontSize: 13 }}>I</span>} before="*" after="*" title="Italic (wrap with *)" label="Italic" />
             <TB icon={<span style={{ textDecoration: 'underline', fontSize: 13 }}>U</span>} before="__" after="__" title="Underline (wrap with __)" label="Underline" />
@@ -510,7 +510,7 @@ export const TagsAutocomplete: React.FC<{
           onBlur={() => { if (input.trim()) addTag(input); }} />
       </div>
       {suggest.length > 0 && (
-        <div className="absolute z-10 mt-1 border border-border-primary bg-bg-secondary w-full" style={{ borderRadius: 6 }}>
+        <div className="absolute z-10 mt-1 border border-border-primary bg-bg-secondary w-full" style={{ borderRadius: 'var(--app-radius)' }}>
           {suggest.map(t => (
             <div key={t} className="px-3 py-1.5 text-xs cursor-pointer hover:bg-bg-tertiary flex items-center gap-2"
               onClick={() => addTag(t)}>

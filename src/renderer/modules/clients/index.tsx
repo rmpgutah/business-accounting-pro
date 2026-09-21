@@ -30,7 +30,7 @@ const TabBtn: React.FC<{
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
         : 'text-text-muted hover:text-text-secondary transition-colors'
     }`}
-    style={{ borderRadius: '6px 6px 0 0' }}
+    style={{ borderRadius: 'var(--app-radius) var(--app-radius) 0 0' }}
   >
     {icon}
     {label}
@@ -389,19 +389,19 @@ const ClientsModule: React.FC = () => {
             <>
               {/* KPI Row 1 */}
               <div className="kpi-grid-fit">
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Clients</div>
                   <div className="text-xl font-mono font-bold text-text-primary mt-1">{clientStats?.total ?? 0}</div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Active Clients</div>
                   <div className="text-xl font-mono font-bold text-accent-income mt-1">{clientStats?.active ?? 0}</div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Revenue</div>
                   <div className="text-xl font-mono font-bold text-accent-blue mt-1">{formatCurrency(revenueStats?.total_revenue ?? 0)}</div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Outstanding AR</div>
                   <div className="text-xl font-mono font-bold text-accent-expense mt-1">{formatCurrency(revenueStats?.outstanding ?? 0)}</div>
                 </div>
@@ -409,27 +409,27 @@ const ClientsModule: React.FC = () => {
 
               {/* KPI Row 2 */}
               <div className="kpi-grid-fit">
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg Revenue / Client</div>
                   <div className="text-xl font-mono font-bold text-text-primary mt-1">
                     {formatCurrency((clientStats?.active ?? 0) > 0 ? (revenueStats?.total_revenue ?? 0) / (clientStats?.active ?? 1) : 0)}
                   </div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg Payment Days</div>
                   <div className="text-xl font-mono font-bold text-text-primary mt-1 flex items-center justify-center gap-1.5">
                     <Clock size={16} className="text-text-muted" />
                     {Math.round(revenueStats?.avg_payment_days ?? 0)} days
                   </div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Overdue Invoices</div>
                   <div className="text-xl font-mono font-bold text-accent-expense mt-1 flex items-center justify-center gap-1.5">
                     <AlertTriangle size={16} />
                     {revenueStats?.overdue_count ?? 0}
                   </div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">New This Month</div>
                   <div className="text-xl font-mono font-bold text-accent-income mt-1">{clientStats?.new_this_month ?? 0}</div>
                 </div>
@@ -442,21 +442,21 @@ const ClientsModule: React.FC = () => {
                 </button>
                 <button
                   className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                   onClick={() => switchTab('clients')}
                 >
                   <Upload size={14} /> Import Clients
                 </button>
                 <button
                   className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                   onClick={() => switchTab('analytics')}
                 >
                   <BarChart3 size={14} /> View Analytics
                 </button>
                 <button
                   className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                   onClick={handlePrintSummary}
                 >
                   <Printer size={14} /> Print Summary
@@ -466,7 +466,7 @@ const ClientsModule: React.FC = () => {
               {/* Middle Row: Top Clients + Status Distribution */}
               <div className="grid grid-cols-2 gap-4">
                 {/* Top 5 Clients by Revenue */}
-                <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Top Clients by Revenue</div>
                   {topClients.length === 0 ? (
                     <div className="text-xs text-text-muted py-4 text-center">No invoice data yet</div>
@@ -497,7 +497,7 @@ const ClientsModule: React.FC = () => {
                 </div>
 
                 {/* Status Distribution */}
-                <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Status Distribution</div>
                   {(() => {
                     const total = clientStats?.total ?? 0;
@@ -525,15 +525,15 @@ const ClientsModule: React.FC = () => {
                         {/* Legend */}
                         <div className="flex gap-5">
                           <div className="flex items-center gap-2">
-                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-income)', borderRadius: '6px' }} />
+                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-income)', borderRadius: 'var(--app-radius)' }} />
                             <span className="text-xs text-text-secondary">Active ({active})</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-expense)', borderRadius: '6px' }} />
+                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-expense)', borderRadius: 'var(--app-radius)' }} />
                             <span className="text-xs text-text-secondary">Inactive ({inactive})</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-blue)', borderRadius: '6px' }} />
+                            <div className="w-3 h-3" style={{ background: 'var(--color-accent-blue)', borderRadius: 'var(--app-radius)' }} />
                             <span className="text-xs text-text-secondary">Prospect ({prospects})</span>
                           </div>
                         </div>
@@ -546,7 +546,7 @@ const ClientsModule: React.FC = () => {
               {/* Industry Breakdown + Credit Risk + Payment Behavior + Retention */}
               <div className="kpi-grid-fit">
                 {/* Retention */}
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Retention Rate</div>
                   <div className="text-xl font-mono font-bold text-accent-income mt-1">
                     {(clientStats?.total ?? 0) > 0 ? (((clientStats?.active ?? 0) / (clientStats?.total ?? 1)) * 100).toFixed(1) : '0'}%
@@ -555,7 +555,7 @@ const ClientsModule: React.FC = () => {
                 </div>
 
                 {/* Credit Risk Summary */}
-                <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Credit Risk</div>
                   {riskBreakdown.length === 0 ? (
                     <div className="text-xs text-text-muted text-center py-2">No data</div>
@@ -582,7 +582,7 @@ const ClientsModule: React.FC = () => {
                 </div>
 
                 {/* Payment Behavior */}
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">On-Time Payments</div>
                   <div className="text-xl font-mono font-bold text-accent-income mt-1">
                     {(paymentStats?.paid_count ?? 0) > 0
@@ -595,7 +595,7 @@ const ClientsModule: React.FC = () => {
                 </div>
 
                 {/* Industry Breakdown */}
-                <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Industry Breakdown</div>
                   {industryBreakdown.length === 0 ? (
                     <div className="text-xs text-text-muted text-center py-2">No data</div>
@@ -613,7 +613,7 @@ const ClientsModule: React.FC = () => {
               </div>
 
               {/* Recent Clients Table */}
-              <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Recent Clients</div>
                   <button
@@ -693,7 +693,7 @@ const ClientsModule: React.FC = () => {
                       ? 'bg-accent-blue text-text-primary'
                       : 'text-text-muted hover:text-text-secondary border border-border-primary'
                   }`}
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   {g.charAt(0).toUpperCase() + g.slice(1)}
                 </button>
@@ -706,7 +706,7 @@ const ClientsModule: React.FC = () => {
           ) : segData.length === 0 ? (
             <div className="text-sm text-text-muted text-center py-12">No segment data available</div>
           ) : (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <table className="block-table">
                 <thead>
                   <tr>
@@ -744,7 +744,7 @@ const ClientsModule: React.FC = () => {
           ) : (
             <>
               {/* Revenue by Month */}
-              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-4">Revenue by Month (Last 12 Months)</div>
                 {revenueByMonth.length === 0 ? (
                   <div className="text-xs text-text-muted py-6 text-center">No invoice data</div>
@@ -775,7 +775,7 @@ const ClientsModule: React.FC = () => {
               {/* Acquisition + Concentration Row */}
               <div className="grid grid-cols-2 gap-4">
                 {/* Client Acquisition Trend */}
-                <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-4">Client Acquisition (Last 12 Months)</div>
                   {acquisitionByMonth.length === 0 ? (
                     <div className="text-xs text-text-muted py-6 text-center">No client data</div>
@@ -804,7 +804,7 @@ const ClientsModule: React.FC = () => {
                 </div>
 
                 {/* Revenue Concentration */}
-                <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-4">Revenue Concentration</div>
                   <div className="flex flex-col items-center py-4">
                     <div className="text-3xl font-mono font-bold text-accent-blue">{concentrationData.top20Pct.toFixed(1)}%</div>
@@ -831,7 +831,7 @@ const ClientsModule: React.FC = () => {
               </div>
 
               {/* Payment Timeliness */}
-              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-4">Payment Timeliness Distribution</div>
                 {paymentTimeliness.length === 0 ? (
                   <div className="text-xs text-text-muted py-6 text-center">No payment data</div>

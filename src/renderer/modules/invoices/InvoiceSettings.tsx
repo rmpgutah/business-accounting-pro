@@ -93,7 +93,7 @@ const ColumnConfigurator: React.FC<ColConfigProps> = ({ columns, onChange }) => 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {sorted.map((col) => (
-        <div key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--color-bg-secondary)', borderRadius: '6px', border: '1px solid var(--color-border-primary)' }}>
+        <div key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)' }}>
           <GripVertical size={13} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
           <input
             type="checkbox"
@@ -322,7 +322,7 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
                     key={opt.value}
                     onClick={() => setSettings((p) => ({ ...p, template_style: opt.value }))}
                     style={{
-                      padding: '12px', borderRadius: '6px',
+                      padding: '12px', borderRadius: 'var(--app-radius)',
                       border: `2px solid ${settings.template_style === opt.value ? accent : 'var(--color-border-primary)'}`,
                       background: settings.template_style === opt.value ? `${accent}15` : 'var(--color-bg-secondary)',
                       cursor: 'pointer', textAlign: 'left',
@@ -357,11 +357,11 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     {ACCENT_PRESETS.map((color) => (
                       <button key={color} onClick={() => setSettings((p) => ({ ...p, accent_color: color }))}
-                        style={{ width: 26, height: 26, borderRadius: '6px', background: color, border: settings.accent_color === color ? '3px solid var(--color-text-primary)' : '2px solid transparent', cursor: 'pointer', flexShrink: 0 }} title={color} />
+                        style={{ width: 26, height: 26, borderRadius: 'var(--app-radius)', background: color, border: settings.accent_color === color ? '3px solid var(--color-text-primary)' : '2px solid transparent', cursor: 'pointer', flexShrink: 0 }} title={color} />
                     ))}
                     <input type="color" value={settings.accent_color || '#2563eb'}
                       onChange={(e) => setSettings((p) => ({ ...p, accent_color: e.target.value }))}
-                      style={{ width: 36, height: 26, borderRadius: '6px', border: '1px solid var(--color-border-primary)', padding: 2, cursor: 'pointer', background: 'transparent' }} />
+                      style={{ width: 36, height: 26, borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)', padding: 2, cursor: 'pointer', background: 'transparent' }} />
                   </div>
                 </div>
                 {/* Secondary color */}
@@ -370,7 +370,7 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <input type="color" value={settings.secondary_color || '#64748b'}
                       onChange={(e) => setSettings((p) => ({ ...p, secondary_color: e.target.value }))}
-                      style={{ width: 36, height: 26, borderRadius: '6px', border: '1px solid var(--color-border-primary)', padding: 2, cursor: 'pointer', background: 'transparent' }} />
+                      style={{ width: 36, height: 26, borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)', padding: 2, cursor: 'pointer', background: 'transparent' }} />
                     <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>{settings.secondary_color}</span>
                     <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Used for row stripes and section fills</span>
                   </div>
@@ -405,7 +405,7 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {HEADER_LAYOUT_OPTIONS.map((opt) => (
                       <button key={opt.value} onClick={() => setSettings((p) => ({ ...p, header_layout: opt.value }))}
-                        style={{ padding: '8px 12px', borderRadius: '6px', border: `2px solid ${settings.header_layout === opt.value ? accent : 'var(--color-border-primary)'}`, background: settings.header_layout === opt.value ? `${accent}15` : 'var(--color-bg-secondary)', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        style={{ padding: '8px 12px', borderRadius: 'var(--app-radius)', border: `2px solid ${settings.header_layout === opt.value ? accent : 'var(--color-border-primary)'}`, background: settings.header_layout === opt.value ? `${accent}15` : 'var(--color-bg-secondary)', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{opt.label}</div>
                         <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>{opt.description}</div>
                       </button>
@@ -421,14 +421,14 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 {settings.logo_data ? (
                   <div style={{ position: 'relative', display: 'inline-block' }}>
-                    <img src={settings.logo_data} alt="Company logo" style={{ height: 60, maxWidth: 200, objectFit: 'contain', borderRadius: '6px', border: '1px solid var(--color-border-primary)' }} />
+                    <img src={settings.logo_data} alt="Company logo" style={{ height: 60, maxWidth: 200, objectFit: 'contain', borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)' }} />
                     <button onClick={() => setSettings((p) => ({ ...p, logo_data: null }))}
                       style={{ position: 'absolute', top: -6, right: -6, background: 'var(--color-accent-expense)', color: '#fff', borderRadius: '50%', width: 18, height: 18, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove logo">
                       <X size={10} />
                     </button>
                   </div>
                 ) : (
-                  <div style={{ width: 80, height: 60, borderRadius: '6px', border: '1px dashed var(--color-border-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 80, height: 60, borderRadius: 'var(--app-radius)', border: '1px dashed var(--color-border-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>No logo</span>
                   </div>
                 )}
@@ -447,14 +447,14 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {settings.letterhead_data ? (
                   <div style={{ position: 'relative' }}>
-                    <img src={settings.letterhead_data as string} alt="Letterhead banner" style={{ width: '100%', maxHeight: 100, objectFit: 'contain', borderRadius: '6px', border: '1px solid var(--color-border-primary)', background: '#fff' }} />
+                    <img src={settings.letterhead_data as string} alt="Letterhead banner" style={{ width: '100%', maxHeight: 100, objectFit: 'contain', borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)', background: '#fff' }} />
                     <button onClick={() => setSettings((p) => ({ ...p, letterhead_data: null }))}
                       style={{ position: 'absolute', top: -6, right: -6, background: 'var(--color-accent-expense)', color: '#fff', borderRadius: '50%', width: 22, height: 22, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove letterhead">
                       <X size={12} />
                     </button>
                   </div>
                 ) : (
-                  <div style={{ width: '100%', height: 80, borderRadius: '6px', border: '1px dashed var(--color-border-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: '100%', height: 80, borderRadius: 'var(--app-radius)', border: '1px dashed var(--color-border-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>No letterhead — full-width banner shown above the standard header</span>
                   </div>
                 )}
@@ -571,7 +571,7 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
             </div>
 
             {/* Custom Fields */}
-            <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary">Custom Fields</h3>
               <p className="text-xs text-text-muted">
                 Define up to 4 custom fields that appear on every invoice header. Leave a label blank to hide that field.

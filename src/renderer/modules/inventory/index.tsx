@@ -541,7 +541,7 @@ const Inventory: React.FC = () => {
       {/* Header */}
       <div className="module-header">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+          <div className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <Package size={18} className="text-accent-blue" />
           </div>
           <div>
@@ -596,7 +596,7 @@ const Inventory: React.FC = () => {
               { label: 'Sold (Month)', value: String(soldThisMonth), icon: <TrendingDown size={14} />, color: 'text-accent-blue' },
               { label: 'Avg Item Value', value: fmt.format(avgItemValue), icon: <DollarSign size={14} />, color: 'text-text-primary' },
             ].map((k) => (
-              <div key={k.label} className="block-card p-3" style={{ borderRadius: '6px' }}>
+              <div key={k.label} className="block-card p-3" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className={k.color}>{k.icon}</span>
                   <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{k.label}</span>
@@ -608,7 +608,7 @@ const Inventory: React.FC = () => {
 
           {/* Stock Status Distribution */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-3">Stock Status Distribution</h3>
               {(() => {
                 const inStock = items.length - lowStockCount - outOfStockCount - overstockCount;
@@ -627,8 +627,8 @@ const Inventory: React.FC = () => {
                           <span className="text-text-secondary">{s.label}</span>
                           <span className="font-mono text-text-muted">{s.count} ({((s.count / total) * 100).toFixed(0)}%)</span>
                         </div>
-                        <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
-                          <div className="h-full transition-all" style={{ width: `${(s.count / total) * 100}%`, backgroundColor: s.color, borderRadius: '6px' }} />
+                        <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
+                          <div className="h-full transition-all" style={{ width: `${(s.count / total) * 100}%`, backgroundColor: s.color, borderRadius: 'var(--app-radius)' }} />
                         </div>
                       </div>
                     ))}
@@ -638,7 +638,7 @@ const Inventory: React.FC = () => {
             </div>
 
             {/* Reorder Alerts */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
                 <AlertTriangle size={14} className="text-accent-warning" /> Reorder Alerts
               </h3>
@@ -667,7 +667,7 @@ const Inventory: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Top Movers */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-3">Top Movers (Last 30 Days)</h3>
               {topMovers.length === 0 ? (
                 <p className="text-xs text-text-muted">No movement data.</p>
@@ -691,7 +691,7 @@ const Inventory: React.FC = () => {
             </div>
 
             {/* Slow Movers */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-3">Slow-Moving Inventory (60+ days)</h3>
               {slowMovers.length === 0 ? (
                 <p className="text-xs text-text-muted">No slow movers.</p>
@@ -717,7 +717,7 @@ const Inventory: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Value Trend */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-3">Inventory Value Trend (Movement Volume)</h3>
               {valueTrend.length === 0 ? (
                 <p className="text-xs text-text-muted">No trend data.</p>
@@ -731,8 +731,8 @@ const Inventory: React.FC = () => {
                           <span className="text-text-secondary font-mono">{v.month}</span>
                           <span className="font-mono text-text-muted">{fmt.format(v.value)}</span>
                         </div>
-                        <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
-                          <div className="h-full bg-accent-blue transition-all" style={{ width: `${(v.value / max) * 100}%`, borderRadius: '6px' }} />
+                        <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
+                          <div className="h-full bg-accent-blue transition-all" style={{ width: `${(v.value / max) * 100}%`, borderRadius: 'var(--app-radius)' }} />
                         </div>
                       </div>
                     ))}
@@ -742,7 +742,7 @@ const Inventory: React.FC = () => {
             </div>
 
             {/* Category Breakdown */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-sm font-bold text-text-primary mb-3">Category Breakdown</h3>
               {categoryBreakdown.length === 0 ? (
                 <p className="text-xs text-text-muted">No items.</p>
@@ -769,7 +769,7 @@ const Inventory: React.FC = () => {
 
       {/* New Item Form */}
       {showForm && (
-        <div className="block-card p-5 space-y-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-5 space-y-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary">{editingId ? 'Edit Inventory Item' : 'New Inventory Item'}</h3>
             <button className="text-text-muted hover:text-text-primary transition-colors" onClick={() => { setShowForm(false); setEditingId(null); setFormData(emptyForm); }}>
@@ -832,7 +832,7 @@ const Inventory: React.FC = () => {
       {/* Stock Adjustment Modal */}
       {adjustItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="block-card p-5 w-96 space-y-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-5 w-96 space-y-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-text-primary">Adjust Stock — {adjustItem.name}</h3>
               <button onClick={() => setAdjustItem(null)}><X size={16} className="text-text-muted" /></button>
@@ -850,7 +850,7 @@ const Inventory: React.FC = () => {
                         : 'border-accent-blue text-accent-blue bg-accent-blue/10'
                       : 'border-border-primary text-text-muted'
                   }`}
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   {t === 'in' ? '▼ Receive' : t === 'out' ? '▲ Ship' : '↺ Adjust'}
                 </button>
@@ -920,7 +920,7 @@ const Inventory: React.FC = () => {
                 </div>
               ) : (
                 movements.map(m => (
-                  <div key={m.id} className="block-card p-3 flex items-start justify-between gap-2" style={{ borderRadius: '6px' }}>
+                  <div key={m.id} className="block-card p-3 flex items-start justify-between gap-2" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <MovBadge type={m.type} />
@@ -970,7 +970,7 @@ const Inventory: React.FC = () => {
 
       {/* Bulk Action Bar */}
       {activeTab !== 'dashboard' && selectedItemIds.size > 0 && (
-        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: '6px', borderColor: 'color-mix(in srgb, var(--color-accent-blue) 30%, transparent)' }}>
+        <div className="block-card p-3 flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)', borderColor: 'color-mix(in srgb, var(--color-accent-blue) 30%, transparent)' }}>
           <span className="text-xs font-semibold text-text-primary">
             {selectedItemIds.size} item{selectedItemIds.size !== 1 ? 's' : ''} selected
           </span>
@@ -989,7 +989,7 @@ const Inventory: React.FC = () => {
       {activeTab === 'all' && lowStockCount > 0 && (
         <div
           className="flex items-center gap-2 px-4 py-2 border text-xs"
-          style={{ borderColor: 'var(--color-accent-expense)', background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)', borderRadius: '6px', color: 'var(--color-accent-expense)' }}
+          style={{ borderColor: 'var(--color-accent-expense)', background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)', borderRadius: 'var(--app-radius)', color: 'var(--color-accent-expense)' }}
         >
           <AlertTriangle size={13} />
           <strong>{lowStockCount} item{lowStockCount !== 1 ? 's' : ''} at or below reorder point.</strong>
@@ -997,8 +997,8 @@ const Inventory: React.FC = () => {
         </div>
       )}
 
-      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
-      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: 'var(--app-radius)' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: 'var(--app-radius)' }}>{opError}</div>}
 
       {/* Table */}
       {activeTab !== 'dashboard' && (filtered.length === 0 ? (
@@ -1071,7 +1071,7 @@ const Inventory: React.FC = () => {
                     <td>
                       <span
                         className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5"
-                        style={{ color: status.color, background: status.bg, borderRadius: '6px' }}
+                        style={{ color: status.color, background: status.bg, borderRadius: 'var(--app-radius)' }}
                       >
                         {status.label}
                       </span>

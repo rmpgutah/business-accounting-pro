@@ -597,7 +597,7 @@ const TrialBalance: React.FC = () => {
       {error && <ErrorBanner message={error} title="Failed to load Trial Balance" onDismiss={() => setError('')} />}
 
       {!loading && !isBalanced && (
-        <div className="block-card p-3 flex items-center gap-2 border border-accent-expense/40 bg-accent-expense/5" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 flex items-center gap-2 border border-accent-expense/40 bg-accent-expense/5" style={{ borderRadius: 'var(--app-radius)' }}>
           <AlertTriangle size={16} className="text-accent-expense" />
           <span className="text-xs font-semibold text-accent-expense">
             Out of balance by {formatCurrency(Math.abs(delta))} (debits {delta > 0 ? 'exceed' : 'are less than'} credits)
@@ -609,14 +609,14 @@ const TrialBalance: React.FC = () => {
       )}
 
       {periodIsLocked && (
-        <div className="block-card p-2 flex items-center gap-2 border border-accent-blue/30 bg-accent-blue/5" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-2 flex items-center gap-2 border border-accent-blue/30 bg-accent-blue/5" style={{ borderRadius: 'var(--app-radius)' }}>
           <Lock size={13} className="text-accent-blue" />
           <span className="text-[11px] font-semibold text-accent-blue">Period locked through {lockDate}</span>
         </div>
       )}
 
       {unpostedClosingWarning && unpostedClosingWarning.length > 0 && (
-        <div className="block-card p-2 flex items-center gap-2 border border-accent-expense/30 bg-accent-expense/5" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-2 flex items-center gap-2 border border-accent-expense/30 bg-accent-expense/5" style={{ borderRadius: 'var(--app-radius)' }}>
           <AlertTriangle size={13} className="text-accent-expense" />
           <span className="text-[11px] font-semibold text-accent-expense">
             Closing not posted: {unpostedClosingWarning.length} revenue/expense account(s) still have non-zero balances after close date {closeDate}.
@@ -625,7 +625,7 @@ const TrialBalance: React.FC = () => {
       )}
 
       {/* Controls */}
-      <div className="block-card p-4 flex flex-wrap items-center gap-3 justify-between" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex flex-wrap items-center gap-3 justify-between" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex flex-wrap items-center gap-3">
           <select className="block-select text-xs" style={{ width: '140px' }} value={preset} onChange={(e) => applyPreset(e.target.value as PresetKey)}>
             <option value="this-month">This Month</option>
@@ -662,20 +662,20 @@ const TrialBalance: React.FC = () => {
           <div className={`flex items-center gap-1.5 text-xs font-semibold ${isBalanced ? 'text-accent-income' : 'text-accent-expense'}`}>
             {isBalanced ? <><CheckCircle size={14} /> Balanced</> : <><AlertTriangle size={14} /> Out of Balance</>}
           </div>
-          <button className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: '6px' }} title="What-if (sensitivity)" onClick={() => setWhatIfOpen(true)}>
+          <button className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: 'var(--app-radius)' }} title="What-if (sensitivity)" onClick={() => setWhatIfOpen(true)}>
             <Layers size={15} />
           </button>
-          <button className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: '6px' }} title="Export CSV (Cmd+E)" onClick={handleExport}>
+          <button className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: 'var(--app-radius)' }} title="Export CSV (Cmd+E)" onClick={handleExport}>
             <Download size={15} />
           </button>
-          <button className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: '6px' }} title="Export PDF / Print" onClick={handlePrintPDF}>
+          <button className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: 'var(--app-radius)' }} title="Export PDF / Print" onClick={handlePrintPDF}>
             <Printer size={15} />
           </button>
         </div>
       </div>
 
       {/* Toggle row */}
-      <div className="block-card p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px]" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px]" style={{ borderRadius: 'var(--app-radius)' }}>
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={excludeInactive} onChange={(e) => setExcludeInactive(e.target.checked)} />
           Exclude inactive
@@ -733,7 +733,7 @@ const TrialBalance: React.FC = () => {
         <div className="flex items-center justify-center h-64 text-text-muted text-sm font-mono">Generating report...</div>
       ) : view === 'exception' ? (
         // Exception report view
-        <div id="tb-print-area" className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div id="tb-print-area" className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <table className="block-table">
             <thead><tr><th>Code</th><th>Account</th><th>Type</th><th className="text-right">Balance</th><th>Anomaly</th></tr></thead>
             <tbody>
@@ -753,7 +753,7 @@ const TrialBalance: React.FC = () => {
         </div>
       ) : view === 'monthly' || view === 'rolling12' ? (
         // Wide month-column views — print landscape with extra-tight font
-        <div id="tb-print-area" className="block-card p-0 overflow-auto report-landscape" style={{ borderRadius: '6px' }}>
+        <div id="tb-print-area" className="block-card p-0 overflow-auto report-landscape" style={{ borderRadius: 'var(--app-radius)' }}>
           <table className="block-table report-extra-wide">
             <thead>
               <tr>
@@ -788,7 +788,7 @@ const TrialBalance: React.FC = () => {
         </div>
       ) : view === 'schedule' ? (
         // Printable schedule of accounts (full list, debit/credit columns)
-        <div id="tb-print-area" className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div id="tb-print-area" className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <table className="block-table">
             <thead><tr><th>Code</th><th>Account</th><th>Type</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead>
             <tbody>
@@ -816,27 +816,27 @@ const TrialBalance: React.FC = () => {
       ) : (
         <div id="tb-print-area">
           <div className="grid grid-cols-3 gap-3 report-summary-tiles">
-            <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Total Debits</p>
               <p className="text-lg font-bold font-mono text-text-primary">{formatCurrency(totalDebits)}</p>
             </div>
-            <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Total Credits</p>
               <p className="text-lg font-bold font-mono text-text-primary">{formatCurrency(totalCredits)}</p>
             </div>
-            <div className={`block-card p-4 text-center ${isBalanced ? 'border border-accent-income/30' : 'border border-accent-expense/30'}`} style={{ borderRadius: '6px' }}>
+            <div className={`block-card p-4 text-center ${isBalanced ? 'border border-accent-income/30' : 'border border-accent-expense/30'}`} style={{ borderRadius: 'var(--app-radius)' }}>
               <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Difference</p>
               <p className={`text-lg font-bold font-mono ${isBalanced ? 'text-accent-income' : 'text-accent-expense'}`}>{formatCurrency(Math.abs(delta))}</p>
             </div>
           </div>
 
           {visible.length === 0 ? (
-            <div className="block-card p-8 text-center mt-3" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-8 text-center mt-3" style={{ borderRadius: 'var(--app-radius)' }}>
               <FileText size={24} className="mx-auto mb-2 text-text-muted/50" />
               <p className="text-sm text-text-secondary font-medium">No posted journal entries</p>
             </div>
           ) : (
-            <div className="block-card p-0 overflow-hidden mt-3" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden mt-3" style={{ borderRadius: 'var(--app-radius)' }}>
               <table className="block-table">
                 <thead>
                   <tr>
@@ -967,7 +967,7 @@ const TrialBalance: React.FC = () => {
       {/* Walker modal */}
       {walkerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setWalkerOpen(false)}>
-          <div className="block-card p-4 w-[640px] max-h-[80vh] overflow-auto" style={{ borderRadius: '6px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-4 w-[640px] max-h-[80vh] overflow-auto" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-2">Out-of-Balance Walker</h3>
             <p className="text-xs text-text-muted mb-3">Difference: <span className="font-mono text-accent-expense">{formatCurrency(Math.abs(delta))}</span>. Top entries this period — click to inspect.</p>
             <table className="block-table text-xs">
@@ -996,7 +996,7 @@ const TrialBalance: React.FC = () => {
       {/* What-if modal */}
       {whatIfOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setWhatIfOpen(false)}>
-          <div className="block-card p-4 w-[560px]" style={{ borderRadius: '6px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-4 w-[560px]" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-2">What-If Sensitivity</h3>
             <p className="text-xs text-text-muted mb-3">Enter a hypothetical journal entry. Preview how the trial balance changes — nothing is committed.</p>
             <table className="block-table text-xs mb-3">
@@ -1018,7 +1018,7 @@ const TrialBalance: React.FC = () => {
                 ))}
               </tbody>
             </table>
-            <div className="block-card p-2 text-xs" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-2 text-xs" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="flex justify-between"><span>New Total Debits:</span><span className="font-mono">{formatCurrency(whatIfPreview.newDebits)}</span></div>
               <div className="flex justify-between"><span>New Total Credits:</span><span className="font-mono">{formatCurrency(whatIfPreview.newCredits)}</span></div>
               <div className={`flex justify-between font-semibold ${whatIfPreview.balanced ? 'text-accent-income' : 'text-accent-expense'}`}>
@@ -1034,7 +1034,7 @@ const TrialBalance: React.FC = () => {
       {/* Eliminations modal */}
       {eliminationOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEliminationOpen(false)}>
-          <div className="block-card p-4 w-[520px]" style={{ borderRadius: '6px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-4 w-[520px]" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-2">Intercompany Elimination Entries</h3>
             <p className="text-xs text-text-muted mb-3">Period: {startDate} → {endDate}</p>
             <table className="block-table text-xs mb-3">

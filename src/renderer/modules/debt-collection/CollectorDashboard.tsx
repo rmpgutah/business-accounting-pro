@@ -82,13 +82,13 @@ const ActionCard: React.FC<{
   onView: (debtId: string) => void;
   renderRow: (item: any) => React.ReactNode;
 }> = ({ title, icon, count, color, items, onView, renderRow }) => (
-  <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+  <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
     <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: color }}>
       <div className="flex items-center gap-2">
         {icon}
         <span className="text-sm font-semibold text-text-primary">{title}</span>
       </div>
-      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: `color-mix(in srgb, ${color} 13%, transparent)`, color, minWidth: 24, textAlign: 'center' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: `color-mix(in srgb, ${color} 13%, transparent)`, color, minWidth: 24, textAlign: 'center' }}>
         {count}
       </span>
     </div>
@@ -118,9 +118,9 @@ const KPICard: React.FC<{
   color: string;
   icon: React.ReactNode;
 }> = ({ label, value, sub, color, icon }) => (
-  <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+  <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
     <div className="flex items-center justify-between mb-2">
-      <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+      <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
         {icon}
       </div>
       {sub && <span className="text-[10px] font-semibold text-text-muted">{sub}</span>}
@@ -613,7 +613,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
       {/* Feature 5-7: Analytics Row */}
       <div className="grid grid-cols-3 gap-3">
         {/* Collection Velocity */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-2 mb-3">
             <BarChart3 size={14} className="text-blue-400" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Collection Velocity</span>
@@ -625,7 +625,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
         </div>
 
         {/* Aging Distribution */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-2 mb-3">
             <Clock size={14} className="text-yellow-400" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Aging Distribution</span>
@@ -634,7 +634,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
         </div>
 
         {/* Contact Success Rate */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-2 mb-3">
             <Phone size={14} className="text-green-400" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Contact Success Rate</span>
@@ -649,7 +649,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
       {/* Feature 11: Monthly Collection Goal + Feature 13: Quick Stats Bar */}
       <div className="grid grid-cols-2 gap-3">
         {/* Monthly Goal Tracker */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Target size={14} className="text-purple-400" />
@@ -676,7 +676,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
         </div>
 
         {/* Quick Stats Bar (This Week) */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-2 mb-3">
             <Zap size={14} className="text-yellow-400" />
             <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">This Week</span>
@@ -716,13 +716,13 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
       {/* Feature 8: Priority Queue + Feature 10: Compliance Alerts */}
       <div className="grid grid-cols-2 gap-4">
         {/* Priority Queue */}
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-expense)' }}>
             <div className="flex items-center gap-2">
               <ArrowUpRight size={16} className="text-red-400" />
               <span className="text-sm font-semibold text-text-primary">Priority Queue</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>
               {priorityQueue.length}
             </span>
           </div>
@@ -751,13 +751,13 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
         </div>
 
         {/* Compliance Alerts */}
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-warning)' }}>
             <div className="flex items-center gap-2">
               <Shield size={16} className="text-orange-400" />
               <span className="text-sm font-semibold text-text-primary">Compliance Alerts</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>
               {complianceAlerts.length}
             </span>
           </div>
@@ -784,7 +784,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
                     <p className="text-sm text-text-primary font-medium truncate">{alert.debtor_name}</p>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       {flags.map((f) => (
-                        <span key={f.label} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: `color-mix(in srgb, ${f.color} 13%, transparent)`, color: f.color }}>
+                        <span key={f.label} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: `color-mix(in srgb, ${f.color} 13%, transparent)`, color: f.color }}>
                           {f.label}
                         </span>
                       ))}
@@ -874,13 +874,13 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
 
       {/* Feature 9: Recent Activity Feed */}
       {activityFeed.length > 0 && (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-blue)' }}>
             <div className="flex items-center gap-2">
               <Activity size={16} className="text-blue-400" />
               <span className="text-sm font-semibold text-text-primary">Recent Activity</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>
               {activityFeed.length}
             </span>
           </div>
@@ -900,14 +900,14 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
                   className="flex items-center gap-3 px-4 py-2.5 hover:bg-bg-hover cursor-pointer border-b border-border-primary last:border-b-0 transition-colors"
                   onClick={() => onViewDebt(item.debt_id)}
                 >
-                  <div className="w-6 h-6 flex items-center justify-center bg-bg-tertiary border border-border-primary flex-shrink-0" style={{ borderRadius: '6px' }}>
+                  <div className="w-6 h-6 flex items-center justify-center bg-bg-tertiary border border-border-primary flex-shrink-0" style={{ borderRadius: 'var(--app-radius)' }}>
                     {icon}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium text-text-primary truncate">{item.debtor_name}</span>
                       <span style={{
-                        fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6,
+                        fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)',
                         background: isPayment ? 'var(--color-accent-income-bg)' : 'var(--color-accent-blue-bg)',
                         color: isPayment ? 'var(--color-accent-income)' : 'var(--color-accent-blue)',
                         textTransform: 'uppercase',
@@ -929,7 +929,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
 
       {/* Feature 12: Collector Performance Leaderboard */}
       {collectorPerf.length > 0 && (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-blue)' }}>
             <div className="flex items-center gap-2">
               <Users size={16} className="text-cyan-400" />
@@ -965,13 +965,13 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
 
       {/* Smart Recommendations */}
       {recommendations.length > 0 && (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-purple)' }}>
             <div className="flex items-center gap-2">
               <Zap size={16} className="text-purple-400" />
               <span className="text-sm font-semibold text-text-primary">Smart Recommendations</span>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-purple) 13%, transparent)', color: 'var(--color-accent-purple)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-purple) 13%, transparent)', color: 'var(--color-accent-purple)' }}>
               {recommendations.length}
             </span>
           </div>
@@ -985,7 +985,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
                   className="flex items-start gap-3 px-4 py-3 hover:bg-bg-hover cursor-pointer border-b border-border-primary last:border-b-0 transition-colors"
                   onClick={() => onViewDebt(rec.debtId)}
                 >
-                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: `color-mix(in srgb, ${color} 13%, transparent)`, color, textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', marginTop: 2 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--app-radius)', background: `color-mix(in srgb, ${color} 13%, transparent)`, color, textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', marginTop: 2 }}>
                     {humanizeLabel(rec.priority)}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -1004,10 +1004,10 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
           stale cases, SOL deadlines, missed installments, aging settlement
           offers, over-budget collection spend. */}
       {actionQueue.length > 0 && (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-warning)' }}>
             <span className="text-sm font-semibold text-text-primary">Action Queue</span>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-warning) 13%, transparent)', color: 'var(--color-accent-warning)' }}>
               {actionQueue.length}
             </span>
           </div>
@@ -1020,7 +1020,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
                   className="flex items-start gap-3 px-4 py-2.5 hover:bg-bg-hover cursor-pointer border-b border-border-primary last:border-b-0 transition-colors"
                   onClick={() => onViewDebt(a.debt_id)}
                 >
-                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: `color-mix(in srgb, ${color} 13%, transparent)`, color, textTransform: 'uppercase', whiteSpace: 'nowrap', marginTop: 2 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--app-radius)', background: `color-mix(in srgb, ${color} 13%, transparent)`, color, textTransform: 'uppercase', whiteSpace: 'nowrap', marginTop: 2 }}>
                     {a.severity}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -1037,7 +1037,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
 
       {/* Debt Wave: Collectability scores — on-demand portfolio scoring.
           Persists to debts.collectability_score so other views can sort. */}
-      <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-primary" style={{ borderLeftWidth: 4, borderLeftColor: 'var(--color-accent-blue)' }}>
           <span className="text-sm font-semibold text-text-primary">Collectability Scores</span>
           <button

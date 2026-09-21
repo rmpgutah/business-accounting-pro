@@ -362,19 +362,19 @@ const ExpensesModule: React.FC = () => {
             <>
               {/* KPI Row 1 */}
               <div className="grid grid-cols-4 gap-4">
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">MTD Spending</div>
                   <div className="text-xl font-mono font-bold text-accent-expense mt-1">{formatCurrency(dashData?.mtd ?? 0)}</div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">YTD Spending</div>
                   <div className="text-xl font-mono font-bold text-text-primary mt-1">{formatCurrency(dashData?.ytd ?? 0)}</div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Pending Approval</div>
                   <div className="text-xl font-mono font-bold text-accent-blue mt-1">{dashData?.pending_count ?? 0}</div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Tax Deductible</div>
                   <div className="text-xl font-mono font-bold text-accent-income mt-1">{formatCurrency(dashData?.tax_deductible ?? 0)}</div>
                 </div>
@@ -385,13 +385,13 @@ const ExpensesModule: React.FC = () => {
                 <button className="block-btn-primary flex items-center gap-2 text-xs" onClick={() => { switchTab('expenses'); handleNewExpense(); }}>
                   <Plus size={14} /> New Expense
                 </button>
-                <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }} onClick={() => switchTab('expenses')}>
+                <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: 'var(--app-radius)' }} onClick={() => switchTab('expenses')}>
                   <CreditCard size={14} /> Import Statement
                 </button>
-                <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }} onClick={() => switchTab('reimbursement')}>
+                <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: 'var(--app-radius)' }} onClick={() => switchTab('reimbursement')}>
                   <DollarSign size={14} /> Run Reimbursement
                 </button>
-                <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }} onClick={() => { switchTab('insights'); setInsightsView('charts'); }}>
+                <button className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: 'var(--app-radius)' }} onClick={() => { switchTab('insights'); setInsightsView('charts'); }}>
                   <BarChart3 size={14} /> View Analytics
                 </button>
               </div>
@@ -399,7 +399,7 @@ const ExpensesModule: React.FC = () => {
               {/* Middle Row: Top Categories + Payment Methods */}
               <div className="grid grid-cols-2 gap-4">
                 {/* Top 5 Spending Categories */}
-                <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Top Categories This Month</div>
                   {topCategories.length === 0 ? (
                     <div className="text-xs text-text-muted py-4 text-center">No expenses this month</div>
@@ -430,7 +430,7 @@ const ExpensesModule: React.FC = () => {
                 </div>
 
                 {/* Spending by Payment Method */}
-                <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Spending by Payment Method</div>
                   {paymentMethods.length === 0 ? (
                     <div className="text-xs text-text-muted py-4 text-center">No expenses this month</div>
@@ -463,7 +463,7 @@ const ExpensesModule: React.FC = () => {
               </div>
 
               {/* Spending Timeline — 12-month trend bar chart */}
-              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Spending Timeline · Last 12 Months</div>
                   {monthlyTimeline.length > 1 && (() => {
@@ -512,7 +512,7 @@ const ExpensesModule: React.FC = () => {
               </div>
 
               {/* Daily Spending Heatmap — GitHub-contribution style */}
-              <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Daily Spending Heatmap · Last 26 Weeks</div>
                 {dailyHeatmap.length === 0 ? (
                   <div className="text-xs text-text-muted py-8 text-center">No expense history yet</div>
@@ -574,7 +574,7 @@ const ExpensesModule: React.FC = () => {
               </div>
 
               {/* Recent Expenses */}
-              <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Recent Expenses</div>
                   <button className="text-[10px] font-semibold text-accent-blue uppercase tracking-wider flex items-center gap-1 hover:underline" onClick={() => switchTab('expenses')}>
@@ -613,24 +613,24 @@ const ExpensesModule: React.FC = () => {
 
               {/* KPI Row 2 */}
               <div className="grid grid-cols-4 gap-4">
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Billable Expenses</div>
                   <div className="text-xl font-mono font-bold text-accent-blue mt-1">{formatCurrency(dashData?.billable ?? 0)}</div>
                   <div className="text-[10px] text-text-muted mt-0.5">Year to date</div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Unreimbursed</div>
                   <div className="text-xl font-mono font-bold text-accent-expense mt-1">{formatCurrency(dashData?.unreimbursed ?? 0)}</div>
                   <div className="text-[10px] text-text-muted mt-0.5">Outstanding</div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg Expense</div>
                   <div className="text-xl font-mono font-bold text-text-primary mt-1">
                     {formatCurrency((dashData?.total_count ?? 0) > 0 ? (dashData?.ytd ?? 0) / (dashData?.total_count ?? 1) : 0)}
                   </div>
                   <div className="text-[10px] text-text-muted mt-0.5">Per transaction</div>
                 </div>
-                <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+                <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">This Month vs Last</div>
                   <div className="text-xl font-mono font-bold mt-1 flex items-center justify-center gap-1.5">
                     {(() => {

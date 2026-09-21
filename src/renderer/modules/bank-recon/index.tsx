@@ -222,7 +222,7 @@ const BankReconDashboard: React.FC = () => {
     <div className="space-y-5">
       {/* 6 KPI cards */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Bank Accounts</div>
@@ -233,7 +233,7 @@ const BankReconDashboard: React.FC = () => {
             <Building size={20} className="text-accent-blue opacity-60 mt-1" />
           </div>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Total Cash</div>
@@ -244,7 +244,7 @@ const BankReconDashboard: React.FC = () => {
             <Wallet size={20} className="text-accent-income opacity-60 mt-1" />
           </div>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Unreconciled</div>
@@ -258,7 +258,7 @@ const BankReconDashboard: React.FC = () => {
             />
           </div>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Last Reconciled</div>
@@ -269,7 +269,7 @@ const BankReconDashboard: React.FC = () => {
             <Clock size={20} className="text-accent-blue opacity-60 mt-1" />
           </div>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Pending Matches</div>
@@ -280,7 +280,7 @@ const BankReconDashboard: React.FC = () => {
             <GitMerge size={20} className="text-accent-blue opacity-60 mt-1" />
           </div>
         </div>
-        <div className="stat-card" style={{ borderRadius: '6px' }}>
+        <div className="stat-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="stat-label text-text-muted">Unmatched Items</div>
@@ -297,7 +297,7 @@ const BankReconDashboard: React.FC = () => {
       </div>
 
       {/* Reconciliation Health Score */}
-      <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between mb-3">
           <div>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
@@ -322,7 +322,7 @@ const BankReconDashboard: React.FC = () => {
           style={{
             height: 10,
             background: 'var(--color-bg-tertiary)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             overflow: 'hidden',
           }}
         >
@@ -430,7 +430,7 @@ const BankReconDashboard: React.FC = () => {
             )}
           </div>
 
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">
               Auto-Match Rules
             </div>
@@ -553,7 +553,7 @@ const BankReconModule: React.FC = () => {
       <div className="flex items-center gap-3">
         <div
           className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <Landmark size={18} className="text-accent-blue" />
         </div>

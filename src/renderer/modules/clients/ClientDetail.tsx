@@ -121,7 +121,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
       style={{
         background: 'rgba(15, 15, 20, 0.92)',
         border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: '6px',
+        borderRadius: 'var(--app-radius)',
         padding: '8px 12px',
       }}
     >
@@ -654,11 +654,11 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
       {/* Top Section: Contact Card + Stats */}
       <div className="grid grid-cols-3 gap-4">
         {/* Contact Card */}
-        <div className="col-span-2 block-card" style={{ borderRadius: '6px' }}>
+        <div className="col-span-2 block-card" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-start gap-4">
             <div
               className="flex items-center justify-center w-12 h-12 bg-bg-tertiary border border-border-primary shrink-0"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <UserCircle size={24} className="text-text-muted" />
             </div>
@@ -671,7 +671,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
                 {/* Feature 31: Health badge */}
                 <span
                   className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5"
-                  style={{ color: healthBadge.color, background: healthBadge.bg, borderRadius: '6px' }}
+                  style={{ color: healthBadge.color, background: healthBadge.bg, borderRadius: 'var(--app-radius)' }}
                 >
                   {healthBadge.label}
                 </span>
@@ -713,7 +713,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
 
           {/* Feature 36-37: Primary Contact Quick Actions */}
           {primaryContact && (
-            <div className="flex items-center gap-4 mt-3 p-3 bg-bg-secondary border border-border-primary" style={{ borderRadius: '6px' }}>
+            <div className="flex items-center gap-4 mt-3 p-3 bg-bg-secondary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="flex-1">
                 <div className="text-sm font-semibold text-text-primary">{primaryContact.name}</div>
                 {primaryContact.title && <div className="text-xs text-text-muted">{primaryContact.title}</div>}
@@ -734,15 +734,15 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
 
         {/* Summary Stats */}
         <div className="space-y-4">
-          <div className="stat-card border-l-2 border-l-accent-income" style={{ borderRadius: '6px' }}>
+          <div className="stat-card border-l-2 border-l-accent-income" style={{ borderRadius: 'var(--app-radius)' }}>
             <span className="stat-label">Total Invoiced</span>
             <span className="stat-value text-text-primary">{formatCurrency(stats.totalInvoiced)}</span>
           </div>
-          <div className="stat-card border-l-2 border-l-accent-blue" style={{ borderRadius: '6px' }}>
+          <div className="stat-card border-l-2 border-l-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
             <span className="stat-label">Total Paid</span>
             <span className="stat-value text-accent-income">{formatCurrency(stats.totalPaid)}</span>
           </div>
-          <div className="stat-card border-l-2 border-l-accent-warning" style={{ borderRadius: '6px' }}>
+          <div className="stat-card border-l-2 border-l-accent-warning" style={{ borderRadius: 'var(--app-radius)' }}>
             <span className="stat-label">Outstanding</span>
             <span className="stat-value text-accent-warning">{formatCurrency(stats.outstanding)}</span>
           </div>
@@ -751,19 +751,19 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
 
       {/* Feature 31-33: Enhanced Stats Row */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Lifetime Value</div>
           <div className="text-lg font-mono font-bold text-text-primary mt-1">{formatCurrency(stats.totalInvoiced)}</div>
         </div>
-        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Outstanding</div>
           <div className="text-lg font-mono font-bold text-accent-expense mt-1">{formatCurrency(stats.outstanding)}</div>
         </div>
-        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg Payment Days</div>
           <div className="text-lg font-mono font-bold text-text-primary mt-1">{avgPaymentDays > 0 ? `${avgPaymentDays}d` : '--'}</div>
         </div>
-        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Invoices</div>
           <div className="text-lg font-mono font-bold text-text-primary mt-1">{invoiceCount}</div>
         </div>
@@ -772,7 +772,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
       {/* Feature 42: Credit & Risk Section */}
       <div className="grid grid-cols-3 gap-4">
         {/* Payment Trend */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Payment Trend</div>
           <div className="flex items-center gap-2">
             {paymentTrend.icon}
@@ -784,7 +784,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
         </div>
 
         {/* Feature 34: Payment History Sparkline */}
-        <div className="block-card p-4 col-span-2" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4 col-span-2" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Payment History (12 Months)</div>
           {paymentChart.length > 0 ? (
             <ResponsiveContainer width="100%" height={80}>
@@ -802,10 +802,10 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
 
       {/* Feature 35: Aging Breakdown */}
       {agingTotal > 0 && (
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Aging Breakdown</div>
           {/* Horizontal stacked bar */}
-          <div className="flex h-6 overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="flex h-6 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
             {aging.current_due > 0 && (
               <div
                 className="flex items-center justify-center text-[9px] font-mono font-bold"
@@ -864,7 +864,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
 
       {/* Feature 38: Notes & Internal Notes Section */}
       {client.notes && (
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <button
             className="flex items-center gap-2 w-full text-left"
             onClick={() => setNotesExpanded(!notesExpanded)}
@@ -924,7 +924,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
               message={`No ${activeTab} found for this client`}
             />
           ) : (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               {activeTab === 'invoices' && <InvoicesTable data={tabData} onNavigate={(id) => nav.goToInvoice(id)} />}
               {activeTab === 'projects' && <ProjectsTable data={tabData} onNavigate={(id) => nav.goToProject(id)} />}
               {activeTab === 'time' && <TimeEntriesTable data={tabData} />}
@@ -959,21 +959,21 @@ const RevenueTab: React.FC<{ data: any[] }> = ({ data }) => {
     <div className="space-y-4">
       {/* Summary cards */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Invoiced</div>
           <div className="text-lg font-mono font-bold text-accent-income mt-1">{formatCurrency(totalInvoiced)}</div>
         </div>
-        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Expenses</div>
           <div className="text-lg font-mono font-bold text-accent-expense mt-1">{formatCurrency(totalExpenses)}</div>
         </div>
-        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Net Revenue</div>
           <div className={`text-lg font-mono font-bold mt-1 ${netRevenue >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
             {formatCurrency(netRevenue)}
           </div>
         </div>
-        <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Profit Margin</div>
           <div className={`text-lg font-mono font-bold mt-1 ${Number(marginPct) >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
             {marginPct}%
@@ -982,7 +982,7 @@ const RevenueTab: React.FC<{ data: any[] }> = ({ data }) => {
       </div>
       {/* Chart */}
       {data.length > 0 ? (
-        <div className="block-card p-4" style={{ borderRadius: '6px', background: 'rgba(255,255,255,0.02)' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(255,255,255,0.02)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Revenue vs Expenses (12 Months)</div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
@@ -1000,7 +1000,7 @@ const RevenueTab: React.FC<{ data: any[] }> = ({ data }) => {
       )}
       {/* Net Revenue Line */}
       {data.length > 0 && (
-        <div className="block-card p-4" style={{ borderRadius: '6px', background: 'rgba(255,255,255,0.02)' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(255,255,255,0.02)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Net Revenue Trend</div>
           <ResponsiveContainer width="100%" height={160}>
             <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
@@ -1039,7 +1039,7 @@ const ActivityTimelineTab: React.FC<{ data: ActivityEntry[] }> = ({ data }) => {
   }
 
   return (
-    <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+    <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
       <div className="space-y-0">
         {data.map((entry, i) => (
           <div key={i} className="flex gap-3 relative">
@@ -1050,7 +1050,7 @@ const ActivityTimelineTab: React.FC<{ data: ActivityEntry[] }> = ({ data }) => {
             {/* Dot */}
             <div
               className="flex items-center justify-center w-6 h-6 shrink-0 mt-1"
-              style={{ borderRadius: '6px', background: ACTIVITY_COLORS[entry.type] ?? 'rgba(255,255,255,0.1)' }}
+              style={{ borderRadius: 'var(--app-radius)', background: ACTIVITY_COLORS[entry.type] ?? 'rgba(255,255,255,0.1)' }}
             >
               {ACTIVITY_ICONS[entry.type] ?? <Activity size={12} />}
             </div>

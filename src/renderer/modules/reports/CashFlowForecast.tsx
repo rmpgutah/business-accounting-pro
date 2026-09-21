@@ -102,7 +102,7 @@ const CashFlowForecast: React.FC<Props> = ({ onBack }) => {
               border: '1px solid var(--color-warning)',
               borderLeft: '3px solid var(--color-warning)',
               background: 'rgba(217, 119, 6, 0.08)',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               marginBottom: 12,
               display: 'flex',
               gap: 10,

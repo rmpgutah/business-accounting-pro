@@ -198,7 +198,7 @@ export default function ApiModule() {
               <h3 className="text-sm font-semibold">API Key</h3>
             </div>
             <div className="flex items-center gap-2">
-              <code className="flex-1 px-3 py-2 bg-bg-primary border border-border-primary text-text-secondary text-xs font-mono" style={{ borderRadius: '6px' }}>
+              <code className="flex-1 px-3 py-2 bg-bg-primary border border-border-primary text-text-secondary text-xs font-mono" style={{ borderRadius: 'var(--app-radius)' }}>
                 {apiKey}
               </code>
               <button className="block-btn flex items-center gap-1" onClick={copyKey}>
@@ -347,7 +347,7 @@ export default function ApiModule() {
             The Business Accounting Pro API is accessible via the IPC bridge and plugin system.
             All database tables can be queried, created, updated, and deleted through the IPC channels.
           </p>
-          <div className="bg-bg-primary border border-border-primary p-4 space-y-2" style={{ borderRadius: '6px' }}>
+          <div className="bg-bg-primary border border-border-primary p-4 space-y-2" style={{ borderRadius: 'var(--app-radius)' }}>
             <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Available IPC Channels</p>
             <div className="space-y-1">
               {[

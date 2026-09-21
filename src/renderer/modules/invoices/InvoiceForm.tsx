@@ -268,7 +268,7 @@ const CatalogDropdown: React.FC<CatalogDropdownProps> = ({ items, onSelect, onCl
         zIndex: 100,
         background: 'var(--color-bg-secondary)',
         border: '1px solid var(--color-border-primary)',
-        borderRadius: '6px',
+        borderRadius: 'var(--app-radius)',
         width: '280px',
         boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
         overflow: 'hidden',
@@ -1148,7 +1148,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                 onClick={() => setForm(p => ({ ...p, invoice_type: type }))}
                 style={{
                   padding: '5px 14px',
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   border: `1px solid ${isActive ? 'var(--color-accent)' : 'var(--color-border-primary)'}`,
                   background: isActive ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
                   color: isActive ? '#fff' : 'var(--color-text-secondary)',
@@ -1164,12 +1164,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
           })}
         </div>
         {form.invoice_type === 'credit_note' && (
-          <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--color-accent-expense-bg)', border: '1px solid var(--color-accent-expense)', borderRadius: 6, fontSize: 12, color: 'var(--color-accent-expense)', fontWeight: 600 }}>
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--color-accent-expense-bg)', border: '1px solid var(--color-accent-expense)', borderRadius: 'var(--app-radius)', fontSize: 12, color: 'var(--color-accent-expense)', fontWeight: 600 }}>
             Credit Note — total will be displayed as a negative amount (credit to client)
           </div>
         )}
         {form.invoice_type === 'proforma' && (
-          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(234,179,8,0.08)', border: '1px solid #d97706', borderRadius: 6, fontSize: 12, color: '#d97706', fontWeight: 600 }}>
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(234,179,8,0.08)', border: '1px solid #d97706', borderRadius: 'var(--app-radius)', fontSize: 12, color: '#d97706', fontWeight: 600 }}>
             Proforma — this invoice is preliminary and not a final billing document
           </div>
         )}
@@ -1542,7 +1542,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                           padding: '3px 4px',
                           background: 'var(--color-bg-elevated)',
                           border: '1px solid var(--color-border-primary)',
-                          borderRadius: 6,
+                          borderRadius: 'var(--app-radius)',
                         }}>
                         <button
                           type="button"
@@ -1551,7 +1551,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                           style={{
                             background: line.bold ? 'var(--color-accent-blue)' : 'transparent',
                             color: line.bold ? '#fff' : 'var(--color-text-muted)',
-                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 6,
+                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 'var(--app-radius)',
                           }}
                         >
                           <Bold size={10} />
@@ -1563,7 +1563,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                           style={{
                             background: line.italic ? 'var(--color-accent-blue)' : 'transparent',
                             color: line.italic ? '#fff' : 'var(--color-text-muted)',
-                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 6,
+                            border: 'none', padding: '2px 4px', cursor: 'pointer', borderRadius: 'var(--app-radius)',
                           }}
                         >
                           <Italic size={10} />
@@ -1580,7 +1580,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
                               border: line.highlight_color === color
                                 ? '2px solid var(--color-accent-blue)'
                                 : '1px solid var(--color-border-primary)',
-                              width: 14, height: 14, cursor: 'pointer', borderRadius: 6,
+                              width: 14, height: 14, cursor: 'pointer', borderRadius: 'var(--app-radius)',
                               backgroundImage: color ? 'none' : 'linear-gradient(45deg, transparent 45%, var(--color-accent-expense) 45%, var(--color-accent-expense) 55%, transparent 55%)',
                             }}
                           />
@@ -2084,7 +2084,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 14 }}>
               The same client has {duplicateCandidates.length === 1 ? 'a recent invoice' : `${duplicateCandidates.length} recent invoices`} with a similar total and due date. This is the most common cause of double-billing — review before continuing.
             </p>
-            <div style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 6, padding: 12, marginBottom: 16, maxHeight: 200, overflowY: 'auto' }}>
+            <div style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', padding: 12, marginBottom: 16, maxHeight: 200, overflowY: 'auto' }}>
               {duplicateCandidates.map((d) => {
                 const ageDays = Math.max(0, Math.floor((Date.now() - new Date(d.created_at).getTime()) / 86_400_000));
                 return (

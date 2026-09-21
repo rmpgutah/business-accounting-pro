@@ -452,7 +452,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
           {/* Modal header */}
           <div className="tform-modal-header">
             <div className="tform-modal-title">
-              <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-tertiary)', borderRadius: 6, border: '1px solid var(--color-border-primary)' }}>
+              <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)' }}>
                 <Building2 size={16} style={{ color: 'var(--color-accent-blue)' }} />
               </div>
               <span>{isEditing ? 'Edit Vendor' : 'New Vendor'}</span>

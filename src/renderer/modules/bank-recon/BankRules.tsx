@@ -255,7 +255,7 @@ const BankRules: React.FC = () => {
           className={`fixed top-4 right-4 z-50 px-4 py-3 text-sm font-semibold border ${
             toast.ok ? 'bg-bg-elevated border-accent-income text-accent-income' : 'bg-bg-elevated border-accent-expense text-accent-expense'
           }`}
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           {toast.msg}
         </div>
@@ -264,7 +264,7 @@ const BankRules: React.FC = () => {
       {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+          <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <Shield size={15} className="text-accent-blue" />
           </div>
           <div>
@@ -503,7 +503,7 @@ const BankRules: React.FC = () => {
                     </td>
                     <td className="text-text-secondary text-xs">{MATCH_TYPE_LABELS[rule.match_type]}</td>
                     <td>
-                      <code className="text-xs font-mono text-accent-blue bg-bg-tertiary px-1.5 py-0.5" style={{ borderRadius: '6px' }}>
+                      <code className="text-xs font-mono text-accent-blue bg-bg-tertiary px-1.5 py-0.5" style={{ borderRadius: 'var(--app-radius)' }}>
                         {rule.match_value}
                       </code>
                     </td>

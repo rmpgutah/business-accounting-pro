@@ -260,7 +260,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
 
   if (loading) {
     return (
-      <div className="block-card p-6 text-xs text-text-muted italic" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-6 text-xs text-text-muted italic" style={{ borderRadius: 'var(--app-radius)' }}>
         Loading workflow…
       </div>
     );
@@ -282,7 +282,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
             className="block-btn inline-flex items-center gap-1 text-xs px-3 py-1.5"
             onClick={onCancel}
             disabled={saving}
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <X size={12} /> Cancel
           </button>
@@ -290,7 +290,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
             className="block-btn-primary inline-flex items-center gap-1.5 text-xs px-4 py-1.5 font-semibold"
             onClick={handleSave}
             disabled={saving || !name.trim()}
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Save size={12} /> {saving ? 'Saving…' : 'Save Workflow'}
           </button>
@@ -298,7 +298,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
       </div>
 
       {/* Basic Info */}
-      <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
         <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Basic Info</p>
         <div>
           <label className={`block ${LABEL_CLASS} mb-1`}>Name *</label>
@@ -332,7 +332,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
       </div>
 
       {/* Trigger */}
-      <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-2">
           <Zap size={12} className="text-accent-blue" />
           <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Trigger</p>
@@ -375,14 +375,14 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
       </div>
 
       {/* Conditions */}
-      <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between">
           <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Conditions</p>
           <button
             className="block-btn inline-flex items-center gap-1 text-[10px] px-2 py-1"
             onClick={addCondition}
             type="button"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Plus size={10} /> Add Condition
           </button>
@@ -437,14 +437,14 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
       </div>
 
       {/* Actions */}
-      <div className="block-card p-4 space-y-3" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between">
           <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Actions</p>
           <button
             className="block-btn inline-flex items-center gap-1 text-[10px] px-2 py-1"
             onClick={addAction}
             type="button"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Plus size={10} /> Add Action
           </button>
@@ -459,7 +459,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
               <div
                 key={idx}
                 className="border border-border-secondary p-3 space-y-2"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-mono text-text-muted">#{idx + 1}</span>
@@ -585,7 +585,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
       </div>
 
       {/* Advanced */}
-      <div className="block-card p-0" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-0" style={{ borderRadius: 'var(--app-radius)' }}>
         <button
           className="w-full flex items-center justify-between px-4 py-3 hover:bg-bg-hover transition-colors"
           type="button"
@@ -632,7 +632,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
           className="block-btn inline-flex items-center gap-1 text-xs px-4 py-2"
           onClick={onCancel}
           disabled={saving}
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <X size={12} /> Cancel
         </button>
@@ -640,7 +640,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflowId, onSaved, 
           className="block-btn-primary inline-flex items-center gap-1.5 text-xs px-4 py-2 font-semibold"
           onClick={handleSave}
           disabled={saving || !name.trim()}
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <Save size={12} /> {saving ? 'Saving…' : 'Save Workflow'}
         </button>

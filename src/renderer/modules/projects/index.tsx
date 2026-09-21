@@ -161,7 +161,7 @@ const ProjectsDashboard: React.FC<{
   return (
     <div className="p-6 space-y-5">
       {error && (
-        <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>
+        <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: 'var(--app-radius)' }}>
           {error}
         </div>
       )}
@@ -176,7 +176,7 @@ const ProjectsDashboard: React.FC<{
           { label: 'Over-Budget', value: String(kpis.overBudget), icon: <AlertTriangle size={16} />, color: kpis.overBudget > 0 ? 'text-accent-expense' : 'text-text-muted' },
           { label: 'Completed', value: String(kpis.completedThisMonth), icon: <CheckCircle2 size={16} />, color: 'text-accent-blue' },
         ].map((k) => (
-          <div key={k.label} className="block-card p-3" style={{ borderRadius: '6px' }}>
+          <div key={k.label} className="block-card p-3" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-center gap-2 mb-1">
               <span className={k.color}>{k.icon}</span>
               <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{k.label}</span>
@@ -187,7 +187,7 @@ const ProjectsDashboard: React.FC<{
       </div>
 
       {/* Quick Actions */}
-      <div className="block-card p-3 flex items-center gap-2" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-3 flex items-center gap-2" style={{ borderRadius: 'var(--app-radius)' }}>
         <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mr-2">Quick Actions:</span>
         <button className="block-btn-primary inline-flex items-center gap-1.5 text-xs" onClick={onNewProject}>
           <Plus size={12} /> New Project
@@ -202,7 +202,7 @@ const ProjectsDashboard: React.FC<{
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Top Profitable */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
             <TrendingUp size={14} className="text-accent-income" /> Top 5 Most Profitable
           </h3>
@@ -237,7 +237,7 @@ const ProjectsDashboard: React.FC<{
         </div>
 
         {/* At Risk */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
             <AlertTriangle size={14} className="text-accent-expense" /> At-Risk Projects (&gt; 80% Budget)
           </h3>
@@ -272,7 +272,7 @@ const ProjectsDashboard: React.FC<{
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Recent Time Logged */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
             <Clock size={14} className="text-accent-blue" /> Recent Time Logged
           </h3>
@@ -299,7 +299,7 @@ const ProjectsDashboard: React.FC<{
         </div>
 
         {/* Status Distribution */}
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
             <Briefcase size={14} className="text-accent-blue" /> Project Status Distribution
           </h3>
@@ -310,8 +310,8 @@ const ProjectsDashboard: React.FC<{
                   <span className="text-text-secondary">{s.label}</span>
                   <span className="font-mono text-text-muted">{s.count} ({s.pct.toFixed(0)}%)</span>
                 </div>
-                <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
-                  <div className="h-full transition-all" style={{ width: `${s.pct}%`, backgroundColor: s.color, borderRadius: '6px' }} />
+                <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
+                  <div className="h-full transition-all" style={{ width: `${s.pct}%`, backgroundColor: s.color, borderRadius: 'var(--app-radius)' }} />
                 </div>
               </div>
             ))}
@@ -435,7 +435,7 @@ const ProfitabilityTab: React.FC = () => {
         </button>
       </div>
 
-      <div className="block-card overflow-hidden" style={{ borderRadius: '6px' }}>
+      <div className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
         <table className="block-table w-full text-xs">
           <thead>
             <tr>

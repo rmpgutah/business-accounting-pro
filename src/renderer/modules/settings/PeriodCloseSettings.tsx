@@ -129,7 +129,7 @@ const PeriodCloseSettings: React.FC = () => {
             marginTop: 12, padding: 10, fontSize: 11,
             background: 'color-mix(in srgb, var(--color-accent-warning) 8%, transparent)',
             border: '1px solid color-mix(in srgb, var(--color-accent-warning) 30%, transparent)',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             color: 'var(--color-text-primary)',
             display: 'flex', gap: 8, alignItems: 'flex-start',
           }}>

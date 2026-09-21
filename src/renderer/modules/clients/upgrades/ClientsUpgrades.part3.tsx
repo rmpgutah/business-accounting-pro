@@ -816,7 +816,7 @@ const ClientsUpgradesPart3: React.FC = () => {
       </h3>
 
       {error && (
-        <div className="block-card p-3 text-xs text-accent-expense" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 text-xs text-accent-expense" style={{ borderRadius: 'var(--app-radius)' }}>
           {error}
         </div>
       )}
@@ -824,7 +824,7 @@ const ClientsUpgradesPart3: React.FC = () => {
       {toast && (
         <div
           className="block-card p-3 text-xs text-text-primary flex items-center justify-between gap-3"
-          style={{ borderRadius: '6px', borderLeft: '2px solid var(--color-accent-blue)' }}
+          style={{ borderRadius: 'var(--app-radius)', borderLeft: '2px solid var(--color-accent-blue)' }}
         >
           <span>{toast}</span>
           {undo && (

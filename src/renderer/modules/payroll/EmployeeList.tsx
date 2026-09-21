@@ -346,27 +346,27 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
       {/* Workforce Summary Cards */}
       {!loading && employees.length > 0 && (
         <div className="grid grid-cols-5 gap-3">
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Headcount</div>
             <div className="text-xl font-mono font-bold text-text-primary mt-1">{stats.total}</div>
             <div className="text-[10px] text-text-muted mt-0.5">{stats.active} active / {stats.inactive} inactive</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Active Employees</div>
             <div className="text-xl font-mono font-bold text-text-primary mt-1">{stats.active}</div>
             <div className="text-[10px] text-text-muted mt-0.5">{stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% of total</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Payroll Cost</div>
             <div className="text-xl font-mono font-bold text-text-primary mt-1">{formatCurrency(stats.totalCost)}</div>
             <div className="text-[10px] text-text-muted mt-0.5">annualized</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg Salary</div>
             <div className="text-xl font-mono font-bold text-text-primary mt-1">{formatCurrency(stats.avgSalary)}</div>
             <div className="text-[10px] text-text-muted mt-0.5">per active employee</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Contractors</div>
             <div className="text-xl font-mono font-bold text-text-primary mt-1">{stats.contractors}</div>
             <div className="text-[10px] text-text-muted mt-0.5">{stats.total > 0 ? Math.round((stats.contractors / stats.total) * 100) : 0}% of total</div>
@@ -376,9 +376,9 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
 
       {/* Department Distribution Bar */}
       {!loading && deptCounts.length > 0 && employees.length > 0 && (
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Department Distribution</div>
-          <div style={{ display: 'flex', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', height: '12px', borderRadius: 'var(--app-radius)', overflow: 'hidden' }}>
             {deptCounts.map((d, i) => (
               <div key={d.name || '__unassigned'} style={{ width: `${d.pct}%`, background: COLORS[i % COLORS.length] }} title={`${d.name || 'Unassigned'}: ${d.count}`} />
             ))}
@@ -386,7 +386,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
           <div className="flex flex-wrap gap-3 mt-2">
             {deptCounts.map((d, i) => (
               <div key={d.name || '__unassigned'} className="flex items-center gap-1 text-[10px] text-text-muted">
-                <div style={{ width: 8, height: 8, background: COLORS[i % COLORS.length], borderRadius: '6px' }} />
+                <div style={{ width: 8, height: 8, background: COLORS[i % COLORS.length], borderRadius: 'var(--app-radius)' }} />
                 {d.name || 'Unassigned'} ({d.count})
               </div>
             ))}
@@ -473,7 +473,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
 
       {/* Bulk Actions Toolbar */}
       {selectedIds.size > 0 && (
-        <div className="block-card p-3 flex items-center gap-3" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-3 flex items-center gap-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5">
             <Check size={14} className="text-accent-blue" />
             <span className="text-xs font-semibold text-text-primary">{selectedIds.size} selected</span>
@@ -535,7 +535,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ onSelectEmployee, onNewEmpl
           )}
         </div>
       ) : (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="overflow-x-auto">
           <table className="block-table" style={{ fontSize: cEmpFont }}>
             <thead>

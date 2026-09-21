@@ -114,7 +114,7 @@ const TabBtn: React.FC<{
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
         : 'text-text-muted hover:text-text-secondary'
     }`}
-    style={{ borderRadius: '6px 6px 0 0' }}
+    style={{ borderRadius: 'var(--app-radius) var(--app-radius) 0 0' }}
   >
     {icon}
     {label}
@@ -566,7 +566,7 @@ const InvoicingModule: React.FC = () => {
             style={{
               background: 'var(--color-accent-expense-bg)',
               border: '1px solid var(--color-accent-expense)',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
             }}
           >
             <div className="flex items-center gap-2">
@@ -657,7 +657,7 @@ const InvoicingModule: React.FC = () => {
               display: 'flex',
               height: 16,
               width: '100%',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               overflow: 'hidden',
               background: 'var(--color-bg-tertiary)',
             }}
@@ -678,7 +678,7 @@ const InvoicingModule: React.FC = () => {
           <div className="flex flex-wrap gap-3 mt-3">
             {statusOrder.map((s) => (
               <div key={s.key} className="flex items-center gap-1.5">
-                <span style={{ width: 10, height: 10, background: s.color, borderRadius: 6 }} />
+                <span style={{ width: 10, height: 10, background: s.color, borderRadius: 'var(--app-radius)' }} />
                 <span className="text-[11px] text-text-secondary">
                   {s.label} <span className="text-text-muted">({statusCounts[s.key] || 0})</span>
                 </span>
@@ -724,7 +724,7 @@ const InvoicingModule: React.FC = () => {
                     <tr key={b}>
                       <td>
                         <span className="flex items-center gap-2 text-text-primary">
-                          <span style={{ width: 8, height: 8, background: colorMap[b], borderRadius: 6 }} />
+                          <span style={{ width: 8, height: 8, background: colorMap[b], borderRadius: 'var(--app-radius)' }} />
                           {labelMap[b]}
                         </span>
                       </td>
@@ -876,7 +876,7 @@ const InvoicingModule: React.FC = () => {
                         width: '100%',
                         height: `${Math.max(h, 2)}%`,
                         background: 'var(--color-accent-blue)',
-                        borderRadius: '6px 6px 0 0',
+                        borderRadius: 'var(--app-radius) var(--app-radius) 0 0',
                       }}
                     />
                     <div className="text-[9px] text-text-muted whitespace-nowrap">
@@ -971,7 +971,7 @@ const InvoicingModule: React.FC = () => {
                         width: '100%',
                         height: `${Math.max(h, 2)}%`,
                         background: 'var(--color-accent-blue)',
-                        borderRadius: '6px 6px 0 0',
+                        borderRadius: 'var(--app-radius) var(--app-radius) 0 0',
                       }}
                     />
                     <div className="text-[10px] text-text-muted whitespace-nowrap">

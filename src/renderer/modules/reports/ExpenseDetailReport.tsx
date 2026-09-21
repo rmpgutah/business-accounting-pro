@@ -441,7 +441,7 @@ const ExpenseDetailReport: React.FC = () => {
       {error && <ErrorBanner message={error} title="Failed to load expense detail report" onDismiss={() => setError('')} />}
 
       {/* Controls */}
-      <div className="block-card p-4 flex items-center justify-between flex-wrap gap-3" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex items-center justify-between flex-wrap gap-3" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-3 flex-wrap">
           <Receipt size={16} className="text-accent-expense" />
           <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">From</label>
@@ -476,7 +476,7 @@ const ExpenseDetailReport: React.FC = () => {
         <div
           className="p-5 flex items-end justify-between gap-6 flex-wrap bg-bg-secondary"
           style={{
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             borderTop: '2px solid var(--color-text-primary)',
             borderBottom: '1px solid var(--color-border-primary)',
           }}
@@ -516,7 +516,7 @@ const ExpenseDetailReport: React.FC = () => {
 
       {/* Change 51-52: Tax Deductible Summary */}
       {filtered.length > 0 && (
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Tax Deductible Summary</h3>
           <div className="grid grid-cols-3 gap-3 mb-3">
             <div className="text-center">
@@ -554,11 +554,11 @@ const ExpenseDetailReport: React.FC = () => {
       {/* Change 53: Billable vs Non-Billable */}
       {filtered.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
-          <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <p className="text-lg font-bold font-mono text-accent-income">{formatCurrency(billableAmt)}</p>
             <p className="text-[10px] text-text-muted uppercase tracking-wider font-semibold mt-1">Billable ({billableItems.length})</p>
           </div>
-          <div className="block-card p-4 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <p className="text-lg font-bold font-mono text-text-secondary">{formatCurrency(nonBillableAmt)}</p>
             <p className="text-[10px] text-text-muted uppercase tracking-wider font-semibold mt-1">Non-Billable ({nonBillableItems.length})</p>
           </div>
@@ -569,7 +569,7 @@ const ExpenseDetailReport: React.FC = () => {
       {filtered.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {paymentMethodBreakdown.filter(m => m.count > 0).map(m => (
-            <div key={m.method} className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+            <div key={m.method} className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <p className="text-sm font-bold font-mono text-text-primary">{formatCurrency(m.amount)}</p>
               <p className="text-[10px] text-text-muted uppercase tracking-wider font-semibold mt-0.5">{m.label} ({m.count})</p>
             </div>
@@ -583,7 +583,7 @@ const ExpenseDetailReport: React.FC = () => {
       ) : filtered.length === 0 ? (
         <div className="flex items-center justify-center h-64 text-text-muted text-sm">No expenses found for this period.</div>
       ) : groupBy === 'none' ? (
-        <div className="block-card overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <table className="block-table w-full text-sm">
             {tableHead}
             <tbody>{filtered.map(renderExpenseRow)}</tbody>
@@ -599,7 +599,7 @@ const ExpenseDetailReport: React.FC = () => {
       ) : (
         <div className="space-y-4">
           {groups.map((group) => (
-            <div key={group.label} className="block-card overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div key={group.label} className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-4 py-2.5 bg-bg-tertiary border-b border-border-primary flex items-center justify-between">
                 <span className="text-xs font-bold text-text-primary uppercase tracking-wider">{group.label}</span>
                 <span className="text-xs font-bold font-mono text-accent-expense">{formatCurrency(group.total)}</span>
@@ -611,7 +611,7 @@ const ExpenseDetailReport: React.FC = () => {
             </div>
           ))}
 
-          <div className="block-card p-3 flex items-center justify-between report-grand-total-row" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 flex items-center justify-between report-grand-total-row" style={{ borderRadius: 'var(--app-radius)' }}>
             <span className="text-xs font-bold text-text-primary">Grand Total ({filtered.length} expenses)</span>
             <span className="text-sm font-bold font-mono text-accent-expense">{formatCurrency(total)}</span>
           </div>

@@ -85,7 +85,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border ${colors[s] ?? colors.not_filed}`}
-      style={{ borderRadius: '6px' }}
+      style={{ borderRadius: 'var(--app-radius)' }}
     >
       {icons[s] ?? icons.not_filed}
       {labels[s] ?? 'Not Filed'}
@@ -469,7 +469,7 @@ const TaxFiling: React.FC = () => {
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
             className="block-select text-sm pr-8"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             {yearRange.map((y) => (
               <option key={y} value={y}>
@@ -486,7 +486,7 @@ const TaxFiling: React.FC = () => {
 
       {/* Feature 50: Form 944 Support Indicator */}
       {annualTotals.wages > 0 && annualTotals.wages < 50000 && (
-        <div className="flex items-center gap-2 p-3 bg-bg-tertiary border border-accent-blue/20 text-xs text-text-secondary mb-0" style={{ borderRadius: '6px' }}>
+        <div className="flex items-center gap-2 p-3 bg-bg-tertiary border border-accent-blue/20 text-xs text-text-secondary mb-0" style={{ borderRadius: 'var(--app-radius)' }}>
           <Info size={14} className="text-accent-blue shrink-0" />
           Annual wages under $50,000 — your business may qualify for Form 944 (annual filing) instead of quarterly 941. Contact the IRS to request this option.
         </div>
@@ -494,7 +494,7 @@ const TaxFiling: React.FC = () => {
 
       {/* Feature 49: Annual Filing Summary */}
       {summary.length > 0 && (
-        <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-5" style={{ borderRadius: 'var(--app-radius)' }}>
           <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Annual Filing Summary — {year}</h3>
           <div className="grid grid-cols-5 gap-3">
             <div className="text-center">
@@ -528,7 +528,7 @@ const TaxFiling: React.FC = () => {
         const dueDate = quarterDueDate(q, year);
 
         return (
-          <div key={q} className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div key={q} className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
             {/* Quarter Header */}
             <button
               onClick={() => setExpandedQ(isExpanded ? null : q)}
@@ -563,7 +563,7 @@ const TaxFiling: React.FC = () => {
                   {/* Federal 941 Card */}
                   <div
                     className="block-card-elevated p-4 border-l-2 border-l-accent-expense"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -588,7 +588,7 @@ const TaxFiling: React.FC = () => {
                       <button
                         onClick={() => openPaymentForm('941', q)}
                         className="block-btn text-[10px] px-3 py-1.5 flex items-center gap-1"
-                        style={{ borderRadius: '6px' }}
+                        style={{ borderRadius: 'var(--app-radius)' }}
                       >
                         <DollarSign size={11} /> Record Payment
                       </button>
@@ -596,7 +596,7 @@ const TaxFiling: React.FC = () => {
                         <button
                           onClick={() => handleMarkFiled('941', q)}
                           className="block-btn text-[10px] px-3 py-1.5 flex items-center gap-1"
-                          style={{ borderRadius: '6px' }}
+                          style={{ borderRadius: 'var(--app-radius)' }}
                         >
                           <CheckCircle size={11} /> Mark Filed
                         </button>
@@ -604,7 +604,7 @@ const TaxFiling: React.FC = () => {
                       <button
                         onClick={() => handlePrint941(qs)}
                         className="block-btn text-[10px] px-3 py-1.5 flex items-center gap-1"
-                        style={{ borderRadius: '6px' }}
+                        style={{ borderRadius: 'var(--app-radius)' }}
                       >
                         <Printer size={11} /> Print Worksheet
                       </button>
@@ -614,7 +614,7 @@ const TaxFiling: React.FC = () => {
                   {/* Utah TC-941 Card */}
                   <div
                     className="block-card-elevated p-4 border-l-2 border-l-accent-warning"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -634,7 +634,7 @@ const TaxFiling: React.FC = () => {
                       <button
                         onClick={() => openPaymentForm('TC-941', q)}
                         className="block-btn text-[10px] px-3 py-1.5 flex items-center gap-1"
-                        style={{ borderRadius: '6px' }}
+                        style={{ borderRadius: 'var(--app-radius)' }}
                       >
                         <DollarSign size={11} /> Record Payment
                       </button>
@@ -642,7 +642,7 @@ const TaxFiling: React.FC = () => {
                         <button
                           onClick={() => handleMarkFiled('TC-941', q)}
                           className="block-btn text-[10px] px-3 py-1.5 flex items-center gap-1"
-                          style={{ borderRadius: '6px' }}
+                          style={{ borderRadius: 'var(--app-radius)' }}
                         >
                           <CheckCircle size={11} /> Mark Filed
                         </button>
@@ -655,7 +655,7 @@ const TaxFiling: React.FC = () => {
                 {paymentForm && paymentForm.quarter === q && (
                   <div
                     className="block-card-elevated p-4 border-l-2 border-l-accent-blue"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -679,7 +679,7 @@ const TaxFiling: React.FC = () => {
                           value={paymentAmount}
                           onChange={(e) => setPaymentAmount(e.target.value)}
                           className="block-input text-sm w-full"
-                          style={{ borderRadius: '6px' }}
+                          style={{ borderRadius: 'var(--app-radius)' }}
                           placeholder="0.00"
                         />
                       </div>
@@ -692,7 +692,7 @@ const TaxFiling: React.FC = () => {
                           value={paymentDate}
                           onChange={(e) => setPaymentDate(e.target.value)}
                           className="block-input text-sm w-full"
-                          style={{ borderRadius: '6px' }}
+                          style={{ borderRadius: 'var(--app-radius)' }}
                         />
                       </div>
                       <div>
@@ -704,7 +704,7 @@ const TaxFiling: React.FC = () => {
                           value={paymentConfirm}
                           onChange={(e) => setPaymentConfirm(e.target.value)}
                           className="block-input text-sm w-full"
-                          style={{ borderRadius: '6px' }}
+                          style={{ borderRadius: 'var(--app-radius)' }}
                           placeholder="Optional"
                         />
                       </div>
@@ -717,7 +717,7 @@ const TaxFiling: React.FC = () => {
                           value={paymentNotes}
                           onChange={(e) => setPaymentNotes(e.target.value)}
                           className="block-input text-sm w-full"
-                          style={{ borderRadius: '6px' }}
+                          style={{ borderRadius: 'var(--app-radius)' }}
                           placeholder="Optional"
                         />
                       </div>
@@ -727,14 +727,14 @@ const TaxFiling: React.FC = () => {
                         onClick={handleRecordPayment}
                         disabled={saving || !paymentAmount}
                         className="block-btn-primary text-[10px] px-4 py-1.5"
-                        style={{ borderRadius: '6px' }}
+                        style={{ borderRadius: 'var(--app-radius)' }}
                       >
                         {saving ? 'Saving...' : 'Save Payment'}
                       </button>
                       <button
                         onClick={() => setPaymentForm(null)}
                         className="block-btn text-[10px] px-4 py-1.5"
-                        style={{ borderRadius: '6px' }}
+                        style={{ borderRadius: 'var(--app-radius)' }}
                       >
                         Cancel
                       </button>
@@ -747,7 +747,7 @@ const TaxFiling: React.FC = () => {
                   const daysLate = calcDaysLate(dueDate);
                   const penalty = calcPenalty(qs.balance_due, daysLate);
                   return (
-                    <div className="block-card-elevated p-3 border-l-2 border-l-accent-expense" style={{ borderRadius: '6px' }}>
+                    <div className="block-card-elevated p-3 border-l-2 border-l-accent-expense" style={{ borderRadius: 'var(--app-radius)' }}>
                       <div className="text-[10px] font-semibold text-accent-expense uppercase tracking-wider">Estimated Late Payment Penalty</div>
                       <div className="grid grid-cols-3 gap-3 mt-2 text-xs">
                         <div>
@@ -768,7 +768,7 @@ const TaxFiling: React.FC = () => {
                 })()}
 
                 {/* Feature 46: Pre-Filing Checklist */}
-                <div className="block-card-elevated p-4" style={{ borderRadius: '6px' }}>
+                <div className="block-card-elevated p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                   <h4 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Pre-Filing Checklist — Q{q}</h4>
                   <div className="space-y-1.5">
                     {CHECKLIST_ITEMS.map((label, i) => {
@@ -819,7 +819,7 @@ const TaxFiling: React.FC = () => {
       })}
 
       {/* W-2 / W-3 Annual Section */}
-      <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="px-5 py-4 border-b border-border-primary flex items-center justify-between">
           <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
             W-2 / W-3 Annual Summary &mdash; {year}
@@ -829,7 +829,7 @@ const TaxFiling: React.FC = () => {
               onClick={handlePrintW2}
               disabled={w2Data.length === 0}
               className="block-btn text-[10px] px-3 py-1.5 flex items-center gap-1"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <Printer size={11} /> Preview W-2
             </button>
@@ -837,7 +837,7 @@ const TaxFiling: React.FC = () => {
               onClick={handlePrintW3}
               disabled={!w3Data}
               className="block-btn text-[10px] px-3 py-1.5 flex items-center gap-1"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <Printer size={11} /> Preview W-3
             </button>
@@ -914,12 +914,12 @@ const TaxFiling: React.FC = () => {
 
       {/* Feature 52-53: New Hire / Termination Summary */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <h4 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">New Hires — {year}</h4>
           <div className="text-2xl font-mono font-bold text-accent-income">{newHireCount}</div>
           <div className="text-xs text-text-muted mt-1">Employees with start_date in {year}</div>
         </div>
-        <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
           <h4 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">Terminations — {year}</h4>
           <div className="text-2xl font-mono font-bold text-accent-expense">{termCount}</div>
           <div className="text-xs text-text-muted mt-1">Employees with end_date in {year}</div>

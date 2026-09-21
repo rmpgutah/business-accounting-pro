@@ -389,7 +389,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
                 ? 'bg-accent-blue border-accent-blue text-white'
                 : 'border-border-primary text-text-muted'
             }`}
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             {currentStep > s ? '\u2713' : s}
           </div>
@@ -902,7 +902,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
 
       {/* ─── Step 1: Pay Period ─────────────────────── */}
       {step === 1 && (
-        <div className="block-card p-6 space-y-6" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-6 space-y-6" style={{ borderRadius: 'var(--app-radius)' }}>
           <h2 className="text-sm font-bold text-text-primary">Select Pay Period</h2>
 
           {/* Run Type */}
@@ -918,7 +918,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
                 <button
                   key={rt.value}
                   className={`px-3 py-1.5 text-xs font-semibold border transition-colors ${runType === rt.value ? 'bg-accent-blue/20 border-accent-blue text-accent-blue' : 'border-border-primary text-text-muted hover:text-text-primary'}`}
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                   onClick={() => setRunType(rt.value)}
                 >
                   {rt.label}
@@ -1007,7 +1007,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
       {/* ─── Step 2: Calculation Review ────────────── */}
       {step === 2 && (
         <div className="space-y-4">
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-xs text-text-muted mb-1">Pay Period</div>
             <div className="text-sm text-text-primary font-mono">
               {periodStart} to {periodEnd} &mdash; Pay Date: {payDate}
@@ -1016,7 +1016,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
 
           {/* Feature 15: Period overlap warning */}
           {periodWarning && (
-            <div className="block-card p-3 border-l-4 border-accent-warning bg-accent-warning/5 flex items-center gap-2" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-3 border-l-4 border-accent-warning bg-accent-warning/5 flex items-center gap-2" style={{ borderRadius: 'var(--app-radius)' }}>
               <AlertTriangle size={14} className="text-accent-warning shrink-0" />
               <span className="text-xs text-text-secondary">{periodWarning}</span>
             </div>
@@ -1024,7 +1024,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
 
           {/* Feature 21: Pay date warning */}
           {payDateWarning && (
-            <div className="block-card p-3 border-l-4 border-accent-warning bg-accent-warning/5 flex items-center gap-2" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-3 border-l-4 border-accent-warning bg-accent-warning/5 flex items-center gap-2" style={{ borderRadius: 'var(--app-radius)' }}>
               <AlertTriangle size={14} className="text-accent-warning shrink-0" />
               <span className="text-xs text-text-secondary">{payDateWarning}</span>
             </div>
@@ -1032,7 +1032,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
 
           {/* Feature 14: Minimum wage warnings */}
           {employees.filter(e => e.pay_type === 'hourly' && e.pay_rate < FEDERAL_MINIMUM_WAGE).length > 0 && (
-            <div className="block-card p-3 border-l-4 border-accent-expense bg-accent-expense/5 flex items-center gap-2" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-3 border-l-4 border-accent-expense bg-accent-expense/5 flex items-center gap-2" style={{ borderRadius: 'var(--app-radius)' }}>
               <AlertTriangle size={14} className="text-accent-expense shrink-0" />
               <span className="text-xs text-text-secondary">
                 Warning: {employees.filter(e => e.pay_type === 'hourly' && e.pay_rate < FEDERAL_MINIMUM_WAGE).map(e => e.name).join(', ')} ha{employees.filter(e => e.pay_type === 'hourly' && e.pay_rate < FEDERAL_MINIMUM_WAGE).length === 1 ? 's' : 've'} an hourly rate below the federal minimum wage (${fmt.format(FEDERAL_MINIMUM_WAGE)}).
@@ -1066,7 +1066,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
             </div>
           )}
 
-          <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
             <table className="block-table">
               <thead>
                 <tr>
@@ -1197,26 +1197,26 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
       {/* ─── Step 3: Review & Process ─────────────── */}
       {step === 3 && (
         <div className="space-y-4">
-          <div className="block-card p-6 space-y-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-6 space-y-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h2 className="text-sm font-bold text-text-primary flex items-center gap-2">
               <DollarSign size={16} />
               Payroll Summary
             </h2>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="text-xs text-text-muted mb-1">Pay Period</div>
                 <div className="text-sm text-text-primary font-mono">{periodStart} to {periodEnd}</div>
               </div>
-              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="text-xs text-text-muted mb-1">Pay Date</div>
                 <div className="text-sm text-text-primary font-mono">{payDate}</div>
               </div>
-              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="text-xs text-text-muted mb-1">Employees</div>
                 <div className="text-sm text-text-primary font-mono">{calculations.length}</div>
               </div>
-              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: '6px' }}>
+              <div className="block-card p-4 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="text-xs text-text-muted mb-1">Total Gross Pay</div>
                 <div className="text-sm text-text-primary font-mono font-semibold">{fmt.format(totals.gross_pay)}</div>
               </div>
@@ -1353,7 +1353,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
       {/* ─── Step 4: Results & Post-Processing ──────── */}
       {step === 4 && (
         <div className="space-y-4">
-          <div className="block-card p-6 space-y-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-6 space-y-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-center py-4">
               <div className="text-3xl mb-2">&#10003;</div>
               <h2 className="text-lg font-bold text-text-primary">Payroll Processed Successfully</h2>
@@ -1361,7 +1361,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
             </div>
 
             {/* Feature 10: Employer tax summary recap */}
-            <div className="block-card p-4 bg-bg-tertiary space-y-2" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4 bg-bg-tertiary space-y-2" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Employer Tax Summary</div>
               <div className="grid grid-cols-3 gap-4 text-xs">
                 <div>
@@ -1382,7 +1382,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
             </div>
 
             {/* Feature 25: Tax deposit reminder */}
-            <div className="block-card p-4 border-l-4 border-accent-blue bg-accent-blue/5" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4 border-l-4 border-accent-blue bg-accent-blue/5" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="text-[10px] font-bold text-accent-blue uppercase tracking-wider mb-1">Tax Deposit Reminder</div>
               <div className="text-xs text-text-secondary space-y-1">
                 <p>

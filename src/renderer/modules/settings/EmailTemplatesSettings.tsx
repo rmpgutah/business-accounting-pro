@@ -132,7 +132,7 @@ const EmailTemplatesSettings: React.FC = () => {
   return (
     <div className="block-card space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: '6px' }}>
+        <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary shrink-0" style={{ borderRadius: 'var(--app-radius)' }}>
           <Mail size={16} className="text-accent-blue" />
         </div>
         <div>
@@ -212,7 +212,7 @@ const EmailTemplatesSettings: React.FC = () => {
 
           <div className="border-t border-border-primary pt-3">
             <div className="text-text-muted mb-1 flex items-center gap-1"><Eye size={12} /> Preview (against sample)</div>
-            <div className="p-3 border border-border-primary" style={{ borderRadius: '6px', background: 'var(--bg-tertiary)' }}>
+            <div className="p-3 border border-border-primary" style={{ borderRadius: 'var(--app-radius)', background: 'var(--bg-tertiary)' }}>
               <div className="font-semibold mb-1">{previewSubject}</div>
               <PreviewBody body={previewBody} />
             </div>

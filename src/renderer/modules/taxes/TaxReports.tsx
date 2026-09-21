@@ -623,7 +623,7 @@ const TaxReports: React.FC = () => {
                 ? 'bg-accent-blue/10 text-accent-blue border-accent-blue/20'
                 : 'bg-bg-secondary text-text-muted border-border-primary hover:text-text-primary'
             }`}
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             {tab.icon} {tab.label}
           </button>
@@ -652,7 +652,7 @@ const TaxReports: React.FC = () => {
                   value={liabilityYear}
                   onChange={(e) => setLiabilityYear(Number(e.target.value))}
                   className="block-select text-sm pr-8"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   {yearRange.map((y) => (
                     <option key={y} value={y}>
@@ -675,7 +675,7 @@ const TaxReports: React.FC = () => {
                   value={qStart}
                   onChange={(e) => setQStart(Number(e.target.value))}
                   className="block-select text-sm pr-8"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   {[1, 2, 3, 4].map((q) => (
                     <option key={q} value={q}>
@@ -698,7 +698,7 @@ const TaxReports: React.FC = () => {
                   value={qEnd}
                   onChange={(e) => setQEnd(Number(e.target.value))}
                   className="block-select text-sm pr-8"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   {[1, 2, 3, 4].map((q) => (
                     <option key={q} value={q}>
@@ -716,7 +716,7 @@ const TaxReports: React.FC = () => {
               onClick={generateLiability}
               disabled={liabilityLoading}
               className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <Search size={13} />
               {liabilityLoading ? 'Loading...' : 'Generate'}
@@ -725,7 +725,7 @@ const TaxReports: React.FC = () => {
               <button
                 onClick={handlePrintLiability}
                 className="block-btn text-xs px-4 py-2 flex items-center gap-1.5"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 <Printer size={13} /> Print
               </button>
@@ -734,7 +734,7 @@ const TaxReports: React.FC = () => {
 
           {/* Liability Table */}
           {liabilityData && (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-5 py-4 border-b border-border-primary">
                 <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
                   Tax Liability &mdash; Q{qStart}
@@ -796,7 +796,7 @@ const TaxReports: React.FC = () => {
           )}
 
           {!liabilityData && !liabilityLoading && (
-            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <PieChart size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-sm text-text-muted">
                 Select a period and click Generate to view the tax liability report.
@@ -828,7 +828,7 @@ const TaxReports: React.FC = () => {
                   value={empYear}
                   onChange={(e) => setEmpYear(Number(e.target.value))}
                   className="block-select text-sm pr-8"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   {yearRange.map((y) => (
                     <option key={y} value={y}>
@@ -851,7 +851,7 @@ const TaxReports: React.FC = () => {
                   value={empFilter}
                   onChange={(e) => setEmpFilter(e.target.value)}
                   className="block-select text-sm pr-8"
-                  style={{ borderRadius: '6px', minWidth: '200px' }}
+                  style={{ borderRadius: 'var(--app-radius)', minWidth: '200px' }}
                 >
                   <option value="">All Employees</option>
                   {employees.map((emp) => (
@@ -870,7 +870,7 @@ const TaxReports: React.FC = () => {
               onClick={loadEmployeeSummary}
               disabled={employeeLoading}
               className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <Search size={13} />
               {employeeLoading ? 'Loading...' : 'Generate'}
@@ -879,7 +879,7 @@ const TaxReports: React.FC = () => {
               <button
                 onClick={handlePrintEmployee}
                 className="block-btn text-xs px-4 py-2 flex items-center gap-1.5"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 <Printer size={13} /> Print
               </button>
@@ -888,7 +888,7 @@ const TaxReports: React.FC = () => {
 
           {/* Employee Table */}
           {employeeData.length > 0 ? (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-5 py-4 border-b border-border-primary">
                 <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
                   Employee Tax Summary &mdash; {empYear}
@@ -1045,7 +1045,7 @@ const TaxReports: React.FC = () => {
               </table>
             </div>
           ) : !employeeLoading ? (
-            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <Users size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-sm text-text-muted">
                 {empFilter
@@ -1057,7 +1057,7 @@ const TaxReports: React.FC = () => {
 
           {/* Feature 57: 1099 Contractor Summary */}
           {contractorData.length > 0 && (
-            <div className="block-card p-0 overflow-hidden mt-6" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden mt-6" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-5 py-4 border-b border-border-primary">
                 <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">1099 Contractor Summary — {empYear}</h3>
               </div>
@@ -1117,7 +1117,7 @@ const TaxReports: React.FC = () => {
               onClick={loadW4Compliance}
               disabled={w4Loading}
               className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <Search size={13} />
               {w4Loading ? 'Loading...' : 'Refresh'}
@@ -1126,7 +1126,7 @@ const TaxReports: React.FC = () => {
               <button
                 onClick={handlePrintW4}
                 className="block-btn text-xs px-4 py-2 flex items-center gap-1.5"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 <Printer size={13} /> Print
               </button>
@@ -1134,7 +1134,7 @@ const TaxReports: React.FC = () => {
           </div>
 
           {w4Data.length > 0 ? (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-5 py-4 border-b border-border-primary">
                 <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
                   W-4 Compliance — Active Employees
@@ -1164,11 +1164,11 @@ const TaxReports: React.FC = () => {
                         <td className="text-sm font-medium text-text-primary">{emp.name}</td>
                         <td>
                           {isMissing ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border bg-accent-expense/10 text-accent-expense border-accent-expense/20" style={{ borderRadius: '6px' }}>Missing</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border bg-accent-expense/10 text-accent-expense border-accent-expense/20" style={{ borderRadius: 'var(--app-radius)' }}>Missing</span>
                           ) : isOld ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border bg-accent-warning/10 text-accent-warning border-accent-warning/20" style={{ borderRadius: '6px' }}>Outdated</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border bg-accent-warning/10 text-accent-warning border-accent-warning/20" style={{ borderRadius: 'var(--app-radius)' }}>Outdated</span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border bg-accent-income/10 text-accent-income border-accent-income/20" style={{ borderRadius: '6px' }}>Current</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border bg-accent-income/10 text-accent-income border-accent-income/20" style={{ borderRadius: 'var(--app-radius)' }}>Current</span>
                           )}
                         </td>
                         <td className="text-sm text-text-secondary">{emp.w4_filing_status ? humanizeLabel(emp.w4_filing_status) : 'N/A'}</td>
@@ -1181,7 +1181,7 @@ const TaxReports: React.FC = () => {
               </table>
             </div>
           ) : !w4Loading ? (
-            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <ClipboardCheck size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-sm text-text-muted">No active employees found.</p>
             </div>
@@ -1200,24 +1200,24 @@ const TaxReports: React.FC = () => {
             <div>
               <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Year</label>
               <div className="relative">
-                <select value={deptYear} onChange={(e) => setDeptYear(Number(e.target.value))} className="block-select text-sm pr-8" style={{ borderRadius: '6px' }}>
+                <select value={deptYear} onChange={(e) => setDeptYear(Number(e.target.value))} className="block-select text-sm pr-8" style={{ borderRadius: 'var(--app-radius)' }}>
                   {yearRange.map((y) => (<option key={y} value={y}>{y}</option>))}
                 </select>
                 <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
               </div>
             </div>
-            <button onClick={loadDeptReport} disabled={deptLoading} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: '6px' }}>
+            <button onClick={loadDeptReport} disabled={deptLoading} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: 'var(--app-radius)' }}>
               <Search size={13} />{deptLoading ? 'Loading...' : 'Generate'}
             </button>
             {deptData.length > 0 && (
-              <button onClick={handlePrintDept} className="block-btn text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: '6px' }}>
+              <button onClick={handlePrintDept} className="block-btn text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: 'var(--app-radius)' }}>
                 <Printer size={13} /> Print
               </button>
             )}
           </div>
 
           {deptData.length > 0 ? (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-5 py-4 border-b border-border-primary">
                 <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
                   Department Tax Allocation — {deptYear}
@@ -1268,7 +1268,7 @@ const TaxReports: React.FC = () => {
               </table>
             </div>
           ) : !deptLoading ? (
-            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <Building2 size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-sm text-text-muted">Select a year and click Generate to view department tax allocation.</p>
             </div>
@@ -1287,24 +1287,24 @@ const TaxReports: React.FC = () => {
             <div>
               <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block mb-1">Year</label>
               <div className="relative">
-                <select value={qcYear} onChange={(e) => setQcYear(Number(e.target.value))} className="block-select text-sm pr-8" style={{ borderRadius: '6px' }}>
+                <select value={qcYear} onChange={(e) => setQcYear(Number(e.target.value))} className="block-select text-sm pr-8" style={{ borderRadius: 'var(--app-radius)' }}>
                   {yearRange.map((y) => (<option key={y} value={y}>{y}</option>))}
                 </select>
                 <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
               </div>
             </div>
-            <button onClick={loadQcReport} disabled={qcLoading} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: '6px' }}>
+            <button onClick={loadQcReport} disabled={qcLoading} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: 'var(--app-radius)' }}>
               <Search size={13} />{qcLoading ? 'Loading...' : 'Generate'}
             </button>
             {qcData.length > 0 && (
-              <button onClick={handlePrintQC} className="block-btn text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: '6px' }}>
+              <button onClick={handlePrintQC} className="block-btn text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: 'var(--app-radius)' }}>
                 <Printer size={13} /> Print
               </button>
             )}
           </div>
 
           {qcData.length > 0 ? (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-5 py-4 border-b border-border-primary">
                 <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
                   Quarterly Comparison — {qcYear}
@@ -1339,7 +1339,7 @@ const TaxReports: React.FC = () => {
               </table>
             </div>
           ) : !qcLoading ? (
-            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <Columns size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-sm text-text-muted">Select a year and click Generate to view the quarterly comparison.</p>
             </div>
@@ -1355,18 +1355,18 @@ const TaxReports: React.FC = () => {
           )}
 
           <div className="flex items-end gap-3">
-            <button onClick={loadDeposits} disabled={depositLoading} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: '6px' }}>
+            <button onClick={loadDeposits} disabled={depositLoading} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: 'var(--app-radius)' }}>
               <Search size={13} />{depositLoading ? 'Loading...' : 'Refresh'}
             </button>
             {depositData.length > 0 && (
-              <button onClick={handlePrintDeposits} className="block-btn text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: '6px' }}>
+              <button onClick={handlePrintDeposits} className="block-btn text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: 'var(--app-radius)' }}>
                 <Printer size={13} /> Print
               </button>
             )}
           </div>
 
           {depositData.length > 0 ? (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-5 py-4 border-b border-border-primary">
                 <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
                   Tax Deposit History
@@ -1405,7 +1405,7 @@ const TaxReports: React.FC = () => {
               </table>
             </div>
           ) : !depositLoading ? (
-            <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <Wallet size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-sm text-text-muted">No tax deposits recorded. Deposits are created when you record payments in Tax Filing.</p>
             </div>

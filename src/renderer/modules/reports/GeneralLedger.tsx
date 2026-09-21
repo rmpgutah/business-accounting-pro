@@ -902,14 +902,14 @@ const GeneralLedger: React.FC = () => {
 
       {/* Lock banner */}
       {lockDate && (
-        <div className="block-card p-2 flex items-center gap-2 border border-accent-blue/30 bg-accent-blue/5" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-2 flex items-center gap-2 border border-accent-blue/30 bg-accent-blue/5" style={{ borderRadius: 'var(--app-radius)' }}>
           <Lock size={13} className="text-accent-blue" />
           <span className="text-[11px] font-semibold text-accent-blue">Periods locked through {lockDate}</span>
         </div>
       )}
 
       {/* Controls */}
-      <div className="block-card p-4 flex flex-wrap items-center gap-3 justify-between" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex flex-wrap items-center gap-3 justify-between" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex flex-wrap items-center gap-3">
           <select className="block-select text-xs" style={{ width: '130px' }} value={preset} onChange={(e) => applyPreset(e.target.value as PresetKey)}>
             <option value="this-month">This Month</option>
@@ -965,13 +965,13 @@ const GeneralLedger: React.FC = () => {
         <div className="flex items-center gap-2">
           <button className="text-xs text-text-muted hover:text-text-primary px-2 py-1" onClick={expandAll}>Expand All</button>
           <button className="text-xs text-text-muted hover:text-text-primary px-2 py-1" onClick={collapseAll}>Collapse All</button>
-          <button className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover" style={{ borderRadius: '6px' }} title="Export CSV (Cmd+E)" onClick={handleExport}><Download size={15} /></button>
-          <button className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover" style={{ borderRadius: '6px' }} title="Print/PDF" onClick={handlePrintPDF}><Printer size={15} /></button>
+          <button className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover" style={{ borderRadius: 'var(--app-radius)' }} title="Export CSV (Cmd+E)" onClick={handleExport}><Download size={15} /></button>
+          <button className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover" style={{ borderRadius: 'var(--app-radius)' }} title="Print/PDF" onClick={handlePrintPDF}><Printer size={15} /></button>
         </div>
       </div>
 
       {/* Toggles + bulk action */}
-      <div className="block-card p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px]" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px]" style={{ borderRadius: 'var(--app-radius)' }}>
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={includeUnposted} onChange={(e) => setIncludeUnposted(e.target.checked)} />
           Include unposted
@@ -997,7 +997,7 @@ const GeneralLedger: React.FC = () => {
       </div>
 
       {/* Round-2 toggles + saved views + highlight rules */}
-      <div className="block-card p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px]" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px]" style={{ borderRadius: 'var(--app-radius)' }}>
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" checked={onlyUnsigned} onChange={(e) => setOnlyUnsigned(e.target.checked)} />
           Only unsigned
@@ -1046,7 +1046,7 @@ const GeneralLedger: React.FC = () => {
         <div className="flex items-center justify-center h-64 text-text-muted text-sm font-mono">Generating report...</div>
       ) : pivotMode && pivot ? (
         // Month × account pivot — print landscape with extra-tight font
-        <div id="gl-print-area" className="block-card p-0 overflow-auto report-landscape" style={{ borderRadius: '6px' }}>
+        <div id="gl-print-area" className="block-card p-0 overflow-auto report-landscape" style={{ borderRadius: 'var(--app-radius)' }}>
           <table className="block-table report-extra-wide">
             <thead>
               <tr>
@@ -1078,7 +1078,7 @@ const GeneralLedger: React.FC = () => {
           </table>
         </div>
       ) : filteredAccounts.length === 0 ? (
-        <div className="block-card p-8 text-center" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <FileText size={24} className="mx-auto mb-2 text-text-muted/50" />
           <p className="text-sm text-text-secondary font-medium">No transactions found</p>
           <p className="text-xs text-text-muted mt-1">Adjust filters or post journal entries.</p>
@@ -1089,7 +1089,7 @@ const GeneralLedger: React.FC = () => {
             const isExpanded = expandedAccounts.has(acct.account_id);
             const normalSide = NORMAL_SIDE[acct.account_type] ?? 'debit';
             return (
-              <div key={acct.account_id} className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+              <div key={acct.account_id} className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                 <button className="w-full flex items-center gap-3 px-4 py-3 hover:bg-bg-hover text-left" onClick={() => toggleAccount(acct.account_id)}>
                   <span className="text-text-muted">{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
                   <span className="font-mono text-xs text-text-muted w-16 shrink-0">{acct.account_code}</span>
@@ -1266,7 +1266,7 @@ const GeneralLedger: React.FC = () => {
       {/* Note popover */}
       {editingNoteFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEditingNoteFor(null)}>
-          <div className="block-card p-4 w-[420px]" style={{ borderRadius: '6px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-4 w-[420px]" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-2 text-text-primary">Line note</h3>
             <p className="text-xs text-text-muted mb-2">Entry {editingNoteFor.entry_number} — {editingNoteFor.account_name}</p>
             <textarea
@@ -1287,7 +1287,7 @@ const GeneralLedger: React.FC = () => {
       {/* Split modal */}
       {splitFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSplitFor(null)}>
-          <div className="block-card p-4 w-[440px]" style={{ borderRadius: '6px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-4 w-[440px]" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-2">Split Line</h3>
             <p className="text-xs text-text-muted mb-3">Split {formatCurrency(splitFor.amount)} from {splitFor.account_name} into another account on the same JE.</p>
             <label className="text-[10px] font-semibold uppercase block mb-1">Other account</label>
@@ -1308,7 +1308,7 @@ const GeneralLedger: React.FC = () => {
       {/* Flag/Question modal */}
       {flagDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setFlagDraft(null)}>
-          <div className="block-card p-4 w-[420px]" style={{ borderRadius: '6px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-4 w-[420px]" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-2">{flagDraft.type === 'flag' ? 'Flag for follow-up' : 'Mark needs accountant review'}</h3>
             <p className="text-xs text-text-muted mb-2">Entry {flagDraft.line.entry_number} — {flagDraft.line.account_name}</p>
             <textarea className="block-input w-full text-xs" rows={3} value={flagDraft.reason} onChange={(e) => setFlagDraft({ ...flagDraft, reason: e.target.value })} placeholder="Reason / question" autoFocus />
@@ -1323,7 +1323,7 @@ const GeneralLedger: React.FC = () => {
       {/* Highlight rules modal */}
       {rulesOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setRulesOpen(false)}>
-          <div className="block-card p-4 w-[560px]" style={{ borderRadius: '6px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-4 w-[560px]" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-2">Row Highlight Rules</h3>
             <p className="text-xs text-text-muted mb-3">Stored locally. Earlier rules win.</p>
             <table className="block-table text-xs mb-3">
@@ -1385,7 +1385,7 @@ const GeneralLedger: React.FC = () => {
       {/* Reclassify modal */}
       {reclassifyOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setReclassifyOpen(false)}>
-          <div className="block-card p-4 w-[480px]" style={{ borderRadius: '6px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="block-card p-4 w-[480px]" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold mb-3 text-text-primary">Bulk Reclassify {selectedLineIds.size} line(s)</h3>
             <p className="text-xs text-text-muted mb-3">A balancing journal entry will be created to reclassify the selected lines into the chosen account.</p>
             <label className="text-[10px] font-semibold text-text-muted uppercase block mb-1">Target account</label>

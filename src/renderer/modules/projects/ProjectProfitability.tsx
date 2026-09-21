@@ -91,7 +91,7 @@ const ProjectProfitability: React.FC<ProjectProfitabilityProps> = ({ projectId }
       {/* Stat Cards: 2x3 grid */}
       <div className="grid grid-cols-3 gap-4">
         {/* Revenue */}
-        <div className="stat-card border-l-2 border-l-accent-income" style={{ borderRadius: '6px' }}>
+        <div className="stat-card border-l-2 border-l-accent-income" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-1">
             <DollarSign size={12} className="text-text-muted" />
             <span className="stat-label">Revenue</span>
@@ -100,7 +100,7 @@ const ProjectProfitability: React.FC<ProjectProfitabilityProps> = ({ projectId }
         </div>
 
         {/* Total Costs */}
-        <div className="stat-card border-l-2 border-l-accent-expense" style={{ borderRadius: '6px' }}>
+        <div className="stat-card border-l-2 border-l-accent-expense" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-1">
             <Receipt size={12} className="text-text-muted" />
             <span className="stat-label">Total Costs</span>
@@ -116,7 +116,7 @@ const ProjectProfitability: React.FC<ProjectProfitabilityProps> = ({ projectId }
         </div>
 
         {/* Profit */}
-        <div className="stat-card border-l-2" style={{ borderRadius: '6px', borderLeftColor: profitColor(data.profit) }}>
+        <div className="stat-card border-l-2" style={{ borderRadius: 'var(--app-radius)', borderLeftColor: profitColor(data.profit) }}>
           <div className="flex items-center gap-1.5 mb-1">
             <TrendingUp size={12} className="text-text-muted" />
             <span className="stat-label">Profit</span>
@@ -127,7 +127,7 @@ const ProjectProfitability: React.FC<ProjectProfitabilityProps> = ({ projectId }
         </div>
 
         {/* Margin */}
-        <div className="stat-card border-l-2" style={{ borderRadius: '6px', borderLeftColor: marginColor(data.margin) }}>
+        <div className="stat-card border-l-2" style={{ borderRadius: 'var(--app-radius)', borderLeftColor: marginColor(data.margin) }}>
           <div className="flex items-center gap-1.5 mb-1">
             <Percent size={12} className="text-text-muted" />
             <span className="stat-label">Margin</span>
@@ -138,7 +138,7 @@ const ProjectProfitability: React.FC<ProjectProfitabilityProps> = ({ projectId }
         </div>
 
         {/* Hours Logged */}
-        <div className="stat-card border-l-2 border-l-accent-blue" style={{ borderRadius: '6px' }}>
+        <div className="stat-card border-l-2 border-l-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-1">
             <Clock size={12} className="text-text-muted" />
             <span className="stat-label">Hours Logged</span>
@@ -147,7 +147,7 @@ const ProjectProfitability: React.FC<ProjectProfitabilityProps> = ({ projectId }
         </div>
 
         {/* Effective Rate */}
-        <div className="stat-card border-l-2 border-l-accent-purple" style={{ borderRadius: '6px' }}>
+        <div className="stat-card border-l-2 border-l-accent-purple" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center gap-1.5 mb-1">
             <Zap size={12} className="text-text-muted" />
             <span className="stat-label">Effective Rate</span>
@@ -163,7 +163,7 @@ const ProjectProfitability: React.FC<ProjectProfitabilityProps> = ({ projectId }
         <div
           className="block-card"
           style={{
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             background: 'var(--hairline)',
           }}
         >
@@ -183,7 +183,7 @@ const ProjectProfitability: React.FC<ProjectProfitabilityProps> = ({ projectId }
               width: '100%',
               height: 8,
               background: 'var(--color-border-primary)',
-              borderRadius: '6px',
+              borderRadius: 'var(--app-radius)',
               overflow: 'hidden',
             }}
           >
@@ -192,7 +192,7 @@ const ProjectProfitability: React.FC<ProjectProfitabilityProps> = ({ projectId }
                 width: `${budgetBarPct}%`,
                 height: '100%',
                 background: budgetBarColor,
-                borderRadius: '6px',
+                borderRadius: 'var(--app-radius)',
                 transition: 'width 0.4s ease',
               }}
             />

@@ -124,9 +124,9 @@ const InventoryValuation: React.FC = () => {
       {error && <ErrorBanner message={error} onDismiss={() => setError('')} />}
 
       {/* Controls */}
-      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="text-xs text-text-muted">Current inventory as of {new Date().toLocaleDateString()}</div>
-        <button onClick={handlePrint} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: '6px' }} title="Print">
+        <button onClick={handlePrint} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: 'var(--app-radius)' }} title="Print">
           <Printer size={15} />
         </button>
       </div>
@@ -139,7 +139,7 @@ const InventoryValuation: React.FC = () => {
           { label: 'Low Stock Items', value: String(lowStockCount + outOfStockCount), accent: lowStockCount + outOfStockCount > 0 ? 'text-accent-warning' : 'text-accent-income' },
           { label: 'Avg Item Value', value: formatCurrency(avgItemValue), accent: 'text-text-primary' },
         ].map((card) => (
-          <div key={card.label} className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div key={card.label} className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{card.label}</div>
             <div className={`text-lg font-bold ${card.accent} mt-1 font-mono`}>{card.value}</div>
           </div>
@@ -151,7 +151,7 @@ const InventoryValuation: React.FC = () => {
       ) : data.length === 0 ? (
         <div className="flex items-center justify-center h-64 text-text-muted text-sm">No inventory items found.</div>
       ) : (
-        <div className="block-card overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-bg-tertiary border-b border-border-primary">

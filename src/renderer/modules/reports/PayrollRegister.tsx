@@ -304,7 +304,7 @@ const PayrollRegister: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Change 59: Date Range Controls */}
-      <div className="block-card p-4 flex items-center justify-between flex-wrap gap-3" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex items-center justify-between flex-wrap gap-3" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-3 flex-wrap">
           <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">From</label>
           <input type="date" className="block-input" style={{ width: 'auto' }} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -327,7 +327,7 @@ const PayrollRegister: React.FC = () => {
           { label: 'Avg Gross/Employee', value: formatCurrency(avgGrossPerEmployee), color: 'text-text-secondary' },
           { label: 'Total Hours', value: `${(totals.hoursReg + totals.hoursOT).toLocaleString()}`, color: 'text-accent-blue' },
         ].map(c => (
-          <div key={c.label} className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div key={c.label} className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <p className={`text-lg font-bold font-mono ${c.color}`}>{c.value}</p>
             <p className="text-[10px] text-text-muted uppercase tracking-wider font-semibold mt-1">{c.label}</p>
           </div>
@@ -342,7 +342,7 @@ const PayrollRegister: React.FC = () => {
         <>
           {/* Change 62: Payroll Cost Trend */}
           {monthlyTrend.length > 1 && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Payroll Cost Trend</h3>
               <div style={{ height: 200 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -351,7 +351,7 @@ const PayrollRegister: React.FC = () => {
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} />
                     <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip
-                      contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: '6px', fontSize: 11 }}
+                      contentStyle={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--hairline)', borderRadius: 'var(--app-radius)', fontSize: 11 }}
                       labelStyle={{ color: 'var(--color-text-muted)' }}
                       formatter={(value: any) => [formatCurrency(Number(value) || 0), 'Gross Payroll']}
                     />
@@ -364,7 +364,7 @@ const PayrollRegister: React.FC = () => {
 
           {/* Change 60: Department Breakdown */}
           {deptBreakdown.length > 0 && (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-4 py-3 border-b border-border-primary bg-bg-tertiary/30">
                 <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Department Breakdown</h3>
               </div>
@@ -414,7 +414,7 @@ const PayrollRegister: React.FC = () => {
           )}
 
           {/* Change 63: Tax Breakdown Summary */}
-          <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="px-4 py-3 border-b border-border-primary bg-bg-tertiary/30">
               <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Tax Breakdown</h3>
             </div>
@@ -464,7 +464,7 @@ const PayrollRegister: React.FC = () => {
 
           {/* Change 64: Run Type Breakdown */}
           {runTypeGroups.length > 1 && (
-            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="px-4 py-3 border-b border-border-primary bg-bg-tertiary/30">
                 <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">By Run Type</h3>
               </div>
@@ -494,7 +494,7 @@ const PayrollRegister: React.FC = () => {
           )}
 
           {/* Change 61: Full Employee Detail Table */}
-          <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="px-4 py-3 border-b border-border-primary bg-bg-tertiary/30">
               <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Employee Detail</h3>
             </div>

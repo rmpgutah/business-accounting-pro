@@ -405,7 +405,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
                 ? 'bg-accent-income-bg text-accent-income'
                 : 'bg-bg-tertiary text-text-muted'
             }`}
-            style={{ borderRadius: '6px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 'var(--app-radius)', whiteSpace: 'nowrap' }}
             disabled={isActive}
             title={billable ? 'Billable' : 'Non-billable'}
           >
@@ -418,7 +418,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
               <button
                 onClick={handleStart}
                 className="block-btn-success flex items-center gap-1.5 px-4 py-2 text-xs font-semibold"
-                style={{ borderRadius: '6px', whiteSpace: 'nowrap' }}
+                style={{ borderRadius: 'var(--app-radius)', whiteSpace: 'nowrap' }}
               >
                 <Play size={14} />
                 Start
@@ -430,7 +430,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
                 <button
                   onClick={handlePause}
                   className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/20 transition-colors"
-                  style={{ borderRadius: '6px', whiteSpace: 'nowrap' }}
+                  style={{ borderRadius: 'var(--app-radius)', whiteSpace: 'nowrap' }}
                 >
                   <Pause size={14} />
                   Pause
@@ -439,7 +439,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
                   onClick={handleStop}
                   disabled={saving}
                   className="block-btn-danger flex items-center gap-1.5 px-3 py-2 text-xs font-semibold"
-                  style={{ borderRadius: '6px', whiteSpace: 'nowrap', opacity: saving ? 0.6 : 1 }}
+                  style={{ borderRadius: 'var(--app-radius)', whiteSpace: 'nowrap', opacity: saving ? 0.6 : 1 }}
                 >
                   <Square size={14} />
                   {saving ? 'Saving...' : 'Stop'}
@@ -452,7 +452,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
                 <button
                   onClick={handleResume}
                   className="block-btn-success flex items-center gap-1.5 px-3 py-2 text-xs font-semibold"
-                  style={{ borderRadius: '6px', whiteSpace: 'nowrap' }}
+                  style={{ borderRadius: 'var(--app-radius)', whiteSpace: 'nowrap' }}
                 >
                   <Play size={14} />
                   Resume
@@ -461,7 +461,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
                   onClick={handleStop}
                   disabled={saving}
                   className="block-btn-danger flex items-center gap-1.5 px-3 py-2 text-xs font-semibold"
-                  style={{ borderRadius: '6px', whiteSpace: 'nowrap', opacity: saving ? 0.6 : 1 }}
+                  style={{ borderRadius: 'var(--app-radius)', whiteSpace: 'nowrap', opacity: saving ? 0.6 : 1 }}
                 >
                   <Square size={14} />
                   {saving ? 'Saving...' : 'Stop'}
@@ -469,7 +469,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
                 <button
                   onClick={handleDiscard}
                   className="block-btn px-3 py-2 text-xs font-semibold text-text-muted hover:text-text-primary"
-                  style={{ borderRadius: '6px', whiteSpace: 'nowrap' }}
+                  style={{ borderRadius: 'var(--app-radius)', whiteSpace: 'nowrap' }}
                   title="Discard this timer without saving"
                 >
                   Discard
@@ -484,7 +484,7 @@ const TimerWidget: React.FC<TimerWidgetProps> = ({
       {error && (
         <div
           className="flex items-center gap-2 px-4 py-2.5 text-xs text-accent-expense bg-accent-expense/10 border border-accent-expense/20"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <AlertCircle size={14} className="flex-shrink-0" />
           <span className="flex-1">{error}</span>

@@ -31,7 +31,7 @@ const TabBtn: React.FC<{ active: boolean; label: string; icon: React.ReactNode; 
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
         : 'text-text-muted hover:text-text-secondary'
     }`}
-    style={{ borderRadius: '6px 6px 0 0' }}
+    style={{ borderRadius: 'var(--app-radius) var(--app-radius) 0 0' }}
   >
     {icon}
     {label}
@@ -112,8 +112,8 @@ const ComplianceScoreCard: React.FC<{ debtId: string; events: any[] }> = ({ debt
       <div className="flex items-center gap-4">
         <div className={`text-4xl font-mono font-bold ${scoreColor}`}>{score}</div>
         <div className="flex-1">
-          <div className="w-full h-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
-            <div className={`h-full ${scoreBarColor}`} style={{ width: `${score}%`, borderRadius: 6, transition: 'width 0.5s ease' }} />
+          <div className="w-full h-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
+            <div className={`h-full ${scoreBarColor}`} style={{ width: `${score}%`, borderRadius: 'var(--app-radius)', transition: 'width 0.5s ease' }} />
           </div>
           <div className="text-[10px] text-text-muted mt-1">
             {score >= 80 ? 'Excellent compliance' : score >= 50 ? 'Needs improvement' : 'Critical — action required'}
@@ -173,7 +173,7 @@ const ViolationTracker: React.FC<{ companyId: string }> = ({ companyId }) => {
         <h4 className="text-sm font-semibold text-text-primary">FDCPA Violation Tracker</h4>
       </div>
       {violations.length === 0 ? (
-        <div className="text-xs text-accent-income flex items-center gap-2 p-3 bg-accent-income/10 border border-accent-income/20" style={{ borderRadius: 6 }}>
+        <div className="text-xs text-accent-income flex items-center gap-2 p-3 bg-accent-income/10 border border-accent-income/20" style={{ borderRadius: 'var(--app-radius)' }}>
           <CheckCircle size={14} />
           No potential violations detected. All active debts appear compliant.
         </div>
@@ -258,7 +258,7 @@ const CommunicationHours: React.FC<{ debtId: string }> = ({ debtId }) => {
         <Clock size={16} className="text-accent-blue" />
         <h4 className="text-sm font-semibold text-text-primary">Communication Hours (FDCPA: 8am-9pm)</h4>
         {outOfHours > 0 && (
-          <span className="text-[10px] font-semibold text-accent-expense bg-accent-expense/10 px-2 py-0.5 ml-auto" style={{ borderRadius: 6 }}>
+          <span className="text-[10px] font-semibold text-accent-expense bg-accent-expense/10 px-2 py-0.5 ml-auto" style={{ borderRadius: 'var(--app-radius)' }}>
             {outOfHours} outside allowed hours
           </span>
         )}
@@ -271,7 +271,7 @@ const CommunicationHours: React.FC<{ debtId: string }> = ({ debtId }) => {
                 height: `${Math.max((h.count / maxCount) * 60, h.count > 0 ? 4 : 0)}px`,
                 width: '100%',
                 background: !h.allowed && h.count > 0 ? 'var(--color-accent-expense)' : h.allowed ? 'var(--color-accent-income)' : 'var(--color-bg-secondary)',
-                borderRadius: '3px 3px 0 0',
+                borderRadius: 'var(--app-radius) var(--app-radius) 0 0',
                 transition: 'height 0.3s ease',
                 opacity: h.count === 0 ? 0.3 : 1,
               }}
@@ -289,8 +289,8 @@ const CommunicationHours: React.FC<{ debtId: string }> = ({ debtId }) => {
         <span>12am</span>
       </div>
       <div className="flex gap-4 text-[10px] text-text-muted">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-accent-income inline-block" style={{ borderRadius: 2 }} /> Allowed (8am-9pm)</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-accent-expense inline-block" style={{ borderRadius: 2 }} /> Prohibited</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-accent-income inline-block" style={{ borderRadius: 'var(--app-radius)' }} /> Allowed (8am-9pm)</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-accent-expense inline-block" style={{ borderRadius: 'var(--app-radius)' }} /> Prohibited</span>
       </div>
     </div>
   );
@@ -315,7 +315,7 @@ const DisclosuresChecklist: React.FC<{ debtId: string; events: any[] }> = ({ deb
         {disclosures.map((d) => {
           const done = events.some(e => e.event_type === d.key);
           return (
-            <div key={d.key} className="flex items-start gap-3 p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+            <div key={d.key} className="flex items-start gap-3 p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="mt-0.5 flex-shrink-0">
                 {done ? (
                   <CheckCircle size={16} className="text-accent-income" />
@@ -329,7 +329,7 @@ const DisclosuresChecklist: React.FC<{ debtId: string; events: any[] }> = ({ deb
                     {d.label}
                   </span>
                   {d.required && !done && (
-                    <span className="text-[9px] font-bold text-accent-expense bg-accent-expense/10 px-1.5 py-0.5" style={{ borderRadius: 4 }}>REQUIRED</span>
+                    <span className="text-[9px] font-bold text-accent-expense bg-accent-expense/10 px-1.5 py-0.5" style={{ borderRadius: 'var(--app-radius)' }}>REQUIRED</span>
                   )}
                 </div>
                 <div className="text-[11px] text-text-muted mt-0.5">{d.desc}</div>
@@ -471,7 +471,7 @@ const SOLDashboard: React.FC<{ companyId: string }> = ({ companyId }) => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {debts.map((d: any) => (
-            <div key={d.id} className={`p-3 ${solBg(d.days_remaining)}`} style={{ borderRadius: 6 }}>
+            <div key={d.id} className={`p-3 ${solBg(d.days_remaining)}`} style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="text-xs font-semibold text-text-primary truncate">{d.debtor_name}</div>
               <div className="text-[10px] text-text-muted mt-0.5">{formatCurrency(d.balance_due)}</div>
               <div className={`text-sm font-mono font-bold mt-1 ${solColor(d.days_remaining)}`}>
@@ -717,8 +717,8 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
         <TabBtn active={activeTab === 'docs'} label="Documents" icon={<FileCheck size={12} />} onClick={() => setActiveTab('docs')} />
       </div>
 
-      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20 mb-3" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
-      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mb-3" style={{ borderRadius: '6px' }}>{opError}</div>}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20 mb-3" style={{ borderRadius: 'var(--app-radius)' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mb-3" style={{ borderRadius: 'var(--app-radius)' }}>{opError}</div>}
 
       {hasCeaseDesist && (
         <div
@@ -729,7 +729,7 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
             padding: '8px 12px',
             background: 'rgba(239,68,68,0.08)',
             border: '1px solid var(--color-accent-expense)',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             marginBottom: 12,
           }}
         >
@@ -744,7 +744,7 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
       {activeTab === 'log' && (
         <>
           {showForm && (
-            <div className="grid grid-cols-2 gap-3 mb-4 p-4 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+            <div className="grid grid-cols-2 gap-3 mb-4 p-4 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
               <div>
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">
                   Event Type
@@ -812,7 +812,7 @@ const ComplianceLog: React.FC<Props> = ({ debtId, onRefresh }) => {
                     gap: 10,
                     padding: '8px 10px',
                     background: 'var(--color-bg-tertiary)',
-                    borderRadius: 6,
+                    borderRadius: 'var(--app-radius)',
                   }}
                 >
                   <div

@@ -37,7 +37,7 @@ const SubTabBtn: React.FC<{
         ? 'bg-bg-tertiary text-text-primary border-b-2 border-accent-blue'
         : 'text-text-muted hover:text-text-secondary transition-colors'
     }`}
-    style={{ borderRadius: '6px 6px 0 0' }}
+    style={{ borderRadius: 'var(--app-radius) var(--app-radius) 0 0' }}
   >
     {icon}
     {label}
@@ -140,15 +140,15 @@ const LitigationCostTracker: React.FC<{ companyId: string }> = ({ companyId }) =
     <div className="space-y-4">
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="block-card p-4 text-center" style={{ borderRadius: 6 }}>
+        <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-lg font-mono font-bold text-accent-expense">{formatCurrency(totalCosts)}</div>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Legal Costs</div>
         </div>
-        <div className="block-card p-4 text-center" style={{ borderRadius: 6 }}>
+        <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="text-lg font-mono font-bold text-accent-income">{formatCurrency(totalRecovered)}</div>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Recovered</div>
         </div>
-        <div className="block-card p-4 text-center" style={{ borderRadius: 6 }}>
+        <div className="block-card p-4 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className={`text-lg font-mono font-bold ${netRoi >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>{netRoi}%</div>
           <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">ROI</div>
         </div>
@@ -180,7 +180,7 @@ const LitigationCostTracker: React.FC<{ companyId: string }> = ({ companyId }) =
                   <td className="text-right font-mono text-sm text-accent-income">{formatCurrency(d.recovered)}</td>
                   <td className={`text-right font-mono text-sm font-bold ${net >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>{formatCurrency(net)}</td>
                   <td className="text-center">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 ${st.className}`} style={{ borderRadius: 4 }}>{st.label}</span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 ${st.className}`} style={{ borderRadius: 'var(--app-radius)' }}>{st.label}</span>
                   </td>
                 </tr>
               );
@@ -317,7 +317,7 @@ const GarnishmentCalculator: React.FC = () => {
         <Calculator size={16} className="text-accent-blue" />
         <h4 className="text-sm font-semibold text-text-primary">Federal Garnishment Calculator</h4>
       </div>
-      <div className="text-xs text-text-muted p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+      <div className="text-xs text-text-muted p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
         Per CCPA (15 U.S.C. 1673): Maximum garnishment is the lesser of 25% of disposable earnings OR the amount by which disposable weekly earnings exceed 30 times the federal minimum wage (${FEDERAL_MIN_WAGE}/hr).
       </div>
       <div className="grid grid-cols-3 gap-3">
@@ -352,11 +352,11 @@ const GarnishmentCalculator: React.FC = () => {
           />
         </div>
       </div>
-      <button className="block-btn-primary text-xs py-1.5 px-4" style={{ borderRadius: 6 }} onClick={calculate}>
+      <button className="block-btn-primary text-xs py-1.5 px-4" style={{ borderRadius: 'var(--app-radius)' }} onClick={calculate}>
         Calculate Maximum Garnishment
       </button>
       {result && (
-        <div className="block-card p-4 space-y-3" style={{ borderRadius: 6 }}>
+        <div className="block-card p-4 space-y-3" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Max Weekly Garnishment</div>
@@ -453,7 +453,7 @@ const LienFilingStatus: React.FC<{ companyId: string }> = ({ companyId }) => {
                 <td className="text-right font-mono text-sm">{l.amount ? formatCurrency(l.amount) : '-'}</td>
                 <td className="text-sm text-text-secondary font-mono">{l.filing_date || '-'}</td>
                 <td className="text-center">
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 ${statusColor(l.status)}`} style={{ borderRadius: 4 }}>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 ${statusColor(l.status)}`} style={{ borderRadius: 'var(--app-radius)' }}>
                     {formatStatus(l.status || 'unknown').label}
                   </span>
                 </td>
@@ -531,7 +531,7 @@ const LegalTimeline: React.FC<{ debtId: string }> = ({ debtId }) => {
                     a.status === 'completed' ? 'text-accent-income bg-accent-income/10' :
                     a.status === 'pending' ? 'text-yellow-500 bg-yellow-500/10' :
                     'text-text-muted bg-bg-tertiary'
-                  }`} style={{ borderRadius: 4 }}>
+                  }`} style={{ borderRadius: 'var(--app-radius)' }}>
                     {formatStatus(a.status || 'pending').label}
                   </span>
                   {a.amount > 0 && (
@@ -609,7 +609,7 @@ const AttorneyAssignment: React.FC<{ companyId: string }> = ({ companyId }) => {
             const totalBalance = debts.reduce((s, d) => s + (d.balance_due || 0), 0);
             const totalCosts = debts.reduce((s, d) => s + (d.legal_costs || 0), 0);
             return (
-              <div key={attorney} className="block-card p-4" style={{ borderRadius: 6 }}>
+              <div key={attorney} className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <div className="text-sm font-semibold text-text-primary">{attorney}</div>
@@ -626,18 +626,18 @@ const AttorneyAssignment: React.FC<{ companyId: string }> = ({ companyId }) => {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-3">
-                  <div className="text-center p-2 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                  <div className="text-center p-2 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div className="text-sm font-mono font-bold text-text-primary">{formatCurrency(totalBalance)}</div>
                     <div className="text-[10px] text-text-muted">Total Balance</div>
                   </div>
-                  <div className="text-center p-2 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                  <div className="text-center p-2 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div className="text-sm font-mono font-bold text-accent-expense">{formatCurrency(totalCosts)}</div>
                     <div className="text-[10px] text-text-muted">Legal Costs</div>
                   </div>
                 </div>
                 <div className="space-y-1">
                   {debts.map((d: any) => (
-                    <div key={d.id} className="flex justify-between text-xs px-2 py-1 hover:bg-bg-hover transition-colors" style={{ borderRadius: 6 }}>
+                    <div key={d.id} className="flex justify-between text-xs px-2 py-1 hover:bg-bg-hover transition-colors" style={{ borderRadius: 'var(--app-radius)' }}>
                       <span className="text-text-secondary">{d.debtor_name}</span>
                       <span className="font-mono text-text-primary">{formatCurrency(d.balance_due)}</span>
                     </div>
@@ -729,7 +729,7 @@ const PrintLegalSummary: React.FC<{ companyId: string }> = ({ companyId }) => {
         <Printer size={16} className="text-accent-blue" />
         <h4 className="text-sm font-semibold text-text-primary">Print Legal Summary</h4>
       </div>
-      <div className="block-card p-6 text-center" style={{ borderRadius: 6 }}>
+      <div className="block-card p-6 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
         <Scale size={32} className="mx-auto text-text-muted mb-3" />
         <p className="text-text-secondary text-sm mb-4">
           Generate a comprehensive legal portfolio summary including all debts in collection or legal status, costs, judgments, garnishment status, and attorney assignments.

@@ -66,7 +66,7 @@ const CHART_TICK_FILL = CHART_AXIS;
 const TOOLTIP_STYLE = {
   backgroundColor: '#1a1a1a',
   border: '1px solid #2e2e2e',
-  borderRadius: '6px',
+  borderRadius: 'var(--app-radius)',
 };
 
 // DATE: Format as YYYY-MM-DD using local Y/M/D — toISOString() shifts the day
@@ -345,7 +345,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
       {/* ── Date Range Selector ── */}
       <div
         className="block-card p-4 flex items-center gap-4 flex-wrap"
-        style={{ borderRadius: '6px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         <label className="text-text-secondary text-sm flex items-center gap-2">
           From
@@ -354,7 +354,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             className="block-input px-2 py-1 text-sm"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           />
         </label>
         <label className="text-text-secondary text-sm flex items-center gap-2">
@@ -364,14 +364,14 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             className="block-input px-2 py-1 text-sm"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           />
         </label>
         <button
           onClick={loadData}
           disabled={loading}
           className="block-btn block-btn-primary px-3 py-1 text-sm flex items-center gap-1"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refresh
@@ -427,7 +427,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
             api.printPreview(html, 'Debt Analytics Report');
           }}
           className="block-btn px-3 py-1 text-sm flex items-center gap-1"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
           disabled={loading || !hasData}
         >
           <Printer size={14} />
@@ -450,7 +450,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
       {!loading && hasData && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* ── 1. Collection Rate Over Time (AreaChart) ── */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Collection Rate Over Time
             </h3>
@@ -485,7 +485,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           </div>
 
           {/* ── 2. Aging Breakdown (BarChart) ── */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Aging Breakdown
             </h3>
@@ -520,7 +520,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           </div>
 
           {/* ── 3. Recovery by Stage (Horizontal BarChart) ── */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Recovery by Stage
             </h3>
@@ -554,7 +554,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           </div>
 
           {/* ── 4. Top Debtors (Horizontal BarChart) ── */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Top Debtors
             </h3>
@@ -592,30 +592,30 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           </div>
 
           {/* ── 5. Summary Stats ── */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Summary
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              <div className="stat-card block-card" style={{ borderRadius: '6px' }}>
+              <div className="stat-card block-card" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="stat-value font-mono text-accent-expense">
                   {formatCurrency(stats?.total_outstanding ?? 0)}
                 </div>
                 <div className="stat-label">Total Outstanding</div>
               </div>
-              <div className="stat-card block-card" style={{ borderRadius: '6px' }}>
+              <div className="stat-card block-card" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="stat-value font-mono text-accent-income">
                   {formatCurrency(stats?.collected_this_month ?? 0)}
                 </div>
                 <div className="stat-label">Collected This Month</div>
               </div>
-              <div className="stat-card block-card" style={{ borderRadius: '6px' }}>
+              <div className="stat-card block-card" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="stat-value font-mono text-text-muted">
                   {formatCurrency(stats?.writeoffs_ytd ?? 0)}
                 </div>
                 <div className="stat-label">Write-offs YTD</div>
               </div>
-              <div className="stat-card block-card" style={{ borderRadius: '6px' }}>
+              <div className="stat-card block-card" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="stat-value font-mono text-accent-blue">
                   {stats?.in_collection ?? 0}
                 </div>
@@ -626,7 +626,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 6. Collector Performance ── */}
           {collectorPerf.length > 0 && (
-            <div className="block-card p-4 col-span-2" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4 col-span-2" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-text-primary text-sm font-semibold mb-3">
                 Collector Performance
               </h3>
@@ -662,7 +662,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           )}
 
           {/* ── 7. Pipeline Velocity ── */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Pipeline Velocity
             </h3>
@@ -680,7 +680,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                   <div
                     key={v.stage}
                     className="grid grid-cols-2 gap-2 text-sm px-2 py-2 hover:bg-bg-hover transition-colors"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                   >
                     <span className="text-text-secondary capitalize">
                       {v.stage.replace(/_/g, ' ')}
@@ -698,7 +698,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 8. Collection Effectiveness Index (CEI) ── */}
           {cei !== null && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-text-primary text-sm font-semibold mb-3">
                 Collection Effectiveness Index (CEI)
               </h3>
@@ -708,8 +708,8 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                     {cei.toFixed(1)}%
                   </div>
                   <div className="text-xs text-text-muted mt-2">Total Collected / Total Placed for Collection</div>
-                  <div className="w-full h-2 bg-bg-tertiary mt-3" style={{ borderRadius: 6, width: 200 }}>
-                    <div className={`h-full ${cei >= 50 ? 'bg-accent-income' : cei >= 25 ? 'bg-yellow-500' : 'bg-accent-expense'}`} style={{ width: `${Math.min(cei, 100)}%`, borderRadius: 6, transition: 'width 0.5s ease' }} />
+                  <div className="w-full h-2 bg-bg-tertiary mt-3" style={{ borderRadius: 'var(--app-radius)', width: 200 }}>
+                    <div className={`h-full ${cei >= 50 ? 'bg-accent-income' : cei >= 25 ? 'bg-yellow-500' : 'bg-accent-expense'}`} style={{ width: `${Math.min(cei, 100)}%`, borderRadius: 'var(--app-radius)', transition: 'width 0.5s ease' }} />
                   </div>
                 </div>
               </div>
@@ -717,7 +717,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           )}
 
           {/* ── 11. Debt Aging Waterfall ── */}
-          <div className="block-card p-4 col-span-2" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4 col-span-2" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Aging Waterfall
             </h3>
@@ -741,7 +741,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 15. Portfolio Segmentation ── */}
           {(segmentation.byStage.length > 0 || segmentation.byBalance.length > 0) && (
-            <div className="block-card p-4 col-span-2" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4 col-span-2" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-text-primary text-sm font-semibold mb-3">
                 Portfolio Segmentation
               </h3>
@@ -751,7 +751,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                   <h4 className="text-xs text-text-muted font-semibold uppercase mb-2">By Stage</h4>
                   <div className="space-y-1">
                     {segmentation.byStage.map((s: any) => (
-                      <div key={s.segment} className="flex justify-between text-xs px-2 py-1 border border-border-primary" style={{ borderRadius: 6 }}>
+                      <div key={s.segment} className="flex justify-between text-xs px-2 py-1 border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                         <span className="text-text-secondary capitalize">{(s.segment || '').replace(/_/g, ' ')}</span>
                         <span className="font-mono text-text-primary">{s.count} / {formatCurrency(s.total)}</span>
                       </div>
@@ -763,7 +763,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                   <h4 className="text-xs text-text-muted font-semibold uppercase mb-2">By Balance</h4>
                   <div className="space-y-1">
                     {segmentation.byBalance.map((s: any) => (
-                      <div key={s.segment} className="flex justify-between text-xs px-2 py-1 border border-border-primary" style={{ borderRadius: 6 }}>
+                      <div key={s.segment} className="flex justify-between text-xs px-2 py-1 border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                         <span className="text-text-secondary">{s.segment}</span>
                         <span className="font-mono text-text-primary">{s.count} / {formatCurrency(s.total)}</span>
                       </div>
@@ -775,7 +775,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                   <h4 className="text-xs text-text-muted font-semibold uppercase mb-2">By Collector</h4>
                   <div className="space-y-1">
                     {segmentation.byCollector.map((s: any) => (
-                      <div key={s.segment} className="flex justify-between text-xs px-2 py-1 border border-border-primary" style={{ borderRadius: 6 }}>
+                      <div key={s.segment} className="flex justify-between text-xs px-2 py-1 border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                         <span className="text-text-secondary truncate" style={{ maxWidth: 100 }}>{s.segment}</span>
                         <span className="font-mono text-text-primary">{s.count} / {formatCurrency(s.total)}</span>
                       </div>
@@ -788,7 +788,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 25. Recovery Forecast ── */}
           {forecast.length > 0 && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-text-primary text-sm font-semibold mb-3">
                 Recovery Forecast
               </h3>
@@ -813,7 +813,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 31. Recovery Rate Trend ── */}
           {recoveryTrend.length > 0 && (
-            <div className="block-card p-4 col-span-2" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4 col-span-2" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp size={14} className="text-accent-blue" />
                 <h3 className="text-text-primary text-sm font-semibold">
@@ -852,24 +852,24 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 32. Settlement Success Rate ── */}
           {settlementStats && settlementStats.total > 0 && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-text-primary text-sm font-semibold mb-3">
                 Settlement Success Rate
               </h3>
               <div className="grid grid-cols-2 gap-3">
-                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-2xl font-mono font-bold text-text-primary">{settlementStats.total}</div>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Offered</div>
                 </div>
-                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-2xl font-mono font-bold text-accent-income">{settlementStats.accepted}</div>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Accepted</div>
                 </div>
-                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-2xl font-mono font-bold text-accent-expense">{settlementStats.rejected}</div>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Rejected</div>
                 </div>
-                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-2xl font-mono font-bold text-accent-blue">{settlementStats.avg_pct}%</div>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg Settlement %</div>
                 </div>
@@ -887,7 +887,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 33. Communication Effectiveness ── */}
           {commEffectiveness.length > 0 && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-text-primary text-sm font-semibold mb-3">
                 Communication Effectiveness
               </h3>
@@ -925,30 +925,30 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 34. Payment Plan Performance ── */}
           {planPerf && planPerf.total_plans > 0 && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-text-primary text-sm font-semibold mb-3">
                 Payment Plan Performance
               </h3>
               <div className="grid grid-cols-2 gap-3">
-                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-2xl font-mono font-bold text-text-primary">{planPerf.total_plans}</div>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Plans</div>
                 </div>
-                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-2xl font-mono font-bold text-accent-blue">{planPerf.active}</div>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Active</div>
                 </div>
-                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-2xl font-mono font-bold text-accent-income">{planPerf.completed}</div>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Completed</div>
                 </div>
-                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="text-2xl font-mono font-bold text-accent-expense">{planPerf.defaulted}</div>
                   <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Defaulted</div>
                 </div>
               </div>
               {planPerf.total_plans > 0 && (
-                <div className="mt-3 w-full h-3 bg-bg-tertiary flex overflow-hidden" style={{ borderRadius: 6 }}>
+                <div className="mt-3 w-full h-3 bg-bg-tertiary flex overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                   <div className="bg-accent-income h-full" style={{ width: `${(planPerf.completed / planPerf.total_plans) * 100}%`, transition: 'width 0.5s ease' }} />
                   <div className="bg-accent-blue h-full" style={{ width: `${(planPerf.active / planPerf.total_plans) * 100}%`, transition: 'width 0.5s ease' }} />
                   <div className="bg-accent-expense h-full" style={{ width: `${(planPerf.defaulted / planPerf.total_plans) * 100}%`, transition: 'width 0.5s ease' }} />
@@ -964,7 +964,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 35. Geographic Distribution ── */}
           {geoData.length > 0 && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-text-primary text-sm font-semibold mb-3">
                 Geographic Distribution
               </h3>
@@ -975,7 +975,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                   <span className="text-right">Balance</span>
                 </div>
                 {geoData.map((g: any) => (
-                  <div key={g.state} className="grid grid-cols-3 gap-2 text-sm px-2 py-1.5 hover:bg-bg-hover transition-colors" style={{ borderRadius: 6 }}>
+                  <div key={g.state} className="grid grid-cols-3 gap-2 text-sm px-2 py-1.5 hover:bg-bg-hover transition-colors" style={{ borderRadius: 'var(--app-radius)' }}>
                     <span className="text-text-secondary font-medium">{g.state}</span>
                     <span className="text-right font-mono text-text-primary">{g.count}</span>
                     <span className="text-right font-mono text-accent-expense">{formatCurrency(g.balance)}</span>
@@ -987,7 +987,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 36. Collector Comparison Chart ── */}
           {collectorComparison.length > 0 && (
-            <div className="block-card p-4 col-span-2" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4 col-span-2" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-text-primary text-sm font-semibold mb-3">
                 Collector Comparison
               </h3>
@@ -1023,21 +1023,21 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
 
           {/* ── 37. Collection Cost ROI ── */}
           {costRoi && (costRoi.total_collected > 0 || costRoi.total_costs > 0) && (
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-text-primary text-sm font-semibold mb-3">
                 Collection Cost ROI
               </h3>
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                  <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div className="text-lg font-mono font-bold text-accent-income">{formatCurrency(costRoi.total_collected)}</div>
                     <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Collected</div>
                   </div>
-                  <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                  <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div className="text-lg font-mono font-bold text-accent-expense">{formatCurrency(costRoi.total_costs)}</div>
                     <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Costs</div>
                   </div>
-                  <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                  <div className="text-center p-3 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div className={`text-lg font-mono font-bold ${costRoi.roi >= 100 ? 'text-accent-income' : costRoi.roi >= 0 ? 'text-yellow-500' : 'text-accent-expense'}`}>
                       {costRoi.roi}%
                     </div>
@@ -1054,7 +1054,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
           )}
 
           {/* ── 40. Benchmark Indicators Summary ── */}
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <h3 className="text-text-primary text-sm font-semibold mb-3">
               Industry Benchmark Comparison
             </h3>
@@ -1094,10 +1094,10 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                       Avg: {item.benchmark}{item.suffix}
                     </span>
                   </div>
-                  <div className="relative w-full h-2 bg-bg-tertiary" style={{ borderRadius: 6 }}>
+                  <div className="relative w-full h-2 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                     <div
                       className={item.yours >= item.benchmark ? 'bg-accent-income' : 'bg-accent-expense'}
-                      style={{ width: `${Math.min((item.yours / Math.max(item.benchmark * 2, 1)) * 100, 100)}%`, height: '100%', borderRadius: 6, transition: 'width 0.5s ease' }}
+                      style={{ width: `${Math.min((item.yours / Math.max(item.benchmark * 2, 1)) * 100, 100)}%`, height: '100%', borderRadius: 'var(--app-radius)', transition: 'width 0.5s ease' }}
                     />
                     <div
                       className="absolute top-0 h-full w-0.5 bg-text-muted"

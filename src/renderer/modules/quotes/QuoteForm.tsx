@@ -613,7 +613,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold"
             onClick={handleConvert}
             style={{
-              borderRadius: '6px',
+              borderRadius: 'var(--app-radius)',
               background: 'color-mix(in srgb, var(--color-accent-blue) 12%, transparent)',
               border: '1px solid color-mix(in srgb, var(--color-accent-blue) 25%, transparent)',
               color: 'var(--color-accent-blue)',
@@ -632,7 +632,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
           style={{
             background: 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)',
             border: '1px solid var(--color-accent-income)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             padding: '12px 16px',
             color: 'var(--color-accent-income)',
             fontSize: '13px',
@@ -649,7 +649,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
           style={{
             background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
             border: '1px solid var(--color-accent-expense)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             padding: '12px 16px',
           }}
         >
@@ -768,7 +768,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
                   style={{
                     background: 'color-mix(in srgb, var(--color-accent-blue) 8%, transparent)',
                     border: '1px solid color-mix(in srgb, var(--color-accent-blue) 20%, transparent)',
-                    borderRadius: '6px',
+                    borderRadius: 'var(--app-radius)',
                     cursor: 'pointer',
                   }}
                   title={`Set valid_until to ${days} days from issue`}
@@ -800,7 +800,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
           style={{
             background: 'rgba(18,19,24,0.40)',
             border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
           }}
         >
           <div className="flex items-center justify-between mb-3">
@@ -895,7 +895,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
           style={{
             background: 'rgba(18,19,24,0.40)',
             border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
           }}
         >
           <div className="flex items-center justify-between mb-3">
@@ -1103,7 +1103,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quoteId, onBack, onSaved }) => {
               className="w-72 space-y-2 p-4"
               style={{
                 background: 'var(--color-bg-elevated)',
-                borderRadius: '6px',
+                borderRadius: 'var(--app-radius)',
                 border: '1px solid var(--color-border-primary)',
               }}
             >

@@ -164,14 +164,14 @@ const DebtCollectionReport: React.FC = () => {
       {error && <ErrorBanner message={error} onDismiss={() => setError('')} />}
 
       {/* Controls */}
-      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-3">
           <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">From</label>
           <input type="date" className="block-input" style={{ width: 'auto' }} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           <label className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">To</label>
           <input type="date" className="block-input" style={{ width: 'auto' }} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
-        <button onClick={handlePrint} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: '6px' }} title="Print">
+        <button onClick={handlePrint} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: 'var(--app-radius)' }} title="Print">
           <Printer size={15} />
         </button>
       </div>
@@ -184,7 +184,7 @@ const DebtCollectionReport: React.FC = () => {
           { label: 'Outstanding', value: formatCurrency(totalOutstanding), accent: 'text-accent-expense' },
           { label: 'Recovery Rate', value: `${recoveryRate.toFixed(1)}%`, accent: 'text-accent-blue' },
         ].map((card) => (
-          <div key={card.label} className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div key={card.label} className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{card.label}</div>
             <div className={`text-lg font-bold ${card.accent} mt-1 font-mono`}>{card.value}</div>
           </div>
@@ -196,7 +196,7 @@ const DebtCollectionReport: React.FC = () => {
       ) : (
         <>
           {/* Aging Analysis */}
-          <div className="block-card overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="bg-bg-tertiary px-4 py-2 border-b border-border-primary">
               <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Aging Analysis</h3>
             </div>
@@ -225,8 +225,8 @@ const DebtCollectionReport: React.FC = () => {
                       <td className="text-right px-4 py-2 text-xs text-text-primary font-mono font-semibold">{formatCurrency(bucket.amount)}</td>
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
-                            <div className={`h-full transition-all duration-500 ${barColors[bucket.label] || 'bg-accent-blue'}`} style={{ width: `${pct}%`, borderRadius: '6px' }} />
+                          <div className="flex-1 h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
+                            <div className={`h-full transition-all duration-500 ${barColors[bucket.label] || 'bg-accent-blue'}`} style={{ width: `${pct}%`, borderRadius: 'var(--app-radius)' }} />
                           </div>
                           <span className="text-xs text-text-muted font-mono w-12 text-right">{pct.toFixed(1)}%</span>
                         </div>
@@ -248,7 +248,7 @@ const DebtCollectionReport: React.FC = () => {
 
           {/* Collector Performance */}
           {collectors.length > 0 && (
-            <div className="block-card overflow-hidden" style={{ borderRadius: '6px' }}>
+            <div className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="bg-bg-tertiary px-4 py-2 border-b border-border-primary">
                 <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Collector Performance</h3>
               </div>
@@ -269,8 +269,8 @@ const DebtCollectionReport: React.FC = () => {
                       <td className="text-right px-4 py-2 text-xs text-accent-income font-mono font-semibold">{formatCurrency(c.collected)}</td>
                       <td className="text-right px-4 py-2 text-xs">
                         <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-1.5 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
-                            <div className="h-full bg-accent-income transition-all duration-500" style={{ width: `${Math.min(c.rate, 100)}%`, borderRadius: '6px' }} />
+                          <div className="w-16 h-1.5 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
+                            <div className="h-full bg-accent-income transition-all duration-500" style={{ width: `${Math.min(c.rate, 100)}%`, borderRadius: 'var(--app-radius)' }} />
                           </div>
                           <span className="text-text-primary font-mono font-semibold">{c.rate.toFixed(1)}%</span>
                         </div>

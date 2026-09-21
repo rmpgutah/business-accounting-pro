@@ -221,7 +221,7 @@ const SmartMatchView: React.FC = () => {
                     padding: '8px 10px',
                     background: i === 0 ? 'color-mix(in srgb, var(--color-accent-income) 6%, transparent)' : 'transparent',
                     border: '1px solid ' + (i === 0 ? 'color-mix(in srgb, var(--color-accent-income) 30%, transparent)' : 'var(--color-border-primary)'),
-                    borderRadius: 6,
+                    borderRadius: 'var(--app-radius)',
                   }}>
                     {/* Score badge */}
                     <div style={{

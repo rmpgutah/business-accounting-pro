@@ -162,9 +162,9 @@ const ProjectProfitability: React.FC = () => {
       {error && <ErrorBanner message={error} onDismiss={() => setError('')} />}
 
       {/* Controls */}
-      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4 flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="text-xs text-text-muted">All projects, all time</div>
-        <button onClick={handlePrint} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: '6px' }} title="Print">
+        <button onClick={handlePrint} className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" style={{ borderRadius: 'var(--app-radius)' }} title="Print">
           <Printer size={15} />
         </button>
       </div>
@@ -177,7 +177,7 @@ const ProjectProfitability: React.FC = () => {
           { label: 'Overall Margin', value: `${formatCurrency(totals.totalMargin)} (${totals.overallMarginPct.toFixed(1)}%)`, accent: marginColor(totals.overallMarginPct) },
           { label: 'Projects', value: String(totals.count), accent: 'text-accent-blue' },
         ].map((card) => (
-          <div key={card.label} className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div key={card.label} className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">{card.label}</div>
             <div className={`text-lg font-bold ${card.accent} mt-1 font-mono truncate`}>{card.value}</div>
           </div>
@@ -189,7 +189,7 @@ const ProjectProfitability: React.FC = () => {
       ) : data.length === 0 ? (
         <div className="flex items-center justify-center h-64 text-text-muted text-sm">No projects found.</div>
       ) : (
-        <div className="block-card overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-bg-tertiary border-b border-border-primary">
@@ -216,10 +216,10 @@ const ProjectProfitability: React.FC = () => {
                   <td className="text-right px-4 py-2 text-xs">
                     {row.budget > 0 ? (
                       <div className="flex items-center justify-end gap-2">
-                        <div className="w-16 h-1.5 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
+                        <div className="w-16 h-1.5 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                           <div
                             className={`h-full transition-all duration-500 ${row.budgetUsedPct > 100 ? 'bg-accent-expense' : row.budgetUsedPct > 80 ? 'bg-accent-warning' : 'bg-accent-income'}`}
-                            style={{ width: `${Math.min(row.budgetUsedPct, 100)}%`, borderRadius: '6px' }}
+                            style={{ width: `${Math.min(row.budgetUsedPct, 100)}%`, borderRadius: 'var(--app-radius)' }}
                           />
                         </div>
                         <span className="text-text-muted font-mono">{row.budgetUsedPct.toFixed(0)}%</span>

@@ -277,7 +277,7 @@ const POList: React.FC<POListProps> = ({ onNew, onView }) => {
                     ? 'bg-accent-blue text-white'
                     : 'bg-bg-tertiary text-text-secondary hover:text-text-primary border border-border-primary transition-colors'
                 }`}
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 {TAB_LABELS[s]}
               </button>
@@ -548,7 +548,7 @@ const POForm: React.FC<POFormProps> = ({ editId, onBack, onSaved }) => {
       {error && (
         <div
           className="mb-4 p-3 bg-bg-tertiary border border-accent-expense text-accent-expense text-xs font-mono"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           {error}
         </div>
@@ -972,7 +972,7 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
       {successMsg && (
         <div
           className="mb-4 p-3 bg-bg-tertiary border border-accent-income text-accent-income text-xs font-mono flex items-start gap-2"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <CheckCircle size={14} className="mt-0.5 flex-shrink-0" />
           <span>{successMsg}</span>
@@ -981,7 +981,7 @@ const PODetail: React.FC<PODetailProps> = ({ poId, onBack, onEdit }) => {
       {errorMsg && (
         <div
           className="mb-4 p-3 bg-bg-tertiary border border-accent-expense text-accent-expense text-xs font-mono"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           {errorMsg}
         </div>

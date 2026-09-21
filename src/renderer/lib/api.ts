@@ -142,11 +142,11 @@ const api = {
 
   // Invoice atomic save (header + line items in one DB transaction)
   saveInvoice: (payload: SavePayload): Promise<SaveResult> =>
-    window.electronAPI.invoke<SaveResult>('invoice:save', payload),
+    invoke<SaveResult>('invoice:save', payload),
 
   // Expense atomic save (header + line items in one DB transaction)
   saveExpense: (payload: SavePayload): Promise<SaveResult> =>
-    window.electronAPI.invoke<SaveResult>('expense:save', payload),
+    invoke<SaveResult>('expense:save', payload),
 
   // Export
   // Bug fix #3: export:invoice-pdf handler was removed in v1.1.1 dedup cleanup;
@@ -629,7 +629,7 @@ const api = {
   // user can sign in on the cloud with their existing desktop password.
   // Idempotent — re-runs just refresh hashes. Handler: cloud:bootstrap-users.
   cloudBootstrapUsers: (): Promise<{ ok?: boolean; error?: string; imported?: { users?: number; companies?: number } }> =>
-    window.electronAPI.invoke('cloud:bootstrap-users'),
+    invoke('cloud:bootstrap-users'),
 
   // ─── Debt Collection ─────────────────────────
   debtStats: (companyId: string): Promise<{

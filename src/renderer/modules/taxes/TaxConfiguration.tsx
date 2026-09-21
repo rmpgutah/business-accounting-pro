@@ -274,7 +274,7 @@ const TaxConfiguration: React.FC = () => {
           className={`fixed top-4 right-4 z-50 px-4 py-3 text-sm font-semibold border ${
             toast.ok ? 'bg-bg-elevated border-accent-income text-accent-income' : 'bg-bg-elevated border-accent-expense text-accent-expense'
           }`}
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           {toast.msg}
         </div>
@@ -283,7 +283,7 @@ const TaxConfiguration: React.FC = () => {
       {/* Header + Year Selector */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+          <div className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             <Calculator size={15} className="text-accent-blue" />
           </div>
           <div>
@@ -294,13 +294,13 @@ const TaxConfiguration: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {autoSeeded && (
-            <div className="flex items-center gap-1.5 text-xs text-accent-income px-2 py-1 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+            <div className="flex items-center gap-1.5 text-xs text-accent-income px-2 py-1 bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
               <CheckCircle size={12} />
               Auto-seeded {CURRENT_YEAR}
             </div>
           )}
 
-          <div className="flex items-center border border-border-primary" style={{ borderRadius: '6px' }}>
+          <div className="flex items-center border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
             {availableYears.length === 0 ? (
               <span className="text-xs text-text-muted px-3 py-1.5">Loading years...</span>
             ) : (
@@ -336,7 +336,7 @@ const TaxConfiguration: React.FC = () => {
       </div>
 
       {yearNotSeeded && (
-        <div className="flex items-center gap-2 p-3 bg-bg-tertiary border border-border-primary text-xs text-text-secondary" style={{ borderRadius: '6px' }}>
+        <div className="flex items-center gap-2 p-3 bg-bg-tertiary border border-border-primary text-xs text-text-secondary" style={{ borderRadius: 'var(--app-radius)' }}>
           <AlertCircle size={14} className="text-accent-blue shrink-0" />
           Tax data for {selectedYear} has not been seeded. Click &quot;Seed {selectedYear}&quot; to initialize with default federal tax rates.
         </div>
@@ -431,7 +431,7 @@ const TaxConfiguration: React.FC = () => {
                   { label: 'Standard Deduction (HoH)', value: formatCurrency(constants.standard_deduction_hoh), icon: <DollarSign size={13} /> },
                   { label: 'Allowance Value', value: formatCurrency(constants.allowance_value), icon: <DollarSign size={13} /> },
                 ].map((c) => (
-                  <div key={c.label} className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+                  <div key={c.label} className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                     <span className="text-text-muted mt-0.5">{c.icon}</span>
                     <div>
                       <p className="text-xs text-text-muted leading-tight">{c.label}</p>
@@ -504,7 +504,7 @@ const TaxConfiguration: React.FC = () => {
             {calcError && (
               <div
                 className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20 mb-3"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 {calcError}
               </div>
@@ -528,7 +528,7 @@ const TaxConfiguration: React.FC = () => {
                     { label: 'Medicare', value: formatCurrency(calcResult.medicare), color: 'text-text-primary' },
                     { label: 'Total', value: formatCurrency(calcResult.total), color: 'text-accent-expense' },
                   ].map((r) => (
-                    <div key={r.label} className="flex items-center gap-2 px-3 py-1.5 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+                    <div key={r.label} className="flex items-center gap-2 px-3 py-1.5 bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                       <span className="text-xs text-text-muted">{r.label}:</span>
                       <span className={`text-sm font-bold ${r.color}`}>{r.value}</span>
                     </div>
@@ -541,12 +541,12 @@ const TaxConfiguration: React.FC = () => {
           {/* IRS Reference Rates + Per Diem + W-4 Version + Calendar */}
           <div className="grid grid-cols-2 gap-4">
             {/* IRS Rates & Per Diem */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary pb-2 mb-4">
                 IRS Reference Rates — {selectedYear}
               </h3>
               <div className="space-y-3">
-                <div className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+                <div className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <DollarSign size={13} className="text-accent-blue mt-0.5" />
                   <div>
                     <p className="text-xs text-text-muted">Standard Mileage Rate</p>
@@ -554,7 +554,7 @@ const TaxConfiguration: React.FC = () => {
                     <p className="text-[10px] text-text-muted mt-0.5">Business use of personal vehicle</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+                <div className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <DollarSign size={13} className="text-accent-warning mt-0.5" />
                   <div>
                     <p className="text-xs text-text-muted">Per Diem — Meals</p>
@@ -562,7 +562,7 @@ const TaxConfiguration: React.FC = () => {
                     <p className="text-[10px] text-text-muted mt-0.5">Federal M&IE rate (standard CONUS)</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+                <div className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <DollarSign size={13} className="text-accent-expense mt-0.5" />
                   <div>
                     <p className="text-xs text-text-muted">Per Diem — Lodging</p>
@@ -570,7 +570,7 @@ const TaxConfiguration: React.FC = () => {
                     <p className="text-[10px] text-text-muted mt-0.5">$107 standard CONUS / higher for high-cost areas</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
+                <div className="flex items-start gap-2 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                   <FileText size={13} className="text-accent-income mt-0.5" />
                   <div>
                     <p className="text-xs text-text-muted">W-4 Form Version</p>
@@ -582,7 +582,7 @@ const TaxConfiguration: React.FC = () => {
             </div>
 
             {/* Tax Calendar Quick Reference */}
-            <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+            <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border-primary">
                 <Calendar size={15} className="text-accent-blue" />
                 <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">
@@ -592,8 +592,8 @@ const TaxConfiguration: React.FC = () => {
               {miniDeadlines.length > 0 ? (
                 <div className="space-y-3">
                   {miniDeadlines.map((d, i) => (
-                    <div key={i} className="flex items-center gap-3 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: '6px' }}>
-                      <div className={`w-2 h-2 shrink-0 ${d.daysUntil <= 14 ? 'bg-accent-expense' : d.daysUntil <= 60 ? 'bg-accent-warning' : 'bg-accent-income'}`} style={{ borderRadius: '6px' }} />
+                    <div key={i} className="flex items-center gap-3 p-2 bg-bg-tertiary border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
+                      <div className={`w-2 h-2 shrink-0 ${d.daysUntil <= 14 ? 'bg-accent-expense' : d.daysUntil <= 60 ? 'bg-accent-warning' : 'bg-accent-income'}`} style={{ borderRadius: 'var(--app-radius)' }} />
                       <div className="flex-1">
                         <div className="text-xs font-medium text-text-primary">{d.label}</div>
                         <div className="text-[10px] text-text-muted">{formatDate(d.dueDate)}</div>
@@ -611,7 +611,7 @@ const TaxConfiguration: React.FC = () => {
           </div>
 
           {/* Tax Preferences & Settings */}
-          <div className="block-card p-5" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-5" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border-primary">
               <Settings size={15} className="text-accent-blue" />
               <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">

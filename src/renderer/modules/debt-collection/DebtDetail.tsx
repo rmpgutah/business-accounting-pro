@@ -780,7 +780,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             <h2 className="text-xl font-bold text-text-primary">{debt.debtor_name}</h2>
             <div
               className={`w-2.5 h-2.5 ${priorityDot[debt.priority] || 'bg-bg-secondary'}`}
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
               title={`Priority: ${debt.priority ? debt.priority.charAt(0).toUpperCase() + debt.priority.slice(1) : ''}`}
             />
           </div>
@@ -792,7 +792,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               const badge = getAgingBadge(debt.delinquent_date);
               return (
                 <span style={{
-                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)',
                   background: badge.bg, color: badge.color,
                   letterSpacing: '0.5px', textTransform: 'uppercase'
                 }}>
@@ -818,13 +818,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               return (
                 <>
                   <span style={{
-                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)',
                     background: risk.color + '20', color: risk.color,
                   }}>
                     Risk: {risk.label} ({score})
                   </span>
                   <span style={{
-                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)',
                     background: cBadge.color + '20', color: cBadge.color,
                   }}>
                     Collectability: {cBadge.label} ({cScore})
@@ -835,7 +835,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             {/* Feature 6: Credit Score */}
             {debt.credit_score > 0 && (
               <span style={{
-                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)',
                 background: debt.credit_score >= 670 ? 'var(--color-accent-income-bg)' : debt.credit_score >= 580 ? 'var(--color-accent-warning-bg)' : 'var(--color-accent-expense-bg)',
                 color: debt.credit_score >= 670 ? 'var(--color-accent-income)' : debt.credit_score >= 580 ? 'var(--color-accent-warning)' : 'var(--color-accent-expense)',
               }}>
@@ -844,7 +844,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             )}
             {/* Feature 10: Currency */}
             {debt.currency && debt.currency !== 'USD' && (
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: '#6366f122', color: '#a78bfa' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: '#6366f122', color: '#a78bfa' }}>
                 {debt.currency}
               </span>
             )}
@@ -898,7 +898,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {debt.hold ? (
           <div
             className="flex items-center justify-between mt-3 px-4 py-2 border border-yellow-600"
-            style={{ borderRadius: '6px', background: 'rgba(234, 179, 8, 0.1)' }}
+            style={{ borderRadius: 'var(--app-radius)', background: 'rgba(234, 179, 8, 0.1)' }}
           >
             <div className="flex items-center gap-2 text-yellow-500 text-sm">
               <Pause size={14} />
@@ -921,7 +921,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         ) : showHoldInput ? (
           <div
             className="flex items-center gap-3 mt-3 px-4 py-2 border border-border-primary"
-            style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
+            style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.80)' }}
           >
             <span className="text-xs text-text-secondary font-semibold whitespace-nowrap">Hold reason:</span>
             <input
@@ -1038,7 +1038,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
               <ChevronRight size={10} className={`transition-transform ${showLetterMenu ? 'rotate-90' : ''}`} />
             </button>
             {showLetterMenu && (
-              <div className="absolute top-full left-0 mt-1 z-30 block-card-elevated p-1 min-w-[180px] space-y-0.5" style={{ borderRadius: '6px' }}>
+              <div className="absolute top-full left-0 mt-1 z-30 block-card-elevated p-1 min-w-[180px] space-y-0.5" style={{ borderRadius: 'var(--app-radius)' }}>
                 {[
                   { key: 'reminder', label: 'Reminder Letter' },
                   { key: 'warning', label: 'Warning Notice' },
@@ -1050,7 +1050,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   <button
                     key={lt.key}
                     className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
-                    style={{ borderRadius: '6px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                     onClick={() => handleGenerateLetter(lt.key)}
                   >
                     {lt.label}
@@ -1156,14 +1156,14 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
 
         {/* Cease & Desist / DNC Banner */}
         {(!!debt.cease_desist_active || !!debt.do_not_call) && (
-          <div className="mt-3 flex items-center gap-3 px-4 py-2.5 border border-red-700/50" style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}>
+          <div className="mt-3 flex items-center gap-3 px-4 py-2.5 border border-red-700/50" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(248,113,113,0.08)' }}>
             {!!debt.cease_desist_active && (
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-expense-bg)', color: 'var(--color-accent-expense)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-expense-bg)', color: 'var(--color-accent-expense)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Cease & Desist Active
               </span>
             )}
             {!!debt.do_not_call && (
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-warning-bg)', color: 'var(--color-accent-warning)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-warning-bg)', color: 'var(--color-accent-warning)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Do Not Call
               </span>
             )}
@@ -1179,7 +1179,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {/* Contact Preference Badges (non-restricted) */}
         {!debt.cease_desist_active && !debt.do_not_call && debt.preferred_contact_method && (
           <div className="mt-2 flex items-center gap-2">
-            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {debt.preferred_contact_method} preferred
             </span>
           </div>
@@ -1187,7 +1187,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
 
         {/* Feature 22: Cease & Desist Blocking Modal */}
         {showCeaseDesistBlock && (
-          <div className="mt-3 p-4 border border-red-700" style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}>
+          <div className="mt-3 p-4 border border-red-700" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(248,113,113,0.08)' }}>
             <p className="text-sm text-red-400 font-bold mb-2">CEASE & DESIST ACTIVE</p>
             <p className="text-xs text-text-secondary mb-3">Outbound communications are blocked. This debtor has sent a cease and desist notice. Proceeding may violate FDCPA regulations.</p>
             <div className="flex gap-2">
@@ -1201,7 +1201,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
 
         {/* Feature 4: Schedule Communication Form */}
         {showScheduleComm && (
-          <div className="mt-3 p-4 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+          <div className="mt-3 p-4 border border-border-primary" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.90)' }}>
             <p className="text-sm font-semibold text-text-primary mb-3">Schedule Communication</p>
             <div className="grid grid-cols-4 gap-3 items-end">
               <div>
@@ -1245,8 +1245,8 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
 
         {/* Feature 16: Interest Frozen Banner */}
         {!!debt.interest_frozen && (
-          <div className="mt-3 flex items-center gap-3 px-4 py-2 border border-blue-700/50" style={{ borderRadius: '6px', background: 'rgba(59,130,246,0.08)' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <div className="mt-3 flex items-center gap-3 px-4 py-2 border border-blue-700/50" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(59,130,246,0.08)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Interest Frozen
             </span>
             {debt.interest_frozen_date && <span className="text-xs text-text-muted">since {debt.interest_frozen_date}</span>}
@@ -1256,7 +1256,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
 
         {/* Add Fee Form */}
         {showFeeForm && (
-          <div className="mt-3 p-4 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+          <div className="mt-3 p-4 border border-border-primary" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.90)' }}>
             <p className="text-sm font-semibold text-text-primary mb-3">Add Fee</p>
             <div className="grid grid-cols-4 gap-3 items-end">
               <div>
@@ -1291,7 +1291,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
         {showWriteOff && (
           <div
             className="mt-3 p-4 border border-red-700"
-            style={{ borderRadius: '6px', background: 'rgba(248,113,113,0.08)' }}
+            style={{ borderRadius: 'var(--app-radius)', background: 'rgba(248,113,113,0.08)' }}
           >
             <p className="text-sm text-red-400 font-semibold mb-2">Write Off Debt</p>
             <textarea
@@ -1390,7 +1390,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     return (
                       <span className="flex items-center gap-2">
                         <span>{formatDate(debt.statute_of_limitations_date)}</span>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: colorBg, color }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 'var(--app-radius)', background: colorBg, color }}>
                           {dLeft > 0 ? `${dLeft}d left` : 'EXPIRED'}
                         </span>
                       </span>
@@ -1606,7 +1606,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                 const pctFees = Math.round((totalFees / totalAll) * 100);
                 return (
                   <div className="space-y-3">
-                    <div className="flex h-4 w-full overflow-hidden" style={{ borderRadius: 6 }}>
+                    <div className="flex h-4 w-full overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                       {pctFees > 0 && <div style={{ width: `${pctFees}%`, background: 'var(--color-accent-expense)' }} title={`Fees: ${pctFees}%`} />}
                       {pctInterest > 0 && <div style={{ width: `${pctInterest}%`, background: 'var(--color-accent-warning)' }} title={`Interest: ${pctInterest}%`} />}
                       {pctPrincipal > 0 && <div style={{ width: `${pctPrincipal}%`, background: 'var(--color-accent-income)' }} title={`Principal: ${pctPrincipal}%`} />}
@@ -1647,7 +1647,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   <div
                     key={c.id}
                     className="flex gap-3 p-3 border border-border-primary"
-                    style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
+                    style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.80)' }}
                   >
                     <div className="flex-shrink-0 text-text-muted mt-0.5">
                       {commIcon[c.type] || <MessageSquare size={14} />}
@@ -1742,23 +1742,23 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   const badgeBg = p.kept ? 'var(--color-accent-income-bg)' : isPast ? 'var(--color-accent-expense-bg)' : 'var(--color-accent-warning-bg)';
                   const badgeLabel = p.kept ? 'Kept' : isPast ? 'Broken' : 'Pending';
                   return (
-                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--color-bg-secondary)', borderRadius: 6 }}>
+                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--color-bg-secondary)', borderRadius: 'var(--app-radius)' }}>
                       <div style={{ fontSize: 12, color: 'var(--color-text-muted)', minWidth: 90 }}>{p.promised_date}</div>
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{formatCurrency(Number(p.promised_amount))}</div>
                       {p.notes && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', flex: 1 }}>{p.notes}</div>}
                       <div style={{ flex: 1 }} />
-                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: badgeBg, color: badgeColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--app-radius)', background: badgeBg, color: badgeColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                         {badgeLabel}
                       </span>
                       <button
                         onClick={() => togglePromiseKept(p.id, Boolean(p.kept))}
-                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
+                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', padding: '2px 8px', cursor: 'pointer' }}
                       >
                         {p.kept ? 'Mark Broken' : 'Mark Kept'}
                       </button>
                       <button
                         onClick={() => handleDeletePromise(p.id)}
-                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
+                        style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', padding: '2px 8px', cursor: 'pointer' }}
                         title="Delete promise"
                       >
                         <Trash2 size={11} />
@@ -1795,7 +1795,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             </div>
 
             {showDisputeForm && (
-              <div className="mb-4 p-3 border border-border-primary space-y-3" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+              <div className="mb-4 p-3 border border-border-primary space-y-3" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.90)' }}>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-text-muted mb-1">Reason</label>
@@ -1839,9 +1839,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   const statusColor: Record<string, string> = { open: 'var(--color-accent-warning)', investigating: 'var(--color-accent-blue)', resolved: 'var(--color-accent-income)', rejected: 'var(--color-accent-expense)' };
                   const reasonLabels: Record<string, string> = { not_my_debt: 'Not My Debt', wrong_amount: 'Wrong Amount', already_paid: 'Already Paid', statute_expired: 'Statute Expired', identity_theft: 'Identity Theft', other: 'Other' };
                   return (
-                    <div key={d.id} className="flex items-center justify-between p-2.5 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
+                    <div key={d.id} className="flex items-center justify-between p-2.5 border border-border-primary" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.80)' }}>
                       <div className="flex items-center gap-2 min-w-0">
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: `color-mix(in srgb, ${statusColor[d.status] || 'var(--color-text-muted)'} 14%, transparent)`, color: statusColor[d.status] || 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--app-radius)', background: `color-mix(in srgb, ${statusColor[d.status] || 'var(--color-text-muted)'} 14%, transparent)`, color: statusColor[d.status] || 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           {formatStatus(d.status).label}
                         </span>
                         <span className="text-xs text-text-primary font-medium">{reasonLabels[d.reason] || d.reason}</span>
@@ -1872,7 +1872,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             </div>
 
             {showSkipTraceForm && (
-              <div className="mb-4 p-3 border border-border-primary space-y-3" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.90)' }}>
+              <div className="mb-4 p-3 border border-border-primary space-y-3" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.90)' }}>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-text-muted mb-1">Source</label>
@@ -1935,10 +1935,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   const resultColor: Record<string, string> = { pending: 'var(--color-accent-warning)', verified: 'var(--color-accent-income)', invalid: 'var(--color-accent-expense)', no_contact: 'var(--color-text-muted)' };
                   const resultBg: Record<string, string> = { pending: 'var(--color-accent-warning-bg)', verified: 'var(--color-accent-income-bg)', invalid: 'var(--color-accent-expense-bg)', no_contact: 'var(--color-bg-secondary)' };
                   return (
-                    <div key={st.id} className="p-2.5 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
+                    <div key={st.id} className="p-2.5 border border-border-primary" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.80)' }}>
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: resultBg[st.result] || 'var(--color-bg-secondary)', color: resultColor[st.result] || 'var(--color-text-muted)', textTransform: 'uppercase' }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 'var(--app-radius)', background: resultBg[st.result] || 'var(--color-bg-secondary)', color: resultColor[st.result] || 'var(--color-text-muted)', textTransform: 'uppercase' }}>
                             {st.result}
                           </span>
                           {st.source && <span className="text-xs text-text-primary font-medium">{st.source}</span>}
@@ -2001,7 +2001,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     <div
                       key={e.id}
                       className="flex items-center justify-between p-2.5 border border-border-primary"
-                      style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
+                      style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.80)' }}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="block-badge">{typeLabel}</span>
@@ -2058,7 +2058,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                     <div
                       key={la.id}
                       className="p-3 border border-border-primary"
-                      style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}
+                      style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.80)' }}
                     >
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className="block-badge">{actionTypeLabel}</span>
@@ -2103,13 +2103,13 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                           </div>
                           <div
                             className="w-full h-1.5 bg-bg-tertiary"
-                            style={{ borderRadius: '6px' }}
+                            style={{ borderRadius: 'var(--app-radius)' }}
                           >
                             <div
                               className="h-full bg-accent-blue"
                               style={{
                                 width: `${checklistPct}%`,
-                                borderRadius: '6px',
+                                borderRadius: 'var(--app-radius)',
                                 transition: 'width 0.3s ease',
                               }}
                             />
@@ -2148,10 +2148,10 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         const color = isPaid ? 'var(--color-accent-income)' : isOverdue ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)';
                         const label = isPaid ? 'Paid' : isOverdue ? 'Overdue' : 'Due';
                         return (
-                          <div key={inst.id || idx} className="flex items-center justify-between px-2.5 py-1.5 border border-border-primary" style={{ borderRadius: '6px', borderLeftWidth: 3, borderLeftColor: color }}>
+                          <div key={inst.id || idx} className="flex items-center justify-between px-2.5 py-1.5 border border-border-primary" style={{ borderRadius: 'var(--app-radius)', borderLeftWidth: 3, borderLeftColor: color }}>
                             <span className="text-xs font-mono text-text-secondary">{formatDate(inst.due_date)}</span>
                             <span className="text-xs font-mono font-bold text-text-primary">{formatCurrency(inst.amount || 0)}</span>
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 6, background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>{label}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 'var(--app-radius)', background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>{label}</span>
                           </div>
                         );
                       })}
@@ -2178,7 +2178,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
             ) : (
               <div className="space-y-1.5">
                 {documents.map((doc: any) => (
-                  <div key={doc.id} className="flex items-center justify-between p-2 border border-border-primary" style={{ borderRadius: '6px', background: 'rgba(18,20,28,0.80)' }}>
+                  <div key={doc.id} className="flex items-center justify-between p-2 border border-border-primary" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(18,20,28,0.80)' }}>
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText size={14} className="text-accent-blue flex-shrink-0" />
                       <span className="text-xs text-text-primary font-medium truncate">{doc.filename}</span>
@@ -2318,7 +2318,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       <div key={ev.id} className="relative flex gap-3 items-start">
                         <div
                           className="absolute -left-5 top-1.5 w-2.5 h-2.5 flex-shrink-0"
-                          style={{ background: dotColor, borderRadius: 6 }}
+                          style={{ background: dotColor, borderRadius: 'var(--app-radius)' }}
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -2361,7 +2361,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                         <div
                           className={`absolute -left-5 top-1 w-3 h-3 ${dotColor} flex-shrink-0`}
                           style={{
-                            borderRadius: '6px',
+                            borderRadius: 'var(--app-radius)',
                             animation: isCurrent ? 'pulse 2s infinite' : undefined,
                           }}
                         />

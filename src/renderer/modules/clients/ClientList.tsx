@@ -465,11 +465,11 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       <div className="module-header">
         <h1 className="module-title text-text-primary">Clients</h1>
         <div className="module-actions">
-          <button onClick={handlePrintDirectory} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }}>
+          <button onClick={handlePrintDirectory} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: 'var(--app-radius)' }}>
             <Printer size={14} />
             Print Directory
           </button>
-          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: '6px' }}>
+          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-3 py-2 border border-border-primary text-xs font-bold uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" style={{ borderRadius: 'var(--app-radius)' }}>
             Import CSV
           </button>
           <button className="block-btn-primary inline-flex items-center gap-1.5" onClick={onNewClient}>
@@ -482,27 +482,27 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
       {/* Inline Summary Stats (6 cards) */}
       {summaryStats && (
         <div className="grid grid-cols-6 gap-3">
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Clients</div>
             <div className="text-lg font-mono font-bold text-text-primary mt-0.5">{summaryStats.total ?? 0}</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Active</div>
             <div className="text-lg font-mono font-bold text-accent-income mt-0.5">{summaryStats.active ?? 0}</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Prospects</div>
             <div className="text-lg font-mono font-bold text-accent-blue mt-0.5">{summaryStats.prospects ?? 0}</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Revenue</div>
             <div className="text-lg font-mono font-bold text-accent-blue mt-0.5">{formatCurrency(summaryStats.total_revenue ?? 0)}</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Outstanding AR</div>
             <div className="text-lg font-mono font-bold text-accent-expense mt-0.5">{formatCurrency(summaryStats.outstanding ?? 0)}</div>
           </div>
-          <div className="block-card p-3 text-center" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-3 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Avg Revenue</div>
             <div className="text-lg font-mono font-bold text-text-primary mt-0.5">
               {formatCurrency((summaryStats.active ?? 0) > 0 ? (summaryStats.total_revenue ?? 0) / (summaryStats.active ?? 1) : 0)}
@@ -611,7 +611,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           )}
         </div>
       ) : (
-        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
           <div
             className="overflow-x-auto"
             style={cprefs.stickyHeader ? { maxHeight: '70vh', overflowY: 'auto' } : undefined}
@@ -789,7 +789,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 border border-border-primary shadow-lg"
           style={{
             background: 'rgba(18,20,28,0.80)',
-            borderRadius: '6px',
+            borderRadius: 'var(--app-radius)',
             minWidth: '460px',
           }}
         >
@@ -810,7 +810,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBatchSetInactive}
             disabled={batchLoading}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
           >
             <XCircle size={13} />
             Inactive
@@ -820,7 +820,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleBatchSetProspect}
             disabled={batchLoading}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Users size={13} />
             Prospect
@@ -832,13 +832,13 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
               className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
               onClick={() => { setBulkTierOpen(!bulkTierOpen); setBulkTagOpen(false); }}
               disabled={batchLoading}
-              style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Shield size={13} />
               Set Tier
             </button>
             {bulkTierOpen && (
-              <div className="absolute bottom-full mb-1 left-0 z-50 border border-border-primary shadow-lg p-1" style={{ background: 'rgba(18,20,28,0.95)', borderRadius: '6px', minWidth: '120px' }}>
+              <div className="absolute bottom-full mb-1 left-0 z-50 border border-border-primary shadow-lg p-1" style={{ background: 'rgba(18,20,28,0.95)', borderRadius: 'var(--app-radius)', minWidth: '120px' }}>
                 {['enterprise', 'premium', 'standard', 'basic'].map(tier => (
                   <button
                     key={tier}
@@ -859,13 +859,13 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
               className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
               onClick={() => { setBulkTagOpen(!bulkTagOpen); setBulkTierOpen(false); }}
               disabled={batchLoading}
-              style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Tag size={13} />
               Add Tag
             </button>
             {bulkTagOpen && (
-              <div className="absolute bottom-full mb-1 left-0 z-50 border border-border-primary shadow-lg p-2 flex items-center gap-2" style={{ background: 'rgba(18,20,28,0.95)', borderRadius: '6px', minWidth: '200px' }}>
+              <div className="absolute bottom-full mb-1 left-0 z-50 border border-border-primary shadow-lg p-2 flex items-center gap-2" style={{ background: 'rgba(18,20,28,0.95)', borderRadius: 'var(--app-radius)', minWidth: '200px' }}>
                 <input
                   className="block-input text-xs flex-1"
                   placeholder="Tag name..."
@@ -882,7 +882,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
           <button
             className="flex items-center gap-1.5 text-xs font-semibold text-text-primary"
             onClick={handleExportSelected}
-            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+            style={{ background: 'rgba(28,30,38,0.65)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
           >
             <Download size={13} />
             Export
@@ -892,7 +892,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
             <button
               className="flex items-center gap-1.5 text-xs font-semibold"
               onClick={() => setShowDeleteConfirm(true)}
-              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer' }}
+              style={{ background: 'transparent', border: '1px solid var(--color-accent-expense)', color: 'var(--color-accent-expense)', borderRadius: 'var(--app-radius)', padding: '6px 12px', cursor: 'pointer' }}
             >
               <Trash2 size={13} />
               Delete
@@ -904,14 +904,14 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>
               <button
                 className="text-xs font-semibold text-text-muted"
                 onClick={() => setShowDeleteConfirm(false)}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Cancel
               </button>

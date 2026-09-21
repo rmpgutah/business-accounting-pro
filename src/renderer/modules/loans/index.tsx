@@ -145,7 +145,7 @@ const LoansModule: React.FC = () => {
           border: '1px solid var(--color-accent-expense)',
           borderLeft: '4px solid var(--color-accent-expense)',
           background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
         }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <AlertTriangle size={18} style={{ color: 'var(--color-accent-expense)', flexShrink: 0, marginTop: 2 }} />
@@ -192,7 +192,7 @@ const LoansModule: React.FC = () => {
             <Stat label="Monthly Burn" value={fmt$(aggregate.stats.total_monthly_payment || 0)} />
           </div>
           {aggregate.upcoming?.length > 0 && (
-            <div style={{ marginTop: 14, padding: 10, background: 'var(--color-bg-secondary)', borderRadius: 6, borderLeft: '3px solid var(--color-warning, var(--color-accent-warning))' }}>
+            <div style={{ marginTop: 14, padding: 10, background: 'var(--color-bg-secondary)', borderRadius: 'var(--app-radius)', borderLeft: '3px solid var(--color-warning, var(--color-accent-warning))' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Wallet size={12} /> Next 30 days · {aggregate.upcoming.length} payment{aggregate.upcoming.length === 1 ? '' : 's'} · total {fmt$(aggregate.upcoming.reduce((s: number, p: any) => s + Number(p.scheduled_payment), 0))}
               </div>

@@ -177,8 +177,8 @@ const MultiCompany: React.FC = () => {
         </div>
       </div>
 
-      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: '6px' }}>{opSuccess}</div>}
-      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: '6px' }}>{opError}</div>}
+      {opSuccess && <div className="text-xs text-accent-income bg-accent-income/10 px-3 py-2 border border-accent-income/20" style={{ borderRadius: 'var(--app-radius)' }}>{opSuccess}</div>}
+      {opError && <div className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20" style={{ borderRadius: 'var(--app-radius)' }}>{opError}</div>}
 
       {companies.length > 0 && !showForm && (
         <div className="relative">
@@ -345,7 +345,7 @@ const MultiCompany: React.FC = () => {
                         ? 'var(--color-accent-blue-bg)'
                         : 'var(--color-bg-tertiary)',
                       border: '1px solid var(--color-border-primary)',
-                      borderRadius: '6px',
+                      borderRadius: 'var(--app-radius)',
                     }}
                   >
                     <Building2

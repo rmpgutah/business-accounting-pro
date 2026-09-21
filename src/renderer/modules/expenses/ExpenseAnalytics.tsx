@@ -703,7 +703,7 @@ const ExpenseAnalytics: React.FC = () => {
               fontSize: 11,
               fontWeight: 700,
               padding: '4px 10px',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               background: burnRate.trend === 'increasing' ? 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)' : burnRate.trend === 'decreasing' ? 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)' : 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)',
               color: burnRate.trend === 'increasing' ? 'var(--color-accent-expense)' : burnRate.trend === 'decreasing' ? 'var(--color-accent-income)' : 'var(--color-text-muted)',
               textTransform: 'uppercase',

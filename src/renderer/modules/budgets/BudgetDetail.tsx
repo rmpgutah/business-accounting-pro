@@ -87,11 +87,11 @@ function MiniBarChart({ months }: { months: MonthBucket[] }) {
             <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 72 }}>
               <div
                 title={`Budgeted: ${formatCurrency(m.budgeted)}`}
-                style={{ width: 8, height: bH, background: 'var(--color-accent-blue)', borderRadius: '6px 6px 0 0', opacity: 0.5 }}
+                style={{ width: 8, height: bH, background: 'var(--color-accent-blue)', borderRadius: 'var(--app-radius) var(--app-radius) 0 0', opacity: 0.5 }}
               />
               <div
                 title={`Actual: ${formatCurrency(m.actual)}`}
-                style={{ width: 8, height: aH, background: over ? 'var(--color-accent-expense)' : 'var(--color-accent-income)', borderRadius: '6px 6px 0 0' }}
+                style={{ width: 8, height: aH, background: over ? 'var(--color-accent-expense)' : 'var(--color-accent-income)', borderRadius: 'var(--app-radius) var(--app-radius) 0 0' }}
               />
             </div>
             <span style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 32 }}>
@@ -265,29 +265,29 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
 
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="block-card p-4 border-l-2 border-l-accent-blue" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4 border-l-2 border-l-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Total Budgeted</span>
           <p className="text-2xl font-mono text-text-primary mt-1">{formatCurrency(totals.budgeted)}</p>
         </div>
-        <div className="block-card p-4 border-l-2 border-l-accent-expense" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4 border-l-2 border-l-accent-expense" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Actual Spent</span>
           <p className="text-2xl font-mono text-text-primary mt-1">{formatCurrency(totals.actual)}</p>
         </div>
-        <div className="block-card p-4 border-l-2 border-l-accent-income" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4 border-l-2 border-l-accent-income" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Remaining</span>
           <p className={`text-2xl font-mono mt-1 ${totals.remaining >= 0 ? 'text-accent-income' : 'text-accent-expense'}`}>
             {formatCurrency(Math.abs(totals.remaining))}
             {totals.remaining < 0 && <span className="text-xs ml-1">over</span>}
           </p>
         </div>
-        <div className="block-card p-4 border-l-2 border-l-accent-warning" style={{ borderRadius: '6px' }}>
+        <div className="block-card p-4 border-l-2 border-l-accent-warning" style={{ borderRadius: 'var(--app-radius)' }}>
           <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">% Used</span>
           <p className="text-2xl font-mono text-text-primary mt-1">{totalPct.toFixed(1)}%</p>
-          <div className="w-full h-2 mt-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
+          <div className="w-full h-2 mt-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
             <div style={{
               width: `${Math.min(100, totalPct)}%`,
               backgroundColor: progressColor(totalPct),
-              height: '100%', borderRadius: '6px', transition: 'width 0.3s ease',
+              height: '100%', borderRadius: 'var(--app-radius)', transition: 'width 0.3s ease',
             }} />
           </div>
         </div>
@@ -346,11 +346,11 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
                     </td>
                     <td className="text-right font-mono text-text-secondary text-sm">{line.percentUsed.toFixed(1)}%</td>
                     <td>
-                      <div className="w-full h-3 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
+                      <div className="w-full h-3 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                         <div style={{
                           width: `${Math.min(100, line.percentUsed)}%`,
                           backgroundColor: progressColor(line.percentUsed),
-                          height: '100%', borderRadius: '6px', transition: 'width 0.3s ease',
+                          height: '100%', borderRadius: 'var(--app-radius)', transition: 'width 0.3s ease',
                         }} />
                       </div>
                     </td>
@@ -369,11 +369,11 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
                   </td>
                   <td className="text-right font-mono font-bold text-text-primary">{totalPct.toFixed(1)}%</td>
                   <td>
-                    <div className="w-full h-3 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '6px' }}>
+                    <div className="w-full h-3 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                       <div style={{
                         width: `${Math.min(100, totalPct)}%`,
                         backgroundColor: progressColor(totalPct),
-                        height: '100%', borderRadius: '6px',
+                        height: '100%', borderRadius: 'var(--app-radius)',
                       }} />
                     </div>
                   </td>
@@ -387,7 +387,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
       {/* Monthly Trend Tab */}
       {activeTab === 'monthly' && (
         <div className="space-y-4">
-          <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+          <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp size={14} className="text-text-muted" />
               <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Monthly Spend vs Budget</span>
@@ -462,7 +462,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
                 <div>
                   <p className="text-xs font-bold text-accent-expense uppercase tracking-wider mb-2">Over Budget</p>
                   {overBudgetLines.map(l => (
-                    <div key={l.id} className="block-card p-4 mb-2 border-l-2 border-l-accent-expense flex items-center justify-between" style={{ borderRadius: '6px' }}>
+                    <div key={l.id} className="block-card p-4 mb-2 border-l-2 border-l-accent-expense flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)' }}>
                       <div>
                         <p className="text-sm font-semibold text-text-primary">{l.category}</p>
                         <p className="text-xs text-text-muted mt-0.5">
@@ -481,7 +481,7 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
                 <div>
                   <p className="text-xs font-bold text-accent-warning uppercase tracking-wider mb-2">Approaching Limit (≥80%)</p>
                   {nearLimitLines.map(l => (
-                    <div key={l.id} className="block-card p-4 mb-2 border-l-2 border-l-accent-warning flex items-center justify-between" style={{ borderRadius: '6px' }}>
+                    <div key={l.id} className="block-card p-4 mb-2 border-l-2 border-l-accent-warning flex items-center justify-between" style={{ borderRadius: 'var(--app-radius)' }}>
                       <div>
                         <p className="text-sm font-semibold text-text-primary">{l.category}</p>
                         <p className="text-xs text-text-muted mt-0.5">
