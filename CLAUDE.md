@@ -20,7 +20,6 @@ bash scripts/codesign-mac.sh "release/mac-arm64/Business Accounting Pro.app"  # 
 - `src/main/ipc/index.ts` — All IPC handlers (~2900 lines, 110+ handlers)
 - `src/renderer/lib/api.ts` — Frontend API wrapper (maps to IPC channels)
 - `src/shared/types.ts` — Shared TypeScript types
-- `server/` — Express sync server (deployed to VPS at 194.113.64.90)
 - `landing-page/` — Static site at accounting.rmpgutah.us
 
 ## Key Patterns
@@ -56,29 +55,11 @@ bash scripts/codesign-mac.sh "release/mac-arm64/Business Accounting Pro.app"  # 
 - **New columns need migration in `database/index.ts`** (try/catch ALTER TABLE) AND listing in `tablesWithoutUpdatedAt` if no `updated_at` column
 - **New modules must be added to BOTH `App.tsx` (MODULE_NAMES + switch case) AND `Sidebar.tsx`** — missing either causes invisible or unroutable modules
 
-## VPS / Server
-
-- Host: `187.124.243.230` (SSH: `root` with `~/.ssh/id_ed25519_deploy`)
-- Landing page: `/var/www/accounting.rmpgutah.us/`
-- Sync server: `/opt/bap-server/` (port 3001) — **PM2 runs under the `deploy` user** (systemd unit `pm2-deploy.service`, PM2_HOME `/home/deploy/.pm2`), NOT root. Manage it with `sudo -u deploy pm2 <cmd> bap-server`. Running `pm2` as root creates a *duplicate* that crash-loops on EADDRINUSE.
-- Nginx proxies `/api/` and `/ws` to port 3001
-- DNS: `accounting.rmpgutah.us` → `187.124.243.230`
-- Portal site `rmpgutahps.us` is a trusted origin in the portal CSRF guard (`server/src/routes/portal.ts` DEFAULT_TRUSTED_DOMAINS)
-- Auto-backup: desktop uploads DB to `/api/backup/upload` after every data write (30s debounce)
-
 ## Deploy
 
 ```bash
-# Everything (GitHub push + VPS server deploy)
+# Push to GitHub
 npm run deploy
-
-# Landing page only
-npm run deploy:landing
-
-# VPS server manually
-rsync -az --delete --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='data' -e "ssh -i ~/.ssh/id_ed25519_deploy" server/ root@187.124.243.230:/opt/bap-server/
-# IMPORTANT: pm2 runs as the `deploy` user — use sudo -u deploy, NOT root pm2.
-ssh -i ~/.ssh/id_ed25519_deploy root@187.124.243.230 "cd /opt/bap-server && npm install && npm run build && sudo -u deploy pm2 restart bap-server --update-env && sudo -u deploy pm2 save"
 
 # Mac app install (always delete first — cp -R onto existing .app won't replace it)
 npm run build && npx electron-builder --mac --arm64
@@ -89,17 +70,7 @@ xattr -cr "/Applications/Business Accounting Pro.app"
 npm rebuild better-sqlite3
 ```
 
-## VPS Server Notes
-
-- pm2 manages `bap-server` **as the `deploy` user** — check status with `sudo -u deploy pm2 list` (root's `pm2 list` is empty/misleading)
-- `.env` lives at `/opt/bap-server/.env` (never in git); must set `SYNC_SECRET`, `DESKTOP_WS_TOKEN`
-- pm2 started with `--cwd /opt/bap-server` so dotenv finds `.env`
-- After VPS reboot: the `pm2-deploy.service` systemd unit auto-starts the deploy-user pm2 daemon (which restores bap-server from `/home/deploy/.pm2/dump.pm2`)
-
 ## Deploy Gotchas
 
-- **VPS needs `npm install` (not `--production`)** before `npm run build` — TypeScript is a devDependency
-- **pm2 runs under the `deploy` user, not root** — always `sudo -u deploy pm2 ...`. If the process is missing, recreate with `sudo -u deploy pm2 start dist/index.js --name bap-server --cwd /opt/bap-server && sudo -u deploy pm2 save`. Never `pm2 start` as root — it binds-conflicts on :3001 with the deploy-user process and crash-loops.
 - **Always build + install locally after code changes**: `npm run build && npx electron-builder --mac --arm64 && bash scripts/codesign-mac.sh ... && rm -rf /Applications/... && cp -R ... && xattr -cr ... && npm rebuild better-sqlite3`
 - **GitHub Actions Node.js deprecation**: All workflows use `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` env var
-- **express-rate-limit** installed on server — all API routes rate-limited (300/15min API, 30/15min auth)
