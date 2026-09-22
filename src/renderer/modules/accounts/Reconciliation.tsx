@@ -5,6 +5,11 @@ import { formatCurrency, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import api from '../../lib/api';
 
+const invoke = <T = any>(ch: string, ...a: unknown[]): Promise<T> =>
+  (window as any).electronAPI?.invoke
+    ? window.electronAPI.invoke<T>(ch, ...a)
+    : Promise.reject(new Error('Not in Electron'));
+
 // Star confidence indicator (1–5)
 const Stars: React.FC<{ n: number }> = ({ n }) => (
   <span className="inline-flex">{[1,2,3,4,5].map(i => <Star key={i} size={10} className={i <= n ? 'text-yellow-400 fill-current' : 'text-text-muted'} />)}</span>
@@ -49,27 +54,27 @@ const AccountReconciliation: React.FC = () => {
       });
       setAccounts(filtered);
     });
-    window.electronAPI.invoke('recon:history', { companyId }).then(setHistory);
-    window.electronAPI.invoke('recon:intercompany').then(setInterCo);
-    window.electronAPI.invoke('recon:schedule-list', { companyId }).then(setSchedules);
+    invoke('recon:history', { companyId }).then(setHistory);
+    invoke('recon:intercompany').then(setInterCo);
+    invoke('recon:schedule-list', { companyId }).then(setSchedules);
   }, [companyId]);
 
   const compute = useCallback(async () => {
     if (!accountId || !companyId) return;
     setBusy(true);
-    const res = await window.electronAPI.invoke('recon:compute', { companyId, accountId, asOfDate });
+    const res = await invoke('recon:compute', { companyId, accountId, asOfDate });
     setComputed(res);
     // Use v2 with confidence/delta
-    const m = await window.electronAPI.invoke('recon:auto-match-v2', { companyId, accountId, asOfDate });
+    const m = await invoke('recon:auto-match-v2', { companyId, accountId, asOfDate });
     setMatches(m);
-    const it = await window.electronAPI.invoke('recon:items-list', { companyId, accountId, asOfDate });
+    const it = await invoke('recon:items-list', { companyId, accountId, asOfDate });
     setItems(it || []);
-    const pp = await window.electronAPI.invoke('recon:prior-period', { companyId, accountId, asOfDate });
+    const pp = await invoke('recon:prior-period', { companyId, accountId, asOfDate });
     setPrior(pp || { prior: null, uncleared: [] });
-    const imp = await window.electronAPI.invoke('recon:imports-list', { companyId, accountId });
+    const imp = await invoke('recon:imports-list', { companyId, accountId });
     setImports(imp || []);
     if (res && !res.error) {
-      const aa = await window.electronAPI.invoke('recon:auto-approve-check', { companyId, accountId, variance: res.variance });
+      const aa = await invoke('recon:auto-approve-check', { companyId, accountId, variance: res.variance });
       setAutoApprove(aa || { autoApprove: false, threshold: 0 });
     }
     setBusy(false);
@@ -92,10 +97,10 @@ const AccountReconciliation: React.FC = () => {
 
   // 11. Save item note
   const saveItemNote = async (transactionId: string, reference: string, amount: number, note: string, status: string) => {
-    await window.electronAPI.invoke('recon:item-save', {
+    await invoke('recon:item-save', {
       companyId, accountId, asOfDate, transactionId, reference, amount, note, status,
     });
-    const it = await window.electronAPI.invoke('recon:items-list', { companyId, accountId, asOfDate });
+    const it = await invoke('recon:items-list', { companyId, accountId, asOfDate });
     setItems(it || []);
   };
 
@@ -109,17 +114,17 @@ const AccountReconciliation: React.FC = () => {
       return { date: cols[0] || '', reference: cols[1] || '', amount: Number(cols[2] || 0), description: cols[3] || '' };
     });
     const statementBalance = rows.reduce((s, r) => s + (r.amount || 0), 0);
-    await window.electronAPI.invoke('recon:import-statement', {
+    await invoke('recon:import-statement', {
       companyId, accountId, asOfDate, statementBalance, rows, importedBy: 'user',
     });
-    const imp = await window.electronAPI.invoke('recon:imports-list', { companyId, accountId });
+    const imp = await invoke('recon:imports-list', { companyId, accountId });
     setImports(imp || []);
     alert(`Imported ${rows.length} statement rows. Statement balance: ${formatCurrency(statementBalance)}`);
   };
 
   // 15. Multi-account recon
   const computeMulti = async () => {
-    const res = await window.electronAPI.invoke('recon:multi-compute', { companyId, asOfDate });
+    const res = await invoke('recon:multi-compute', { companyId, asOfDate });
     setMulti(res || []);
   };
 
@@ -128,14 +133,14 @@ const AccountReconciliation: React.FC = () => {
     if (!accountId) { alert('Select an account first.'); return; }
     const freq = prompt('Frequency (weekly|monthly|quarterly)?', 'monthly') || 'monthly';
     const threshold = Number(prompt('Variance auto-approve threshold ($)?', '5') || 0);
-    await window.electronAPI.invoke('recon:schedule-save', { companyId, accountId, frequency: freq, threshold });
-    const list = await window.electronAPI.invoke('recon:schedule-list', { companyId });
+    await invoke('recon:schedule-save', { companyId, accountId, frequency: freq, threshold });
+    const list = await invoke('recon:schedule-list', { companyId });
     setSchedules(list || []);
   };
 
   const deleteSchedule = async (id: string) => {
-    await window.electronAPI.invoke('recon:schedule-delete', { id });
-    const list = await window.electronAPI.invoke('recon:schedule-list', { companyId });
+    await invoke('recon:schedule-delete', { id });
+    const list = await invoke('recon:schedule-list', { companyId });
     setSchedules(list || []);
   };
 
@@ -143,13 +148,13 @@ const AccountReconciliation: React.FC = () => {
   const carryForward = async () => {
     if (!prior.uncleared.length) return;
     for (const u of prior.uncleared) {
-      await window.electronAPI.invoke('recon:item-save', {
+      await invoke('recon:item-save', {
         companyId, accountId, asOfDate,
         transactionId: u.transaction_id, reference: u.reference, amount: u.amount,
         note: u.note, status: 'open', rolledFromId: u.id,
       });
     }
-    const it = await window.electronAPI.invoke('recon:items-list', { companyId, accountId, asOfDate });
+    const it = await invoke('recon:items-list', { companyId, accountId, asOfDate });
     setItems(it || []);
     alert(`Carried forward ${prior.uncleared.length} uncleared items.`);
   };
@@ -157,7 +162,7 @@ const AccountReconciliation: React.FC = () => {
   const save = async () => {
     if (!computed) return;
     setBusy(true);
-    await window.electronAPI.invoke('recon:save', {
+    await invoke('recon:save', {
       companyId, accountId, asOfDate,
       subLedgerTotal: computed.sub_ledger_total,
       glTotal: computed.gl_total,
@@ -166,7 +171,7 @@ const AccountReconciliation: React.FC = () => {
       reconciledBy: 'user',
       matches: matches.matches.map(m => ({ subId: m.sub.id, glId: m.gl.id, reason: m.reason })),
     });
-    const fresh = await window.electronAPI.invoke('recon:history', { companyId });
+    const fresh = await invoke('recon:history', { companyId });
     setHistory(fresh);
     setNotes('');
     setBusy(false);

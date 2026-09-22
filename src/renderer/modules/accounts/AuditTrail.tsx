@@ -5,6 +5,11 @@ import { formatCurrency, humanizeLabel } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import api from '../../lib/api';
 
+const invoke = <T = any>(ch: string, ...a: unknown[]): Promise<T> =>
+  (window as any).electronAPI?.invoke
+    ? window.electronAPI.invoke<T>(ch, ...a)
+    : Promise.reject(new Error('Not in Electron'));
+
 // ─── Compliance Center ───────────────────────────────────────
 // Implements features 21–30.
 
@@ -65,7 +70,7 @@ const AccountAudit: React.FC<{ companyId: string }> = ({ companyId }) => {
   const load = async (id: string) => {
     setAccountId(id);
     if (!id) { setData(null); return; }
-    const r = await window.electronAPI.invoke('compliance:account-audit', { companyId, accountId: id });
+    const r = await invoke('compliance:account-audit', { companyId, accountId: id });
     setData(r);
   };
   return (
@@ -108,7 +113,7 @@ const Form1099: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [rows, setRows] = useState<any[]>([]);
   const run = async () => {
-    const r = await window.electronAPI.invoke('compliance:1099-report', { companyId, year });
+    const r = await invoke('compliance:1099-report', { companyId, year });
     setRows(r || []);
   };
   const exportCsv = () => {
@@ -149,7 +154,7 @@ const TaxLineExport: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [end, setEnd] = useState(todayLocal());
   const [rows, setRows] = useState<any[]>([]);
   const run = async () => {
-    const r = await window.electronAPI.invoke('compliance:tax-line-export', { companyId, periodStart: start, periodEnd: end });
+    const r = await invoke('compliance:tax-line-export', { companyId, periodStart: start, periodEnd: end });
     setRows(r || []);
   };
   const exportCsv = () => {
@@ -190,7 +195,7 @@ const SoDReport: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [end, setEnd] = useState(todayLocal());
   const [rows, setRows] = useState<any[]>([]);
   const run = async () => {
-    const r = await window.electronAPI.invoke('compliance:sod-report', { companyId, periodStart: start, periodEnd: end });
+    const r = await invoke('compliance:sod-report', { companyId, periodStart: start, periodEnd: end });
     setRows(r || []);
   };
   return (
@@ -281,7 +286,7 @@ const WorkingPapers: React.FC<{ companyId: string }> = ({ companyId }) => {
       const [tb, gl, recons, audit] = await Promise.all([
         api.reportTrialBalance(start, end),
         api.reportGeneralLedger(start, end),
-        window.electronAPI.invoke('recon:history', { companyId }),
+        invoke('recon:history', { companyId }),
         api.query('audit_log', { company_id: companyId }, { field: 'timestamp', dir: 'desc' }, 500),
       ]);
       const html = `<!DOCTYPE html><html><head><title>Working Papers ${start} to ${end}</title>
@@ -347,7 +352,7 @@ const ComplianceDashboard: React.FC<{ companyId: string }> = ({ companyId }) => 
   const [data, setData] = useState<any>(null);
   useEffect(() => {
     if (!companyId) return;
-    window.electronAPI.invoke('compliance:dashboard', { companyId }).then(setData);
+    invoke('compliance:dashboard', { companyId }).then(setData);
   }, [companyId]);
   if (!data) return <div className="text-xs text-text-muted">Loading…</div>;
   const Tile: React.FC<{ label: string; value: string | number; warn?: boolean }> = ({ label, value, warn }) => (
@@ -373,12 +378,12 @@ const SoxControls: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [controls, setControls] = useState<any[]>([]);
   const [editing, setEditing] = useState<any | null>(null);
   const [tests, setTests] = useState<Record<string, any[]>>({});
-  const reload = () => window.electronAPI.invoke('sox:controls-list', { companyId }).then(setControls);
+  const reload = () => invoke('sox:controls-list', { companyId }).then(setControls);
   useEffect(() => { if (companyId) reload(); }, [companyId]);
 
   const save = async () => {
     if (!editing) return;
-    const res: any = await window.electronAPI.invoke('sox:control-save', { ...editing, companyId });
+    const res: any = await invoke('sox:control-save', { ...editing, companyId });
     if (res?.error) { alert(res.error); return; }
     setEditing(null);
     reload();
@@ -386,12 +391,12 @@ const SoxControls: React.FC<{ companyId: string }> = ({ companyId }) => {
 
   const remove = async (id: string) => {
     if (!confirm('Delete control?')) return;
-    await window.electronAPI.invoke('sox:control-delete', { id });
+    await invoke('sox:control-delete', { id });
     reload();
   };
 
   const loadTests = async (controlId: string) => {
-    const t = await window.electronAPI.invoke('sox:tests-list', { controlId });
+    const t = await invoke('sox:tests-list', { controlId });
     setTests((prev) => ({ ...prev, [controlId]: t || [] }));
   };
 
@@ -399,7 +404,7 @@ const SoxControls: React.FC<{ companyId: string }> = ({ companyId }) => {
     const result = prompt('Result (pass|fail|na)?', 'pass') || 'pass';
     const evidence = prompt('Evidence reference (e.g. audit_log id, doc URL)?', '') || '';
     const notes = prompt('Notes?', '') || '';
-    await window.electronAPI.invoke('sox:test-save', {
+    await invoke('sox:test-save', {
       controlId, companyId, testedBy: 'user', testedAt: todayLocal(), result, evidence, notes,
     });
     await loadTests(controlId);
@@ -408,10 +413,10 @@ const SoxControls: React.FC<{ companyId: string }> = ({ companyId }) => {
 
   // 23. Sarbanes evidence packet PDF
   const evidencePacket = async () => {
-    const list = await window.electronAPI.invoke('sox:controls-list', { companyId });
+    const list = await invoke('sox:controls-list', { companyId });
     const allTests: Record<string, any[]> = {};
     for (const c of list || []) {
-      allTests[c.id] = await window.electronAPI.invoke('sox:tests-list', { controlId: c.id }) || [];
+      allTests[c.id] = await invoke('sox:tests-list', { controlId: c.id }) || [];
     }
     const html = `<!DOCTYPE html><html><head><title>Sarbanes Evidence Packet</title>
       <style>body{font-family:sans-serif;padding:24px;}h1{font-size:18px;}h2{font-size:14px;border-bottom:1px solid #ccc;padding:4px 0;margin-top:18px;}
@@ -520,7 +525,7 @@ const AuditLetter: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [asOf, setAsOf] = useState(todayLocal());
   const [auditor, setAuditor] = useState('');
   const generate = async () => {
-    const res: any = await window.electronAPI.invoke('compliance:audit-letter-data', { companyId, asOfDate: asOf });
+    const res: any = await invoke('compliance:audit-letter-data', { companyId, asOfDate: asOf });
     if (res?.error) { alert(res.error); return; }
     const c = res.company || {};
     const balances = res.balances || [];
@@ -563,7 +568,7 @@ const AuditLetter: React.FC<{ companyId: string }> = ({ companyId }) => {
 const HashChain: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [result, setResult] = useState<any>(null);
   const verify = async () => {
-    const r = await window.electronAPI.invoke('compliance:hash-chain-verify', { companyId, limit: 5000 });
+    const r = await invoke('compliance:hash-chain-verify', { companyId, limit: 5000 });
     setResult(r);
   };
   return (
@@ -594,11 +599,11 @@ const ApprovalRules: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [rules, setRules] = useState({ twoFactorThreshold: 0, commentThreshold: 0, blockSelfApproval: true });
   const [saving, setSaving] = useState(false);
   useEffect(() => {
-    window.electronAPI.invoke('compliance:approval-rules-get').then((r: any) => r && setRules(r));
+    invoke('compliance:approval-rules-get').then((r: any) => r && setRules(r));
   }, [companyId]);
   const save = async () => {
     setSaving(true);
-    await window.electronAPI.invoke('compliance:approval-rules-save', rules);
+    await invoke('compliance:approval-rules-save', rules);
     setSaving(false);
     alert('Approval rules saved.');
   };

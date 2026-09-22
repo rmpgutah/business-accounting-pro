@@ -6,6 +6,11 @@ import { formatCurrency } from '../../lib/format';
 import api from '../../lib/api';
 import { toLocalDateString, fiscalYearEnd } from '../../lib/date-helpers';
 
+const invoke = <T = any>(ch: string, ...a: unknown[]): Promise<T> =>
+  (window as any).electronAPI?.invoke
+    ? window.electronAPI.invoke<T>(ch, ...a)
+    : Promise.reject(new Error('Not in Electron'));
+
 const ADJUSTMENT_CATEGORIES = ['deferral', 'accrual', 'depreciation', 'inventory', 'revaluation', 'correction', 'other'] as const;
 
 // ─── Period Close Workflow ──────────────────────────────────
@@ -68,12 +73,12 @@ const PeriodCloseWorkflow: React.FC = () => {
   const reload = useCallback(async () => {
     if (!companyId) return;
     const [c, l, lg, ns, adj, cycle] = await Promise.all([
-      window.electronAPI.invoke('close:checklist-list', { companyId, periodLabel }),
-      window.electronAPI.invoke('close:list-locks', { companyId }),
-      window.electronAPI.invoke('close:log-list', { companyId }),
+      invoke('close:checklist-list', { companyId, periodLabel }),
+      invoke('close:list-locks', { companyId }),
+      invoke('close:log-list', { companyId }),
       api.getSetting('period_close_notify_emails').catch(() => null),
-      window.electronAPI.invoke('close:adjustment-breakdown', { companyId, periodStart, periodEnd }),
-      window.electronAPI.invoke('close:cycle-dashboard', { companyId }),
+      invoke('close:adjustment-breakdown', { companyId, periodStart, periodEnd }),
+      invoke('close:cycle-dashboard', { companyId }),
     ]);
     setChecklist(c || []);
     setLocks(l || []);
@@ -92,7 +97,7 @@ const PeriodCloseWorkflow: React.FC = () => {
     const existing = itemFor(step.key);
     const completed = field === 'completed' ? !existing?.completed_at : !!existing?.completed_at;
     const skipped = field === 'skipped' ? !existing?.skipped : !!existing?.skipped;
-    await window.electronAPI.invoke('close:checklist-toggle', {
+    await invoke('close:checklist-toggle', {
       companyId, periodLabel, itemKey: step.key, itemLabel: step.label,
       completed, skipped, by: 'user',
     });
@@ -105,7 +110,7 @@ const PeriodCloseWorkflow: React.FC = () => {
     const reason = prompt(`Reason for ${lockLevel} lock?`) || '';
     if (!reason) return;
     setBusy(true);
-    const res = await window.electronAPI.invoke('close:lock-period-v2', {
+    const res = await invoke('close:lock-period-v2', {
       companyId, periodStart, periodEnd, lockedBy: 'user', reason, lockLevel,
     });
     if (res?.error) setError(res.error);
@@ -116,7 +121,7 @@ const PeriodCloseWorkflow: React.FC = () => {
   // 2. Pre-close report bundle
   const generatePreCloseBundle = async () => {
     setBusy(true);
-    const res: any = await window.electronAPI.invoke('close:pre-close-bundle', { companyId, periodStart, periodEnd });
+    const res: any = await invoke('close:pre-close-bundle', { companyId, periodStart, periodEnd });
     if (res?.error) { setError(res.error); setBusy(false); return; }
     const html = `<!DOCTYPE html><html><head><title>Pre-Close Bundle ${periodEnd}</title>
       <style>body{font-family:sans-serif;padding:24px;}h1{font-size:18px;}h2{font-size:13px;border-bottom:1px solid #ccc;margin-top:18px;}
@@ -146,7 +151,7 @@ const PeriodCloseWorkflow: React.FC = () => {
 
   // 4. Email digest
   const generateDigest = async (logId: string) => {
-    const res: any = await window.electronAPI.invoke('close:email-digest', { companyId, logId });
+    const res: any = await invoke('close:email-digest', { companyId, logId });
     if (res?.error) { setError(res.error); return; }
     const blob = new Blob([`<html><body>${res.html}</body></html>`], { type: 'text/html' });
     window.open(URL.createObjectURL(blob), '_blank');
@@ -154,7 +159,7 @@ const PeriodCloseWorkflow: React.FC = () => {
 
   // 5. Roll-forward
   const rollForward = async (logId: string) => {
-    const res: any = await window.electronAPI.invoke('close:roll-forward', { companyId, logId });
+    const res: any = await invoke('close:roll-forward', { companyId, logId });
     if (res?.error) setError(res.error);
     else alert(res.alreadyDone ? 'Already rolled forward.' : `Snapshotted ${res.snapshotCount} balances.`);
     await reload();
@@ -162,7 +167,7 @@ const PeriodCloseWorkflow: React.FC = () => {
 
   // 6. Reopen
   const reopenPeriod = async (logId: string) => {
-    const preview: any = await window.electronAPI.invoke('close:reopen-preview', { logId });
+    const preview: any = await invoke('close:reopen-preview', { logId });
     if (preview?.error) { setError(preview.error); return; }
     const msg = `Reopen period ${preview.log.period_start} → ${preview.log.period_end}?\n\nThis will:\n` +
       `- Post a reversing JE for ${preview.closingJe?.entry_number || 'closing entry'} (${formatCurrency(preview.closingJe?.total || 0)})\n` +
@@ -170,7 +175,7 @@ const PeriodCloseWorkflow: React.FC = () => {
     if (!confirm(msg)) return;
     const reason = prompt('Reason for reopening?') || '';
     if (!reason) return;
-    const res: any = await window.electronAPI.invoke('close:reopen-commit', { logId, reopenedBy: 'user', reason });
+    const res: any = await invoke('close:reopen-commit', { logId, reopenedBy: 'user', reason });
     if (res?.error) setError(res.error);
     await reload();
   };
@@ -180,7 +185,7 @@ const PeriodCloseWorkflow: React.FC = () => {
     if (!shortStart || !shortEnd) { setError('Pick stub period dates.'); return; }
     const reason = prompt('Reason for short-period close (e.g. "Fiscal year change")?') || '';
     if (!reason) return;
-    const res: any = await window.electronAPI.invoke('close:short-period-commit',
+    const res: any = await invoke('close:short-period-commit',
       { companyId, periodStart: shortStart, periodEnd: shortEnd, closedBy: 'user', reason });
     if (res?.error) setError(res.error);
     else alert('Short period locked.');
@@ -191,14 +196,14 @@ const PeriodCloseWorkflow: React.FC = () => {
     const reason = prompt(override ? 'Override reason (admin):' : 'Unlock reason:') || '';
     if (!reason) return;
     setBusy(true);
-    await window.electronAPI.invoke('close:unlock-period', { lockId, unlockedBy: 'user', reason, override });
+    await invoke('close:unlock-period', { lockId, unlockedBy: 'user', reason, override });
     await reload();
     setBusy(false);
   };
 
   const previewClosing = async () => {
     setBusy(true); setError(null);
-    const res = await window.electronAPI.invoke('close:closing-preview', { companyId, periodStart, periodEnd });
+    const res = await invoke('close:closing-preview', { companyId, periodStart, periodEnd });
     if (res?.error) setError(res.error);
     setClosingPreview(res);
     setBusy(false);
@@ -207,7 +212,7 @@ const PeriodCloseWorkflow: React.FC = () => {
   const commitClosing = async () => {
     if (!confirm('Post year-end closing entries and lock the period?')) return;
     setBusy(true); setError(null);
-    const res = await window.electronAPI.invoke('close:closing-commit', { companyId, periodStart, periodEnd, closedBy: 'user' });
+    const res = await invoke('close:closing-commit', { companyId, periodStart, periodEnd, closedBy: 'user' });
     if (res?.error) setError(res.error);
     setClosingPreview(null);
     await reload();

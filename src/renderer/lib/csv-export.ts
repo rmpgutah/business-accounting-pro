@@ -158,6 +158,11 @@ export function downloadCSVBlob(
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+const invoke = <T = any>(ch: string, ...a: unknown[]): Promise<T> =>
+  (window as any).electronAPI?.invoke
+    ? window.electronAPI.invoke<T>(ch, ...a)
+    : Promise.reject(new Error('Not in Electron'));
+
 /**
  * Export via main process (shows native save dialog).
  */
@@ -165,7 +170,7 @@ export async function exportViaDialog(
   table: string,
   filters?: Record<string, any>
 ): Promise<{ path?: string; error?: string; cancelled?: boolean }> {
-  return window.electronAPI.invoke('export:csv', { table, filters });
+  return invoke('export:csv', { table, filters });
 }
 
 /**

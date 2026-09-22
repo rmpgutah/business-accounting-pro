@@ -22,6 +22,11 @@ import {
 } from '../../lib/classifications';
 import AttachmentsPanel from '../../components/AttachmentsPanel';
 
+const invoke = <T = any>(ch: string, ...a: unknown[]): Promise<T> =>
+  (window as any).electronAPI?.invoke
+    ? window.electronAPI.invoke<T>(ch, ...a)
+    : Promise.reject(new Error('Not in Electron'));
+
 // ─── Types ───────────────────────────────────────────────
 interface FixedAsset {
   id: string;
@@ -323,7 +328,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
       let processed = 0;
       for (const id of selectedIds) {
         try {
-          await window.electronAPI.invoke('assets:run-depreciation', { periodDate, assetId: id });
+          await invoke('assets:run-depreciation', { periodDate, assetId: id });
           processed += 1;
         } catch { /* ignore individual failure */ }
       }
@@ -412,7 +417,7 @@ const AssetList: React.FC<AssetListProps> = ({ onNew, onView, onEdit }) => {
     setRunningDep(true);
     try {
       const periodDate = format(new Date(), 'yyyy-MM-01');
-      const result = await window.electronAPI.invoke('assets:run-depreciation', { periodDate });
+      const result = await invoke('assets:run-depreciation', { periodDate });
       showToast(`Depreciation processed for ${result?.processed ?? 0} asset(s).`, true);
       load();
     } catch {
@@ -952,7 +957,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
         });
       } else {
         // Auto-generate asset code
-        const code = await window.electronAPI.invoke('assets:next-code');
+        const code = await invoke('assets:next-code');
         setForm((f) => ({ ...f, asset_code: code ?? '' }));
       }
       setLoading(false);
@@ -1296,7 +1301,7 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ assetId, onBack, onEdit }) =>
       setAsset(a);
 
       // Non-critical secondary data — failures don't hide primary content
-      window.electronAPI.invoke('assets:schedule', { assetId })
+      invoke('assets:schedule', { assetId })
         .then((r: any) => setSchedule(Array.isArray(r) ? r : []))
         .catch(() => {});
       api.query('asset_depreciation_entries', { asset_id: assetId })

@@ -24,6 +24,11 @@ import IntegritySettings from './IntegritySettings';
 import PeriodCloseSettings from './PeriodCloseSettings';
 import MacroRecorder from '../../components/MacroRecorder';
 
+const invoke = <T = any>(ch: string, ...a: unknown[]): Promise<T> =>
+  (window as any).electronAPI?.invoke
+    ? window.electronAPI.invoke<T>(ch, ...a)
+    : Promise.reject(new Error('Not in Electron'));
+
 // ─── Types ──────────────────────────────────────────────
 interface SettingsMap {
   [key: string]: string;
@@ -422,7 +427,7 @@ export default function SettingsModule() {
 
   // ─── Load federal constants & Utah config when year changes ──
   useEffect(() => {
-    window.electronAPI.invoke('tax:get-brackets', { year: taxYear }).then((data: any) => {
+    invoke('tax:get-brackets', { year: taxYear }).then((data: any) => {
       if (data?.constants) setFedConstants(data.constants);
     }).catch(() => {});
     api.taxGetUtahConfig(taxYear).then((data: any) => {
@@ -440,8 +445,8 @@ export default function SettingsModule() {
   }, [taxYear]);
 
   const handleSeedYear = async () => {
-    await window.electronAPI.invoke('tax:seed-year', { year: taxYear });
-    const data = await window.electronAPI.invoke('tax:get-brackets', { year: taxYear });
+    await invoke('tax:seed-year', { year: taxYear });
+    const data = await invoke('tax:get-brackets', { year: taxYear });
     if (data?.constants) setFedConstants(data.constants);
   };
 
