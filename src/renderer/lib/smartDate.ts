@@ -125,7 +125,6 @@ export function parseSmartDate(input: string): string | null {
 export function __smartDateSelfTest(): void {
   const cases = ['today', 'yesterday', 'eom', 'eoy', '+3d', '-1w', '+2m', 'next fri', '2026-05-05'];
   for (const c of cases) {
-    // eslint-disable-next-line no-console
-    console.log(c, '→', parseSmartDate(c));
+    parseSmartDate(c);
   }
 }

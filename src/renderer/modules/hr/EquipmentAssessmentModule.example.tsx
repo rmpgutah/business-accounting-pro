@@ -59,7 +59,6 @@ export const NewAssessmentExample = () => {
   const handleSave = async (data: EquipmentAssessment) => {
     try {
       const result = await api.equipmentAssessmentSave(data);
-      console.log('Assessment saved:', result);
       alert(`Assessment saved! ID: ${result.id}`);
     } catch (error) {
       console.error('Failed to save:', error);
@@ -165,7 +164,6 @@ export const AssessmentListExample = () => {
                   <button
                     onClick={() => {
                       // Navigate to view/edit page
-                      console.log('View assessment:', assessment.id);
                     }}
                     className="text-color-accent-blue hover:underline"
                   >
@@ -200,8 +198,7 @@ export const ExportPDFExample = async () => {
 
   try {
     // Export to user-selected location
-    const filePath = await api.equipmentAssessmentExportPDF(assessment);
-    console.log('PDF exported to:', filePath);
+    await api.equipmentAssessmentExportPDF(assessment);
   } catch (error) {
     console.error('Failed to export PDF:', error);
   }

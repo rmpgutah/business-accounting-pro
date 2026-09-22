@@ -73,7 +73,7 @@ export function PnLRow({
         padding: '8px 12px',
         borderBottom: '1px solid var(--color-border-secondary, #2a2a2a)',
         background: emphasis ? 'var(--color-bg-tertiary, #1c1c1c)' : 'transparent',
-        borderRadius: emphasis ? 6 : 0,
+        borderRadius: 'var(--app-radius)',
       }}
     >
       <span
