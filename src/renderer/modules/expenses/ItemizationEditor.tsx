@@ -65,10 +65,10 @@ const JurisdictionPicker: React.FC<{
       <div className="flex items-center justify-between mb-2">
         <div className="flex gap-1">
           <button type="button" className={`text-[10px] px-2 py-1 uppercase font-bold ${mode === 'preset' ? 'bg-accent-blue text-white' : 'text-text-secondary'}`}
-            style={{ borderRadius: 4 }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             onClick={() => setMode('preset')}>US State</button>
           <button type="button" className={`text-[10px] px-2 py-1 uppercase font-bold ${mode === 'custom' ? 'bg-accent-blue text-white' : 'text-text-secondary'}`}
-            style={{ borderRadius: 4 }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             onClick={() => setMode('custom')}>Custom</button>
         </div>
         <button type="button" className="text-text-muted hover:text-text-primary" onClick={onClose} title="Close">
@@ -121,7 +121,7 @@ const JurisdictionPicker: React.FC<{
             {recent.map((r, i) => (
               <button key={i} type="button"
                 className="text-[10px] px-2 py-0.5 bg-bg-tertiary border border-border-primary hover:border-accent-blue"
-                style={{ borderRadius: 3 }}
+                style={{ borderRadius: 'var(--app-radius)' }}
                 onClick={() => submit(r.jurisdiction, r.rate)}>
                 {r.jurisdiction} <span className="text-text-muted">{r.rate.toFixed(2)}%</span>
               </button>

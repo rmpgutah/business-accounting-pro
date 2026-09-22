@@ -2028,8 +2028,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
 
         {/* Preview pane */}
         {showPreview && (
-          <div style={{ flex: 1, overflow: 'hidden', background: '#f1f5f9', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '8px 12px', fontSize: '11px', color: '#64748b', fontWeight: 600, background: '#e2e8f0', borderBottom: '1px solid #cbd5e1', flexShrink: 0 }}>
+          <div style={{ flex: 1, overflow: 'hidden', background: 'var(--color-bg-secondary)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: 600, background: 'var(--color-bg-tertiary)', borderBottom: '1px solid var(--hairline)', flexShrink: 0 }}>
               LIVE PREVIEW
             </div>
             {/* Deliberate exception to the PDF-redesign: the live-edit preview
@@ -2068,7 +2068,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
             style={{
               background: 'var(--color-bg-primary)',
               border: '1px solid var(--color-border-primary)',
-              borderRadius: 8,
+              borderRadius: 'var(--app-radius)',
               maxWidth: 560,
               width: '100%',
               padding: 24,

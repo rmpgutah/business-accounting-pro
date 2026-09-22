@@ -33,7 +33,7 @@ const Section: React.FC<{ title: string; icon: React.ReactNode; count?: number; 
       {icon}
       <span className="text-xs font-bold uppercase tracking-wider text-text-muted">{title}</span>
       {count !== undefined && (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 ml-1" style={{ borderRadius: 4, background: 'rgba(96,165,250,0.12)', color: 'var(--color-accent-blue)' }}>{count}</span>
+        <span className="text-[10px] font-bold px-1.5 py-0.5 ml-1" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(96,165,250,0.12)', color: 'var(--color-accent-blue)' }}>{count}</span>
       )}
     </div>
     {children}

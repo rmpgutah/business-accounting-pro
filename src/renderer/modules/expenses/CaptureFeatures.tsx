@@ -403,7 +403,7 @@ export const NotesMemoField: React.FC<{ value: string; onChange: (v: string) => 
     <button type="button" title={title}
       onClick={() => wrapSelection(before, after)}
       className="px-2 py-1 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-      style={{ borderRadius: 4 }}>
+      style={{ borderRadius: 'var(--app-radius)' }}>
       {icon}
     </button>
   );
@@ -498,7 +498,7 @@ export const TagsAutocomplete: React.FC<{
         style={{ paddingTop: 5, paddingBottom: 5 }}>
         {tags.map(tag => (
           <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium"
-            style={{ borderRadius: 4, background: 'rgba(96,165,250,0.15)', color: 'var(--color-accent-blue)' }}>
+            style={{ borderRadius: 'var(--app-radius)', background: 'rgba(96,165,250,0.15)', color: 'var(--color-accent-blue)' }}>
             {tag}
             <button type="button" onClick={(e) => { e.stopPropagation(); removeTag(tag); }}
               className="hover:text-accent-expense transition-colors" style={{ lineHeight: 1 }}>×</button>

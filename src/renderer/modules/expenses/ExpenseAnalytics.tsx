@@ -647,8 +647,8 @@ const ExpenseAnalytics: React.FC = () => {
                     <td className="text-right font-mono">{formatCurrency(c.amount)}</td>
                     <td className="text-center">
                       {c.deductible
-                        ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>YES</span>
-                        : <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', color: 'var(--color-text-muted)' }}>NO</span>}
+                        ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>YES</span>
+                        : <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', color: 'var(--color-text-muted)' }}>NO</span>}
                     </td>
                     <td className="text-text-secondary text-xs">{c.scheduleCLine || '—'}</td>
                   </tr>

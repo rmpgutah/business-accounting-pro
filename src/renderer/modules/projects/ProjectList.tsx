@@ -582,7 +582,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject, onNewProject
                             style={{
                               flex: 1,
                               height: 4,
-                              borderRadius: 2,
+                              borderRadius: 'var(--app-radius)',
                               background: filled ? 'var(--color-accent-blue)' : 'var(--color-border-primary)',
                             }}
                             title={p}

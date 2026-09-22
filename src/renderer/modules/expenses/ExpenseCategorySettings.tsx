@@ -213,7 +213,7 @@ const ExpenseCategorySettings: React.FC<Props> = ({ onBack }) => {
               return (
                 <tr key={c.id}>
                   <td className="font-medium text-text-primary">
-                    <span className="inline-block w-2 h-2 mr-2" style={{ background: c.color || '#6b7280', borderRadius: '50%' }} />
+                    <span className="inline-block w-2 h-2 mr-2" style={{ background: c.color || 'var(--color-text-muted)', borderRadius: '50%' }} />
                     {c.name}
                   </td>
                   <td>

@@ -284,14 +284,22 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
     const palette = ['', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
     const cur = entry.color || '';
     const next = palette[(palette.indexOf(cur) + 1) % palette.length];
-    await api.update('journal_entries', entry.id, { color: next });
-    reload();
+    try {
+      await api.update('journal_entries', entry.id, { color: next });
+      reload();
+    } catch (err) {
+      console.error('[JournalEntries] cycleColor', err);
+    }
   };
 
   // F29: Toggle star
   const toggleStar = async (entry: JournalEntry) => {
-    await api.update('journal_entries', entry.id, { is_starred: entry.is_starred ? 0 : 1 });
-    reload();
+    try {
+      await api.update('journal_entries', entry.id, { is_starred: entry.is_starred ? 0 : 1 });
+      reload();
+    } catch (err) {
+      console.error('[JournalEntries] toggleStar', err);
+    }
   };
 
   const bulkDelete = async () => {
@@ -589,7 +597,7 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
           <div className="bg-bg-elevated border border-border-primary px-6 py-4 w-80 shadow-xl" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="text-sm font-semibold mb-2">{batchProgress.label}</div>
             <div className="text-xs text-text-secondary mb-2">{batchProgress.done} of {batchProgress.total}</div>
-            <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: '4px' }}>
+            <div className="w-full h-2 bg-bg-tertiary overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="h-full bg-accent-blue transition-all"
                    style={{ width: `${Math.min(100, (batchProgress.done / Math.max(1, batchProgress.total)) * 100)}%` }} />
             </div>
@@ -821,26 +829,26 @@ const JournalEntries: React.FC<JournalEntriesProps> = ({ onNewEntry, onEditEntry
                         so they can be unposted and deleted. */}
                     {Math.abs((entry.total_debit ?? 0) - (entry.total_credit ?? 0)) > 0.005 && (
                       <span title={`Debits ${formatCurrency(entry.total_debit ?? 0)} ≠ credits ${formatCurrency(entry.total_credit ?? 0)} — this entry corrupts the trial balance. Unpost and fix or delete it.`}
-                            className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-expense/20 text-accent-expense" style={{ borderRadius: '4px' }}>⚠ UNBALANCED</span>
+                            className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-expense/20 text-accent-expense" style={{ borderRadius: 'var(--app-radius)' }}>⚠ UNBALANCED</span>
                     )}
                     {(entry.total_debit ?? 0) === 0 && (entry.total_credit ?? 0) === 0 && (
                       <span title="No line amounts — likely an empty shell from a failed operation. Safe to delete."
-                            className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-warning/20 text-accent-warning" style={{ borderRadius: '4px' }}>⚠ EMPTY</span>
+                            className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-warning/20 text-accent-warning" style={{ borderRadius: 'var(--app-radius)' }}>⚠ EMPTY</span>
                     )}
                     {entry.is_adjusting === 1 && (
-                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-blue/15 text-accent-blue" style={{ borderRadius: '4px' }}>ADJ</span>
+                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-blue/15 text-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>ADJ</span>
                     )}
                     {entry.is_recurring === 1 && (
-                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-blue/15 text-accent-blue" style={{ borderRadius: '4px' }}>REC</span>
+                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-blue/15 text-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>REC</span>
                     )}
                     {entry.is_reversing === 1 && (
-                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-blue/15 text-accent-blue" style={{ borderRadius: '4px' }}>REV</span>
+                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-blue/15 text-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>REV</span>
                     )}
                     {(entry.has_attachment ?? 0) > 0 && (
-                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-bg-tertiary text-text-secondary" style={{ borderRadius: '4px' }}>📎</span>
+                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-bg-tertiary text-text-secondary" style={{ borderRadius: 'var(--app-radius)' }}>📎</span>
                     )}
                     <span className={`px-2 py-0.5 text-[9px] font-semibold uppercase ${entry.is_posted === 1 ? 'bg-accent-income/15 text-accent-income' : 'bg-bg-tertiary text-text-muted'}`}
-                          style={{ borderRadius: '4px' }}>
+                          style={{ borderRadius: 'var(--app-radius)' }}>
                       {entry.is_posted === 1 ? 'Posted' : 'Draft'}
                     </span>
                   </div>

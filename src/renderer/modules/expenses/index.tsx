@@ -410,13 +410,13 @@ const ExpensesModule: React.FC = () => {
                         return topCategories.map((cat, i) => (
                           <div key={i} className="flex items-center gap-3">
                             <div className="text-xs text-text-secondary w-28 truncate">{cat.name || '(uncategorized)'}</div>
-                            <div className="flex-1 h-4 relative" style={{ background: 'var(--color-bg-tertiary)', borderRadius: '3px' }}>
+                            <div className="flex-1 h-4 relative" style={{ background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)' }}>
                               <div
                                 style={{
                                   width: `${Math.max(((cat.total || 0) / maxCat) * 100, 2)}%`,
                                   height: '100%',
                                   background: 'var(--color-accent-blue)',
-                                  borderRadius: '3px',
+                                  borderRadius: 'var(--app-radius)',
                                   transition: 'width 0.3s ease',
                                 }}
                               />
@@ -441,13 +441,13 @@ const ExpensesModule: React.FC = () => {
                         return paymentMethods.map((pm, i) => (
                           <div key={i} className="flex items-center gap-3">
                             <div className="text-xs text-text-secondary w-28 truncate capitalize">{humanizeLabel(pm.method)}</div>
-                            <div className="flex-1 h-4 relative" style={{ background: 'var(--color-bg-tertiary)', borderRadius: '3px' }}>
+                            <div className="flex-1 h-4 relative" style={{ background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)' }}>
                               <div
                                 style={{
                                   width: `${Math.max(((pm.total || 0) / maxPm) * 100, 2)}%`,
                                   height: '100%',
                                   background: 'var(--color-accent-expense)',
-                                  borderRadius: '3px',
+                                  borderRadius: 'var(--app-radius)',
                                   transition: 'width 0.3s ease',
                                 }}
                               />
@@ -563,7 +563,7 @@ const ExpensesModule: React.FC = () => {
                       <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-border-primary/40 text-[10px] text-text-muted">
                         <span>Less</span>
                         {['var(--color-bg-tertiary)', 'color-mix(in srgb, var(--color-accent-expense) 25%, transparent)', 'color-mix(in srgb, var(--color-accent-expense) 45%, transparent)', 'color-mix(in srgb, var(--color-accent-expense) 65%, transparent)', 'color-mix(in srgb, var(--color-accent-expense) 82%, transparent)', 'var(--color-accent-expense)'].map((c, i) => (
-                          <span key={i} style={{ width: 11, height: 11, borderRadius: 2, background: c, display: 'inline-block' }} />
+                          <span key={i} style={{ width: 11, height: 11, borderRadius: 'var(--app-radius)', background: c, display: 'inline-block' }} />
                         ))}
                         <span>More</span>
                         <span className="ml-auto font-mono">Peak day: <strong className="text-accent-expense">{formatCurrency(maxDay)}</strong></span>
