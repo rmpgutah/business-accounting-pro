@@ -54,7 +54,8 @@ export const TABLES_WITHOUT_COMPANY_ID = new Set([
   // Approval child tables
   'approval_instances',
   'audit_walkthroughs',
-  // Bank child tables
+  // Bank child tables — no company_id; filter through bank_accounts JOIN
+  'bank_transactions',
   'bank_reconciliation_matches',
   'bank_match_attempts',
   // Bill child tables
