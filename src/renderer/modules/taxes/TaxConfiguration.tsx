@@ -6,6 +6,11 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../lib/format';
 
+const invoke = <T = any>(ch: string, ...a: unknown[]): Promise<T> =>
+  (window as any).electronAPI?.invoke
+    ? window.electronAPI.invoke<T>(ch, ...a)
+    : Promise.reject(new Error('Not in Electron'));
+
 // ─── Types ───────────────────────────────────────────────
 interface TaxBracket {
   min: number;
@@ -142,7 +147,7 @@ const TaxConfiguration: React.FC = () => {
   // Load preferences
   useEffect(() => {
     setPrefsLoading(true);
-    window.electronAPI.invoke('settings:list')
+    invoke('settings:list')
       .then((rows: Array<{ key: string; value: string }>) => {
         const map: Record<string, string> = {};
         (rows || []).forEach((r) => { map[r.key] = r.value; });
@@ -154,7 +159,7 @@ const TaxConfiguration: React.FC = () => {
 
   const savePref = async (key: string, value: string) => {
     try {
-      await window.electronAPI.invoke('settings:set', { key, value });
+      await invoke('settings:set', { key, value });
       setPrefs((p) => ({ ...p, [key]: value }));
     } catch {
       showToast(`Failed to save ${key}`, false);
@@ -163,7 +168,7 @@ const TaxConfiguration: React.FC = () => {
 
   const loadYears = useCallback(async () => {
     try {
-      const years: number[] = await window.electronAPI.invoke('tax:available-years');
+      const years: number[] = await invoke('tax:available-years');
       setAvailableYears(years ?? []);
       return years ?? [];
     } catch {
@@ -174,7 +179,7 @@ const TaxConfiguration: React.FC = () => {
   const loadTaxData = useCallback(async (year: number) => {
     setLoading(true);
     try {
-      const data = await window.electronAPI.invoke('tax:get-brackets', { year });
+      const data = await invoke('tax:get-brackets', { year });
       setTaxData(data ?? null);
     } catch {
       setTaxData(null);
@@ -186,7 +191,7 @@ const TaxConfiguration: React.FC = () => {
   const seedYear = useCallback(async (year: number, silent = false) => {
     setSeeding(true);
     try {
-      const result = await window.electronAPI.invoke('tax:seed-year', { year });
+      const result = await invoke('tax:seed-year', { year });
       if (result?.success) {
         if (!silent) showToast(`Tax data seeded for ${year}.`, true);
         return true;
@@ -244,7 +249,7 @@ const TaxConfiguration: React.FC = () => {
     setCalcError('');
     setCalculating(true);
     try {
-      const result: WithholdingResult = await window.electronAPI.invoke('tax:calculate-withholding', {
+      const result: WithholdingResult = await invoke('tax:calculate-withholding', {
         grossPay: gross,
         filingStatus: calcFiling,
         allowances: parseInt(calcAllowances) || 0,
