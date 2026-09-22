@@ -519,7 +519,11 @@ const ClientInsights: React.FC<ClientInsightsProps> = ({ clientId }) => {
         </div>
       </div>
     `;
-    await api.printPreview(html, 'Client Analysis Report');
+    try {
+      await api.printPreview(html, 'Client Analysis Report');
+    } catch (err) {
+      console.error('[ClientInsights] printPreview failed:', err);
+    }
   };
 
   if (loading) {

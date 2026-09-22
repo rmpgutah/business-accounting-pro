@@ -570,7 +570,11 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
         </div>
       </div>
     `;
-    await api.printPreview(html, `Statement - ${client.name}`);
+    try {
+      await api.printPreview(html, `Statement - ${client.name}`);
+    } catch (err) {
+      console.error('[ClientDetail] printPreview failed:', err);
+    }
   };
 
   // ─── Tab Definitions ────────────────────────────────

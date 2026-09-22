@@ -153,7 +153,7 @@ const TaxPayments: React.FC = () => {
         <div className="flex items-center gap-3">
           <div
             className="w-9 h-9 flex items-center justify-center bg-bg-tertiary border border-border-primary"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <CreditCard size={18} className="text-accent-blue" />
           </div>
@@ -176,7 +176,7 @@ const TaxPayments: React.FC = () => {
 
       {/* Record Payment Form */}
       {showForm && (
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: 'var(--app-radius)' }}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-text-primary">Record Tax Payment</h3>
             <button
@@ -190,7 +190,7 @@ const TaxPayments: React.FC = () => {
             {formError && (
               <div
                 className="text-xs text-accent-expense bg-accent-expense/10 px-3 py-2 border border-accent-expense/20"
-                style={{ borderRadius: '2px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 {formError}
               </div>
