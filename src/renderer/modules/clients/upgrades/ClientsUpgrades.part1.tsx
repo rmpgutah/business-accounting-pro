@@ -524,7 +524,7 @@ const ClientsUpgradesPart1: React.FC = () => {
         borderRadius: 'var(--app-radius)',
         border: '1px solid ' + (active ? 'var(--accent-primary)' : 'var(--structure)'),
         color: active ? 'var(--accent-primary)' : 'var(--color-text-secondary)',
-        background: active ? 'rgba(255,255,255,0.04)' : 'transparent',
+        background: active ? 'color-mix(in srgb, var(--accent-primary) 8%, transparent)' : 'transparent',
       }}
     >
       {label}

@@ -486,7 +486,7 @@ const ClientStatement: React.FC<{ clients: ClientAgg[]; companyId: string }> = (
         })
         .join('');
 
-      printHTML(
+      await printHTML(
         `Statement — ${client.name}`,
         `<h1>Statement of Account</h1><p class="muted">${escapeHtml(client.name)}</p>` +
           `<table><thead><tr><th>Date</th><th>Description</th><th class="right">Charge</th>` +
@@ -495,6 +495,8 @@ const ClientStatement: React.FC<{ clients: ClientAgg[]; companyId: string }> = (
           }</tbody></table>` +
           `<h2>Balance due: ${formatCurrency(running)}</h2>`
       );
+    } catch (err) {
+      console.error('Client statement print error:', err);
     } finally {
       setBusy(false);
     }
@@ -527,35 +529,39 @@ const ArAgingReport: React.FC<{ companyId: string }> = ({ companyId }) => {
   const [loaded, setLoaded] = useState(false);
 
   const build = async () => {
-    const rows = (await api.rawQuery(
-      `SELECT c.name AS name,
-              CAST(julianday('now') - julianday(i.due_date) AS INTEGER) AS age,
-              (i.total - i.amount_paid) AS bal
-         FROM invoices i JOIN clients c ON c.id = i.client_id
-         WHERE i.company_id = ? AND i.status IN ('sent','overdue','partial')
-           AND (i.total - i.amount_paid) > 0`,
-      [companyId]
-    )) as any[];
+    try {
+      const rows = (await api.rawQuery(
+        `SELECT c.name AS name,
+                CAST(julianday('now') - julianday(i.due_date) AS INTEGER) AS age,
+                (i.total - i.amount_paid) AS bal
+           FROM invoices i JOIN clients c ON c.id = i.client_id
+           WHERE i.company_id = ? AND i.status IN ('sent','overdue','partial')
+             AND (i.total - i.amount_paid) > 0`,
+        [companyId]
+      )) as any[];
 
-    const map = new Map<
-      string,
-      { name: string; b0: number; b30: number; b60: number; b90: number; total: number }
-    >();
-    for (const r of Array.isArray(rows) ? rows : []) {
-      const name = String(r.name ?? '');
-      const age = Number(r.age ?? 0);
-      const bal = Number(r.bal ?? 0);
-      const e = map.get(name) ?? { name, b0: 0, b30: 0, b60: 0, b90: 0, total: 0 };
-      if (age <= 30) e.b0 += bal;
-      else if (age <= 60) e.b30 += bal;
-      else if (age <= 90) e.b60 += bal;
-      else e.b90 += bal;
-      e.total += bal;
-      map.set(name, e);
+      const map = new Map<
+        string,
+        { name: string; b0: number; b30: number; b60: number; b90: number; total: number }
+      >();
+      for (const r of Array.isArray(rows) ? rows : []) {
+        const name = String(r.name ?? '');
+        const age = Number(r.age ?? 0);
+        const bal = Number(r.bal ?? 0);
+        const e = map.get(name) ?? { name, b0: 0, b30: 0, b60: 0, b90: 0, total: 0 };
+        if (age <= 30) e.b0 += bal;
+        else if (age <= 60) e.b30 += bal;
+        else if (age <= 90) e.b60 += bal;
+        else e.b90 += bal;
+        e.total += bal;
+        map.set(name, e);
+      }
+      const arr = Array.from(map.values()).sort((a, b) => b.total - a.total);
+      setMatrix(arr);
+      setLoaded(true);
+    } catch (err) {
+      console.error('AR aging build error:', err);
     }
-    const arr = Array.from(map.values()).sort((a, b) => b.total - a.total);
-    setMatrix(arr);
-    setLoaded(true);
   };
 
   const exportCsv = () => {
@@ -930,32 +936,36 @@ const ReminderDraft: React.FC<{ clients: ClientAgg[]; companyId: string }> = ({
   const generate = async () => {
     const client = clients.find((c) => c.id === clientId);
     if (!client) return;
-    const rows = (await api.rawQuery(
-      `SELECT invoice_number, due_date, (total - amount_paid) AS bal
-         FROM invoices
-         WHERE client_id = ? AND company_id = ? AND status IN ('sent','overdue','partial')
-           AND (total - amount_paid) > 0
-         ORDER BY due_date`,
-      [clientId, companyId]
-    )) as any[];
+    try {
+      const rows = (await api.rawQuery(
+        `SELECT invoice_number, due_date, (total - amount_paid) AS bal
+           FROM invoices
+           WHERE client_id = ? AND company_id = ? AND status IN ('sent','overdue','partial')
+             AND (total - amount_paid) > 0
+           ORDER BY due_date`,
+        [clientId, companyId]
+      )) as any[];
 
-    const open = Array.isArray(rows) ? rows : [];
-    const list = open
-      .map(
-        (r) =>
-          `  • ${r.invoice_number} (due ${formatDate(r.due_date)}): ${formatCurrency(
-            Number(r.bal ?? 0)
-          )}`
-      )
-      .join('\n');
-    const total = open.reduce((s, r) => s + Number(r.bal ?? 0), 0);
+      const open = Array.isArray(rows) ? rows : [];
+      const list = open
+        .map(
+          (r) =>
+            `  • ${r.invoice_number} (due ${formatDate(r.due_date)}): ${formatCurrency(
+              Number(r.bal ?? 0)
+            )}`
+        )
+        .join('\n');
+      const total = open.reduce((s, r) => s + Number(r.bal ?? 0), 0);
 
-    const body =
-      `Hi ${client.name},\n\nThis is a friendly reminder regarding the following outstanding ` +
-      `invoice${open.length === 1 ? '' : 's'}:\n\n${list || '  • (no open invoices)'}\n\n` +
-      `Total due: ${formatCurrency(total)}\n\nPlease arrange payment at your earliest convenience. ` +
-      `Thank you.`;
-    setDraft(body);
+      const body =
+        `Hi ${client.name},\n\nThis is a friendly reminder regarding the following outstanding ` +
+        `invoice${open.length === 1 ? '' : 's'}:\n\n${list || '  • (no open invoices)'}\n\n` +
+        `Total due: ${formatCurrency(total)}\n\nPlease arrange payment at your earliest convenience. ` +
+        `Thank you.`;
+      setDraft(body);
+    } catch (err) {
+      console.error('Reminder draft generation error:', err);
+    }
   };
 
   const client = clients.find((c) => c.id === clientId);
@@ -1317,6 +1327,8 @@ const PerClientInvoiceCSV: React.FC<{ clients: ClientAgg[]; companyId: string }>
         `invoices_${client.name.replace(/\s+/g, '_')}_${todayISO()}.csv`,
         toCSV(headers, data)
       );
+    } catch (err) {
+      doFlash(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setBusy(false);
     }
@@ -1371,6 +1383,8 @@ const PerClientPaymentCSV: React.FC<{ clients: ClientAgg[]; companyId: string }>
         `payments_${client.name.replace(/\s+/g, '_')}_${todayISO()}.csv`,
         toCSV(headers, data)
       );
+    } catch (err) {
+      doFlash(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setBusy(false);
     }
@@ -1601,32 +1615,36 @@ const QuarterlyActivity: React.FC<{ companyId: string }> = ({ companyId }) => {
   }, [year, quarter]);
 
   const build = async () => {
-    const data = (await api.rawQuery(
-      `SELECT c.name AS name,
-              COUNT(DISTINCT i.id) AS invoices,
-              COALESCE(SUM(i.total), 0) AS amount,
-              COALESCE((SELECT SUM(p.amount) FROM payments p
-                        JOIN invoices pi ON pi.id = p.invoice_id
-                        WHERE pi.client_id = c.id AND p.company_id = ?
-                          AND p.date BETWEEN ? AND ?), 0) AS payments
-         FROM clients c
-         LEFT JOIN invoices i ON i.client_id = c.id AND i.company_id = ?
-              AND i.issue_date BETWEEN ? AND ?
-         WHERE c.company_id = ?
-         GROUP BY c.id
-         HAVING invoices > 0 OR payments > 0
-         ORDER BY amount DESC`,
-      [companyId, range.start, range.end, companyId, range.start, range.end, companyId]
-    )) as any[];
-    setRows(
-      (Array.isArray(data) ? data : []).map((r) => ({
-        name: String(r.name ?? ''),
-        invoices: Number(r.invoices ?? 0),
-        amount: Number(r.amount ?? 0),
-        payments: Number(r.payments ?? 0),
-      }))
-    );
-    setLoaded(true);
+    try {
+      const data = (await api.rawQuery(
+        `SELECT c.name AS name,
+                COUNT(DISTINCT i.id) AS invoices,
+                COALESCE(SUM(i.total), 0) AS amount,
+                COALESCE((SELECT SUM(p.amount) FROM payments p
+                          JOIN invoices pi ON pi.id = p.invoice_id
+                          WHERE pi.client_id = c.id AND p.company_id = ?
+                            AND p.date BETWEEN ? AND ?), 0) AS payments
+           FROM clients c
+           LEFT JOIN invoices i ON i.client_id = c.id AND i.company_id = ?
+                AND i.issue_date BETWEEN ? AND ?
+           WHERE c.company_id = ?
+           GROUP BY c.id
+           HAVING invoices > 0 OR payments > 0
+           ORDER BY amount DESC`,
+        [companyId, range.start, range.end, companyId, range.start, range.end, companyId]
+      )) as any[];
+      setRows(
+        (Array.isArray(data) ? data : []).map((r) => ({
+          name: String(r.name ?? ''),
+          invoices: Number(r.invoices ?? 0),
+          amount: Number(r.amount ?? 0),
+          payments: Number(r.payments ?? 0),
+        }))
+      );
+      setLoaded(true);
+    } catch (err) {
+      console.error('Quarterly activity build error:', err);
+    }
   };
 
   const exportCsv = () => {
