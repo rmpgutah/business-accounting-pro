@@ -97,6 +97,8 @@ const MODULE_NAMES: Record<string, string> = {
   esign: 'E-Sign',
   'component-library': 'Component Library',
   customization: 'Customization',
+  automations: 'Automations',
+  rules: 'Rules Engine',
 };
 
 // ─── Loading Fallback ────────────────────────────────────
