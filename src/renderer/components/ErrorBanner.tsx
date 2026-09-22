@@ -20,7 +20,7 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, onDismiss, ti
         padding: '12px 16px',
         background: 'var(--color-accent-expense-bg)',
         border: '1px solid var(--color-accent-expense)',
-        borderRadius: '2px',
+        borderRadius: 'var(--app-radius)',
       }}
       role="alert"
     >
@@ -39,7 +39,7 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, onDismiss, ti
           onClick={onDismiss}
           className="text-accent-expense/70 hover:text-accent-expense shrink-0"
           aria-label="Dismiss error"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <X size={14} />
         </button>

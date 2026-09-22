@@ -250,7 +250,7 @@ const AuthScreen: React.FC = () => {
           height: '3px',
           background: 'linear-gradient(90deg, #b91c1c, #dc2626, #b91c1c)',
           margin: '16px auto 20px',
-          borderRadius: '2px',
+          borderRadius: 'var(--app-radius)',
         }} />
 
         {/* Subtitle */}

@@ -47,7 +47,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               style={{
                 background: 'var(--color-bg-primary)',
                 border: '1px solid var(--color-border-primary)',
-                borderRadius: '2px',
+                borderRadius: 'var(--app-radius)',
               }}
             >
               <code
