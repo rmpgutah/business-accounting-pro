@@ -113,7 +113,7 @@ const EntityTimeline: React.FC<Props> = ({ entityType, entityId, limit = 50, com
                       fontFamily: 'SF Mono, Menlo, Consolas, monospace',
                       background: 'rgba(0,0,0,0.04)',
                       padding: '4px 8px',
-                      borderRadius: 4,
+                      borderRadius: 'var(--app-radius)',
                       borderLeft: '2px solid var(--color-accent-blue)',
                       wordBreak: 'break-all',
                       lineHeight: 1.4,

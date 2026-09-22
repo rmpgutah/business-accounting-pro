@@ -116,7 +116,7 @@ function btnStyle(disabled: boolean): React.CSSProperties {
     padding: '6px 8px',
     background: 'transparent',
     border: '1px solid var(--color-border-primary)',
-    borderRadius: 6,
+    borderRadius: 'var(--app-radius)',
     color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.5 : 1,
@@ -181,7 +181,7 @@ const HistoryPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               key={entry.id}
               style={{
                 padding: '8px 10px',
-                borderRadius: 4,
+                borderRadius: 'var(--app-radius)',
                 marginBottom: 4,
                 background: idx === 0 ? 'rgba(37, 99, 235, 0.06)' : 'transparent',
                 border: '1px solid ' + (idx === 0 ? 'var(--color-accent-blue)' : 'var(--color-border-primary)'),

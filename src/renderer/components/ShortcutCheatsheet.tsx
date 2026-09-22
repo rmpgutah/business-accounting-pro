@@ -95,7 +95,7 @@ export const ShortcutCheatsheet: React.FC = () => {
         style={{
           background: 'var(--color-bg-primary)',
           border: '1px solid var(--color-border-primary)',
-          borderRadius: 8,
+          borderRadius: 'var(--app-radius)',
           maxWidth: 560,
           width: '100%',
           maxHeight: '80vh',
@@ -131,7 +131,7 @@ export const ShortcutCheatsheet: React.FC = () => {
                       style={{
                         background: 'var(--color-bg-secondary)',
                         border: '1px solid var(--color-border-primary)',
-                        borderRadius: 4,
+                        borderRadius: 'var(--app-radius)',
                         padding: '2px 8px',
                         fontSize: 11,
                         fontFamily: 'SF Mono, Menlo, Consolas, monospace',
