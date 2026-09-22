@@ -30,7 +30,7 @@ export const ClientContext: React.FC<ClientContextProps> = ({ clientId, companyI
       style={{
         background: 'var(--color-accent-blue-bg)',
         border: '1px solid var(--color-accent-blue)',
-        borderRadius: '2px',
+        borderRadius: 'var(--app-radius)',
       }}
     >
       <div className="font-black uppercase tracking-wider text-accent-blue text-[10px] mb-2">Client Overview</div>
@@ -77,7 +77,7 @@ export const CategoryContext: React.FC<CategoryContextProps> = ({ categoryId, co
       style={{
         background: over ? 'var(--color-accent-expense-bg)' : 'var(--color-bg-secondary)',
         border: `1px solid ${over ? 'var(--color-accent-expense)' : 'var(--color-border-primary)'}`,
-        borderRadius: '2px',
+        borderRadius: 'var(--app-radius)',
       }}
     >
       <div className="font-black uppercase tracking-wider text-[10px] mb-2 text-text-muted">Category This Month</div>

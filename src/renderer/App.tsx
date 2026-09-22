@@ -97,6 +97,8 @@ const MODULE_NAMES: Record<string, string> = {
   esign: 'E-Sign',
   'component-library': 'Component Library',
   customization: 'Customization',
+  automations: 'Automations',
+  rules: 'Rules Engine',
 };
 
 // ─── Loading Fallback ────────────────────────────────────
@@ -157,7 +159,7 @@ const ModuleView: React.FC = () => {
       default:
         return (
           <div className="flex items-center justify-center h-full p-6">
-            <div className="block-card p-8 text-center" style={{ borderRadius: '2px' }}>
+            <div className="block-card p-8 text-center" style={{ borderRadius: 'var(--app-radius)' }}>
               <h2 className="text-lg font-bold text-text-primary mb-1">
                 {MODULE_NAMES[currentModule] ?? currentModule}
               </h2>

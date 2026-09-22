@@ -141,7 +141,7 @@ const ScenarioTooltip: React.FC<any> = ({ active, payload, label }) => {
       style={{
         backgroundColor: 'var(--color-bg-elevated)',
         border: '1px solid var(--hairline)',
-        borderRadius: '2px',
+        borderRadius: 'var(--app-radius)',
       }}
     >
       <p className="text-text-muted mb-1">{label}</p>
@@ -360,7 +360,7 @@ const Forecasting: React.FC = () => {
       </div>
 
       {/* ─── Scenario Selector ─── */}
-      <div className="block-card p-4" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
           Scenario
         </h2>
@@ -376,7 +376,7 @@ const Forecasting: React.FC = () => {
                 style={{
                   backgroundColor: isActive ? `color-mix(in srgb, ${config.color} 12%, transparent)` : 'var(--color-bg-surface)',
                   border: `1px solid ${isActive ? config.color : 'var(--hairline)'}`,
-                  borderRadius: '2px',
+                  borderRadius: 'var(--app-radius)',
                   cursor: 'pointer',
                 }}
               >
@@ -466,7 +466,7 @@ const Forecasting: React.FC = () => {
       </div>
 
       {/* ─── Scenario Comparison Chart ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-5" style={{ borderRadius: 'var(--app-radius)' }}>
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
           Revenue Projection — All Scenarios
         </h2>
@@ -560,7 +560,7 @@ const Forecasting: React.FC = () => {
       </div>
 
       {/* ─── What-If Section ─── */}
-      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-5" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-2 mb-4">
           <SlidersHorizontal size={14} className="text-accent-purple" />
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider">
@@ -631,7 +631,7 @@ const Forecasting: React.FC = () => {
             style={{
               backgroundColor: 'color-mix(in srgb, var(--color-accent-purple) 6%, transparent)',
               border: '1px solid color-mix(in srgb, var(--color-accent-purple) 18%, transparent)',
-              borderRadius: '2px',
+              borderRadius: 'var(--app-radius)',
             }}
           >
             <p className="text-xs text-text-secondary">
@@ -654,7 +654,7 @@ const Forecasting: React.FC = () => {
       </div>
 
       {/* Month-by-Month Projection Table */}
-      <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+      <div className="block-card p-5" style={{ borderRadius: 'var(--app-radius)' }}>
         <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
           Month-by-Month Projections ({SCENARIO_CONFIG[activeScenario].label})
         </h2>
@@ -718,7 +718,7 @@ const Forecasting: React.FC = () => {
       {/* Historical Data Summary */}
       <div className="grid grid-cols-2 gap-4">
         {/* Historical Revenue */}
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: 'var(--app-radius)' }}>
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
             Historical Revenue (Last 6 Months)
           </h2>
@@ -749,7 +749,7 @@ const Forecasting: React.FC = () => {
         </div>
 
         {/* Historical Expenses */}
-        <div className="block-card p-5" style={{ borderRadius: '2px' }}>
+        <div className="block-card p-5" style={{ borderRadius: 'var(--app-radius)' }}>
           <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">
             Historical Expenses (Last 6 Months)
           </h2>

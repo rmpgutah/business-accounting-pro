@@ -570,7 +570,11 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
         </div>
       </div>
     `;
-    await api.printPreview(html, `Statement - ${client.name}`);
+    try {
+      await api.printPreview(html, `Statement - ${client.name}`);
+    } catch (err) {
+      console.error('[ClientDetail] printPreview failed:', err);
+    }
   };
 
   // ─── Tab Definitions ────────────────────────────────
@@ -809,7 +813,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             {aging.current_due > 0 && (
               <div
                 className="flex items-center justify-center text-[9px] font-mono font-bold"
-                style={{ width: `${(aging.current_due / agingTotal) * 100}%`, background: 'rgba(52,211,153,0.5)', color: '#fff', minWidth: '30px' }}
+                style={{ width: `${(aging.current_due / agingTotal) * 100}%`, background: 'color-mix(in srgb, var(--color-accent-income) 50%, transparent)', color: '#fff', minWidth: '30px' }}
                 title={`Current: ${formatCurrency(aging.current_due)}`}
               >
                 {formatCurrency(aging.current_due)}
@@ -818,7 +822,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             {aging.age_1_30 > 0 && (
               <div
                 className="flex items-center justify-center text-[9px] font-mono font-bold"
-                style={{ width: `${(aging.age_1_30 / agingTotal) * 100}%`, background: 'rgba(245,158,11,0.5)', color: '#fff', minWidth: '30px' }}
+                style={{ width: `${(aging.age_1_30 / agingTotal) * 100}%`, background: 'color-mix(in srgb, var(--color-accent-warning) 50%, transparent)', color: '#fff', minWidth: '30px' }}
                 title={`1-30 Days: ${formatCurrency(aging.age_1_30)}`}
               >
                 {formatCurrency(aging.age_1_30)}
@@ -827,7 +831,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             {aging.age_31_60 > 0 && (
               <div
                 className="flex items-center justify-center text-[9px] font-mono font-bold"
-                style={{ width: `${(aging.age_31_60 / agingTotal) * 100}%`, background: 'rgba(249,115,22,0.5)', color: '#fff', minWidth: '30px' }}
+                style={{ width: `${(aging.age_31_60 / agingTotal) * 100}%`, background: 'color-mix(in srgb, var(--color-accent-warning) 70%, var(--color-accent-expense))', color: '#fff', minWidth: '30px' }}
                 title={`31-60 Days: ${formatCurrency(aging.age_31_60)}`}
               >
                 {formatCurrency(aging.age_31_60)}
@@ -836,7 +840,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             {aging.age_61_90 > 0 && (
               <div
                 className="flex items-center justify-center text-[9px] font-mono font-bold"
-                style={{ width: `${(aging.age_61_90 / agingTotal) * 100}%`, background: 'rgba(239,68,68,0.5)', color: '#fff', minWidth: '30px' }}
+                style={{ width: `${(aging.age_61_90 / agingTotal) * 100}%`, background: 'color-mix(in srgb, var(--color-accent-expense) 50%, transparent)', color: '#fff', minWidth: '30px' }}
                 title={`61-90 Days: ${formatCurrency(aging.age_61_90)}`}
               >
                 {formatCurrency(aging.age_61_90)}
@@ -845,7 +849,7 @@ const ClientDetail: React.FC<ClientDetailProps> = ({ clientId, onBack, onEdit })
             {aging.age_90_plus > 0 && (
               <div
                 className="flex items-center justify-center text-[9px] font-mono font-bold"
-                style={{ width: `${(aging.age_90_plus / agingTotal) * 100}%`, background: 'rgba(185,28,28,0.6)', color: '#fff', minWidth: '30px' }}
+                style={{ width: `${(aging.age_90_plus / agingTotal) * 100}%`, background: 'color-mix(in srgb, var(--color-accent-expense) 80%, transparent)', color: '#fff', minWidth: '30px' }}
                 title={`90+ Days: ${formatCurrency(aging.age_90_plus)}`}
               >
                 {formatCurrency(aging.age_90_plus)}

@@ -931,7 +931,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
               <span className="text-text-secondary">Total: {formatCurrency(Number(sourceDoc.total || sourceDoc.subtotal || 0))}</span>
               {sourceDoc.client_name && <span className="text-text-secondary">{sourceDoc.client_name}</span>}
               {sourceDoc.vendor_name && <span className="text-text-secondary">{sourceDoc.vendor_name}</span>}
-              <button onClick={autoFillFromSource} className="ml-auto block-btn px-2 py-0.5 text-[10px]" style={{ borderRadius: '4px' }}>
+              <button onClick={autoFillFromSource} className="ml-auto block-btn px-2 py-0.5 text-[10px]" style={{ borderRadius: 'var(--app-radius)' }}>
                 Auto-fill lines
               </button>
             </div>
@@ -1151,12 +1151,12 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                         {isImage && d.file_path ? (
                           <img src={`file://${d.file_path}`} alt={d.filename}
                             className="w-8 h-8 object-cover border border-border-primary"
-                            style={{ borderRadius: '4px' }}
+                            style={{ borderRadius: 'var(--app-radius)' }}
                             loading="lazy" decoding="async"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         ) : (
                           <span className="w-8 h-8 flex items-center justify-center bg-bg-tertiary border border-border-primary text-[9px]"
-                                style={{ borderRadius: '4px' }}>{(d.filename.split('.').pop() || '?').toUpperCase()}</span>
+                                style={{ borderRadius: 'var(--app-radius)' }}>{(d.filename.split('.').pop() || '?').toUpperCase()}</span>
                         )}
                         <span className="truncate">{d.filename}</span>
                       </div>
@@ -1200,7 +1200,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
             ) : (
               <ul className="space-y-1 max-h-48 overflow-y-auto">
                 {versions.map((v) => (
-                  <li key={v.id} className="flex items-center justify-between border border-border-primary px-2 py-1" style={{ borderRadius: '4px' }}>
+                  <li key={v.id} className="flex items-center justify-between border border-border-primary px-2 py-1" style={{ borderRadius: 'var(--app-radius)' }}>
                     <span className="font-mono">v{v.version}</span>
                     <span className="text-text-muted">{v.changed_at}</span>
                     <button onClick={() => rollbackTo(v.id)} className="text-accent-blue underline">Rollback</button>
@@ -1307,10 +1307,10 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
           <div className="px-5 py-2 border-t border-border-primary text-[11px] text-text-muted">
             <span className="mr-2">Linked:</span>
             <span className="font-mono px-2 py-0.5 bg-bg-tertiary border border-border-primary"
-                  style={{ borderRadius: '4px' }}>recurring template {entry.recurring_template_id.slice(0, 8)}</span>
+                  style={{ borderRadius: 'var(--app-radius)' }}>recurring template {entry.recurring_template_id.slice(0, 8)}</span>
             {entry.source_type && entry.source_id && (
               <span className="ml-2 font-mono px-2 py-0.5 bg-bg-tertiary border border-border-primary"
-                    style={{ borderRadius: '4px' }}>{entry.source_type} {entry.source_id.slice(0, 8)}</span>
+                    style={{ borderRadius: 'var(--app-radius)' }}>{entry.source_type} {entry.source_id.slice(0, 8)}</span>
             )}
           </div>
         )}

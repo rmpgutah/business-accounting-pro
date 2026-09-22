@@ -54,7 +54,7 @@ export function LabeledInput({
         placeholder={placeholder}
         onChange={(e) => onChange?.(e.target.value)}
         className={`block-input${error ? ' is-invalid' : ''}`}
-        style={{ borderRadius: 6, opacity: disabled ? 0.55 : 1 }}
+        style={{ borderRadius: 'var(--app-radius)', opacity: disabled ? 0.55 : 1 }}
       />
       {error ? (
         <span
@@ -127,7 +127,7 @@ export function AmountInput({
           onChange={(e) => onChange?.(e.target.value)}
           className="block-input font-mono"
           style={{
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             paddingLeft: 26,
             textAlign: 'right',
             opacity: disabled ? 0.55 : 1,
@@ -177,7 +177,7 @@ export function SearchBox({
         onChange={(e) => onChange?.(e.target.value)}
         className="block-input"
         style={{
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           paddingLeft: 32,
           paddingRight: value ? 30 : 12,
           width: '100%',
@@ -251,7 +251,7 @@ export function TextareaField({
         placeholder={placeholder}
         onChange={(e) => onChange?.(e.target.value)}
         className="block-input"
-        style={{ borderRadius: 6, resize: 'vertical', minHeight: 72, opacity: disabled ? 0.55 : 1 }}
+        style={{ borderRadius: 'var(--app-radius)', resize: 'vertical', minHeight: 72, opacity: disabled ? 0.55 : 1 }}
       />
       <div className="flex items-center justify-between">
         {hint ? <span className="text-xs text-text-muted">{hint}</span> : <span />}

@@ -291,7 +291,7 @@ export function ClientCard({
         : 'var(--color-accent-income, #34d399)';
 
   return (
-    <div className={`block-card ${className}`} style={{ borderRadius: 6, padding: 16 }}>
+    <div className={`block-card ${className}`} style={{ borderRadius: 'var(--app-radius)', padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <Avatar name={name} src={src} size={44} color="var(--color-accent-blue, #60a5fa)" />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -368,7 +368,7 @@ export function VendorCard({
   className = '',
 }: VendorCardProps) {
   return (
-    <div className={`block-card ${className}`} style={{ borderRadius: 6, padding: 16 }}>
+    <div className={`block-card ${className}`} style={{ borderRadius: 'var(--app-radius)', padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <Avatar name={name} src={src} size={44} color="var(--color-accent-purple, #c084fc)" />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -445,7 +445,7 @@ export function ContactRow({
         alignItems: 'center',
         gap: 12,
         padding: '10px 12px',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         cursor: onClick ? 'pointer' : 'default',
         backgroundColor: selected
           ? 'var(--color-accent-blue-bg, rgba(96,165,250,0.12))'
@@ -497,7 +497,7 @@ export function ContactRow({
             justifyContent: 'center',
             width: 28,
             height: 28,
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             color: 'var(--color-text-muted, #5e6178)',
             background: 'transparent',
             border: '1px solid transparent',

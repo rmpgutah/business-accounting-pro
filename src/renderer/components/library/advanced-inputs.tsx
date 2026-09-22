@@ -43,7 +43,7 @@ export function TagInput({
             className="inline-flex items-center gap-1 text-xs font-medium"
             style={{
               padding: '2px 8px',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               backgroundColor: 'color-mix(in srgb, ' + accentColor + ' 18%, transparent)',
               color: accentColor,
               border: '1px solid color-mix(in srgb, ' + accentColor + ' 35%, transparent)',
@@ -124,7 +124,7 @@ export function RangeSlider({
             right: 0,
             height: 6,
             transform: 'translateY(-50%)',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             backgroundColor: 'var(--color-bg-tertiary, #2e2e2e)',
           }}
         />
@@ -136,7 +136,7 @@ export function RangeSlider({
             width: `${pct}%`,
             height: 6,
             transform: 'translateY(-50%)',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             backgroundColor: accentColor,
           }}
         />
@@ -210,7 +210,7 @@ export function Stepper({
       {label && (
         <div className="text-xs text-text-secondary mb-1.5">{label}</div>
       )}
-      <div className="inline-flex items-stretch" style={{ borderRadius: 6 }}>
+      <div className="inline-flex items-stretch" style={{ borderRadius: 'var(--app-radius)' }}>
         <button
           type="button"
           onClick={() => setVal((v) => clamp(v - step))}
@@ -299,7 +299,7 @@ export function DateRangePresets({
               className="text-xs font-medium transition-colors"
               style={{
                 padding: '5px 12px',
-                borderRadius: 6,
+                borderRadius: 'var(--app-radius)',
                 backgroundColor: on
                   ? 'color-mix(in srgb, ' + accentColor + ' 20%, transparent)'
                   : 'var(--color-bg-secondary, #242424)',
@@ -363,7 +363,7 @@ export function MultiSelectChips({
               className="inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
               style={{
                 padding: '5px 10px',
-                borderRadius: 6,
+                borderRadius: 'var(--app-radius)',
                 backgroundColor: on
                   ? 'color-mix(in srgb, ' + accentColor + ' 18%, transparent)'
                   : 'var(--color-bg-secondary, #242424)',
@@ -377,7 +377,7 @@ export function MultiSelectChips({
                 style={{
                   width: 14,
                   height: 14,
-                  borderRadius: 4,
+                  borderRadius: 'var(--app-radius)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',

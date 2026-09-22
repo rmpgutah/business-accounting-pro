@@ -98,7 +98,7 @@ export function DataTableLite({
                         style={{
                           display: 'block',
                           height: 12,
-                          borderRadius: 4,
+                          borderRadius: 'var(--app-radius)',
                           background: 'var(--skeleton-base)',
                         }}
                       />
@@ -155,7 +155,7 @@ export function DefinitionGrid({
   className,
 }: DefinitionGridProps) {
   return (
-    <div className={`block-card ${className ?? ''}`} style={{ padding: 16, borderRadius: 6 }}>
+    <div className={`block-card ${className ?? ''}`} style={{ padding: 16, borderRadius: 'var(--app-radius)' }}>
       {title && (
         <div
           className="text-sm text-text-primary"
@@ -352,7 +352,7 @@ export function ComparisonTable({
   className,
 }: ComparisonTableProps) {
   return (
-    <div className={`block-card ${className ?? ''}`} style={{ padding: 16, borderRadius: 6 }}>
+    <div className={`block-card ${className ?? ''}`} style={{ padding: 16, borderRadius: 'var(--app-radius)' }}>
       {title && (
         <div
           className="text-sm text-text-primary"

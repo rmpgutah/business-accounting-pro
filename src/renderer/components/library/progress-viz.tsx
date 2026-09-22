@@ -136,7 +136,7 @@ export function ProgressBarLabeled({
           width: '100%',
           height: thickness,
           backgroundColor: trackColor,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           overflow: 'hidden',
         }}
       >
@@ -145,7 +145,7 @@ export function ProgressBarLabeled({
             width: `${pct}%`,
             height: '100%',
             backgroundColor: color,
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             transition: 'width 0.3s ease',
           }}
         />
@@ -356,7 +356,7 @@ export function BulletGraph({
             position: 'absolute',
             inset: 0,
             display: 'flex',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             overflow: 'hidden',
             border: '1px solid var(--color-border-primary, #3a3a3a)',
           }}
@@ -385,7 +385,7 @@ export function BulletGraph({
             height: 8,
             width: `${vPct}%`,
             backgroundColor: color,
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             transition: 'width 0.3s ease',
           }}
         />

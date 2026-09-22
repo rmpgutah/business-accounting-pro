@@ -37,7 +37,7 @@ export function GlassCard({
   return (
     <div
       className={`${elevated ? 'block-card-elevated' : 'block-card'} ${className}`}
-      style={{ borderRadius: 6, padding, ...style }}
+      style={{ borderRadius: 'var(--app-radius)', padding, ...style }}
     >
       {children ?? (
         <div className="text-sm text-text-secondary">Glass card content</div>
@@ -69,7 +69,7 @@ export function PanelCard({
   return (
     <div
       className={`block-card ${className}`}
-      style={{ borderRadius: 6, padding: 0, overflow: 'hidden' }}
+      style={{ borderRadius: 'var(--app-radius)', padding: 0, overflow: 'hidden' }}
     >
       <div
         className="flex items-center justify-between"
@@ -179,7 +179,7 @@ export function StatGrid({
             key={i}
             className="block-card"
             style={{
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               padding: 14,
               borderLeft: `2px solid ${accent}`,
             }}
@@ -241,7 +241,7 @@ export function SplitPanel({
   const pane = (title: string, content: React.ReactNode, fallback: string) => (
     <div
       className="block-card"
-      style={{ borderRadius: 6, padding: 0, overflow: 'hidden', minWidth: 0 }}
+      style={{ borderRadius: 'var(--app-radius)', padding: 0, overflow: 'hidden', minWidth: 0 }}
     >
       <div
         className="text-xs font-semibold text-text-secondary"
@@ -300,7 +300,7 @@ export function InfoCard({
   return (
     <div
       className={`block-card ${className}`}
-      style={{ borderRadius: 6, padding: 16 }}
+      style={{ borderRadius: 'var(--app-radius)', padding: 16 }}
     >
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
         <div
@@ -308,7 +308,7 @@ export function InfoCard({
             flexShrink: 0,
             width: 36,
             height: 36,
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

@@ -72,7 +72,7 @@ export function DeltaBadge({
         alignItems: 'center',
         gap: 4,
         padding: '2px 8px',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         fontSize: 12,
         fontWeight: 600,
         lineHeight: 1.4,
@@ -184,7 +184,7 @@ export function StatCard({
             flexShrink: 0,
             width: 40,
             height: 40,
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -310,7 +310,7 @@ export function KpiCard({
           marginTop: 12,
           width: '100%',
           height: 8,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           backgroundColor: 'var(--color-bg-tertiary, #2e2e2e)',
           overflow: 'hidden',
         }}
@@ -319,7 +319,7 @@ export function KpiCard({
           style={{
             width: `${pct}%`,
             height: '100%',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             backgroundColor: reached ? 'var(--color-accent-income, #22c55e)' : accent,
             transition: 'width 0.3s ease',
           }}

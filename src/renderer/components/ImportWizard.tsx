@@ -96,7 +96,7 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
     >
       <div
         className="bg-bg-elevated w-full max-w-xl border border-border-primary"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
         onClick={e => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -118,7 +118,7 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
               <Upload size={32} className="mx-auto text-text-muted mb-4" aria-hidden="true" />
               <p className="text-sm text-text-secondary mb-1">Upload a CSV file</p>
               <p className="text-xs text-text-muted mb-4">Required columns: <span className="font-bold">{requiredFields.join(', ')}</span></p>
-              <label className="cursor-pointer inline-block bg-accent-blue text-white px-4 py-2 text-xs font-bold uppercase hover:opacity-90" style={{ borderRadius: '2px' }}>
+              <label className="cursor-pointer inline-block bg-accent-blue text-white px-4 py-2 text-xs font-bold uppercase hover:opacity-90" style={{ borderRadius: 'var(--app-radius)' }}>
                 Choose CSV File
                 <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
               </label>
@@ -136,7 +136,7 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
                     <select
                       id={id}
                       className="bg-bg-primary border border-border-primary text-text-primary px-2 py-1.5 text-sm flex-1 focus:outline-none focus:border-border-focus"
-                      style={{ borderRadius: '2px' }}
+                      style={{ borderRadius: 'var(--app-radius)' }}
                       value={mapping[field] ?? ''}
                       onChange={e => { setMapping(prev => ({ ...prev, [field]: e.target.value })); setError(''); }}
                     >
@@ -147,7 +147,7 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
                 );
               })}
               {rows[0] && (
-                <div className="mt-3 text-xs text-text-muted border border-border-primary bg-bg-secondary p-2" style={{ borderRadius: '2px' }}>
+                <div className="mt-3 text-xs text-text-muted border border-border-primary bg-bg-secondary p-2" style={{ borderRadius: 'var(--app-radius)' }}>
                   Preview row 1: {Object.entries(rows[0]).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}
                 </div>
               )}
@@ -167,14 +167,14 @@ export const ImportWizard: React.FC<Props> = ({ table, requiredFields, extraData
         <div className="flex justify-end gap-3 p-4 border-t border-border-primary">
           {step === 2 && (
             <>
-              <button type="button" onClick={() => setStep(1)} className="px-4 py-2 text-xs font-bold uppercase border border-border-secondary text-text-secondary hover:border-border-focus" style={{ borderRadius: '2px' }}>Back</button>
+              <button type="button" onClick={() => setStep(1)} className="px-4 py-2 text-xs font-bold uppercase border border-border-secondary text-text-secondary hover:border-border-focus" style={{ borderRadius: 'var(--app-radius)' }}>Back</button>
               <button type="button" onClick={handleImport} disabled={importing}
-                className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90 disabled:opacity-50" style={{ borderRadius: '2px' }}>
+                className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90 disabled:opacity-50" style={{ borderRadius: 'var(--app-radius)' }}>
                 {importing ? 'Importing…' : `Import ${rows.length} Row${rows.length !== 1 ? 's' : ''}`}
               </button>
             </>
           )}
-          {step === 3 && <button type="button" onClick={onDone} className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90" style={{ borderRadius: '2px' }}>Done</button>}
+          {step === 3 && <button type="button" onClick={onDone} className="px-4 py-2 text-xs font-bold uppercase bg-accent-blue text-white hover:opacity-90" style={{ borderRadius: 'var(--app-radius)' }}>Done</button>}
         </div>
       </div>
     </div>

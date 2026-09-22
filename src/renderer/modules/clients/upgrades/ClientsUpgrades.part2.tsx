@@ -1164,7 +1164,7 @@ function ClientsUpgradesPart2(): React.ReactElement {
 // ─── Small presentational helpers ───────────────────────────────────────────
 function Stat({ label, value, accent }: { label: string; value: string; accent: string }): React.ReactElement {
   return (
-    <div className="rounded p-3" style={{ background: 'var(--bg-tertiary, rgba(255,255,255,0.02))', borderRadius: 'var(--app-radius)' }}>
+    <div className="rounded p-3" style={{ background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)' }}>
       <div className="text-xs text-text-muted">{label}</div>
       <div className="mt-1 text-lg font-semibold" style={{ color: accent }}>
         {value}

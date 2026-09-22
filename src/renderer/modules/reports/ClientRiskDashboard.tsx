@@ -266,7 +266,7 @@ const ComponentBar: React.FC<{ label: string; value: number; weight: number }> =
       <span style={{ fontWeight: 700 }}>{label}</span>
       <span>{value}/100 · {weight}%</span>
     </div>
-    <div style={{ height: 4, background: 'var(--color-bg-secondary)', borderRadius: 2, overflow: 'hidden' }}>
+    <div style={{ height: 4, background: 'var(--color-bg-secondary)', borderRadius: 'var(--app-radius)', overflow: 'hidden' }}>
       <div style={{
         width: value + '%',
         height: '100%',

@@ -94,7 +94,7 @@ export function InvoiceStatusBadge({
         alignItems: 'center',
         gap: compact ? 4 : 6,
         padding: compact ? '2px 8px' : '3px 10px',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         fontSize: 12,
         fontWeight: 600,
         lineHeight: 1.4,
@@ -151,7 +151,7 @@ export function AgingBar({
           display: 'flex',
           width: '100%',
           height,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           overflow: 'hidden',
           background: 'var(--color-bg-tertiary)',
           border: '1px solid var(--color-glass-border)',
@@ -276,7 +276,7 @@ export function PaymentProgress({
         style={{
           width: '100%',
           height,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           background: 'var(--color-bg-tertiary)',
           overflow: 'hidden',
         }}
@@ -285,7 +285,7 @@ export function PaymentProgress({
           style={{
             width: `${pct}%`,
             height: '100%',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             background: fill,
             transition: 'width 0.3s ease',
           }}
@@ -374,7 +374,7 @@ export function DueDateChip({
         alignItems: 'center',
         gap: 6,
         padding: '3px 10px',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         fontSize: 12,
         fontWeight: 600,
         lineHeight: 1.4,

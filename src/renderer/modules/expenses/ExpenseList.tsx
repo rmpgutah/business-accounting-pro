@@ -364,20 +364,24 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
     // Category/Vendor/Project NAMES survive after a batch op / inline edit /
     // import. The flat query returned only FK ids, which blanked those columns
     // and reverted the vendor chip to "vendor <id>" until a full page reload.
-    const expData = await api.rawQuery(
-      `SELECT e.*, c.name as category_name, c.color as category_color,
-              v.name as vendor_name, v.is_1099_eligible as vendor_is_1099, v.w9_status as vendor_w9_status,
-              p.name as project_name
-       FROM expenses e
-       LEFT JOIN categories c ON e.category_id = c.id
-       LEFT JOIN vendors v ON e.vendor_id = v.id
-       LEFT JOIN projects p ON e.project_id = p.id
-       WHERE e.company_id = ?
-       ORDER BY e.date DESC LIMIT 2000`,
-      [activeCompany.id]
-    );
-    setExpenses(Array.isArray(expData) ? expData : []);
-    setSelectedIds(new Set());
+    try {
+      const expData = await api.rawQuery(
+        `SELECT e.*, c.name as category_name, c.color as category_color,
+                v.name as vendor_name, v.is_1099_eligible as vendor_is_1099, v.w9_status as vendor_w9_status,
+                p.name as project_name
+         FROM expenses e
+         LEFT JOIN categories c ON e.category_id = c.id
+         LEFT JOIN vendors v ON e.vendor_id = v.id
+         LEFT JOIN projects p ON e.project_id = p.id
+         WHERE e.company_id = ?
+         ORDER BY e.date DESC LIMIT 2000`,
+        [activeCompany.id]
+      );
+      setExpenses(Array.isArray(expData) ? expData : []);
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.error('[ExpenseList] reload', err);
+    }
   }, [activeCompany]);
 
   const handleBatchApprove = useCallback(async () => {
@@ -804,7 +808,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
     const isRecent = recentlyAddedIds.has(exp.id);
 
     return (
-      <tr key={exp.id} className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`} style={isAnomaly ? { background: 'rgba(239,68,68,0.06)' } : undefined} onClick={() => (onView ? onView(exp.id) : onEdit(exp.id))}>
+      <tr key={exp.id} className={`cursor-pointer ${isSelected ? 'bg-accent-blue/5' : ''}`} style={isAnomaly ? { background: 'color-mix(in srgb, var(--color-accent-expense) 6%, transparent)' } : undefined} onClick={() => (onView ? onView(exp.id) : onEdit(exp.id))}>
         <td onClick={(e) => e.stopPropagation()}>
           <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(exp.id)} style={{ accentColor: 'var(--accent-primary)' }} />
         </td>
@@ -873,10 +877,10 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               </select>
             ) : (
               <span className="inline-flex items-center gap-1.5" onDoubleClick={(e) => { e.stopPropagation(); startEdit(exp.id, 'category_id', exp.category_id || ''); }}>
-                <span className="inline-block w-2 h-2 shrink-0" style={{ background: exp.category_color || '#6b7280', borderRadius: '50%' }} />
+                <span className="inline-block w-2 h-2 shrink-0" style={{ background: exp.category_color || 'var(--color-text-muted)', borderRadius: '50%' }} />
                 <span className="truncate">{exp.category_name || '-'}</span>
-                {exp.vendor_is_1099 ? <span title="1099-relevant" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>1099</span> : null}
-                {exp.is_tax_deductible === 0 ? <span title="Non-deductible" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', color: 'var(--color-text-muted)' }}>NON-DED</span> : null}
+                {exp.vendor_is_1099 ? <span title="1099-relevant" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 'var(--app-radius)', background: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}>1099</span> : null}
+                {exp.is_tax_deductible === 0 ? <span title="Non-deductible" style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', color: 'var(--color-text-muted)' }}>NON-DED</span> : null}
               </span>
             )}
           </td>
@@ -892,7 +896,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
               <div className="flex items-center gap-1">
                 <EntityChip type="project" id={exp.project_id} label={exp.project_name || ''} variant="inline" />
                 {proj && (proj.budget || 0) > 0 && (
-                  <span title={`${formatCurrency(projBal)} of ${formatCurrency(proj.budget || 0)} budget`} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 4, background: projOver ? 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)' : 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: projOver ? 'var(--color-accent-expense)' : 'var(--color-accent-income)' }}>
+                  <span title={`${formatCurrency(projBal)} of ${formatCurrency(proj.budget || 0)} budget`} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 'var(--app-radius)', background: projOver ? 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)' : 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: projOver ? 'var(--color-accent-expense)' : 'var(--color-accent-income)' }}>
                     {projOver ? 'OVER' : `${Math.round((projBal / (proj.budget || 1)) * 100)}%`}
                   </span>
                 )}
@@ -941,7 +945,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 draft: { bg: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', fg: 'var(--color-text-muted)', label: 'DRAFT' },
               };
               const s = map[a] || { bg: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', fg: 'var(--color-text-muted)', label: (exp.approval_status || '-').toUpperCase() };
-              return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: s.bg, color: s.fg }}>{s.label}</span>;
+              return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--app-radius)', background: s.bg, color: s.fg }}>{s.label}</span>;
             })()}
           </td>
         )}
@@ -955,9 +959,9 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
         {colVisible('taxded') && (
           <td>
             {exp.is_tax_deductible === 0 ? (
-              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', color: 'var(--color-text-muted)' }}>Non-Deductible</span>
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)', color: 'var(--color-text-muted)' }}>Non-Deductible</span>
             ) : (
-              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>Deductible</span>
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)', color: 'var(--color-accent-income)' }}>Deductible</span>
             )}
           </td>
         )}
@@ -1181,7 +1185,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
             style={{
               borderColor: showAdvancedFilters ? 'var(--color-accent-blue)' : 'var(--color-border-primary)',
               color: showAdvancedFilters ? 'var(--color-accent-blue)' : 'var(--color-text-muted)',
-              borderRadius: 4,
+              borderRadius: 'var(--app-radius)',
             }}
           >
             Advanced

@@ -166,7 +166,7 @@ export function VarianceCell({
         color,
         fontWeight: 600,
         padding: '2px 8px',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         background: isZero
           ? 'transparent'
           : favorable
@@ -250,7 +250,7 @@ export function TaxSummaryCard({
           style={{
             color: 'var(--color-text-secondary, #94a3b8)',
             padding: '2px 8px',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             background: 'var(--color-bg-tertiary, #1c1c1c)',
           }}
         >
@@ -314,7 +314,7 @@ export function CategoryPill({
 }: CategoryPillProps) {
   const tintBg = `color-mix(in srgb, ${color} 16%, transparent)`;
   const base: React.CSSProperties = {
-    borderRadius: 6,
+    borderRadius: 'var(--app-radius)',
     padding: '3px 10px',
     fontWeight: 600,
     border: '1px solid transparent',
@@ -334,7 +334,7 @@ export function CategoryPill({
         style={{
           width: 8,
           height: 8,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           background: variant === 'solid' ? '#0b1220' : color,
           flexShrink: 0,
         }}
@@ -399,7 +399,7 @@ export function AccountBalanceRow({
         style={{
           width: 4,
           height: 28,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           background: accent,
           marginRight: 12,
           flexShrink: 0,
@@ -424,7 +424,7 @@ export function AccountBalanceRow({
           color: accent,
           letterSpacing: '0.04em',
           padding: '1px 7px',
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           background: `color-mix(in srgb, ${accent} 14%, transparent)`,
           fontWeight: 600,
         }}

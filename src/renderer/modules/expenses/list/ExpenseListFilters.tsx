@@ -85,7 +85,7 @@ const ExpenseListFilters: React.FC<ExpenseListFiltersProps> = ({
         style={{
           borderColor: reimbursableOnly ? 'var(--color-accent-blue)' : 'var(--color-border-primary)',
           color: reimbursableOnly ? 'var(--color-accent-blue)' : 'var(--color-text-muted)',
-          borderRadius: 4,
+          borderRadius: 'var(--app-radius)',
         }}
         title="Show only reimbursable expenses"
       >

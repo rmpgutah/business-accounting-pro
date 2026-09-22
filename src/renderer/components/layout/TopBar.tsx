@@ -302,20 +302,20 @@ const TopBar: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <Bell size={14} className="text-text-secondary" />
                       <span className="text-sm font-semibold text-text-primary">Notifications</span>
-                      {notifUnread > 0 && <span className="text-[10px] font-bold text-white bg-accent-expense px-1.5 py-0.5" style={{ borderRadius: 6 }}>{notifUnread}</span>}
+                      {notifUnread > 0 && <span className="text-[10px] font-bold text-white bg-accent-expense px-1.5 py-0.5" style={{ borderRadius: 'var(--app-radius)' }}>{notifUnread}</span>}
                     </div>
                     <div className="flex items-center gap-1">
                       <button onClick={handleCheckNow} disabled={checking} title="Run alert checks now"
-                        className="p-1.5 text-text-muted hover:text-text-primary" style={{ borderRadius: 6 }}>
+                        className="p-1.5 text-text-muted hover:text-text-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                         <RefreshCw size={13} className={checking ? 'animate-spin' : ''} />
                       </button>
                       {notifUnread > 0 && (
                         <button onClick={handleMarkAllRead} title="Mark all read"
-                          className="p-1.5 text-text-muted hover:text-text-primary" style={{ borderRadius: 6 }}>
+                          className="p-1.5 text-text-muted hover:text-text-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                           <CheckCheck size={14} />
                         </button>
                       )}
-                      <button onClick={() => setNotifOpen(false)} className="p-1.5 text-text-muted hover:text-text-primary" style={{ borderRadius: 6 }}>
+                      <button onClick={() => setNotifOpen(false)} className="p-1.5 text-text-muted hover:text-text-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                         <X size={14} />
                       </button>
                     </div>

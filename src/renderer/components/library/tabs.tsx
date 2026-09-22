@@ -162,7 +162,7 @@ export function PillTabs({
         display: 'inline-flex',
         gap: 4,
         padding: 4,
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         background: 'var(--color-bg-tertiary, rgba(28,30,38,0.65))',
         border: '1px solid var(--color-border-primary, rgba(255,255,255,0.06))',
       }}
@@ -182,7 +182,7 @@ export function PillTabs({
               alignItems: 'center',
               gap: 6,
               padding: '5px 14px',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               border: 'none',
               background: isActive ? ACCENT_BG : 'transparent',
               boxShadow: isActive
@@ -265,7 +265,7 @@ export function VerticalTabs({
               alignItems: 'center',
               gap: 10,
               padding: '9px 12px',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               border: 'none',
               borderLeft: '2px solid',
               borderLeftColor: isActive ? ACCENT : 'transparent',
@@ -378,7 +378,7 @@ export function TabWithBadge({
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   fontSize: 11,
                   lineHeight: 1,
                   fontWeight: 600,
@@ -469,7 +469,7 @@ export function ScrollTabs({
               alignItems: 'center',
               gap: 6,
               padding: '6px 14px',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               border: '1px solid',
               borderColor: isActive
                 ? 'rgba(96,165,250,0.35)'

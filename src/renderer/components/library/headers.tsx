@@ -277,7 +277,7 @@ export function CommandBar({
               minWidth: 18,
               height: 18,
               padding: '0 5px',
-              borderRadius: 9,
+              borderRadius: 'var(--app-radius)',
               backgroundColor: 'var(--accent-primary)',
             }}
           >

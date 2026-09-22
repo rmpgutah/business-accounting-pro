@@ -19,7 +19,7 @@ import {
 const cardStyle: React.CSSProperties = {
   background: 'var(--color-bg-elevated, #20222c)',
   border: '1px solid var(--color-glass-border, rgba(255,255,255,0.08))',
-  borderRadius: 6,
+  borderRadius: 'var(--app-radius)',
   boxShadow: '0 1px 0 var(--color-glass-shine, rgba(255,255,255,0.04)) inset',
 };
 
@@ -68,7 +68,7 @@ export function ShortcutHint({
               color: 'var(--color-text-secondary, #9a9db0)',
               background: 'var(--color-bg-tertiary, #1c1e26)',
               border: '1px solid var(--color-glass-border, rgba(255,255,255,0.08))',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
             }}
           >
             {k}
@@ -123,7 +123,7 @@ export function CommandItem({
         width: '100%',
         padding: '9px 12px',
         textAlign: 'left',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         border: '1px solid transparent',
         background: highlighted
           ? 'var(--color-bg-hover, rgba(42,44,56,0.6))'
@@ -145,7 +145,7 @@ export function CommandItem({
           width: 28,
           height: 28,
           flexShrink: 0,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           background: 'var(--color-bg-tertiary, #1c1e26)',
           color: 'var(--color-accent-blue, #60a5fa)',
         }}
@@ -264,7 +264,7 @@ export function FilterChipGroup({
               padding: '4px 10px',
               fontSize: 12,
               fontWeight: 500,
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               cursor: 'pointer',
               color: isOn
                 ? 'var(--color-accent-blue, #60a5fa)'
@@ -424,7 +424,7 @@ export function DropdownMenu({
                   padding: '7px 10px',
                   fontSize: 13,
                   textAlign: 'left',
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   border: 'none',
                   background: 'transparent',
                   cursor: item.disabled ? 'not-allowed' : 'pointer',
@@ -565,7 +565,7 @@ export function SortMenu({
                   padding: '7px 10px',
                   fontSize: 13,
                   textAlign: 'left',
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   border: 'none',
                   cursor: 'pointer',
                   background: isActive

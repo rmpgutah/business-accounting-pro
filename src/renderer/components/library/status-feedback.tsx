@@ -184,7 +184,7 @@ export function SyncStatus({ state = 'synced', lastSynced = '2 min ago', classNa
         alignItems: 'center',
         gap: 10,
         padding: '6px 12px',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         background: cur.bg,
         border: '1px solid var(--color-border-primary)',
       }}
@@ -247,7 +247,7 @@ export function UploadProgress({
         alignItems: 'center',
         gap: 12,
         padding: '10px 12px',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         background: 'var(--color-bg-secondary)',
         border: '1px solid var(--color-border-primary)',
       }}
@@ -257,7 +257,7 @@ export function UploadProgress({
           flexShrink: 0,
           width: 34,
           height: 34,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           display: 'grid',
           placeItems: 'center',
           color: barColor,
@@ -284,7 +284,7 @@ export function UploadProgress({
           style={{
             width: '100%',
             height: 6,
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             overflow: 'hidden',
             background: 'var(--color-bg-tertiary, #2e2e2e)',
           }}
@@ -293,7 +293,7 @@ export function UploadProgress({
             style={{
               width: `${state === 'done' ? 100 : pct}%`,
               height: '100%',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               background: barColor,
               transition: 'width 0.3s ease',
             }}
@@ -316,7 +316,7 @@ export function UploadProgress({
             placeItems: 'center',
             width: 24,
             height: 24,
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             background: 'transparent',
             border: 'none',
             cursor: 'pointer',

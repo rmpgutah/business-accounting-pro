@@ -91,7 +91,7 @@ export const PasswordStrengthMeter: React.FC<{ password: string }> = ({ password
   const result = scorePassword(password);
   if (!password) return null;
 
-  const palette = ['#dc2626', '#dc2626', '#d97706', '#16a34a', '#16a34a'];
+  const palette = ['var(--color-accent-expense)', 'var(--color-accent-expense)', 'var(--color-accent-warning)', 'var(--color-accent-income)', 'var(--color-accent-income)'];
   const fillPct = ((result.score + 1) / 5) * 100;
 
   return (
@@ -122,7 +122,7 @@ export const PasswordStrengthMeter: React.FC<{ password: string }> = ({ password
       {(result.warnings.length > 0 || result.suggestions.length > 0) && (
         <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.4 }}>
           {result.warnings.map((w, i) => (
-            <div key={'w' + i} style={{ color: '#dc2626' }}>⚠ {w}</div>
+            <div key={'w' + i} style={{ color: 'var(--color-accent-expense)' }}>⚠ {w}</div>
           ))}
           {result.suggestions.map((s, i) => (
             <div key={'s' + i}>· {s}</div>

@@ -44,7 +44,7 @@ export function Breadcrumb({
           <button
             type="button"
             className="flex items-center text-text-muted hover:text-text-primary transition-colors"
-            style={{ padding: '2px 4px', borderRadius: 6 }}
+            style={{ padding: '2px 4px', borderRadius: 'var(--app-radius)' }}
           >
             <Home size={14} />
           </button>
@@ -64,7 +64,7 @@ export function Breadcrumb({
                   ? 'text-text-primary font-medium cursor-default'
                   : 'text-text-muted hover:text-text-primary'
               }`}
-              style={{ padding: '2px 4px', borderRadius: 6 }}
+              style={{ padding: '2px 4px', borderRadius: 'var(--app-radius)' }}
             >
               {item.label}
             </button>
@@ -133,7 +133,7 @@ export function Pagination({
     minWidth: 32,
     height: 32,
     padding: '0 8px',
-    borderRadius: 6,
+    borderRadius: 'var(--app-radius)',
   };
 
   return (
@@ -219,7 +219,7 @@ export function BackButton({
       type="button"
       onClick={onClick}
       className={`inline-flex items-center text-sm text-text-secondary hover:text-text-primary transition-colors ${className}`}
-      style={{ gap: 6, padding: '6px 10px', borderRadius: 6 }}
+      style={{ gap: 6, padding: '6px 10px', borderRadius: 'var(--app-radius)' }}
     >
       <ArrowLeft size={16} />
       <span>{label}</span>
@@ -283,7 +283,7 @@ export function StepWizardNav({
                 style={{
                   width: 32,
                   height: 32,
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   backgroundColor: circleColor,
                   color: isDone || isActive ? '#fff' : 'var(--color-text-muted, #888)',
                   border: isActive
@@ -393,7 +393,7 @@ export function AnchorNav({
                 }`}
                 style={{
                   padding: '6px 10px',
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   borderLeft: isActive
                     ? '2px solid var(--color-accent-blue, #3b82f6)'
                     : '2px solid transparent',

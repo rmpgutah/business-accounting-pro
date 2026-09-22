@@ -63,7 +63,7 @@ export function CopyButton({
         color: copied ? ACCENT_GREEN : TEXT_SECONDARY,
         background: BG_TERTIARY,
         border: `1px solid ${GLASS_BORDER}`,
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         cursor: 'pointer',
         transition: 'color 0.15s ease, background 0.15s ease',
       }}
@@ -115,7 +115,7 @@ export function ColorSwatch({
           height: size,
           flexShrink: 0,
           background: color,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           border: `1px solid ${GLASS_BORDER}`,
           boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
         }}
@@ -192,7 +192,7 @@ export function TooltipChip({
           color: TEXT_SECONDARY,
           background: BG_TERTIARY,
           border: `1px dashed ${GLASS_BORDER}`,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           cursor: 'help',
         }}
       >
@@ -213,7 +213,7 @@ export function TooltipChip({
             color: TEXT_PRIMARY,
             background: BG_ELEVATED,
             border: `1px solid ${GLASS_BORDER}`,
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             boxShadow: '0 6px 18px rgba(0,0,0,0.45)',
             pointerEvents: 'none',
           }}
@@ -267,7 +267,7 @@ export function KeyboardKey({
               background: BG_ELEVATED,
               border: `1px solid ${GLASS_BORDER}`,
               borderBottomWidth: 2,
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
             }}
           >
@@ -319,7 +319,7 @@ export function ThemePreview({
         padding: 12,
         background: BG_TERTIARY,
         border: `1px solid ${GLASS_BORDER}`,
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
       }}
     >
       {title && (
@@ -346,7 +346,7 @@ export function ThemePreview({
                 width: '100%',
                 height: 28,
                 background: c.color,
-                borderRadius: 6,
+                borderRadius: 'var(--app-radius)',
                 border: `1px solid ${GLASS_BORDER}`,
               }}
             />

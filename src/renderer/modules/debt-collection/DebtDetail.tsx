@@ -1612,9 +1612,9 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                       {pctPrincipal > 0 && <div style={{ width: `${pctPrincipal}%`, background: 'var(--color-accent-income)' }} title={`Principal: ${pctPrincipal}%`} />}
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: 'var(--color-accent-expense)', borderRadius: 3 }} /> Fees {formatCurrency(totalFees)}</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: 'var(--color-accent-warning)', borderRadius: 3 }} /> Interest {formatCurrency(totalInterest)}</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: 'var(--color-accent-income)', borderRadius: 3 }} /> Principal {formatCurrency(totalPrincipal)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: 'var(--color-accent-expense)', borderRadius: 'var(--app-radius)' }} /> Fees {formatCurrency(totalFees)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: 'var(--color-accent-warning)', borderRadius: 'var(--app-radius)' }} /> Interest {formatCurrency(totalInterest)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2" style={{ background: 'var(--color-accent-income)', borderRadius: 'var(--app-radius)' }} /> Principal {formatCurrency(totalPrincipal)}</span>
                     </div>
                   </div>
                 );

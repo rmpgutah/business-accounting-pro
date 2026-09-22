@@ -237,13 +237,21 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
   const handlePrintStub = async () => {
     const html = buildStubHTML();
     if (!html) return;
-    await api.print(html);
+    try {
+      await api.print(html);
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to print pay stub');
+    }
   };
 
   const handleSaveStubPDF = async () => {
     const html = buildStubHTML();
     if (!html) return;
-    await api.saveToPDF(html, `PayStub-${stub?.employee_name || 'Employee'}-${stub?.pay_date || ''}`);
+    try {
+      await api.saveToPDF(html, `PayStub-${stub?.employee_name || 'Employee'}-${stub?.pay_date || ''}`);
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to save PDF');
+    }
   };
 
   if (loading) {
@@ -271,25 +279,29 @@ const PayStubView: React.FC<PayStubViewProps> = ({ payStubId, onBack }) => {
 
   // Feature 2: Print check handler — merge per-tax YTD into stub data
   const handlePrintCheck = async (isVoid = false) => {
-    const { generatePaycheckHTML } = await import('../../lib/payroll-check-template');
-    const emp = employee || await api.get('employees', stub.employee_id);
-    const run = await api.get('payroll_runs', stub.payroll_run_id);
+    try {
+      const { generatePaycheckHTML } = await import('../../lib/payroll-check-template');
+      const emp = employee || await api.get('employees', stub.employee_id);
+      const run = await api.get('payroll_runs', stub.payroll_run_id);
 
-    // If per-tax YTD isn't stored on the stub, compute it from the view's ytd state
-    const stubWithYTD = {
-      ...stub,
-      ytd_federal_tax: stub.ytd_federal_tax || ytd.federal_tax || 0,
-      ytd_state_tax: stub.ytd_state_tax || ytd.state_tax || 0,
-      ytd_social_security: stub.ytd_social_security || ytd.social_security || 0,
-      ytd_medicare: stub.ytd_medicare || ytd.medicare || 0,
-    };
+      // If per-tax YTD isn't stored on the stub, compute it from the view's ytd state
+      const stubWithYTD = {
+        ...stub,
+        ytd_federal_tax: stub.ytd_federal_tax || ytd.federal_tax || 0,
+        ytd_state_tax: stub.ytd_state_tax || ytd.state_tax || 0,
+        ytd_social_security: stub.ytd_social_security || ytd.social_security || 0,
+        ytd_medicare: stub.ytd_medicare || ytd.medicare || 0,
+      };
 
-    const html = generatePaycheckHTML(stubWithYTD, emp, activeCompany, run, { isVoid });
-    await api.printPreview(html, `${isVoid ? 'VOID ' : ''}Paycheck — ${emp?.name || 'Employee'}`, {
-      pageSize: 'Letter',
-      margins: { top: 0, bottom: 0, left: 0, right: 0 },
-      noPageNumbers: true,
-    });
+      const html = generatePaycheckHTML(stubWithYTD, emp, activeCompany, run, { isVoid });
+      await api.printPreview(html, `${isVoid ? 'VOID ' : ''}Paycheck — ${emp?.name || 'Employee'}`, {
+        pageSize: 'Letter',
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+        noPageNumbers: true,
+      });
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to print check');
+    }
   };
 
   // ─── Render ─────────────────────────────────────────

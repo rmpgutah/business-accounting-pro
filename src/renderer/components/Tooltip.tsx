@@ -31,7 +31,7 @@ export const Tooltip: React.FC<Props> = ({ content, children, placement = 'top' 
           style={{
             background: 'var(--color-bg-elevated)',
             border: '1px solid var(--color-border-primary)',
-            borderRadius: '2px',
+            borderRadius: 'var(--app-radius)',
           }}
         >
           {content}

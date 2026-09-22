@@ -650,7 +650,7 @@ export default function InvoicesUpgradesPart2() {
           <StatTile label="Avg invoice value" value={formatCurrency(avgInvoice.mean)} sub={`${avgInvoice.count} in period`} />
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 24, marginTop: 8 }}>
             {avgInvoice.spark.map((v, i) => (
-              <div key={i} title={formatCurrency(v)} style={{ flex: 1, height: `${(v / maxSpark) * 100}%`, minHeight: 2, background: 'var(--accent-primary)', borderRadius: 2 }} />
+              <div key={i} title={formatCurrency(v)} style={{ flex: 1, height: `${(v / maxSpark) * 100}%`, minHeight: 2, background: 'var(--accent-primary)', borderRadius: 'var(--app-radius)' }} />
             ))}
           </div>
         </div>
@@ -724,8 +724,8 @@ export default function InvoicesUpgradesPart2() {
           {monthly.map((m) => (
             <div key={m.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%' }}>
               <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 3, width: '100%', justifyContent: 'center' }}>
-                <div title={`Billed ${formatCurrency(m.billed)}`} style={{ width: 12, height: `${(m.billed / maxMonthly) * 100}%`, minHeight: 2, background: 'var(--color-accent-blue)', borderRadius: 2 }} />
-                <div title={`Collected ${formatCurrency(m.collected)}`} style={{ width: 12, height: `${(m.collected / maxMonthly) * 100}%`, minHeight: 2, background: 'var(--color-accent-income)', borderRadius: 2 }} />
+                <div title={`Billed ${formatCurrency(m.billed)}`} style={{ width: 12, height: `${(m.billed / maxMonthly) * 100}%`, minHeight: 2, background: 'var(--color-accent-blue)', borderRadius: 'var(--app-radius)' }} />
+                <div title={`Collected ${formatCurrency(m.collected)}`} style={{ width: 12, height: `${(m.collected / maxMonthly) * 100}%`, minHeight: 2, background: 'var(--color-accent-income)', borderRadius: 'var(--app-radius)' }} />
               </div>
               <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{m.month.slice(5)}</span>
             </div>
@@ -908,7 +908,7 @@ export default function InvoicesUpgradesPart2() {
               {trend.map((t) => (
                 <div key={t.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%' }}>
                   <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end' }}>
-                    <div title={formatCurrency(t.over90)} style={{ width: '100%', height: `${(t.over90 / maxTrend) * 100}%`, minHeight: 2, background: 'var(--color-accent-expense)', borderRadius: 2 }} />
+                    <div title={formatCurrency(t.over90)} style={{ width: '100%', height: `${(t.over90 / maxTrend) * 100}%`, minHeight: 2, background: 'var(--color-accent-expense)', borderRadius: 'var(--app-radius)' }} />
                   </div>
                   <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>{t.month.slice(2)}</span>
                 </div>

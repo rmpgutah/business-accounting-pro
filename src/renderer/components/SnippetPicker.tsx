@@ -126,7 +126,7 @@ export const SnippetPicker: React.FC<Props> = ({ onPick, category, onSaveAsSnipp
             overflowY: 'auto',
             background: 'var(--color-bg-primary)',
             border: '1px solid var(--color-border-primary)',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
             zIndex: 100,
             padding: 4,
@@ -161,7 +161,7 @@ export const SnippetPicker: React.FC<Props> = ({ onPick, category, onSaveAsSnipp
                 background: 'transparent',
                 border: 'none',
                 padding: '8px 10px',
-                borderRadius: 4,
+                borderRadius: 'var(--app-radius)',
                 cursor: 'pointer',
                 display: 'flex',
                 gap: 10,
@@ -191,7 +191,7 @@ export const SnippetPicker: React.FC<Props> = ({ onPick, category, onSaveAsSnipp
       {/* Save-as-snippet modal */}
       {showSaveModal && (
         <div onClick={() => setShowSaveModal(false)} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 8, maxWidth: 400, width: '100%', padding: 18 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', maxWidth: 400, width: '100%', padding: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ fontSize: 14, fontWeight: 700 }}>Save Line as Snippet</h3>
               <button onClick={() => setShowSaveModal(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}>

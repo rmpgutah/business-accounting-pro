@@ -1661,7 +1661,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
             {/* Feature 2 — color dot */}
             {selectedCategory && (
               <div className="flex items-center gap-2 mt-1.5 text-[11px] text-text-muted">
-                <span className="inline-block w-2 h-2" style={{ background: selectedCategory.color || '#6b7280', borderRadius: '50%' }} />
+                <span className="inline-block w-2 h-2" style={{ background: selectedCategory.color || 'var(--color-text-muted)', borderRadius: '50%' }} />
                 <span>{selectedCategory.color || '—'}</span>
                 {/* Feature 8 — usage stats */}
                 {categoryUsage.count > 0 && (
