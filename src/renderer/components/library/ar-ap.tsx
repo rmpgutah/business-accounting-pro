@@ -77,7 +77,7 @@ export function ArAgingChart({
                   width: '100%',
                   height: 8,
                   backgroundColor: 'var(--color-bg-tertiary-solid)',
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   overflow: 'hidden',
                 }}
               >
@@ -86,7 +86,7 @@ export function ArAgingChart({
                     width: `${pct}%`,
                     height: '100%',
                     backgroundColor: color,
-                    borderRadius: 6,
+                    borderRadius: 'var(--app-radius)',
                     transition: 'width 0.3s ease',
                   }}
                 />
@@ -149,7 +149,7 @@ export function CashFlowTile({
           display: 'flex',
           width: '100%',
           height: 6,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           overflow: 'hidden',
           backgroundColor: 'var(--color-bg-tertiary-solid)',
           marginBottom: 14,
@@ -226,7 +226,7 @@ export function OverdueBannerCard({
           flexShrink: 0,
           width: 40,
           height: 40,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

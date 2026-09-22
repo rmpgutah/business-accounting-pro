@@ -23,7 +23,7 @@ export const EmptyState: React.FC<Props> = ({ icon: Icon, message, actionLabel, 
         type="button"
         onClick={onAction}
         className="block-btn-primary text-xs px-3 py-1.5 mt-2"
-        style={{ borderRadius: 6 }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         {actionLabel}
       </button>

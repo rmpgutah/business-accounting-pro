@@ -114,7 +114,7 @@ export function StatusPill({
         color: t.fg,
         background: t.bg,
         border: `1px solid ${t.border}`,
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         whiteSpace: 'nowrap',
       }}
     >
@@ -123,7 +123,7 @@ export function StatusPill({
           style={{
             width: 6,
             height: 6,
-            borderRadius: 999,
+            borderRadius: 'var(--app-radius)',
             background: t.fg,
             flexShrink: 0,
           }}
@@ -172,7 +172,7 @@ export function TagChip({
         color: t.fg,
         background: t.bg,
         border: `1px solid ${t.border}`,
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         whiteSpace: 'nowrap',
       }}
     >
@@ -193,7 +193,7 @@ export function TagChip({
             color: t.fg,
             background: 'transparent',
             border: 'none',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             cursor: 'pointer',
             opacity: 0.75,
           }}
@@ -243,7 +243,7 @@ export function CountBadge({
         color: solid ? '#08090c' : t.fg,
         background: solid ? t.fg : t.bg,
         border: solid ? 'none' : `1px solid ${t.border}`,
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
       }}
     >
       {display}
@@ -276,7 +276,7 @@ export function RibbonBadge({
   return (
     <div
       className={className}
-      style={{ position: 'relative', overflow: 'hidden', borderRadius: 6 }}
+      style={{ position: 'relative', overflow: 'hidden', borderRadius: 'var(--app-radius)' }}
     >
       {children ?? (
         <div
@@ -286,7 +286,7 @@ export function RibbonBadge({
             padding: 16,
             background: 'var(--color-bg-secondary, rgba(18,19,24,0.80))',
             border: '1px solid var(--color-glass-border, rgba(255,255,255,0.08))',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             color: 'var(--color-text-secondary, #9a9db0)',
             fontSize: 13,
           }}
@@ -358,7 +358,7 @@ export function NotificationDot({
             right: -3,
             width: hasCount ? 16 : 9,
             height: hasCount ? 16 : 9,
-            borderRadius: 999,
+            borderRadius: 'var(--app-radius)',
             background: t.fg,
             opacity: 0.5,
             animation: 'ping 1.2s cubic-bezier(0,0,0.2,1) infinite',
@@ -382,7 +382,7 @@ export function NotificationDot({
           color: '#08090c',
           background: t.fg,
           border: '1.5px solid var(--color-bg-primary-solid, #08090c)',
-          borderRadius: 999,
+          borderRadius: 'var(--app-radius)',
           fontVariantNumeric: 'tabular-nums',
         }}
       >

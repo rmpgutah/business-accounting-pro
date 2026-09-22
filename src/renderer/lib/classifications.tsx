@@ -415,7 +415,7 @@ export const ClassificationBadge: React.FC<BadgeProps> = ({ def, value, colorOve
         color,
         background: o.bg,
         padding: '3px 8px',
-        borderRadius: 4,
+        borderRadius: 'var(--app-radius)',
         fontSize,
         letterSpacing: '0.02em',
       }}
@@ -505,7 +505,7 @@ export const ClassificationMultiSelect: React.FC<{
             className="inline-flex items-center gap-1 text-xs font-semibold transition-colors"
             style={{
               padding: '4px 9px',
-              borderRadius: 4,
+              borderRadius: 'var(--app-radius)',
               border: `1px solid ${active ? o.color : 'rgba(255,255,255,0.10)'}`,
               background: active ? o.bg : 'transparent',
               color: active ? o.color : 'var(--color-text-muted)',

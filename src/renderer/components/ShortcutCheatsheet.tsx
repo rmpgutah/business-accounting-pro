@@ -151,7 +151,7 @@ export const ShortcutCheatsheet: React.FC = () => {
           </div>
         ))}
         <div style={{ marginTop: 12, fontSize: 11, color: 'var(--color-text-muted)', textAlign: 'center', fontStyle: 'italic' }}>
-          Press <kbd style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 3, padding: '0 6px', fontSize: 10 }}>?</kbd> any time to reopen this. Esc to close.
+          Press <kbd style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', padding: '0 6px', fontSize: 10 }}>?</kbd> any time to reopen this. Esc to close.
         </div>
       </div>
     </div>

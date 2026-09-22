@@ -502,8 +502,8 @@ const ExpensesModule: React.FC = () => {
                         })}
                       </div>
                       <div className="flex items-center gap-4 mt-3 pt-2 border-t border-border-primary/40 text-[10px] text-text-muted">
-                        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2" style={{ background: 'var(--color-accent-blue)', borderRadius: 2 }} /> Below avg</span>
-                        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2" style={{ background: 'var(--color-accent-expense)', borderRadius: 2 }} /> Above avg</span>
+                        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2" style={{ background: 'var(--color-accent-blue)', borderRadius: 'var(--app-radius)' }} /> Below avg</span>
+                        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2" style={{ background: 'var(--color-accent-expense)', borderRadius: 'var(--app-radius)' }} /> Above avg</span>
                         <span className="ml-auto font-mono">Avg: <strong className="text-text-secondary">{formatCurrency(avg)}</strong>/mo</span>
                       </div>
                     </div>
@@ -554,7 +554,7 @@ const ExpensesModule: React.FC = () => {
                               const future = day > today;
                               return (
                                 <div key={di} title={future ? '' : `${iso(day)}: ${formatCurrency(total)}${cell ? ` (${cell.count} expense${cell.count !== 1 ? 's' : ''})` : ''}`}
-                                  style={{ width: 13, height: 13, borderRadius: 2, background: future ? 'transparent' : colorFor(total), border: future ? 'none' : '1px solid var(--hairline)', cursor: future ? 'default' : 'pointer' }} />
+                                  style={{ width: 13, height: 13, borderRadius: 'var(--app-radius)', background: future ? 'transparent' : colorFor(total), border: future ? 'none' : '1px solid var(--hairline)', cursor: future ? 'default' : 'pointer' }} />
                               );
                             })}
                           </div>

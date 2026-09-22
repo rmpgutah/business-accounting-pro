@@ -251,7 +251,7 @@ const ExpenseCompliance: React.FC<Props> = ({ onViewExpense }) => {
                 <span className="text-text-secondary">Deductible <strong className="font-mono">{formatCurrency(taxSplit.deductible)}</strong></span>
                 <span className="text-text-secondary">Non-deductible <strong className="font-mono">{formatCurrency(taxSplit.nonDeductible)}</strong></span>
               </div>
-              <div style={{ height: 10, background: 'var(--color-bg-tertiary)', borderRadius: 5, overflow: 'hidden', display: 'flex' }}>
+              <div style={{ height: 10, background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)', overflow: 'hidden', display: 'flex' }}>
                 <div style={{ width: `${taxSplit.deductiblePct}%`, background: 'var(--cust-series-positive, var(--color-accent-income))' }} />
                 <div style={{ flex: 1, background: 'var(--cust-series-neutral, var(--color-text-muted))' }} />
               </div>

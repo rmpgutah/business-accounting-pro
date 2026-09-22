@@ -150,13 +150,13 @@ export function HorizontalBarChart({
                 </span>
                 <span className="font-mono text-text-primary ml-2">{valueFormat(d.value)}</span>
               </div>
-              <div style={{ width: '100%', height: barHeight, backgroundColor: TRACK, borderRadius: 6 }}>
+              <div style={{ width: '100%', height: barHeight, backgroundColor: TRACK, borderRadius: 'var(--app-radius)' }}>
                 <div
                   style={{
                     width: `${pct}%`,
                     height: '100%',
                     backgroundColor: fill,
-                    borderRadius: 6,
+                    borderRadius: 'var(--app-radius)',
                     transition: 'width 0.3s ease',
                   }}
                 />
@@ -216,7 +216,7 @@ export function StackedBar({
           display: 'flex',
           width: '100%',
           height,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           overflow: 'hidden',
           backgroundColor: TRACK,
         }}
@@ -246,7 +246,7 @@ export function StackedBar({
                 style={{
                   width: 10,
                   height: 10,
-                  borderRadius: 3,
+                  borderRadius: 'var(--app-radius)',
                   backgroundColor: s.color ?? palette[i % palette.length],
                   display: 'inline-block',
                 }}

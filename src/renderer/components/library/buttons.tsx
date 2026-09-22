@@ -87,7 +87,7 @@ export function IconButton(props: IconButtonProps) {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.45 : 1,
         transition: 'all 0.15s ease',
@@ -143,7 +143,7 @@ export function ButtonGroup(props: ButtonGroupProps) {
         gap: 2,
         background: 'var(--color-bg-tertiary)',
         border: '1px solid var(--color-border-secondary)',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
       }}
     >
       {items.map((item) => {
@@ -162,7 +162,7 @@ export function ButtonGroup(props: ButtonGroupProps) {
               padding: '6px 12px',
               fontSize: 13,
               fontWeight: 500,
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               border: '1px solid transparent',
               cursor: 'pointer',
               transition: 'all 0.15s ease',
@@ -245,7 +245,7 @@ export function QuickActionButton(props: QuickActionButtonProps) {
         width: '100%',
         textAlign: 'left',
         padding: '12px 14px',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         cursor: 'pointer',
         background: hover
           ? 'var(--color-bg-elevated)'
@@ -262,7 +262,7 @@ export function QuickActionButton(props: QuickActionButtonProps) {
           width: 38,
           height: 38,
           flexShrink: 0,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           background: colors.bg,
           color: colors.fg,
         }}
@@ -392,7 +392,7 @@ export function SplitButton(props: SplitButtonProps) {
             padding: 4,
             background: 'var(--color-bg-elevated)',
             border: '1px solid var(--color-border-secondary)',
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             boxShadow: '0 8px 28px rgba(0, 0, 0, 0.45)',
           }}
         >
@@ -415,7 +415,7 @@ export function SplitButton(props: SplitButtonProps) {
                   textAlign: 'left',
                   padding: '8px 10px',
                   fontSize: 13,
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   border: 'none',
                   background: 'transparent',
                   color: 'var(--color-text-secondary)',
