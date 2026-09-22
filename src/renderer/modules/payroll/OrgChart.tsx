@@ -78,6 +78,8 @@ const OrgChart: React.FC<OrgChartProps> = ({ onSelectEmployee }) => {
     let cancelled = false;
     api.hrOrgChart().then((rows: any) => {
       if (!cancelled) setEmployees(Array.isArray(rows) ? rows : []);
+    }).catch(() => {
+      if (!cancelled) setEmployees([]);
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });

@@ -49,11 +49,15 @@ const PtoDashboard: React.FC = () => {
 
   const handleAdjust = async (employeeId: string) => {
     if (!adjustHours || !adjustPolicyId) return;
-    await api.adjustPto(employeeId, adjustPolicyId, parseFloat(adjustHours), adjustNote);
-    setAdjusting(null);
-    setAdjustHours('');
-    setAdjustNote('');
-    load();
+    try {
+      await api.adjustPto(employeeId, adjustPolicyId, parseFloat(adjustHours), adjustNote);
+      setAdjusting(null);
+      setAdjustHours('');
+      setAdjustNote('');
+      load();
+    } catch {
+      // adjustment failed — leave the form open so the user can retry
+    }
   };
 
   if (loading) return (
