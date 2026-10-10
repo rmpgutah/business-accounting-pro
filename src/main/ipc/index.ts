@@ -30,7 +30,6 @@ import { registerDebtWaveIpc } from './debt-wave';
 import { registerTaxIpc } from './tax';
 import { registerComplianceIpc } from './compliance';
 import { registerPayrollWaveIpc } from './payroll-wave';
-import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } from '../services/recurring-processor';
 import { openPathInOS } from '../services/print-preview';
 import { calculateFullPayroll } from '../services/TaxCalculationEngine';
 import { bootstrapBuiltinCommands } from '../services/CommandRegistry';
@@ -257,25 +256,6 @@ export function registerIpcHandlers(): void {
       return r;
     } catch (err: any) {
       return { invoicesFixed: 0, billsFixed: 0, companiesScanned: 0, errors: [err?.message] };
-    }
-  });
-  // Auto-dunning: run now / preview what would be actioned.
-  ipcMain.handle('dunning:run', () => {
-    try {
-      const { runAutoDunning } = require('../services/auto-dunning');
-      const r = runAutoDunning();
-      scheduleAutoBackup();
-      return r;
-    } catch (err: any) {
-      return { invoicesProcessed: 0, remindersQueued: 0, collectionsSuggested: 0, errors: [err?.message] };
-    }
-  });
-  ipcMain.handle('dunning:preview', () => {
-    try {
-      const { getDunningPreview } = require('../services/auto-dunning');
-      return getDunningPreview(db.getCurrentCompanyId());
-    } catch (err: any) {
-      return { error: err?.message };
     }
   });
   registerAccountsGlIpc(ipcMain, deps);
@@ -1552,17 +1532,6 @@ export function registerIpcHandlers(): void {
 
 
 
-  // ─── P6.69: iCal export ────────────────────────────────
-  ipcMain.handle('cal:export-invoices-ics', () => {
-    try {
-      const cid = db.getCurrentCompanyId();
-      if (!cid) return { error: 'No active company' };
-      const { exportInvoiceDueDates } = require('../services/ical-export');
-      return { ics: exportInvoiceDueDates(cid) };
-    } catch (err: any) {
-      return { error: err?.message };
-    }
-  });
   ipcMain.handle('cal:export-payroll-ics', () => {
     try {
       const cid = db.getCurrentCompanyId();
@@ -2117,34 +2086,8 @@ export function registerIpcHandlers(): void {
     return { path: zipPath, format: 'zip', tableCount: exportedFiles.length };
   });
 
-  // ─── Recurring Transaction Processing ────────────────
-  ipcMain.handle('recurring:process-now', () => {
-    const companyId = db.getCurrentCompanyId();
-    const result = processRecurringTemplates(companyId || undefined);
-    // Reactive engine: emit recurring.processed.
-    try {
-      if (companyId) {
-        eventBus.emit({
-          type: 'recurring.processed',
-          companyId,
-          entityType: 'recurring',
-          entityId: '',
-          data: { result },
-        }).catch(() => {});
-      }
-    } catch { /* fire-and-forget */ }
-    return result;
-  });
 
-  ipcMain.handle('recurring:last-processed', () => {
-    return getLastProcessedAt();
-  });
 
-  ipcMain.handle('recurring:history', (_event, opts?: { templateId?: string }) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return [];
-    return getRecurringHistory(companyId, opts?.templateId);
-  });
 
 
 
@@ -2251,48 +2194,7 @@ export function registerIpcHandlers(): void {
 
 
 
-  // ─── Credit Notes ─────────────────────────────────────────
 
-  ipcMain.handle('credit-notes:next-number', () => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return 'CN-1001';
-    const dbInstance = db.getDb();
-    const row = dbInstance.prepare(`SELECT credit_number FROM credit_notes WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(companyId) as any;
-    if (!row) return 'CN-1001';
-    const match = row.credit_number.match(/(\d+)$/);
-    if (!match) return 'CN-1001';
-    const next = parseInt(match[1], 10) + 1;
-    return `CN-${String(next).padStart(4, '0')}`;
-  });
-
-  ipcMain.handle('credit-notes:apply', (_event, { creditNoteId, invoiceId, amount }: { creditNoteId: string; invoiceId: string; amount: number }) => {
-    const dbInstance = db.getDb();
-    const applyTx = dbInstance.transaction(() => {
-      const cn = dbInstance.prepare('SELECT * FROM credit_notes WHERE id = ?').get(creditNoteId) as any;
-      if (!cn) throw new Error('Credit note not found');
-      const available = cn.total - (cn.amount_applied || 0);
-      const applyAmt = Math.min(amount, available);
-
-      const invoice = dbInstance.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;
-      if (!invoice) throw new Error('Invoice not found');
-
-      const newAmountPaid = (invoice.amount_paid || 0) + applyAmt;
-      const newStatus = newAmountPaid >= invoice.total ? 'paid' : newAmountPaid > 0 ? 'partial' : invoice.status;
-
-      dbInstance.prepare(`UPDATE invoices SET amount_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?`)
-        .run(newAmountPaid, newStatus, invoiceId);
-
-      const newApplied = (cn.amount_applied || 0) + applyAmt;
-      const cnStatus = newApplied >= cn.total ? 'applied' : 'open';
-      dbInstance.prepare(`UPDATE credit_notes SET amount_applied = ?, status = ?, updated_at = datetime('now') WHERE id = ?`)
-        .run(newApplied, cnStatus, creditNoteId);
-
-      return { applied: applyAmt, invoiceStatus: newStatus, creditNoteStatus: cnStatus };
-    });
-    const result = applyTx();
-    scheduleAutoBackup();
-    return result;
-  });
 
   // ─── Dynamic Tax Configuration ────────────────────────────
 
@@ -3053,74 +2955,7 @@ export function registerIpcHandlers(): void {
 
   registerSyncBackupIpc(ipcMain, deps);
 
-  // ─── Quotes ──────────────────────────────────────────────
-  ipcMain.handle('quotes:next-number', () => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return 'QT-1001';
-    // Use last quote_number instead of COUNT to avoid duplicates after deletions
-    const row = db.getDb().prepare(`SELECT quote_number FROM quotes WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(companyId) as any;
-    if (!row?.quote_number) return 'QT-1001';
-    const match = row.quote_number.match(/(\d+)$/);
-    if (!match) return 'QT-1001';
-    const next = parseInt(match[1], 10) + 1;
-    const prefix = row.quote_number.slice(0, row.quote_number.length - match[1].length);
-    return `${prefix}${String(next).padStart(match[1].length, '0')}`;
-  });
 
-  ipcMain.handle('quotes:convert-to-invoice', (_event, { quoteId }: { quoteId: string }) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) throw new Error('No active company');
-    const dbInstance = db.getDb();
-
-    const convertTx = dbInstance.transaction(() => {
-      const quote = dbInstance.prepare('SELECT * FROM quotes WHERE id = ?').get(quoteId) as any;
-      if (!quote) throw new Error('Quote not found');
-      const lines = dbInstance.prepare('SELECT * FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order').all(quoteId) as any[];
-
-      // Generate invoice number from last existing number (avoids duplicates on deletion)
-      const lastInv = dbInstance.prepare(`SELECT invoice_number FROM invoices WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(quote.company_id) as any;
-      let invoiceNumber = 'INV-1001';
-      if (lastInv?.invoice_number) {
-        const m = lastInv.invoice_number.match(/(\d+)$/);
-        if (m) {
-          const prefix = lastInv.invoice_number.slice(0, lastInv.invoice_number.length - m[1].length);
-          invoiceNumber = `${prefix}${String(parseInt(m[1], 10) + 1).padStart(m[1].length, '0')}`;
-        }
-      }
-
-      const invoiceId = uuid();
-      dbInstance.prepare(`INSERT INTO invoices (id, company_id, invoice_number, client_id, issue_date, due_date, subtotal, tax_amount, discount_amount, total, notes, terms, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`).run(
-        invoiceId, quote.company_id, invoiceNumber, quote.client_id, new Date().toISOString().split('T')[0],
-        new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        quote.subtotal, quote.tax_amount, quote.discount_amount, quote.total, quote.notes, quote.terms
-      );
-
-      for (const line of lines) {
-        dbInstance.prepare('INSERT INTO invoice_line_items (id, invoice_id, description, quantity, unit_price, tax_rate, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-          uuid(), invoiceId, line.description, line.quantity, line.unit_price, line.tax_rate, line.amount, line.sort_order
-        );
-      }
-
-      dbInstance.prepare("UPDATE quotes SET status = 'converted', converted_invoice_id = ?, updated_at = datetime('now') WHERE id = ?").run(invoiceId, quoteId);
-      return { invoice_id: invoiceId };
-    });
-
-    const convertResult = convertTx();
-    scheduleAutoBackup();
-    // Reactive engine: emit quote.converted for workflows.
-    try {
-      if (companyId && quoteId && convertResult?.invoice_id) {
-        eventBus.emit({
-          type: 'quote.converted',
-          companyId,
-          entityType: 'quote',
-          entityId: quoteId,
-          data: { invoice_id: convertResult.invoice_id },
-        }).catch(() => {});
-      }
-    } catch { /* fire-and-forget */ }
-    return convertResult;
-  });
 
 
   // ─── Project Profitability ───────────────────────────────

@@ -56,4 +56,39 @@ describe('invoices domain', () => {
     expect(rows).toHaveLength(1);
     expect(scheduleAutoBackup).toHaveBeenCalled();
   });
+
+  it('quotes:next-number starts at QT-1001 for a company with no quotes', async () => {
+    expect(await ipc.invoke('quotes:next-number')).toBe('QT-1001');
+  });
+
+  it('credit-notes:apply applies the credit to the invoice and schedules a backup', async () => {
+    const client = db.create('clients', { company_id: companyId, name: 'Acme' });
+    const invoice = db.create('invoices', {
+      company_id: companyId,
+      client_id: client.id,
+      invoice_number: 'INV-1',
+      issue_date: '2026-01-01',
+      due_date: '2026-02-01',
+      total: 100,
+    });
+    const cn = db.create('credit_notes', {
+      company_id: companyId,
+      client_id: client.id,
+      credit_number: 'CN-1',
+      issue_date: '2026-01-02',
+      total: 40,
+    });
+    const res = await ipc.invoke('credit-notes:apply', {
+      creditNoteId: cn.id,
+      invoiceId: invoice.id,
+      amount: 40,
+    });
+    expect(res).toEqual({ applied: 40, invoiceStatus: 'partial', creditNoteStatus: 'applied' });
+    const row = db
+      .getDb()
+      .prepare('SELECT amount_paid FROM invoices WHERE id = ?')
+      .get(invoice.id) as any;
+    expect(row.amount_paid).toBe(40);
+    expect(scheduleAutoBackup).toHaveBeenCalled();
+  });
 });
