@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Printer, Download, GitCompare, FileSpreadsheet, TrendingUp } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, parseISO, differenceInDays, startOfYear } from 'date-fns';
+import { format, startOfMonth, endOfMonth, parseISO, differenceInDays } from 'date-fns';
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,

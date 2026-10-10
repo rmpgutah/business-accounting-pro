@@ -84,7 +84,7 @@ export function ToggleSwitch({
           width: dims.knob,
           height: dims.knob,
           borderRadius: '50%',
-          backgroundColor: '#fff',
+          backgroundColor: 'var(--color-text-on-accent)',
           boxShadow: '0 1px 2px rgba(0,0,0,0.4)',
           transition: 'left 0.2s ease',
         }}
@@ -267,7 +267,7 @@ export function CheckboxCard({
           transition: 'background-color 0.15s ease, border-color 0.15s ease',
         }}
       >
-        {on && <Check size={14} color="#fff" strokeWidth={3} />}
+        {on && <Check size={14} color="var(--color-text-on-accent)" strokeWidth={3} />}
       </span>
       <span style={{ minWidth: 0 }}>
         <span

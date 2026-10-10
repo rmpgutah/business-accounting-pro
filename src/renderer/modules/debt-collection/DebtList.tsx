@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText, RefreshCw, DollarSign, ArrowUpDown, Phone, Mail, ArrowUpRight, Printer, Clock } from 'lucide-react';
+import { Scale, Plus, Search, Filter, Download, Eye, Pencil, Trash2, AlertTriangle, Play, FileText, RefreshCw, DollarSign, ArrowUpDown, Phone, Mail, ArrowUpRight, Printer } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import { downloadCSVBlob } from '../../lib/csv-export';
@@ -11,7 +11,7 @@ import { SummaryBar } from '../../components/SummaryBar';
 import { calcRiskScore, getRiskBadge } from './riskScore';
 import PaymentMatchReview from './PaymentMatchReview';
 import {
-  DEBT_PRIORITY, DEBT_RISK, DEBT_SEGMENT, DEBT_ORIGINATION, DEBT_COLLECTABILITY,
+  DEBT_PRIORITY,
   ClassificationBadge,
 } from '../../lib/classifications';
 
@@ -74,7 +74,7 @@ const getAgingBadge = (delinquencyDate: string): { label: string; color: string;
 };
 
 // ─── Priority Colors ────────────────────────────────────
-const priorityColor: Record<string, string> = {
+const _priorityColor: Record<string, string> = {
   low: 'text-accent-income',
   medium: 'text-blue-500',
   high: 'text-orange-500',
@@ -195,7 +195,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
             contactRows.forEach((r: any) => { if (r.debt_id && r.last_contact) map[r.debt_id] = r.last_contact; });
             if (!cancelled) setLastContactMap(map);
           }
-        } catch (e) { /* non-critical */ }
+        } catch { /* non-critical */ }
 
       } catch (err: any) {
         console.error('Failed to load debts:', err);
@@ -395,7 +395,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       setBulkAssignCollector('');
       await reload();
       setOpSuccess(`Assigned ${selectedIds.size} debts`); setTimeout(() => setOpSuccess(''), 3000);
-    } catch (err) {
+    } catch {
       setOpError('Bulk assign failed'); setTimeout(() => setOpError(''), 5000);
     } finally {
       setBulkProcessing(false);
@@ -415,7 +415,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       setSelectedIds(new Set());
       await reload();
       setOpSuccess(`Advanced ${advanced} debts`); setTimeout(() => setOpSuccess(''), 3000);
-    } catch (err) {
+    } catch {
       setOpError('Bulk advance failed'); setTimeout(() => setOpError(''), 5000);
     } finally {
       setBulkProcessing(false);
@@ -432,7 +432,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       setSelectedIds(new Set());
       await reload();
       setOpSuccess(`${hold ? 'Held' : 'Released'} ${selectedIds.size} debts`); setTimeout(() => setOpSuccess(''), 3000);
-    } catch (err) {
+    } catch {
       setOpError('Bulk hold failed'); setTimeout(() => setOpError(''), 5000);
     } finally {
       setBulkProcessing(false);
@@ -455,7 +455,7 @@ const DebtList: React.FC<DebtListProps> = ({ type, onNew, onView, onEdit }) => {
       setSelectedIds(new Set());
       await reload();
       setOpSuccess(`Escalated ${escalated} debts to next stage`); setTimeout(() => setOpSuccess(''), 3000);
-    } catch (err) {
+    } catch {
       setOpError('Bulk escalate failed'); setTimeout(() => setOpError(''), 5000);
     } finally {
       setBulkProcessing(false);

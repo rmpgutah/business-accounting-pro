@@ -290,8 +290,8 @@ export default function ItemizationEditor({
   }, [tplMenuOpen]);
 
   // Build lookup maps so we can show names in tooltips
-  const categoryNames = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c.name])), [categories]);
-  const projectNames = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p.name])), [projects]);
+  const _categoryNames = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c.name])), [categories]);
+  const _projectNames = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p.name])), [projects]);
   const clientNames = useMemo(() => Object.fromEntries(clients.map(c => [c.id, c.name])), [clients]);
 
   // ── Derived totals ─────────────────────────────────────────────

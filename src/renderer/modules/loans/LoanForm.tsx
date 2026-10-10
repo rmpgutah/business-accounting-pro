@@ -5,7 +5,7 @@
 // Live-preview the computed monthly payment as the user types.
 
 import React, { useState, useEffect } from 'react';
-import { Save, X, ChevronLeft } from 'lucide-react';
+import { Save, ChevronLeft } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 

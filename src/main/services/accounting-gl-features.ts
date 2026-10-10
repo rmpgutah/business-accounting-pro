@@ -572,7 +572,7 @@ export function isPeriodLocked(companyId: string, date: string): boolean {
 }
 
 // F204 — quarter-end procedure runner (returns checklist)
-export function quarterEndChecklist(companyId: string, quarterEndDate: string): { items: Array<{ task: string; complete: boolean }> } {
+export function quarterEndChecklist(companyId: string, _quarterEndDate: string): { items: Array<{ task: string; complete: boolean }> } {
   const items = [
     { task: 'All bank reconciliations complete', complete: false },
     { task: 'Accruals booked', complete: dueAccrualReversals(companyId).length === 0 },

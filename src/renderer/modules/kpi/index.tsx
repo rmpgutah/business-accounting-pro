@@ -499,7 +499,7 @@ const KPIDashboard: React.FC = () => {
                   dataKey="margin"
                   stroke={CHART_INCOME}
                   strokeWidth={2}
-                  dot={{ r: 4, fill: 'var(--color-accent-income)', stroke: '#0a0a0a', strokeWidth: 2 }}
+                  dot={{ r: 4, fill: 'var(--color-accent-income)', stroke: 'var(--color-bg-primary)', strokeWidth: 2 }}
                   activeDot={{ r: 6, fill: 'var(--color-accent-income)' }}
                 />
               </LineChart>

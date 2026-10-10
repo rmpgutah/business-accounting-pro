@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Link, Copy, CheckCircle, ExternalLink, Users } from 'lucide-react';
+import { Globe, Link, Copy, CheckCircle, Users } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 

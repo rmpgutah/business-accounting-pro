@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Lock, Unlock, CheckCircle2, SkipForward, Calendar, FileText, AlertTriangle, Mail,
-  FileBarChart, RotateCcw, RefreshCw, Layers, GitBranch, CalendarDays } from 'lucide-react';
+  FileBarChart, Layers, GitBranch, CalendarDays } from 'lucide-react';
 import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../lib/format';
 import api from '../../lib/api';
@@ -11,7 +11,7 @@ const invoke = <T = any>(ch: string, ...a: unknown[]): Promise<T> =>
     ? window.electronAPI.invoke<T>(ch, ...a)
     : Promise.reject(new Error('Not in Electron'));
 
-const ADJUSTMENT_CATEGORIES = ['deferral', 'accrual', 'depreciation', 'inventory', 'revaluation', 'correction', 'other'] as const;
+const _ADJUSTMENT_CATEGORIES = ['deferral', 'accrual', 'depreciation', 'inventory', 'revaluation', 'correction', 'other'] as const;
 
 // ─── Period Close Workflow ──────────────────────────────────
 // Implements features 1–10:

@@ -172,7 +172,7 @@ export function quickFindVendors(query: string, limit = 10) {
       GROUP BY v.id, v.name
       ORDER BY expense_count DESC, last_used DESC NULLS LAST
       LIMIT ?`).all(db.getCurrentCompanyId(), q, limit);
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F873: Filter expenses by amount range with operators
@@ -420,7 +420,7 @@ export function getApprovalHistory(expenseId: string) {
       WHERE h.expense_id = ? AND h.company_id = ?
       ORDER BY h.created_at ASC`)
       .all(expenseId, db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F884: Approval SLA report — avg time from submitted → approved per approver
@@ -433,7 +433,7 @@ export function approvalSlaReport(days = 90) {
       WHERE h.company_id = ? AND h.action = 'approved' AND h.created_at >= ?
       GROUP BY actor_user_id ORDER BY avg_hours ASC`)
       .all(db.getCurrentCompanyId(), cutoff);
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -452,7 +452,7 @@ export function topVendorsBySpend(opts?: { since?: string; until?: string; limit
       GROUP BY v.id, v.name
       ORDER BY total_spent DESC
       LIMIT ?`).all(db.getCurrentCompanyId(), since, until, opts?.limit || 10);
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F886: Category spend rollup
@@ -467,7 +467,7 @@ export function categorySpendRollup(opts?: { since?: string; until?: string }) {
       GROUP BY c.id, c.name, c.color
       ORDER BY total_spent DESC`)
       .all(db.getCurrentCompanyId(), since, until);
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F887: Anomaly detection — flag expenses that are ≥ N× the rolling category average
@@ -494,7 +494,7 @@ export function detectExpenseAnomalies(thresholdMultiplier = 2.5) {
       multiplier: round2(e.amount / avgMap[e.category_id]),
     }));
     return anomalies;
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F888: Monthly spend trend — 12-month sparkline data
@@ -505,7 +505,7 @@ export function monthlyTrend(monthsBack = 12) {
       WHERE company_id = ? AND deleted_at IS NULL AND date >= date('now', '-' || ? || ' months')
       GROUP BY month ORDER BY month ASC`)
       .all(db.getCurrentCompanyId(), monthsBack);
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F889: Budget burn-down per category (current month spend vs budget)
@@ -530,7 +530,7 @@ export function budgetBurnDown(month?: string) {
       const pct = budget > 0 ? round2((s.spent / budget) * 100) : null;
       return { category_id: s.category_id, spent: round2(s.spent), budget: round2(budget), pct_of_budget: pct, status: pct == null ? 'no_budget' : pct >= 100 ? 'over' : pct >= 80 ? 'warning' : 'on_track' };
     });
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -559,7 +559,7 @@ export function detectRecurringCandidates() {
                 : 'irregular',
       avg_cadence_days: round2(c.avg_cadence_days),
     }));
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F891: Save expense draft (auto-save support — overwrites latest per user)

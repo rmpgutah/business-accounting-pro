@@ -277,7 +277,7 @@ export function getInvoiceViewHistory(invoiceId: string) {
     return db.getDb().prepare(`SELECT event_type, logged_at, metadata_json FROM invoice_view_logs
       WHERE invoice_id = ? AND company_id = ? ORDER BY logged_at DESC LIMIT 50`)
       .all(invoiceId, db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F905: Save an email template (per-state or per-client)
@@ -425,7 +425,7 @@ export function issueCreditMemo(opts: { invoice_id: string; amount: number; reas
 }
 
 // F912: Write off an invoice (after N days, with reason)
-export function writeOffInvoice(invoiceId: string, reason: string, actorUserId?: string) {
+export function writeOffInvoice(invoiceId: string, reason: string, _actorUserId?: string) {
   try {
     const cid = db.getCurrentCompanyId();
     const dbi = db.getDb();
@@ -498,7 +498,7 @@ export function topRevenueClients(opts?: { since?: string; until?: string; limit
       GROUP BY c.id, c.name
       ORDER BY total_revenue DESC
       LIMIT ?`).all(db.getCurrentCompanyId(), since, until, opts?.limit || 10);
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F915: AR aging breakdown by bucket (per client, or company-wide)
@@ -537,7 +537,7 @@ export function cashFlowProjection(daysAhead = 90) {
       AND due_date <= ?
       GROUP BY due_date ORDER BY due_date ASC`).all(cid, cutoff) as any[];
     return rows.map(r => ({ ...r, expected: round2(r.expected) }));
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F917: Compute collection probability score (0-100) for an invoice

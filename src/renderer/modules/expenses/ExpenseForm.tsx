@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Receipt, DollarSign, Paperclip, X, Plus, Trash2, FileText, AlertTriangle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Receipt, DollarSign, FileText, AlertTriangle, Sparkles } from 'lucide-react';
 import api from '../../lib/api';
-import { required, validateForm, minValue } from '../../lib/validation';
+import { required, validateForm } from '../../lib/validation';
 import { useCompanyStore } from '../../stores/companyStore';
 import { CategoryContext } from '../../components/ContextPanel';
 import { FieldLabel } from '../../components/FieldLabel';
@@ -425,7 +425,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   const [suggestedCategoryId, setSuggestedCategoryId] = useState<string>('');
   const [categoryUsage, setCategoryUsage] = useState<{ count: number; total: number }>({ count: 0, total: 0 });
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
-  const [showAffidavit, setShowAffidavit] = useState(false);
+  const [_showAffidavit, _setShowAffidavit] = useState(false);
   const [affidavit, setAffidavit] = useState({
     statement: '', signed_name: '', signed_date: todayLocal(),
   });
@@ -522,7 +522,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
   }, [form.amount, form.tax_rate, form.tax_inclusive, useLineItems]);
 
   // Line item handlers
-  const handleLineChange = (index: number, field: keyof ExpenseLineItem, value: any) => {
+  const _handleLineChange = (index: number, field: keyof ExpenseLineItem, value: any) => {
     setLineItems(prev => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
@@ -543,9 +543,9 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ expenseId, onBack, onSaved })
       return updated;
     });
   };
-  const addLineItem = () => setLineItems(prev => [...prev, newLineItem()]);
-  const removeLineItem = (index: number) => setLineItems(prev => prev.length <= 1 ? prev : prev.filter((_, i) => i !== index));
-  const moveLineItem = (from: number, to: number) => {
+  const _addLineItem = () => setLineItems(prev => [...prev, newLineItem()]);
+  const _removeLineItem = (index: number) => setLineItems(prev => prev.length <= 1 ? prev : prev.filter((_, i) => i !== index));
+  const _moveLineItem = (from: number, to: number) => {
     setLineItems(prev => {
       const arr = [...prev];
       const [item] = arr.splice(from, 1);

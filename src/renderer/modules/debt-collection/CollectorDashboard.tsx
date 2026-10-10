@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   AlertTriangle, Clock, Gavel, MessageSquare, RefreshCw, Zap, TrendingUp,
-  DollarSign, FileText, Download, BarChart3, Shield, Phone, Mail,
+  DollarSign, Download, BarChart3, Shield, Phone, Mail,
   ArrowUpRight, Activity, Target, Users, Printer
 } from 'lucide-react';
 import api from '../../lib/api';

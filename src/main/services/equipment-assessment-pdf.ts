@@ -1,4 +1,4 @@
-import { PDFDocument, PDFPage, rgb, PDFFont } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
 import type { EquipmentAssessment } from '../../shared/types/equipment-assessment';
 
 const MARGIN = 40;
@@ -305,7 +305,7 @@ export async function loadAndFillPDF(
         if (typeof textField.setText === 'function') {
           textField.setText(String(value));
         }
-      } catch (e) {
+      } catch {
         // Skip fields that can't be filled
       }
     }

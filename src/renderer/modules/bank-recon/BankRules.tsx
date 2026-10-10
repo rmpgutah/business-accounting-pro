@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Shield, Plus, Edit2, Trash2, ToggleLeft, ToggleRight,
-  Play, X, ChevronDown, ChevronUp, AlertCircle,
+  Play, X, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';

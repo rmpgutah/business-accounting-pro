@@ -16,7 +16,6 @@ import {
   Download,
   LayoutDashboard,
   List,
-  TrendingUp,
   Users,
   Activity,
 } from 'lucide-react';
@@ -226,7 +225,7 @@ interface BillsListProps {
 
 const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
-  const nav = useNavigation();
+  const _nav = useNavigation();
   // Customization Center (Bills): column visibility + row density.
   const custValues = useCustomizationStore((s) => s.values);
   const cBillCol = (id: string) => custValues['bills.' + id] !== false; // default visible
@@ -2617,7 +2616,7 @@ const BillDetail: React.FC<BillDetailProps> = ({ billId, onBack, onEdit }) => {
 // BillsDashboard — Tabbed Dashboard view
 // ═══════════════════════════════════════════════════════════
 const BillsDashboard: React.FC<{ onView: (id: string) => void }> = ({
-  onView,
+  onView: _onView,
 }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [bills, setBills] = useState<Bill[]>([]);

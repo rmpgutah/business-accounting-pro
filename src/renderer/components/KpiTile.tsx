@@ -97,7 +97,7 @@ const KpiTile: React.FC<KpiTileProps> = ({
       className={`block-card py-6 px-5 ${
         accentClass ? `border-l-4 ${accentClass}` : ''
       } ${onClick ? 'cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200' : ''} ${className ?? ''}`}
-      style={{ borderRadius: '6px' }}
+      style={{ borderRadius: 'var(--app-radius)' }}
       onClick={onClick}
     >
       <div className="flex items-center gap-2 mb-2">

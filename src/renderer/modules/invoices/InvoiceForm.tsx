@@ -93,7 +93,7 @@ const INVOICE_TYPE_CONFIG: Record<InvoiceType, InvoiceTypeConfig> = {
 
 const CURRENCIES_COMMON = ['AUD', 'CAD', 'EUR', 'GBP', 'USD'];
 const CURRENCIES_OTHER = ['CHF', 'CNY', 'INR', 'JPY', 'MXN'];
-const CURRENCIES = [...CURRENCIES_COMMON, ...CURRENCIES_OTHER];
+const _CURRENCIES = [...CURRENCIES_COMMON, ...CURRENCIES_OTHER];
 
 // ─── GripCell (hoisted to module scope to prevent remount-on-render) ───
 interface GripCellProps {
@@ -833,7 +833,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, onBack, onSaved })
   // state) so flipping it doesn't cause a re-render — only the unload
   // handler ever reads it.
   const dirtyRef = useRef(false);
-  const markDirty = useCallback(() => { dirtyRef.current = true; }, []);
+  const _markDirty = useCallback(() => { dirtyRef.current = true; }, []);
 
   const updateField = useCallback(
     (field: keyof InvoiceFormData, value: string | number) => {

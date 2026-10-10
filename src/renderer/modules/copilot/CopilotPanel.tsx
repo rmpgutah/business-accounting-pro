@@ -68,7 +68,7 @@ const ProposalCard: React.FC<{ proposal: ProposalData; onApprove: () => void; on
           <button
             onClick={handleApprove}
             className="px-3 py-1 text-[11px] font-semibold rounded"
-            style={{ background: 'var(--accent-primary)', color: '#fff' }}
+            style={{ background: 'var(--accent-primary)', color: 'var(--color-text-on-accent)' }}
           >
             Approve
           </button>

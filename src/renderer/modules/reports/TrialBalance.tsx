@@ -241,7 +241,7 @@ const TrialBalance: React.FC = () => {
 
         // Pre-close vs post-close
         let preCloseMap: Record<string, number> = {};
-        let postCloseMap: Record<string, number> = {};
+        let _postCloseMap: Record<string, number> = {};
         if (view === 'preclose') {
           try {
             const exclQ = buildSql(startDate, endDate, activeCompany.id, { excludeClosing: true });

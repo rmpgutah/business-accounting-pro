@@ -4,7 +4,7 @@
 import { randomUUID as uuid } from 'crypto';
 import * as db from '../database';
 const now = () => new Date().toISOString();
-const today = () => now().slice(0, 10);
+const _today = () => now().slice(0, 10);
 const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
 
 // ═══ SW51–SW60: Fixed Assets ═════════════════════════════

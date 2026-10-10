@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileBarChart, Plus, Play, Download, Save, Trash2 } from 'lucide-react';
+import { FileBarChart, Play, Download, Trash2 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 
@@ -12,7 +12,7 @@ const AVAILABLE_FIELDS: Record<string, string[]> = {
   employees: ['name', 'email', 'type', 'pay_type', 'pay_rate', 'pay_schedule', 'status'],
 };
 
-const AGGREGATIONS = ['None', 'SUM', 'COUNT', 'AVG', 'MIN', 'MAX'];
+const _AGGREGATIONS = ['None', 'SUM', 'COUNT', 'AVG', 'MIN', 'MAX'];
 
 interface ReportConfig {
   name: string;
@@ -171,7 +171,7 @@ export default function CustomReportsModule() {
       {error && (
         <div
           style={{
-            background: '#2a1215',
+            background: 'color-mix(in srgb, var(--color-accent-expense) 12%, var(--color-bg-primary))',
             border: '1px solid var(--color-accent-expense)',
             borderRadius: 'var(--app-radius)',
             padding: '12px 16px',

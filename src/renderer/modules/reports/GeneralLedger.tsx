@@ -109,7 +109,7 @@ const GeneralLedger: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [accounts, setAccounts] = useState<GLAccount[]>([]);
-  const [openingBalances, setOpeningBalances] = useState<Record<string, number>>({});
+  const [_openingBalances, setOpeningBalances] = useState<Record<string, number>>({});
   const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
   const [classOptions, setClassOptions] = useState<string[]>([]);
   const [classFilter, setClassFilter] = useState<string>('');
@@ -145,7 +145,7 @@ const GeneralLedger: React.FC = () => {
   const [savedViewName, setSavedViewName] = useState('');
   const [splitFor, setSplitFor] = useState<GLTransaction | null>(null);
   const [splitDraft, setSplitDraft] = useState({ accountId: '', amount: 0 });
-  const [combineFor, setCombineFor] = useState<GLTransaction | null>(null);
+  const [_combineFor, _setCombineFor] = useState<GLTransaction | null>(null);
   const [drawerLine, setDrawerLine] = useState<GLTransaction | null>(null);
   const [drawerData, setDrawerData] = useState<{ audit: any[]; comments: any[]; sameDay: any[] } | null>(null);
   const [flagDraft, setFlagDraft] = useState<{ line: GLTransaction; reason: string; type: 'flag' | 'question' } | null>(null);

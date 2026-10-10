@@ -184,12 +184,12 @@ const IncomeByMonth: React.FC = () => {
                     <div className="w-full flex items-end justify-center gap-0.5" style={{ height: '120px' }}>
                       <div
                         className="w-[40%] bg-bg-tertiary transition-all duration-500"
-                        style={{ height: `${priorHeight}%`, borderRadius: '3px 3px 0 0', minHeight: priorHeight > 0 ? '2px' : '0' }}
+                        style={{ height: `${priorHeight}%`, borderRadius: 'var(--app-radius) var(--app-radius) 0 0', minHeight: priorHeight > 0 ? '2px' : '0' }}
                         title={`${year - 1}: ${formatCurrency(priorData[i]?.revenue || 0)}`}
                       />
                       <div
                         className="w-[40%] bg-accent-blue transition-all duration-500"
-                        style={{ height: `${barHeight}%`, borderRadius: '3px 3px 0 0', minHeight: barHeight > 0 ? '2px' : '0' }}
+                        style={{ height: `${barHeight}%`, borderRadius: 'var(--app-radius) var(--app-radius) 0 0', minHeight: barHeight > 0 ? '2px' : '0' }}
                         title={`${year}: ${formatCurrency(row.revenue)}`}
                       />
                     </div>

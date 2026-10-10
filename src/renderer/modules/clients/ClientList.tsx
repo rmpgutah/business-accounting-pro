@@ -14,10 +14,10 @@ import {
   formatClientName,
 } from '../../customization/clients-prefs';
 import { SummaryBar } from '../../components/SummaryBar';
-import { formatCurrency, formatStatus, formatDate } from '../../lib/format';
+import { formatCurrency, formatStatus } from '../../lib/format';
 import { ImportWizard } from '../../components/ImportWizard';
 import {
-  CLIENT_TIER, CLIENT_LIFECYCLE, CLIENT_RISK, CLIENT_INDUSTRY, CLIENT_SEGMENT,
+  CLIENT_TIER, CLIENT_RISK, CLIENT_INDUSTRY,
   ClassificationBadge,
 } from '../../lib/classifications';
 
@@ -79,7 +79,7 @@ const SortableHeader: React.FC<{
 };
 
 // ─── Health Indicator ───────────────────────────────────
-const HealthDot: React.FC<{ lastInvoice: string | null; outstanding: number }> = ({ lastInvoice, outstanding }) => {
+const HealthDot: React.FC<{ lastInvoice: string | null; outstanding: number }> = ({ lastInvoice, outstanding: _outstanding }) => {
   let color = 'var(--color-text-muted)'; // gray = no data
   let title = 'No activity';
 
@@ -844,7 +844,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                     key={tier}
                     className="block w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-tertiary capitalize"
                     onClick={() => handleBatchSetTier(tier)}
-                    style={{ borderRadius: '4px' }}
+                    style={{ borderRadius: 'var(--app-radius)' }}
                   >
                     {tier}
                   </button>
@@ -904,7 +904,7 @@ const ClientList: React.FC<ClientListProps> = ({ onSelectClient, onNewClient }) 
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: 'var(--color-text-on-accent)', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>

@@ -292,7 +292,7 @@ export function runAutoDunning(): DunningRunResult {
                 due_date: inv.due_date,
                 source: 'auto_dunning_cron',
               },
-            });
+            }).catch((err) => console.error('services/auto-dunning:', err));
           } catch { /* event-bus best-effort */ }
         }
       } catch (err: any) {

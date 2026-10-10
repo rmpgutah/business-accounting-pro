@@ -54,7 +54,7 @@ export function runRecurringInvoicesDue() {
         // Advance the schedule
         const next = advanceByFrequency(tpl.next_run_at || today(), tpl.frequency || 'monthly');
         dbi.prepare(`UPDATE recurring_invoice_templates SET next_run_at = ?, last_run_at = ?, generated_count = COALESCE(generated_count, 0) + 1 WHERE id = ?`).run(next, today(), tpl.id);
-      } catch (e: any) { /* skip failures, continue */ }
+      } catch { /* skip failures, continue */ }
     }
     return { generated: generated.length, results: generated };
   } catch (e: any) { return { error: e.message }; }
@@ -178,7 +178,7 @@ export function upsertBrandProfile(opts: any) {
 export function listBrandProfiles() {
   try {
     return db.getDb().prepare(`SELECT * FROM pdf_brand_profiles WHERE company_id = ? ORDER BY is_default DESC, name`).all(db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F930: Get the default brand profile (used by the PDF generator)
@@ -188,7 +188,7 @@ export function getDefaultBrandProfile() {
     const def = db.getDb().prepare(`SELECT * FROM pdf_brand_profiles WHERE company_id = ? AND is_default = 1 LIMIT 1`).get(cid) as any;
     if (def) return def;
     return db.getDb().prepare(`SELECT * FROM pdf_brand_profiles WHERE company_id = ? LIMIT 1`).get(cid) || null;
-  } catch (e: any) { return null; }
+  } catch { return null; }
 }
 
 // F931: Compute the watermark for an invoice (DRAFT/PAID/OVERDUE/VOID)
@@ -202,7 +202,7 @@ export function watermarkForInvoice(invoiceId: string): { watermark: string | nu
     if (inv.status === 'written_off') return { watermark: 'WRITTEN OFF', color: '#ef4444', opacity: 0.20 };
     if (inv.due_date && new Date(inv.due_date + 'T00:00:00Z').getTime() < Date.now()) return { watermark: 'OVERDUE', color: '#ef4444', opacity: 0.15 };
     return { watermark: null, color: '#000', opacity: 0 };
-  } catch (e: any) { return { watermark: null, color: '#000', opacity: 0 }; }
+  } catch { return { watermark: null, color: '#000', opacity: 0 }; }
 }
 
 // F932: PDF preview as HTML — returns a styled HTML string (renderer can iframe it)
@@ -323,7 +323,7 @@ export function quoteRevisionHistory(quoteId: string) {
     try {
       return db.getDb().prepare(`SELECT * FROM quote_revisions WHERE quote_id = ? AND company_id = ? ORDER BY created_at ASC`).all(quoteId, db.getCurrentCompanyId());
     } catch (_) { return []; }
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F937: List expired quotes that need follow-up
@@ -334,7 +334,7 @@ export function expiredQuotesNeedingFollowup() {
       WHERE q.company_id = ? AND q.status IN ('sent', 'viewed')
       AND q.expiry_date IS NOT NULL AND q.expiry_date < date('now')
       ORDER BY q.expiry_date ASC LIMIT 50`).all(db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -408,7 +408,7 @@ export function couponPerformanceReport() {
       WHERE c.company_id = ?
       GROUP BY c.id ORDER BY total_discount_given DESC`)
       .all(db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F942: Compute volume discount tier given a quantity
@@ -419,7 +419,7 @@ export function calculateVolumeDiscount(quantity: number, tiers: Array<{ min_qty
       if (quantity >= t.min_qty) return { tier_min_qty: t.min_qty, discount_pct: t.discount_pct };
     }
     return { tier_min_qty: 0, discount_pct: 0 };
-  } catch (e: any) { return { discount_pct: 0 }; }
+  } catch { return { discount_pct: 0 }; }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -488,7 +488,7 @@ export function paymentMethodSuccessRanking() {
       AND created_at >= date('now', '-90 days')
       GROUP BY payment_method_type
       ORDER BY success_rate DESC`).all(db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F947: List failed payments queued for retry (provider returned a recoverable error)
@@ -500,7 +500,7 @@ export function failedPaymentRetryQueue() {
       WHERE pi.company_id = ? AND pi.status = 'failed'
       AND pi.created_at >= date('now', '-7 days')
       ORDER BY pi.created_at DESC`).all(db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -585,7 +585,7 @@ export function currencyExposureReport() {
       WHERE company_id = ? AND status NOT IN ('paid', 'cancelled', 'void', 'written_off', 'draft')
       GROUP BY COALESCE(currency, 'USD')
       ORDER BY open_total DESC`).all(db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -650,7 +650,7 @@ export function suggestInvoiceClassification(clientId: string) {
       WHERE i.company_id = ? AND i.client_id = ? AND eli.account_id IS NOT NULL
       GROUP BY eli.account_id ORDER BY freq DESC LIMIT 5`).all(cid, clientId) as any[];
     return { suggested_accounts: lines };
-  } catch (e: any) { return { suggested_accounts: [] }; }
+  } catch { return { suggested_accounts: [] }; }
 }
 
 // F957: Should an invoice require approval before sending? (uses approval rules + conditional)

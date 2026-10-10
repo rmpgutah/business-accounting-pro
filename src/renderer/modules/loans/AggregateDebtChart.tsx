@@ -50,7 +50,7 @@ const AggregateDebtChart: React.FC<Props> = ({ data, height = 200 }) => {
 
   // X-axis ticks: every 6 months for readability
   const tickStep = Math.max(1, Math.ceil(n / 8));
-  const xTicks = data.filter((_, i) => i % tickStep === 0).map((r, i) => ({
+  const xTicks = data.filter((_, i) => i % tickStep === 0).map((r, _i) => ({
     label: r.month,
     x: PADDING.left + (data.indexOf(r)) * dx,
   }));
@@ -76,7 +76,7 @@ const AggregateDebtChart: React.FC<Props> = ({ data, height = 200 }) => {
       {/* Stacked bars: green principal on bottom, red interest on top */}
       {data.map((r, i) => {
         const x = PADDING.left + i * dx - barWidth / 2;
-        const totalH = ((r.principal + r.interest) / maxPayment) * innerH;
+        const _totalH = ((r.principal + r.interest) / maxPayment) * innerH;
         const principalH = (r.principal / maxPayment) * innerH;
         const interestH = (r.interest / maxPayment) * innerH;
         const yBottom = PADDING.top + innerH;

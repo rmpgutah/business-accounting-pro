@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  Upload, Download, FileSpreadsheet, Database,
+  Upload, Download, FileSpreadsheet,
   CheckCircle, AlertTriangle, ArrowRight, X, Archive,
 } from 'lucide-react';
 import api from '../../lib/api';

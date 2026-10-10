@@ -10,7 +10,7 @@ interface Props {
   onRefresh?: () => void;
 }
 
-const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => {
+const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue: _balanceDue, onRefresh }) => {
   const [plan, setPlan] = useState<any>(null);
   const [installments, setInstallments] = useState<any[]>([]);
   const [form, setForm] = useState({
@@ -243,7 +243,7 @@ const PaymentPlanCard: React.FC<Props> = ({ debtId, balanceDue, onRefresh }) => 
                           cursor: 'pointer',
                         }}
                       >
-                        {!!inst.paid && <Check size={11} color="#fff" />}
+                        {!!inst.paid && <Check size={11} color="var(--color-text-on-accent)" />}
                       </button>
                     </td>
                   </tr>

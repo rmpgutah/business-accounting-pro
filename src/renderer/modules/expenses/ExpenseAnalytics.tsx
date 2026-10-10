@@ -239,7 +239,7 @@ const ExpenseAnalytics: React.FC = () => {
     const denom = n * sumX2 - sumX * sumX;
     const slope = denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom;
     const intercept = (sumY - slope * sumX) / n;
-    const out: any[] = trend12.map((m, i) => ({ label: m.label, actual: m.total, forecast: null }));
+    const out: any[] = trend12.map((m, _i) => ({ label: m.label, actual: m.total, forecast: null }));
     const now = new Date();
     for (let i = 1; i <= 3; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
@@ -497,9 +497,9 @@ const ExpenseAnalytics: React.FC = () => {
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={topVendors} layout="vertical" margin={{ left: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#262a36" />
-                <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" width={120} tick={{ fill: '#9ca3af', fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" />
+                <XAxis type="number" tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
+                <YAxis type="category" dataKey="name" width={120} tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
                 <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
                 <Bar dataKey="total" fill="var(--color-accent-blue)" />
               </BarChart>
@@ -514,9 +514,9 @@ const ExpenseAnalytics: React.FC = () => {
           <h3 className="text-sm font-bold uppercase text-text-primary mb-2">12-Month Trend</h3>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={trend12}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#262a36" />
-              <XAxis dataKey="label" tick={{ fill: '#9ca3af', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" />
+              <XAxis dataKey="label" tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
+              <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
               <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
               <Line type="monotone" dataKey="total" stroke="var(--color-accent-blue)" strokeWidth={2} dot={false} />
             </LineChart>
@@ -526,13 +526,13 @@ const ExpenseAnalytics: React.FC = () => {
           <h3 className="text-sm font-bold uppercase text-text-primary mb-2">Year-over-Year</h3>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={yoy}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#262a36" />
-              <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" />
+              <XAxis dataKey="month" tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
+              <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
               <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
               <Legend />
               <Line type="monotone" dataKey="thisYear" stroke="var(--color-accent-blue)" strokeWidth={2} dot={false} name="This Year" />
-              <Line type="monotone" dataKey="lastYear" stroke="#8b5cf6" strokeWidth={2} dot={false} name="Last Year" strokeDasharray="4 4" />
+              <Line type="monotone" dataKey="lastYear" stroke="var(--color-accent-purple)" strokeWidth={2} dot={false} name="Last Year" strokeDasharray="4 4" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -546,12 +546,12 @@ const ExpenseAnalytics: React.FC = () => {
         ) : (
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={budgetVsActual}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#262a36" />
-              <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" />
+              <XAxis dataKey="name" tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
+              <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
               <Tooltip formatter={(v: any) => formatCurrency(Number(v))} />
               <Legend />
-              <Bar dataKey="budget" fill="#6b7280" name="Budget" />
+              <Bar dataKey="budget" fill="var(--color-text-muted)" name="Budget" />
               <Bar dataKey="actual" name="Actual">
                 {budgetVsActual.map((d, i) => (
                   <Cell key={i} fill={d.over ? 'var(--color-accent-expense)' : 'var(--color-accent-income)'} />
@@ -567,9 +567,9 @@ const ExpenseAnalytics: React.FC = () => {
         <h3 className="text-sm font-bold uppercase text-text-primary mb-2">Forecast (next 3 months)</h3>
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={forecast}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#262a36" />
-            <XAxis dataKey="label" tick={{ fill: '#9ca3af', fontSize: 11 }} />
-            <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" />
+            <XAxis dataKey="label" tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
+            <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
             <Tooltip formatter={(v: any) => v == null ? '—' : formatCurrency(Number(v))} />
             <Legend />
             <Line type="monotone" dataKey="actual" stroke="var(--color-accent-blue)" strokeWidth={2} dot={false} name="Actual" />

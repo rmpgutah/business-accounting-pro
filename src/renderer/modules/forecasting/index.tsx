@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -386,7 +386,7 @@ const Forecasting: React.FC = () => {
                       width: 8,
                       height: 8,
                       backgroundColor: config.color,
-                      borderRadius: '1px',
+                      borderRadius: 'var(--app-radius)',
                       display: 'inline-block',
                     }}
                   />

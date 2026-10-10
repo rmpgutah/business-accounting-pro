@@ -5,7 +5,6 @@ import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
 import {
   INDUSTRY_PRESETS,
-  getPreset,
   diffPreset,
   exportPresetJson,
   parsePresetJson,

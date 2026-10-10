@@ -969,7 +969,7 @@ function TemplatesCard({
     setName('');
   };
 
-  const useTemplate = async (t: ExpenseTemplate) => {
+  const applyTemplate = async (t: ExpenseTemplate) => {
     try {
       const res = await api.create('expenses', {
         company_id: companyId,
@@ -1030,7 +1030,7 @@ function TemplatesCard({
         <div className="flex flex-wrap gap-2">
           {templates.map((t) => (
             <span key={t.name} className="inline-flex items-center gap-1">
-              <button className="block-btn" onClick={() => useTemplate(t)}>
+              <button className="block-btn" onClick={() => applyTemplate(t)}>
                 {t.name} · {formatCurrency(t.amount)}
               </button>
               <button

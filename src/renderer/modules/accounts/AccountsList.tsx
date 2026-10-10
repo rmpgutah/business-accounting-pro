@@ -13,11 +13,11 @@ import { ImportWizard } from '../../components/ImportWizard';
 import ErrorBanner from '../../components/ErrorBanner';
 import EntityChip from '../../components/EntityChip';
 import { COA_TEMPLATES } from '../../lib/coa-templates';
-import { toCSVString, downloadCSVBlob } from '../../lib/csv-export';
+import { downloadCSVBlob } from '../../lib/csv-export';
 import {
   GroupsDialog, PermissionsDialog, WatchlistDialog, AliasesDialog,
   FxRevalueDialog, BudgetRibbon, IIFImportDialog, XeroImportDialog,
-  TxfExportDialog, Barcode39, SplitDialog, RenumberDialog,
+  TxfExportDialog, SplitDialog, RenumberDialog,
   OpeningTbImportDialog, ClassifyRulesDialog, SnapshotDialog, ComplianceBadges,
 } from './AccountAdvancedDialogs';
 
@@ -347,7 +347,7 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
       </React.Fragment>
     );
   };
-  const renderTreeNodeWrapped = renderTreeNode; // alias kept
+  const _renderTreeNodeWrapped = renderTreeNode; // alias kept
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><span className="text-text-muted text-sm font-mono">Loading accounts...</span></div>;

@@ -17,7 +17,7 @@ const ACCENT_BLUE = 'var(--color-accent-blue, #3b82f6)';
 const ACCENT_INCOME = 'var(--color-accent-income, #22c55e)';
 const ACCENT_WARNING = 'var(--color-accent-warning, #f59e0b)';
 const ACCENT_EXPENSE = 'var(--color-accent-expense, #ef4444)';
-const ACCENT_PURPLE = 'var(--color-accent-purple, #a855f7)';
+const _ACCENT_PURPLE = 'var(--color-accent-purple, #a855f7)';
 
 function polar(cx: number, cy: number, r: number, angleRad: number): [number, number] {
   return [cx + r * Math.cos(angleRad), cy + r * Math.sin(angleRad)];

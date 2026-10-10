@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
-  DollarSign,
   TrendingDown,
   TrendingUp,
   FileText,
@@ -10,7 +9,6 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Zap,
   CalendarCheck,
   Timer,
   Crown,
@@ -23,7 +21,6 @@ import DataBar from '../../components/DataBar';
 import {
   AreaChart,
   Area,
-  LineChart,
   Line,
   PieChart,
   Pie,
@@ -323,7 +320,7 @@ interface StatCardProps {
   accentClass: string;
 }
 
-const StatCard: React.FC<StatCardProps & { onClick?: () => void }> = ({
+const _StatCard: React.FC<StatCardProps & { onClick?: () => void }> = ({
   label,
   value,
   change,
@@ -461,7 +458,7 @@ const Dashboard: React.FC = () => {
     topClientRevenue: 0,
   });
   const [anomalies, setAnomalies] = useState<any[]>([]);
-  const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [_pendingApprovals, setPendingApprovals] = useState(0);
   const [rulesActivity, setRulesActivity] = useState<{ pricing_today: number; approvals_pending: number; alerts_week: number } | null>(null);
   const [debtStats, setDebtStats] = useState<{ count: number; total: number } | null>(null);
   const [billsStats, setBillsStats] = useState<{ unpaid_total: number; overdue_count: number } | null>(null);
@@ -913,7 +910,7 @@ const Dashboard: React.FC = () => {
 
       {/* Rules Activity Strip */}
       {rulesActivity && (rulesActivity.pricing_today > 0 || rulesActivity.approvals_pending > 0 || rulesActivity.alerts_week > 0) && (
-        <div className="glass-subtle px-4 py-2.5 flex gap-6 text-xs font-bold text-accent-blue flex-wrap" style={{ borderRadius: '8px' }}>
+        <div className="glass-subtle px-4 py-2.5 flex gap-6 text-xs font-bold text-accent-blue flex-wrap" style={{ borderRadius: 'var(--app-radius)' }}>
           {rulesActivity.pricing_today > 0 && (
             <span>{rulesActivity.pricing_today} pricing rule{rulesActivity.pricing_today !== 1 ? 's' : ''} applied today</span>
           )}

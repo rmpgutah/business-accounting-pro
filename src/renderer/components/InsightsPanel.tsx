@@ -67,14 +67,14 @@ const InsightsPanel: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="text-xs text-text-muted">Loading insights...</div>
       </div>
     );
   }
   if (insights.length === 0) {
     return (
-      <div className="block-card p-4" style={{ borderRadius: '6px' }}>
+      <div className="block-card p-4" style={{ borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center gap-2 text-xs text-text-muted">
           <CheckCircle size={14} className="text-accent-income" />
           No insights at the moment. Everything looks normal.
@@ -84,7 +84,7 @@ const InsightsPanel: React.FC = () => {
   }
 
   return (
-    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: '6px' }}>
+    <div className="block-card p-0 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
       <div className="px-4 py-3 border-b border-border-primary flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles size={14} className="text-accent-blue" />

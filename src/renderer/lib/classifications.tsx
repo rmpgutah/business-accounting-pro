@@ -30,7 +30,7 @@ export interface ClassificationDef {
 // ─── Color palette (consistent with app theme) ──────────
 const C = {
   bronze:    { color: '#a16207', bg: 'rgba(161,98,7,0.14)' },
-  silver:    { color: '#94a3b8', bg: 'rgba(148,163,184,0.14)' },
+  silver:    { color: 'var(--color-text-secondary)', bg: 'rgba(148,163,184,0.14)' },
   gold:      { color: '#eab308', bg: 'rgba(234,179,8,0.14)' },
   platinum:  { color: '#e0e7ff', bg: 'rgba(224,231,255,0.14)' },
   blue:      { color: '#3b82f6', bg: 'rgba(59,130,246,0.14)' },
@@ -40,7 +40,7 @@ const C = {
   purple:    { color: '#a855f7', bg: 'rgba(168,85,247,0.14)' },
   teal:      { color: '#14b8a6', bg: 'rgba(20,184,166,0.14)' },
   pink:      { color: '#ec4899', bg: 'rgba(236,72,153,0.14)' },
-  slate:     { color: '#94a3b8', bg: 'rgba(148,163,184,0.10)' },
+  slate:     { color: 'var(--color-text-secondary)', bg: 'rgba(148,163,184,0.10)' },
   indigo:    { color: '#6366f1', bg: 'rgba(99,102,241,0.14)' },
   orange:    { color: '#f97316', bg: 'rgba(249,115,22,0.14)' },
   cyan:      { color: '#06b6d4', bg: 'rgba(6,182,212,0.14)' },
@@ -401,7 +401,7 @@ export const ClassificationBadge: React.FC<BadgeProps> = ({ def, value, colorOve
   const o = findOption(def, value);
   if (!o) {
     return (
-      <span className="block-badge" style={{ background: 'rgba(148,163,184,0.10)', color: '#94a3b8' }}>
+      <span className="block-badge" style={{ background: 'rgba(148,163,184,0.10)', color: 'var(--color-text-secondary)' }}>
         {value}
       </span>
     );

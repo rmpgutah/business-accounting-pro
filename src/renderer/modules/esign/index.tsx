@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  PenTool, Plus, FileText, Shield, ShieldCheck, ShieldOff, Trash2,
-  Download, Eye, X, Check, AlertTriangle, Clock, User, Key, History,
-  Search, ArrowLeft, ExternalLink, Pencil, Lock, Unlock, RefreshCw,
+  PenTool, Plus, FileText, Shield, ShieldCheck, ShieldOff, Trash2, Eye, X, Check, Key, History,
+  Search, ArrowLeft, Pencil, Lock, RefreshCw,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { formatDate, formatDateTime } from '../../lib/format';
@@ -546,7 +545,7 @@ const EsignModule: React.FC = () => {
                   onKeyDown={(e) => { if (e.key === 'Enter' && typedName.trim()) handleSign(); }}
                 />
               </div>
-              <div className="flex items-center gap-2 text-xs text-text-muted bg-bg-secondary p-2.5 rounded" style={{ borderRadius: '4px' }}>
+              <div className="flex items-center gap-2 text-xs text-text-muted bg-bg-secondary p-2.5 rounded" style={{ borderRadius: 'var(--app-radius)' }}>
                 <ShieldCheck size={14} className="text-accent-income flex-shrink-0" />
                 Your typed signature will be hashed and stored securely. The document content hash will be linked to this signature.
               </div>
@@ -605,7 +604,7 @@ const EsignModule: React.FC = () => {
             ) : (
               <div className="space-y-1.5 mb-4">
                 {permissions.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between bg-bg-secondary p-2 rounded" style={{ borderRadius: '4px' }}>
+                  <div key={i} className="flex items-center justify-between bg-bg-secondary p-2 rounded" style={{ borderRadius: 'var(--app-radius)' }}>
                     <span className="text-xs font-mono">{p.userId}</span>
                     <div className="flex items-center gap-2">
                       <select className="block-select text-[10px] py-0.5" value={p.level} onChange={(e) => {

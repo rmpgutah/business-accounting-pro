@@ -85,7 +85,7 @@ function round2(n: number): number {
 }
 
 export function computeW3(companyId: string, year: number): FormW3Data {
-  const dbi = db.getDb();
+  const _dbi = db.getDb();
   const company = db.getById('companies', companyId) as any || {};
 
   const w2s = computeW2sForYear(companyId, year);

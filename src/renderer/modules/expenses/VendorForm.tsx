@@ -18,7 +18,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Building2, X, Plus, Trash2, User, MapPin, Shield, CreditCard, FileText, Activity } from 'lucide-react';
+import { Building2, X, Plus, Trash2, User, MapPin, Shield, CreditCard, Activity } from 'lucide-react';
 import api from '../../lib/api';
 import ErrorBanner from '../../components/ErrorBanner';
 import {

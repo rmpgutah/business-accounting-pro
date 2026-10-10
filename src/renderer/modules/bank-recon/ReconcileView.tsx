@@ -707,7 +707,7 @@ const ReconcileView: React.FC = () => {
                             }}
                             className="text-[9px] font-semibold inline-flex items-center gap-1 px-1.5 py-0.5 transition-colors"
                             style={{
-                              borderRadius: '4px',
+                              borderRadius: 'var(--app-radius)',
                               border: '1px solid var(--color-accent-blue)',
                               color: 'var(--color-accent-blue)',
                               background: 'rgba(59,130,246,0.08)',

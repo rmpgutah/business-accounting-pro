@@ -7,8 +7,8 @@ import { randomUUID as uuid, createHash, randomBytes, timingSafeEqual } from 'cr
 import * as db from '../database';
 
 const now = (): string => new Date().toISOString();
-const today = (): string => now().slice(0, 10);
-const round2 = (n: number): number => Math.round((n || 0) * 100) / 100;
+const _today = (): string => now().slice(0, 10);
+const _round2 = (n: number): number => Math.round((n || 0) * 100) / 100;
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
 // ════════════════════════════════════════════════════════════════

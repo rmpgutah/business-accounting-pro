@@ -14,7 +14,7 @@ export function setLogLevel(level: LogLevel): void {
   currentLevel = level;
 }
 
-function formatArgs(args: unknown[]): string {
+function _formatArgs(args: unknown[]): string {
   return args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a ?? '∅')).join(' ');
 }
 

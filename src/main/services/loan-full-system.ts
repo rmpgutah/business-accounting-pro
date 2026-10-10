@@ -24,7 +24,7 @@ const now = (): string => new Date().toISOString();
 const today = (): string => now().slice(0, 10);
 const round2 = (n: number): number => Math.round((n || 0) * 100) / 100;
 
-function addDays(dateStr: string, days: number): string {
+function _addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T12:00:00Z');
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
@@ -943,7 +943,7 @@ export function loanWatchlist() {
   try {
     return db.getDb().prepare(`SELECT l.id, l.name, l.current_balance, l.status, rg.grade, rg.grade_label, rg.assigned_at FROM loans l INNER JOIN loan_risk_grades rg ON rg.loan_id = l.id WHERE l.company_id = ? AND rg.grade >= 4 AND l.deleted_at IS NULL ORDER BY rg.grade DESC, rg.assigned_at DESC`)
       .all(db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F1031: Charge off a loan (or partial)
@@ -1202,7 +1202,7 @@ export function vintageAnalysis() {
   try {
     return db.getDb().prepare(`SELECT substr(origination_date, 1, 4) vintage_year, COUNT(*) loan_count, SUM(principal) total_originated, SUM(current_balance) total_outstanding, SUM(total_principal_paid) total_repaid, AVG(interest_rate) * 100 avg_rate_pct FROM loans WHERE company_id = ? AND deleted_at IS NULL GROUP BY vintage_year ORDER BY vintage_year DESC`)
       .all(db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F1045: Concentration risk — exposure by borrower / type

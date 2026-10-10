@@ -490,7 +490,7 @@ export function openTimesheetPeriod(p: { company_id: string; employee_id: string
     dbi.prepare(`INSERT INTO timesheet_periods (id, company_id, employee_id, period_start, period_end, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)`)
       .run(id, p.company_id, p.employee_id, p.period_start, p.period_end, now());
     return { id, ...p, status: 'open' };
-  } catch (e: any) {
+  } catch {
     // Already exists — return existing
     const existing = dbi.prepare(`SELECT * FROM timesheet_periods WHERE company_id = ? AND employee_id = ? AND period_start = ?`).get(p.company_id, p.employee_id, p.period_start);
     return existing;

@@ -1108,8 +1108,8 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
             <span className="text-text-muted font-semibold uppercase tracking-wider">{data.done} of {data.total} complete</span>
             <span className={`font-bold font-mono ${pct === 100 ? 'text-accent-income' : 'text-accent-blue'}`}>{pct}%</span>
           </div>
-          <div style={{ height: 6, borderRadius: 3, background: 'var(--color-border-primary)', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${pct}%`, borderRadius: 3, background: pct === 100 ? 'var(--color-accent-income)' : 'var(--color-accent-blue)', transition: 'width 0.3s ease' }} />
+          <div style={{ height: 6, borderRadius: 'var(--app-radius)', background: 'var(--color-border-primary)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${pct}%`, borderRadius: 'var(--app-radius)', background: pct === 100 ? 'var(--color-accent-income)' : 'var(--color-accent-blue)', transition: 'width 0.3s ease' }} />
           </div>
         </div>
       )}
@@ -1140,7 +1140,7 @@ const OnboardingPanel: React.FC<{ employeeId: string }> = ({ employeeId }) => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className={`text-xs ${step.done ? 'text-text-muted line-through' : 'text-text-primary font-medium'}`}>{step.label}</span>
-                        {step.auto && <span className="text-[9px] text-accent-blue px-1 py-0.5" style={{ borderRadius: 4, background: 'color-mix(in srgb, var(--color-accent-blue) 10%, transparent)' }}>AUTO</span>}
+                        {step.auto && <span className="text-[9px] text-accent-blue px-1 py-0.5" style={{ borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-blue) 10%, transparent)' }}>AUTO</span>}
                       </div>
                       <p className="text-[11px] text-text-muted truncate">{step.description}</p>
                     </div>
@@ -1547,7 +1547,7 @@ const ESignModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center" style={{ background: 'var(--color-overlay, rgba(0,0,0,0.6))' }} onClick={onClose}>
-      <div className="block-card w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto" style={{ borderRadius: '10px' }} onClick={(e) => e.stopPropagation()}>
+      <div className="block-card w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto" style={{ borderRadius: 'var(--app-radius)' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <PenTool size={16} className="text-accent-income" />

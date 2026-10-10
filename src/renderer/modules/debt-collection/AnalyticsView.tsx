@@ -14,8 +14,6 @@ import {
   Legend,
   ResponsiveContainer,
   Cell,
-  PieChart,
-  Pie,
 } from 'recharts';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
@@ -726,11 +724,11 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ companyId }) => {
                 const maxTotal = Math.max(...agingData.map(x => x.total), 1);
                 const height = Math.max((a.total / maxTotal) * 100, 4);
                 const prevTotal = i > 0 ? agingData[i - 1].total : 0;
-                const flow = Math.min(prevTotal, a.total);
+                const _flow = Math.min(prevTotal, a.total);
                 return (
                   <div key={a.bucket} className="flex flex-col items-center" style={{ width: `${100 / agingData.length}%`, maxWidth: 120 }}>
                     <div className="text-[10px] font-mono text-text-muted mb-1">{formatCurrency(a.total)}</div>
-                    <div style={{ height: `${height}px`, width: '60%', background: AGING_COLORS[a.bucket] || 'var(--color-text-muted)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease' }} />
+                    <div style={{ height: `${height}px`, width: '60%', background: AGING_COLORS[a.bucket] || 'var(--color-text-muted)', borderRadius: 'var(--app-radius) var(--app-radius) 0 0', transition: 'height 0.3s ease' }} />
                     <div className="text-[10px] text-text-muted mt-1 text-center">{a.bucket}</div>
                     <div className="text-[10px] text-text-secondary">{a.count} debts</div>
                   </div>

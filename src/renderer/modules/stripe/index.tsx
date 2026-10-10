@@ -118,7 +118,7 @@ interface StripeSyncModuleProps {
   syncing?: boolean;
 }
 
-const StripeSyncModule: React.FC<StripeSyncModuleProps> = ({ onConnectionChange, syncing = false }) => {
+const StripeSyncModule: React.FC<StripeSyncModuleProps> = ({ onConnectionChange, syncing: _syncing = false }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const [apiKey, setApiKey] = useState('');
   const [savedApiKey, setSavedApiKey] = useState('');

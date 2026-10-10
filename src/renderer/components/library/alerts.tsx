@@ -412,7 +412,7 @@ export function ConfirmDialog({
           style={{
             background: confirmColor,
             border: `1px solid ${confirmColor}`,
-            color: '#fff',
+            color: 'var(--color-text-on-accent)',
             fontSize: 13,
             fontWeight: 600,
             padding: '7px 16px',

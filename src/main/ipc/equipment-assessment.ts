@@ -1,9 +1,8 @@
 import { ipcMain, dialog } from 'electron';
 import * as db from '../database';
-import { generateEquipmentAssessmentPDF, loadAndFillPDF } from '../services/equipment-assessment-pdf';
+import { generateEquipmentAssessmentPDF } from '../services/equipment-assessment-pdf';
 import type { EquipmentAssessment } from '../../shared/types/equipment-assessment';
 import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
 import { v4 as uuid } from 'uuid';
 

@@ -9,7 +9,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useAppStore } from '../../stores/appStore';
 import { useNavigation } from '../../lib/navigation';
 import PaymentRecorder from './PaymentRecorder';
-import { formatCurrency, formatStatus, formatDate, humanizeLabel, formatPaymentMethod } from '../../lib/format';
+import { formatCurrency, formatStatus, formatDate, humanizeLabel } from '../../lib/format';
 import RelatedPanel from '../../components/RelatedPanel';
 import { InvoiceStatusBadge, PaymentProgress, DueDateChip } from '../../components/library';
 import EntityTimeline from '../../components/EntityTimeline';
@@ -145,7 +145,7 @@ interface InvoiceDetailProps {
 const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const setModule = useAppStore((s) => s.setModule);
-  const nav = useNavigation();
+  const _nav = useNavigation();
 
   const sendToCollections = (id: string) => {
     sessionStorage.setItem('nav:source_invoice', id);
@@ -248,7 +248,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
       });
 
       setPageAnalysis({ pageCount, straddlers, docHeightPx: docHeight });
-    } catch (err) {
+    } catch {
       // contentDocument access can throw if cross-origin (shouldn't
       // happen with srcDoc, but defensive). Skip analysis on failure.
       setPageAnalysis(null);

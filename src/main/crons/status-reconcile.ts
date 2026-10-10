@@ -248,6 +248,6 @@ function emitFix(
         new_status: derived,
         source: 'status_reconcile_cron',
       },
-    });
+    }).catch((err) => console.error('crons/status-reconcile:', err));
   } catch { /* event-bus best-effort */ }
 }

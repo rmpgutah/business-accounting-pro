@@ -1,10 +1,9 @@
 // ─── System-Wide Wave 1: 50 features (SW1–SW50) ──────────
 // Clients, Projects, Inventory, Bills/AP, Bank Recon
 
-import { randomUUID as uuid } from 'crypto';
 import * as db from '../database';
 const now = () => new Date().toISOString();
-const today = () => now().slice(0, 10);
+const _today = () => now().slice(0, 10);
 const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
 
 // ═══ SW1–SW10: Client Analytics & Management ═════════════

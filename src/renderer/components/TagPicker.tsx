@@ -39,7 +39,7 @@ export const TagChip: React.FC<{ tag: TagRecord; onRemove?: () => void; small?: 
   return (
     <span
       className={`inline-flex items-center gap-1 ${small ? 'text-[10px] px-1.5 py-0.5' : 'text-xs px-2 py-0.5'} font-medium`}
-      style={{ background: tag.color, color: fg, borderRadius: '3px' }}
+      style={{ background: tag.color, color: fg, borderRadius: 'var(--app-radius)' }}
       title={tag.name}
     >
       <span>{tag.name}</span>
@@ -169,7 +169,7 @@ const TagPicker: React.FC<TagPickerProps> = ({
     <div className={`relative ${className}`}>
       <div
         className="flex flex-wrap gap-1 items-center min-h-[32px] px-2 py-1 bg-bg-tertiary border border-border-primary"
-        style={{ borderRadius: '4px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
         onClick={() => { setOpen(true); inputRef.current?.focus(); }}
       >
         {selectedTags.map(t => <TagChip key={t.id} tag={t} onRemove={() => removeTag(t.id)} />)}
@@ -196,7 +196,7 @@ const TagPicker: React.FC<TagPickerProps> = ({
       {open && (filtered.length > 0 || (allowCreate && search.trim() && !exactMatch)) && (
         <div
           className="absolute z-50 mt-1 w-full bg-bg-secondary border border-border-primary shadow-lg max-h-64 overflow-y-auto"
-          style={{ borderRadius: '4px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           {filtered.map(t => (
             <button

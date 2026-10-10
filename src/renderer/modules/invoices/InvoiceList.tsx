@@ -14,7 +14,6 @@ import { SummaryBar } from '../../components/SummaryBar';
 import { formatCurrency, formatDate, formatStatus, humanizeLabel } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
 import { InvoiceBulkActionBar, OverdueAlertBanner, TopClientsWidget, DSOMiniCard, AgingBucketBar } from './InvoiceUpgradesUI';
-import { useCustomizationStore } from '../../stores/customizationStore';
 import {
   useInvoicingPrefs,
   getInvoicingPrefs,
@@ -81,11 +80,11 @@ interface InvoiceListProps {
 const InvoiceList: React.FC<InvoiceListProps> = ({
   onNewInvoice,
   onViewInvoice,
-  onEditInvoice,
+  onEditInvoice: _onEditInvoice,
   onSettings,
   onCatalog,
 }) => {
-  const nav = useNavigation();
+  const _nav = useNavigation();
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const setModule = useAppStore((s) => s.setModule);
 
@@ -1185,7 +1184,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
             className="block-btn-success flex items-center gap-1.5 text-xs"
             onClick={handleBatchMarkPaid}
             disabled={batchLoading}
-            style={{ background: 'var(--color-accent-income)', color: '#fff', border: 'none', borderRadius: 'var(--app-radius)', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
+            style={{ background: 'var(--color-accent-income)', color: 'var(--color-text-on-accent)', border: 'none', borderRadius: 'var(--app-radius)', padding: '6px 12px', fontWeight: 600, cursor: 'pointer' }}
           >
             <CheckCircle size={13} />
             Mark as Paid
@@ -1267,7 +1266,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 className="text-xs font-semibold"
                 onClick={handleBulkTag}
                 disabled={batchLoading || !bulkTagText.trim()}
-                style={{ background: 'var(--color-accent-blue)', color: '#fff', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-blue)', color: 'var(--color-text-on-accent)', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Apply
               </button>
@@ -1309,7 +1308,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: 'var(--color-text-on-accent)', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>

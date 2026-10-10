@@ -348,7 +348,7 @@ export function loanContextForExpense(expenseId: string) {
       },
       payment,
     };
-  } catch (e: any) { return null; }
+  } catch { return null; }
 }
 
 // Find-or-create an expense category by name (categories use is_active,
@@ -559,7 +559,7 @@ export function reconcileLoanTotals(companyId?: string): { loans_fixed: number }
     });
     tx();
     return { loans_fixed: fixed };
-  } catch (e: any) {
+  } catch {
     return { loans_fixed: 0 };
   }
 }

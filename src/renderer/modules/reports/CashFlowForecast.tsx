@@ -53,7 +53,7 @@ const CashFlowForecast: React.FC<Props> = ({ onBack }) => {
   useEffect(() => { load(); }, [load]);
 
   // Compute max abs(net) for the inline bar visualization scale.
-  const maxNet = data ? Math.max(...data.projection.map((p) => Math.abs(p.net)), 1) : 1;
+  const _maxNet = data ? Math.max(...data.projection.map((p) => Math.abs(p.net)), 1) : 1;
   const dangerCrossed = data && data.lowestBalance.balance < 0;
 
   return (

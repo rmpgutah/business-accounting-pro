@@ -5,7 +5,7 @@
 // active loans on the list view.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Landmark, TrendingDown, ChevronRight, Wallet, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Plus, Landmark, ChevronRight, Wallet, AlertTriangle, RefreshCw } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastProvider';
 import { useAppStore } from '../../stores/appStore';

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  Bell, CheckCheck, AlertTriangle, FileText, DollarSign, Clock,
+  Bell, CheckCheck, AlertTriangle, DollarSign, Clock,
   RefreshCw, BarChart3, Landmark, X, Settings, Trash2,
 } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';

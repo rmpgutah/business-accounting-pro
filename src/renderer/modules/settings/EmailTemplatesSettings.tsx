@@ -44,7 +44,6 @@ const SAMPLE_CTX: Record<string, string> = {
 // Note: renderMarkdown() escapes all HTML before applying its limited markdown
 // transforms (bold/italic/code/link), so the resulting HTML is safe to inject.
 const PreviewBody: React.FC<{ body: string }> = ({ body }) => (
-  // eslint-disable-next-line react/no-danger
   <div dangerouslySetInnerHTML={{ __html: renderMarkdown(body) }} />
 );
 

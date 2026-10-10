@@ -145,7 +145,7 @@ const ClientRiskDashboard: React.FC<Props> = ({ onBack }) => {
                       height: 56,
                       borderRadius: 'var(--app-radius)',
                       background: COLOR_MAP[s.risk_color],
-                      color: '#fff',
+                      color: 'var(--color-text-on-accent)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',

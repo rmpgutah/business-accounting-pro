@@ -18,7 +18,7 @@
 //     deduction on Form 1040 Schedule 1 line 15 (NOT Schedule C).
 //     This is one of the most-missed deductions in DIY filing.
 
-import { computeScheduleC, type ScheduleCData } from './schedule-c';
+import { computeScheduleC } from './schedule-c';
 
 export interface ScheduleSEData {
   taxpayer_name: string;

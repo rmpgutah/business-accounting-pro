@@ -41,7 +41,7 @@ export function suggestCategory(opts: {
   amount?: number | null;
   company_id: string;
 }): CategorySuggestion {
-  const { vendor_id, vendor_name, description, amount, company_id } = opts;
+  const { vendor_id, vendor_name: _vendor_name, description, amount: _amount, company_id } = opts;
   const dbi = db.getDb();
 
   // 1. Vendor-history lookup (highest confidence signal)

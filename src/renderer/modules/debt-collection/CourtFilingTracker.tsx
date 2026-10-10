@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Gavel, Plus, Check, AlertTriangle, Clock } from 'lucide-react';
+import { Gavel, Plus, Clock } from 'lucide-react';
 import api from '../../lib/api';
 import { debtDb } from './dbHelpers';
 import { formatCurrency, formatDate, formatStatus } from '../../lib/format';

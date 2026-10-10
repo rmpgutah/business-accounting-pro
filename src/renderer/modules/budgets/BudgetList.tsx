@@ -10,7 +10,6 @@ import {
   Power,
   AlertTriangle,
   TrendingUp,
-  CheckCircle,
   Target,
 } from 'lucide-react';
 import api from '../../lib/api';
