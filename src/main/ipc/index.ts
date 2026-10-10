@@ -27,6 +27,7 @@ import { registerTreasuryFeaturesFeat } from './feat/treasury-features';
 import { registerInventoryProjectsFeaturesFeat } from './feat/inventory-projects-features';
 import { registerCrmSalesFeaturesFeat } from './feat/crm-sales-features';
 import { registerComplianceSecurityFeaturesFeat } from './feat/compliance-security-features';
+import { registerAccountingGlFeaturesFeat } from './feat/accounting-gl-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -260,121 +261,18 @@ export function registerIpcHandlers(): void {
   // ═══════════════════════════════════════════════════════════════
   // ACCOUNTING DEEP-DIVE: 90 features (F171-F260) — IPC handlers
   // ═══════════════════════════════════════════════════════════════
-  const ag = () => require('../services/accounting-gl-features');
+  registerAccountingGlFeaturesFeat(ipcMain, deps);
   const aa = () => require('../services/accounting-analytics-features');
 
   // ─── Batch A: GL & JE Operations ───
-  ipcMain.handle('feat:recurring-je:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().upsertRecurringJE({ ...r, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:recurring-je:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listRecurringJEs(cid, { active_only }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:recurring-je:due', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().dueRecurringJEs(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:recurring-je:advance', (_e, { id }: any) => { try { return ag().advanceRecurringJE(id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:recurring-je:pause', (_e, { id, paused }: any) => { try { return { ok: ag().pauseRecurringJE(id, paused !== false) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reversing-je:mark', (_e, { je_id, reverse_on_date }: any) => { try {  const _r = { ok: ag().markJEReversing(je_id, reverse_on_date) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reversing-je:link', (_e, { original_je_id, reversing_je_id }: any) => { try { return { ok: ag().linkReversingJE(original_je_id, reversing_je_id) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reversing-je:due', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().dueReversingEntries(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-template:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().upsertJETemplate({ ...t, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-template:list', (_e, { category }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listJETemplates(cid, category); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-template:use', (_e, { id }: any) => { try { ag().incrementTemplateUse(id); return { ok: true }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-fx:calc', (_e, { amount, from_rate, to_rate }: any) => { try {  const _r = ag().calcFxAdjustment(amount, from_rate, to_rate); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:ic-je:pair', (_e, opts: any) => { try { return ag().pairInterCompanyJEs(opts.parent_je_id, opts.counterparty_je_id, opts.parent_company_id, opts.counterparty_company_id, opts.notes); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:ic-je:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listInterCompanyPairs(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-import:start', (_e, { file_name, imported_by }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; const _r = ag().startJEImport(cid, file_name, imported_by); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-import:finish', (_e, { id, ...summary }: any) => { try { return { ok: ag().finishJEImport(id, summary) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-import:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listJEImports(cid, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je:clone-lines', (_e, { source_je_id }: any) => { try { return ag().cloneJELines(source_je_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-attach:add', (_e, a: any) => { try {  const _r = ag().addJEAttachment(a); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-attach:list', (_e, { je_id }: any) => { try { return ag().listJEAttachments(je_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:alloc-rule:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().upsertAllocationRule({ ...r, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:alloc-rule:apply', (_e, { rule_id, amount }: any) => { try {  const _r = ag().applyAllocation(rule_id, amount); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:alloc-rule:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listAllocationRules(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:narrative:upsert', (_e, n: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().upsertNarrative({ ...n, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:narrative:render', (_e, { slug, vars }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return ''; return ag().renderNarrative(cid, slug, vars || {}); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:narrative:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listNarratives(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je:proof', (_e, { lines }: any) => { try { return ag().proofJELines(lines || []); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je:batch-post', (_e, { ids }: any) => { try { return ag().batchPostJEs(ids || []); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-comment:add', (_e, { je_id, user_id, user_email, comment }: any) => { try {  const _r = ag().addJEComment(je_id, user_id, user_email, comment); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:je-comment:list', (_e, { je_id }: any) => { try { return ag().listJEComments(je_id); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch B: Chart of Accounts ───
-  ipcMain.handle('feat:account:set-parent', (_e, { account_id, parent_account_id }: any) => { try {  const _r = { ok: ag().setAccountParent(account_id, parent_account_id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:tree', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().getAccountTree(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:merge', (_e, { primary_id, duplicate_ids }: any) => { try { return ag().mergeAccounts(primary_id, duplicate_ids || []); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:renumber', (_e, { account_id, new_code, renamed_by, notes }: any) => { try { return ag().renumberAccount(account_id, new_code, renamed_by, notes); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:roll-up', (_e, { as_of_date }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().rollUpAccountBalances(cid, as_of_date); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:set-suspense', (_e, { account_id, is_suspense }: any) => { try {  const _r = { ok: ag().setAsSuspense(account_id, is_suspense !== false) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:get-suspense', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ag().getSuspenseAccount(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:close', (_e, { account_id, reason }: any) => { try { return { ok: ag().closeAccount(account_id, reason) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:reopen', (_e, { account_id }: any) => { try { return { ok: ag().reopenAccount(account_id) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:set-tax-mapping', (_e, { account_id, tax_line_code, tax_form }: any) => { try {  const _r = { ok: ag().setAccountTaxMapping(account_id, tax_line_code, tax_form) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:by-tax-line', (_e, { tax_line_code }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().getAccountsByTaxLine(cid, tax_line_code); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:account:set-cash-flow', (_e, { account_id, section, subsection }: any) => { try {  const _r = { ok: ag().setAccountCashFlowMapping(account_id, section, subsection) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:opening-balance:set', (_e, b: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().setOpeningBalance({ ...b, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:opening-balance:list', (_e, { as_of_date }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listOpeningBalances(cid, as_of_date); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch C: Period Close + Adjustments ───
-  ipcMain.handle('feat:close-tpl:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().upsertCloseTemplate({ ...t, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:close-tpl:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listCloseTemplates(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:accrual:create', (_e, a: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().createAccrual({ ...a, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:accrual:post', (_e, { id, posted_je_id }: any) => { try {  const _r = { ok: ag().postAccrual(id, posted_je_id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:accrual:due-reversals', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().dueAccrualReversals(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:accrual:mark-reversed', (_e, { id, reversal_je_id }: any) => { try {  const _r = { ok: ag().markAccrualReversed(id, reversal_je_id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:accrual:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listAccruals(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:prepaid:create', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().createPrepaidSchedule({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:prepaid:recognize', (_e, { id, recognition_date, posted_je_id }: any) => { try { return ag().recognizePrepaid(id, recognition_date, posted_je_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:prepaid:due', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().duePrepaidRecognitions(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:prepaid:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listPrepaidSchedules(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:deferred-rev:create', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().createDeferredRevenueSchedule({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:deferred-rev:recognize', (_e, { id, recognition_date, posted_je_id }: any) => { try { return ag().recognizeDeferredRevenue(id, recognition_date, posted_je_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:deferred-rev:due', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().dueDeferredRevenue(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:deferred-rev:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listDeferredRevenue(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:auto:bank-fee', (_e, { amount, account_id, description }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ag().autoBookBankFee(cid, amount, account_id, description); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:auto:interest-accrual', (_e, { amount, account_id, description }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ag().autoBookInterestAccrual(cid, amount, account_id, description); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:period:is-locked', (_e, { date }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return false; return ag().isPeriodLocked(cid, date); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:close:quarter-checklist', (_e, { quarter_end_date }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ag().quarterEndChecklist(cid, quarter_end_date); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:close:year-end', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ag().runYearEndClose({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:close:list-year-ends', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listYearEndCloses(cid); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch D: Fixed Assets Advanced ───
-  ipcMain.handle('feat:asset:dispose', (_e, d: any) => { try { const cid = db.getCurrentCompanyId(); return ag().disposeAsset({ ...d, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset:disposals', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listAssetDisposals(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset:transfer', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return ag().transferAsset({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset:transfers', (_e, { asset_id }: any) => { try { return ag().listAssetTransfers(asset_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset:partial-dispose', (_e, d: any) => { try { const cid = db.getCurrentCompanyId(); return ag().partialDispose({ ...d, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset:impair', (_e, i: any) => { try { const cid = db.getCurrentCompanyId(); return ag().impairAsset({ ...i, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset:impairments', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listImpairments(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset:revalue', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); return ag().revalueAsset({ ...r, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset:componentize', (_e, { parent_asset_id, components }: any) => { try { return ag().componentizeAsset(parent_asset_id, components || []); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:aro:create', (_e, a: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().createARO({ ...a, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:aro:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listAROs(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset-ins:upsert', (_e, i: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().upsertAssetInsurance({ ...i, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset-ins:list', (_e, { asset_id }: any) => { try { return ag().listAssetInsurance(asset_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset-warranty:upsert', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().upsertAssetWarranty({ ...w, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset-warranty:list', (_e, { asset_id }: any) => { try { return ag().listAssetWarranties(asset_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset-warranty:expiring', (_e, { days_ahead }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().expiringWarranties(cid, days_ahead || 60); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:asset:set-convention', (_e, { asset_id, convention }: any) => { try {  const _r = { ok: ag().setDepreciationConvention(asset_id, convention) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch E: Revenue Recognition ───
-  ipcMain.handle('feat:contract:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().upsertContract({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:contract:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listContracts(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:obligation:upsert', (_e, o: any) => { try {  const _r = ag().upsertObligation(o); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:obligation:list', (_e, { contract_id }: any) => { try { return ag().listObligations(contract_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:contract-mod:log', (_e, m: any) => { try {  const _r = ag().logContractModification(m); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:contract-mod:list', (_e, { contract_id }: any) => { try { return ag().listContractModifications(contract_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:ssp:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().upsertSSP({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:ssp:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listSSPs(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:var-consid:record', (_e, v: any) => { try {  const _r = ag().recordVariableConsideration(v); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:rev-milestone:create', (_e, m: any) => { try {  const _r = ag().createRevenueMilestone(m); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:rev-milestone:complete', (_e, { milestone_id, completion_date, posted_je_id }: any) => { try {  const _r = ag().completeMilestone(milestone_id, completion_date, posted_je_id); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:rev-milestone:list', (_e, { obligation_id }: any) => { try { return ag().listMilestones(obligation_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:sub-waterfall', (_e, { months_ahead }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().subscriptionWaterfall(cid, months_ahead || 12); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bundle:allocate', (_e, { items, transaction_price }: any) => { try { return ag().allocateBundleRevenue(items || [], transaction_price); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:returns-reserve:calc', (_e, { period_start, period_end, historical_rate }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; const _r = ag().calculateReturnsReserve(cid, period_start, period_end, historical_rate); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:returns-reserve:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listReturnsReserves(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:rebate:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().upsertRebateAccrual({ ...r, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:rebate:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listRebateAccruals(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:comm-defer:create', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ag().deferCommission({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:comm-defer:amortize', (_e, { deferral_id, amount }: any) => { try { return ag().amortizeCommission(deferral_id, amount); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:comm-defer:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ag().listCommissionDeferrals(cid); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch F: Cost Accounting ───
   ipcMain.handle('feat:cost-center:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertCostCenter({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
