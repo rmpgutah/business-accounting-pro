@@ -18,6 +18,7 @@ import { registerMiscIpc } from './domains/misc';
 import { registerSyncBackupIpc } from './domains/sync-backup';
 import { registerAdminSettingsIpc } from './domains/admin-settings';
 import { registerWorkflowsAutomationIpc } from './domains/workflows-automation';
+import { registerInvoiceExpenseFeaturesFeat } from './feat/invoice-expense-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -130,36 +131,8 @@ export function registerIpcHandlers(): void {
 
 
   // ─── Batch 2: Invoicing & Expense features (20) ────────────────
-  const ie = () => require('../services/invoice-expense-features');
-  ipcMain.handle('feat:invoice:late-fee:compute', (_e, { invoice_id }: any) => { try { return ie().computeLateFee(invoice_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:invoice:late-fee:apply', (_e, { invoice_id }: any) => { try { const r = ie().applyLateFee(invoice_id); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:invoice:reminders:schedule', (_e, { invoice_id, days }: any) => { try { const r = { scheduled: ie().scheduleInvoiceReminders(invoice_id, days || [7, 14, 30]) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:invoice:reminders:pending', (_e, { as_of }: any = {}) => { try { return ie().pendingReminders(as_of); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:invoice:reminders:mark-sent', (_e, { id }: any) => { try { const r = { ok: ie().markReminderSent(id) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:invoice:recalc-payment-state', (_e, { invoice_id }: any) => { try { const r = ie().recalcInvoicePaymentState(invoice_id); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:credit-memo:create', (_e, memo: any) => { try { const cid = db.getCurrentCompanyId(); const r = ie().createCreditMemo({ ...memo, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:credit-memo:apply', (_e, { memo_id, invoice_id, amount }: any) => { try { const r = ie().applyCreditMemo(memo_id, invoice_id, amount); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:credit-memo:list', (_e, { client_id }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().listCreditMemos(cid, client_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:invoice:batch-send:candidates', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().getBatchSendCandidates(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:invoice:templates:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().listInvoiceTemplates(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:invoice:templates:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); const r = ie().upsertInvoiceTemplate({ ...t, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:invoice:exchange-rate', (_e, { invoice_id, rate }: any) => { try { const r = { ok: ie().setInvoiceExchangeRate(invoice_id, rate) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:invoice:deposit', (_e, { invoice_id, amount, due_date }: any) => { try { const r = { ok: ie().setInvoiceDeposit(invoice_id, amount, due_date) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:budget-alert:upsert', (_e, record: any) => { try { const cid = db.getCurrentCompanyId(); const r = ie().upsertBudgetAlert({ ...record, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:budget-alert:check', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().checkBudgetAlerts(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:vendor:suggest', (_e, { prefix, limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().suggestVendors(cid, prefix, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:expense:split:create', (_e, { expense_id, splits }: any) => { try { const r = ie().createExpenseSplit(expense_id, splits); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:expense:split:get', (_e, { expense_id }: any) => { try { return ie().getExpenseSplits(expense_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reimbursement:create', (_e, record: any) => { try { const cid = db.getCurrentCompanyId(); const r = ie().createReimbursement({ ...record, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reimbursement:approve', (_e, { id, approved_by }: any) => { try { const r = { ok: ie().approveReimbursement(id, approved_by) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reimbursement:reject', (_e, { id, reason }: any) => { try { const r = { ok: ie().rejectReimbursement(id, reason) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reimbursement:pay', (_e, { id, method }: any) => { try { const r = { ok: ie().payReimbursement(id, method) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reimbursement:list', (_e, { status }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().listReimbursements(cid, status); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:per-diem:upsert', (_e, record: any) => { try { const cid = db.getCurrentCompanyId(); const r = ie().upsertPerDiemRate({ ...record, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:per-diem:lookup', (_e, { city, state, year }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ie().lookupPerDiem(cid, city, state, year); } catch (e: any) { return { error: e?.message }; } });
+  registerInvoiceExpenseFeaturesFeat(ipcMain, deps);
   ipcMain.handle('feat:expense:bulk-recategorize', (_e, { expense_ids, category_id }: any) => { const r = eu().bulkRecategorize(expense_ids || [], category_id); scheduleAutoBackup(); return r; });
-  ipcMain.handle('feat:expense:report', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ie().buildExpenseReport(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:expense:duplicates', (_e, { expense, days_window }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ie().findExpenseDuplicates(cid, expense, days_window); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch 3: Banking & Payroll features (15) ─────────────────
   const bp = () => require('../services/banking-payroll-features');
