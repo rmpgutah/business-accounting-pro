@@ -37,6 +37,7 @@ import { registerInvoicePaymentFeaturesFeat } from './feat/invoice-payment-featu
 import { registerExpenseFinanceFeaturesFeat } from './feat/expense-finance-features';
 import { registerExpensePolicyCardFeaturesFeat } from './feat/expense-policy-card-features';
 import { registerExpenseCustomMobileFeaturesFeat } from './feat/expense-custom-mobile-features';
+import { registerExpenseUpgradesFeaturesFeat } from './feat/expense-upgrades-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -69,9 +70,7 @@ export function registerIpcHandlers(): void {
   _ipcHandlersRegistered = true;
 
   const deps = createIpcDeps();
-  const {
-    scheduleAutoBackup, findClosedPeriod, eu,
-  } = deps;
+  const { findClosedPeriod } = deps;
 
   // Advanced System (2026-04-28) — register built-in commands for Cmd+K palette
   // and ensure EventBus singleton is initialized.
@@ -150,7 +149,7 @@ export function registerIpcHandlers(): void {
 
   // ─── Batch 2: Invoicing & Expense features (20) ────────────────
   registerInvoiceExpenseFeaturesFeat(ipcMain, deps);
-  ipcMain.handle('feat:expense:bulk-recategorize', (_e, { expense_ids, category_id }: any) => { const r = eu().bulkRecategorize(expense_ids || [], category_id); scheduleAutoBackup(); return r; });
+  registerExpenseUpgradesFeaturesFeat(ipcMain, deps);
 
   // ─── Batch 3: Banking & Payroll features (15) ─────────────────
   registerBankingPayrollFeaturesFeat(ipcMain, deps);
