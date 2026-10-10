@@ -40,4 +40,16 @@ describe('admin-settings domain', () => {
     expect(rows).toHaveLength(1);
     expect(scheduleAutoBackup).toHaveBeenCalled();
   });
+
+  it('settings:set persists a setting, settings:get reads it, and a backup is scheduled', async () => {
+    await ipc.invoke('settings:set', { key: 'theme', value: 'dark' });
+    const row = db
+      .getDb()
+      .prepare('SELECT value FROM settings WHERE company_id = ? AND key = ?')
+      .get(companyId, 'theme') as any;
+    expect(row.value).toBe('dark');
+    expect(scheduleAutoBackup).toHaveBeenCalled();
+    const got = await ipc.invoke('settings:get', 'theme');
+    expect(got).toBe('dark');
+  });
 });

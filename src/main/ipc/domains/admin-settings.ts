@@ -8,6 +8,7 @@ import {
   updateNotificationPreferences,
 } from '../../services/notification-engine';
 import type { IpcDeps } from '../core/types';
+import { shell } from 'electron';
 
 // ── Helpers for tag rules + custom fields ──
 
@@ -1653,4 +1654,326 @@ export function registerAdminSettingsIpc(ipcMain: IpcMain, deps: IpcDeps): void 
       .prepare('SELECT * FROM esign_audit_log WHERE document_id = ? ORDER BY created_at DESC')
       .all(documentId);
   });
+  // ─── P1.13: Trash (soft-delete recovery) ──────────────
+  // Read-side counterpart to db.remove() now that supported tables
+  // soft-delete. The Trash UI calls these to list / restore / purge
+  // records the user has deleted within the 30-day retention window.
+
+  // ─── Orphan Detection ─────────────────────────────
+  // INTEGRITY: scans for rows whose parent has been deleted out from under
+  // them. SQLite's FK enforcement only catches new violations going forward;
+  // historical data (pre-PRAGMA, manual deletes via raw SQL, etc.) can still
+  // leave orphans. Reports counts only — does not auto-clean.
+  ipcMain.handle('data:check-orphans', () => {
+    try {
+      const dbi = db.getDb();
+      const checks: Array<{ kind: string; sql: string }> = [
+        {
+          kind: 'invoice_line_items_no_invoice',
+          sql: `SELECT COUNT(*) AS c FROM invoice_line_items li
+                 LEFT JOIN invoices i ON i.id = li.invoice_id
+                 WHERE i.id IS NULL`,
+        },
+        {
+          kind: 'journal_entry_lines_no_account',
+          sql: `SELECT COUNT(*) AS c FROM journal_entry_lines jel
+                 LEFT JOIN accounts a ON a.id = jel.account_id
+                 WHERE a.id IS NULL`,
+        },
+        {
+          kind: 'journal_entry_lines_no_entry',
+          sql: `SELECT COUNT(*) AS c FROM journal_entry_lines jel
+                 LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
+                 WHERE je.id IS NULL`,
+        },
+        {
+          kind: 'payments_no_invoice',
+          sql: `SELECT COUNT(*) AS c FROM payments p
+                 LEFT JOIN invoices i ON i.id = p.invoice_id
+                 WHERE i.id IS NULL`,
+        },
+        {
+          kind: 'expense_line_items_no_expense',
+          sql: `SELECT COUNT(*) AS c FROM expense_line_items eli
+                 LEFT JOIN expenses e ON e.id = eli.expense_id
+                 WHERE e.id IS NULL`,
+        },
+        {
+          kind: 'debt_payments_no_debt',
+          sql: `SELECT COUNT(*) AS c FROM debt_payments dp
+                 LEFT JOIN debts d ON d.id = dp.debt_id
+                 WHERE d.id IS NULL`,
+        },
+        {
+          kind: 'debt_communications_no_debt',
+          sql: `SELECT COUNT(*) AS c FROM debt_communications dc
+                 LEFT JOIN debts d ON d.id = dc.debt_id
+                 WHERE d.id IS NULL`,
+        },
+        {
+          kind: 'bill_line_items_no_bill',
+          sql: `SELECT COUNT(*) AS c FROM bill_line_items bli
+                 LEFT JOIN bills b ON b.id = bli.bill_id
+                 WHERE b.id IS NULL`,
+        },
+        {
+          kind: 'bill_payments_no_bill',
+          sql: `SELECT COUNT(*) AS c FROM bill_payments bp
+                 LEFT JOIN bills b ON b.id = bp.bill_id
+                 WHERE b.id IS NULL`,
+        },
+      ];
+      const results: Record<string, number> = {};
+      let total = 0;
+      for (const chk of checks) {
+        try {
+          const row = dbi.prepare(chk.sql).get() as any;
+          const n = Number(row?.c || 0);
+          results[chk.kind] = n;
+          total += n;
+        } catch (_err) {
+          // Table may not exist on older DBs — record -1 so caller can distinguish from 0.
+          results[chk.kind] = -1;
+        }
+      }
+      return { total, counts: results };
+    } catch (err: any) {
+      return { error: err?.message, total: 0, counts: {} };
+    }
+  });
+  // ─── P1.15/P1.16/P1.17: Integrity check + cleanup ─────
+  // These complement data:check-orphans with broader checks
+  // (PRAGMA integrity_check, schema-drift validator, generic
+  // FK-list orphan scanner). One-click cleanup endpoint NULLs
+  // out the FK column on orphaned rows — irreversible, so the
+  // UI confirms before invoking.
+  ipcMain.handle('integrity:check', (_event, opts?: { skipOrphanScan?: boolean }) => {
+    try {
+      const { runIntegrityCheck } = require('../crons/integrity-check');
+      return runIntegrityCheck(opts);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('integrity:cleanup-orphans', (_event, { target }: { target: string }) => {
+    try {
+      const { cleanupOrphans } = require('../crons/integrity-check');
+      const r = cleanupOrphans(target);
+      const cid = db.getCurrentCompanyId();
+      if (cid) db.logAudit(cid, 'integrity', target, 'cleanup_orphans', { cleaned: r.cleaned });
+      scheduleAutoBackup();
+      return r;
+    } catch (err: any) {
+      return { cleaned: 0, error: err?.message };
+    }
+  });
+  // ── Automation manual-trigger handlers ──────────────────────
+  // Balance-aware invoice/bill status reconcile (also runs on a 6h cron).
+  ipcMain.handle('maintenance:reconcile-status', () => {
+    try {
+      const { runStatusReconcile } = require('../crons/status-reconcile');
+      const r = runStatusReconcile();
+      scheduleAutoBackup();
+      return r;
+    } catch (err: any) {
+      return { invoicesFixed: 0, billsFixed: 0, companiesScanned: 0, errors: [err?.message] };
+    }
+  });
+  // ─── P6.70: Webhook subscriptions CRUD ─────────────────
+  ipcMain.handle('webhooks:list', () => {
+    try {
+      const cid = db.getCurrentCompanyId();
+      if (!cid) return [];
+      return db
+        .getDb()
+        .prepare(
+          'SELECT id, event_type, target_url, enabled, last_fired_at, last_status, description FROM webhook_subscriptions WHERE company_id = ? ORDER BY created_at DESC',
+        )
+        .all(cid);
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle(
+    'webhooks:save',
+    (
+      _event,
+      payload: {
+        id?: string;
+        event_type: string;
+        target_url: string;
+        secret?: string;
+        enabled?: number;
+        description?: string;
+      },
+    ) => {
+      try {
+        const cid = db.getCurrentCompanyId();
+        if (!cid) return { error: 'No active company' };
+        if (!payload.event_type || !payload.target_url)
+          return { error: 'event_type and target_url required' };
+        // Reject non-https URLs except localhost.
+        try {
+          const u = new URL(payload.target_url);
+          if (
+            u.protocol !== 'https:' &&
+            !(u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1'))
+          ) {
+            return { error: 'Webhook target must be HTTPS (or http://localhost for testing)' };
+          }
+        } catch {
+          return { error: 'Invalid target_url' };
+        }
+        if (payload.id) {
+          db.update('webhook_subscriptions', payload.id, {
+            event_type: payload.event_type,
+            target_url: payload.target_url,
+            secret: payload.secret ?? '',
+            enabled: payload.enabled ?? 1,
+            description: payload.description ?? '',
+          });
+          scheduleAutoBackup();
+          return { ok: true, id: payload.id };
+        }
+        const r = db.create('webhook_subscriptions', { ...payload, company_id: cid });
+        scheduleAutoBackup();
+        return { ok: true, id: r.id };
+      } catch (err: any) {
+        return { error: err?.message };
+      }
+    },
+  );
+  ipcMain.handle('webhooks:delete', (_event, { id }: { id: string }) => {
+    try {
+      db.removeHard('webhook_subscriptions', id);
+      scheduleAutoBackup();
+      return { ok: true };
+    } catch (err: any) {
+      return { error: err?.message };
+    }
+  });
+  ipcMain.handle('integrity:vacuum', () => {
+    try {
+      const { runVacuum } = require('../crons/integrity-check');
+      const r = runVacuum();
+      const cid = db.getCurrentCompanyId();
+      if (cid)
+        db.logAudit(cid, 'integrity', 'vacuum', 'vacuum', {
+          sizeBefore: r.sizeBefore,
+          sizeAfter: r.sizeAfter,
+        });
+      return r;
+    } catch (err: any) {
+      return { ok: false, error: err?.message };
+    }
+  });
+  // ─── Settings get / set ───────────────────────────────────
+  // Bug fix: settings module queried all companies' settings because
+  // api.query('settings') had no company_id filter; also needed
+  // a key-value interface to read/write individual settings cleanly.
+  ipcMain.handle('settings:get', (_event, key: string) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+    const row = dbInstance
+      .prepare('SELECT value FROM settings WHERE company_id = ? AND key = ?')
+      .get(companyId, key) as any;
+    return row?.value ?? null;
+  });
+  ipcMain.handle('settings:set', (_event, { key, value }: { key: string; value: string }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return;
+    const dbInstance = db.getDb();
+    const existing = dbInstance
+      .prepare('SELECT id FROM settings WHERE company_id = ? AND key = ?')
+      .get(companyId, key) as any;
+    if (existing) {
+      dbInstance
+        .prepare("UPDATE settings SET value = ?, updated_at = datetime('now') WHERE id = ?")
+        .run(value, existing.id);
+    } else {
+      db.create('settings', { company_id: companyId, key, value });
+    }
+    // Back up on BOTH paths — the first save of any setting for a company hit
+    // the INSERT branch, which previously skipped scheduleAutoBackup(), so a
+    // brand-new API key / SMTP config could be lost on restore until the next
+    // unrelated write happened to trigger a backup.
+    scheduleAutoBackup();
+  });
+  // ─── Settings list (company-scoped) ──────────────────────
+  // Bug fix: api.query('settings') returned all companies' settings.
+  // This handler scopes to the current company.
+  ipcMain.handle('settings:list', () => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    return db.queryAll('settings', { company_id: companyId });
+  });
+  ipcMain.handle(
+    'email:send-templated',
+    async (_e, { companyId, templateKey, entityType, entityId, overrideTo }: any) => {
+      try {
+        ensureDefaultEmailTemplates(companyId);
+        const tmpl = db
+          .getDb()
+          .prepare(`SELECT * FROM email_templates WHERE company_id = ? AND key = ?`)
+          .get(companyId, templateKey) as any;
+        if (!tmpl) return { error: 'Template not found' };
+        const ctx = buildTemplateContext(companyId, entityType, entityId);
+        const subject = resolveTemplateTokens(tmpl.subject || '', ctx);
+        const body = resolveTemplateTokens(tmpl.body || '', ctx);
+        let to = overrideTo;
+        if (!to) {
+          if ((tmpl.default_to || '').includes('client.email')) to = ctx.client_email || '';
+          else to = tmpl.default_to || '';
+        }
+        const mailto = `mailto:${encodeURIComponent(to || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        try {
+          shell.openExternal(mailto).catch((err) => console.error('ipc/index:', err));
+        } catch {}
+        try {
+          db.create('email_log', {
+            company_id: companyId,
+            entity_type: entityType,
+            entity_id: entityId,
+            recipient: to || '',
+            subject,
+            status: 'opened_in_client',
+            template_key: templateKey,
+          });
+          scheduleAutoBackup();
+        } catch {}
+        return { ok: true, to, subject, body };
+      } catch (err: any) {
+        return { error: err?.message };
+      }
+    },
+  );
+  ipcMain.handle(
+    'email:bulk-send-templated',
+    async (_e, { companyId, templateKey, items }: any) => {
+      try {
+        const results: any[] = [];
+        const tmpl = db
+          .getDb()
+          .prepare(`SELECT * FROM email_templates WHERE company_id = ? AND key = ?`)
+          .get(companyId, templateKey) as any;
+        for (const it of items) {
+          if (!tmpl) {
+            results.push({ ...it, error: 'no template' });
+            continue;
+          }
+          const ctx = buildTemplateContext(companyId, it.entityType, it.entityId);
+          const subject = resolveTemplateTokens(tmpl.subject || '', ctx);
+          const body = resolveTemplateTokens(tmpl.body || '', ctx);
+          const to =
+            it.overrideTo ||
+            ((tmpl.default_to || '').includes('client.email') ? ctx.client_email : tmpl.default_to);
+          results.push({ ...it, to, subject, body });
+        }
+        return { ok: true, results };
+      } catch (err: any) {
+        return { error: err?.message };
+      }
+    },
+  );
 }
