@@ -1,21 +1,26 @@
 import type { IpcMain } from 'electron';
 import { defineHandler } from './defineHandler';
-import type { IpcDeps } from './types';
+import type { HandlerCtx, IpcDeps } from './types';
 
-// Convention: the IPC args come first and the HandlerCtx is ALWAYS the last argument.
-// (A `[...A, HandlerCtx]` tuple does not type-check for variadic `any[]` handlers, so it is typed loosely.)
+// Convention: exactly one IPC payload (undefined when the renderer sends none); ctx is always last.
 export interface FeatSpec<S> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  call: (s: S, ...args: any[]) => unknown;
+  call: (s: S, payload: any, ctx: HandlerCtx) => unknown;
   mutates?: boolean;
   requiresCompany?: unknown;
 }
 
 export function featHandlers<S>(ipc: Pick<IpcMain, 'handle'>, deps: IpcDeps, service: () => S, table: Record<string, FeatSpec<S>>): void {
-  let s: S | undefined;
+  let s: S;
+  let loaded = false;
   for (const [channel, spec] of Object.entries(table)) {
     const { call, ...rest } = spec;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    defineHandler(ipc, deps, channel, { ...rest, call: (ctx, ...args: unknown[]) => call((s ??= service()), ...(args as any[]), ctx) });
+    defineHandler(ipc, deps, channel, {
+      ...rest,
+      call: (ctx, ...args: unknown[]) => {
+        if (!loaded) { s = service(); loaded = true; }
+        return call(s, args[0], ctx);
+      },
+    });
   }
 }

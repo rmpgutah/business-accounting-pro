@@ -19,4 +19,21 @@ describe('featHandlers', () => {
     expect(loads).toHaveBeenCalledTimes(1);
     expect(deps.scheduleAutoBackup).toHaveBeenCalledTimes(1);
   });
+
+  it('passes undefined payload and a real ctx when invoked with no args', async () => {
+    const t = createTestDb();
+    featHandlers(ipcMain as any, { scheduleAutoBackup: vi.fn() } as any, () => ({}), {
+      'feat:t:noargs': { call: (_s, p, ctx) => ({ p, cid: ctx.cid }) },
+    });
+    expect(await (ipcMain as any).invoke('feat:t:noargs')).toEqual({ p: undefined, cid: t.companyId });
+  });
+  it('converts thrown errors to { error } and does not back up', async () => {
+    createTestDb();
+    const deps = { scheduleAutoBackup: vi.fn() } as any;
+    featHandlers(ipcMain as any, deps, () => ({}), {
+      'feat:t:boom': { call: () => { throw new Error('bad'); }, mutates: true },
+    });
+    expect(await (ipcMain as any).invoke('feat:t:boom', {})).toEqual({ error: 'bad' });
+    expect(deps.scheduleAutoBackup).not.toHaveBeenCalled();
+  });
 });
