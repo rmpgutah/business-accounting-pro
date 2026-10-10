@@ -1,5 +1,5 @@
 import type { Channel } from '@shared/ipc-channels';
-import type { ArgsOf, ResultOf } from '@shared/ipc-contract';
+import type { ArgsOf, ResultOf, SaveResult } from '@shared/ipc-contract';
 
 declare global {
   interface Window {
@@ -51,11 +51,6 @@ const invoke = <C extends Channel>(channel: C, ...args: ArgsOf<C>): Promise<Resu
 const webOn =
   (_channel: string, _callback: (...args: any[]) => void): (() => void) =>
   () => {};
-
-interface SaveResult {
-  id?: string;
-  error?: string;
-}
 
 interface SavePayload {
   invoiceId?: string | null;

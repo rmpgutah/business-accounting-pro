@@ -4,7 +4,8 @@
 # Emergency override:  SKIP_HOOKS=1 git commit ...
 if [ "$SKIP_HOOKS" = "1" ]; then echo "[pre-commit] SKIP_HOOKS=1 — skipping."; exit 0; fi
 if git diff --cached --name-only | grep -qE '^src/main/(ipc|integrations)/'; then
-  npm run -s gen:channels && git add src/shared/ipc-channels.ts
+  npm run -s gen:channels || exit 1
+  git add src/shared/ipc-channels.ts
 fi
 npx lint-staged || exit 1
 STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx)$' | grep -v '\.test\.' | tr '\n' ' ')

@@ -1,4 +1,4 @@
-// @ts-ignore -- tsx/cjs has no type declarations; registers a .ts require hook for lazy require() in handlers
+// tsx/cjs registers a .ts require hook for lazy require() in handlers (typed via tsx-cjs.d.ts)
 import 'tsx/cjs';
 import Module from 'module';
 import path from 'path';

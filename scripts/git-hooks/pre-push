@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-push gate: block pushes that don't type-check.
+# Pre-push gate: block pushes that don't type-check or fail the test suite.
 #
 # This exists because concurrent sessions once merged work that didn't
 # compile straight onto a shared branch (main went red). A fast `tsc
