@@ -23,6 +23,7 @@ import { registerBankingPayrollFeaturesFeat } from './feat/banking-payroll-featu
 import { registerReportsAnalyticsFeaturesFeat } from './feat/reports-analytics-features';
 import { registerClientVendorDocFeaturesFeat } from './feat/client-vendor-doc-features';
 import { registerAutomationFeaturesFeat } from './feat/automation-features';
+import { registerTreasuryFeaturesFeat } from './feat/treasury-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -163,76 +164,26 @@ export function registerIpcHandlers(): void {
   // Quick actions (dashboard shortcuts)
 
   // ─── Batch 7: Banking, Treasury, Multi-Currency (20) ───────────
-  const tr = () => require('../services/treasury-features');
+  registerTreasuryFeaturesFeat(ipcMain, deps);
   // F91 cash position
-  ipcMain.handle('feat:cash-position:capture', (_e, { snapshot_date }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; const _r = tr().captureCashPosition(cid, snapshot_date); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cash-position:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listCashPositionSnapshots(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   // F92 cash forecast
-  ipcMain.handle('feat:cash-forecast:rebuild', (_e, { days_ahead }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; const _r = tr().rebuildCashForecast(cid, days_ahead || 90); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cash-forecast:get', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().getCashForecast(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   // F93 FX rates
-  ipcMain.handle('feat:fx-rate:upsert', (_e, r: any) => { try {  const _r = tr().upsertFxRate(r); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:fx-rate:get', (_e, { from, to, as_of_date }: any) => { try { return tr().getFxRate(from, to, as_of_date); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:fx-rate:list', (_e, opts: any = {}) => { try { return tr().listFxRates(opts); } catch (e: any) { return { error: e?.message }; } });
   // F94 FX revaluation
-  ipcMain.handle('feat:fx-revaluation:run', (_e, { as_of_date, created_by }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; const _r = tr().runFxRevaluation(cid, as_of_date, created_by); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:fx-revaluation:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listFxRevaluationRuns(cid, limit); } catch (e: any) { return { error: e?.message }; } });
   // F96 wire transfers
-  ipcMain.handle('feat:wire-transfer:upsert', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().upsertWireTransfer({ ...w, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:wire-transfer:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listWireTransfers(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   // F97 ACH batches
-  ipcMain.handle('feat:ach-batch:create', (_e, b: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().createAchBatch({ ...b, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:ach-batch:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listAchBatches(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:ach-batch:items', (_e, { batch_id }: any) => { try { return tr().getAchBatchItems(batch_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:ach-batch:mark-submitted', (_e, { batch_id, nacha_file_path }: any) => { try {  const _r = { ok: tr().markAchBatchSubmitted(batch_id, nacha_file_path) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
   // F98 bank fee categorization
-  ipcMain.handle('feat:bank-fee-cat:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().upsertBankFeeCategory({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bank-fee-cat:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listBankFeeCategories(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bank-fee-cat:suggest', (_e, { description }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return tr().suggestBankFeeCategory(cid, description); } catch (e: any) { return { error: e?.message }; } });
   // F99 bank match log
-  ipcMain.handle('feat:bank-match:log', (_e, { transaction_id, candidate }: any) => { try { const cid = db.getCurrentCompanyId(); tr().logBankMatchAttempt(cid, transaction_id, candidate); const _r = { ok: true }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bank-match:list', (_e, { transaction_id, limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listBankMatchAttempts(cid, transaction_id, limit); } catch (e: any) { return { error: e?.message }; } });
   // F100 stop payments
-  ipcMain.handle('feat:stop-payment:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().upsertStopPayment({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:stop-payment:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listStopPayments(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   // F101 pending deposits
-  ipcMain.handle('feat:pending-deposit:upsert', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().upsertPendingDeposit({ ...p, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:pending-deposit:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listPendingDeposits(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:pending-deposit:float', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return { total_pending: 0, count: 0 }; return tr().totalPendingFloat(cid); } catch (e: any) { return { error: e?.message }; } });
   // F102 petty cash
-  ipcMain.handle('feat:petty-cash:log', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().logPettyCash({ ...p, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:petty-cash:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listPettyCash(cid, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:petty-cash:balance', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return 0; return tr().pettyCashBalance(cid); } catch (e: any) { return { error: e?.message }; } });
   // F103 treasury investments
-  ipcMain.handle('feat:treasury:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().upsertTreasuryInvestment({ ...t, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:treasury:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listTreasuryInvestments(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   // F104 letters of credit
-  ipcMain.handle('feat:loc:upsert', (_e, lc: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().upsertLetterOfCredit({ ...lc, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:loc:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listLettersOfCredit(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   // F105 loan covenants
-  ipcMain.handle('feat:covenant:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().upsertLoanCovenant({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:covenant:measure', (_e, { covenant_id, value }: any) => { try {  const _r = tr().recordCovenantMeasurement(covenant_id, value); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:covenant:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listLoanCovenants(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   // F106 sweep rules
-  ipcMain.handle('feat:sweep:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().upsertSweepRule({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:sweep:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listSweepRules(cid, !!active_only); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:sweep:evaluate', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().evaluateSweepRules(cid); } catch (e: any) { return { error: e?.message }; } });
   // F107 inter-company transfers
-  ipcMain.handle('feat:inter-co:record', (_e, t: any) => { try {  const _r = tr().recordInterCompanyTransfer(t); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:inter-co:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); return tr().listInterCompanyTransfers({ company_id: cid, ...opts }); } catch (e: any) { return { error: e?.message }; } });
   // F108 credit card statements
-  ipcMain.handle('feat:cc-stmt:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().upsertCreditCardStatement({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cc-stmt:add-lines', (_e, { statement_id, lines }: any) => { try {  const _r = tr().addStatementLines(statement_id, lines); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cc-stmt:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listCreditCardStatements(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cc-stmt:lines', (_e, { statement_id }: any) => { try { return tr().getStatementLines(statement_id); } catch (e: any) { return { error: e?.message }; } });
   // F109 lockbox imports
-  ipcMain.handle('feat:lockbox:import', (_e, imp: any) => { try { const cid = db.getCurrentCompanyId(); const _r = tr().importLockbox({ ...imp, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:lockbox:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listLockboxImports(cid, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:lockbox:items', (_e, { import_id }: any) => { try { return tr().getLockboxItems(import_id); } catch (e: any) { return { error: e?.message }; } });
   // F110 positive pay
-  ipcMain.handle('feat:positive-pay:generate', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return tr().generatePositivePayFile(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:positive-pay:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return tr().listPositivePayFiles(cid, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:positive-pay:mark-submitted', (_e, { id }: any) => { try {  const _r = { ok: tr().markPositivePayFileSubmitted(id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch 8: Inventory, Projects, Time (20) ───────────
   const ip = () => require('../services/inventory-projects-features');
