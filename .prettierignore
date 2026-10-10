@@ -4,3 +4,4 @@ cloudflare-app/dist
 landing-page
 *.sql
 *.md
+src/main/ipc/index.ts
