@@ -30,6 +30,7 @@ import { registerComplianceSecurityFeaturesFeat } from './feat/compliance-securi
 import { registerAccountingGlFeaturesFeat } from './feat/accounting-gl-features';
 import { registerAccountingAnalyticsFeaturesFeat } from './feat/accounting-analytics-features';
 import { registerDynamicSearchBulkFeaturesFeat } from './feat/dynamic-search-bulk-features';
+import { registerDynamicPowerFeaturesFeat } from './feat/dynamic-power-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -288,7 +289,7 @@ export function registerIpcHandlers(): void {
   // DYNAMIC WAVE: 90 runtime functions (F261-F350) — IPC handlers
   // ═══════════════════════════════════════════════════════════════
   registerDynamicSearchBulkFeaturesFeat(ipcMain, deps);
-  const dp = () => require('../services/dynamic-power-features');
+  registerDynamicPowerFeaturesFeat(ipcMain, deps);
 
   // ─── Batch J: Global Search (F261-F270) ───
 
@@ -299,64 +300,14 @@ export function registerIpcHandlers(): void {
   // ─── Batch M: Bulk Actions (F291-F300) ───
 
   // ─── Batch N: Smart Helpers (F301-F310) ───
-  ipcMain.handle('feat:smart:anomalies', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return dp().detectAnomalies(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:smart:suggest-category', (_e, { description, vendor_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return dp().suggestCategoryByDescription(cid, description, vendor_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:smart:predict-payment', (_e, { invoice_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return dp().predictPaymentDate(cid, invoice_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:smart:fill-from-previous', (_e, { entity_type, context }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return {}; return dp().smartFillFromPrevious(cid, entity_type, context || {}); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:smart:canonicalize-vendor', (_e, { input_name }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return dp().canonicalizeVendorName(cid, input_name); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:smart:match-transaction', (_e, { transaction_id, opts }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return { matches: [] }; return dp().matchTransactionToInvoice(cid, transaction_id, opts || {}); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:smart:late-risk', (_e, { customer_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return dp().calculateLatePaymentRisk(cid, customer_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:smart:forecast', (_e, { account_id, periods }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return dp().forecastNextPeriod(cid, account_id, periods || 3); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:smart:recommend', (_e, { user_id, limit }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return dp().recommendActions(cid, user_id, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:smart:detect-dupes', (_e, { entity_type, lookback_days }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return dp().detectDuplicateEntries(cid, entity_type || 'expense', lookback_days || 30); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch O: Keyboard & Macros (F311-F320) ───
-  ipcMain.handle('feat:cmd:register', (_e, c: any) => { try { return dp().registerCommand(c); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cmd:list', (_e, opts: any = {}) => { try { return dp().listCommands(opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cmd:search', (_e, { query, limit }: any) => { try { return dp().searchCommands(query, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:macro:start', (_e, { user_id, name, scope }: any) => { try {  const _r = dp().recordMacroStart(user_id, name, scope); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:macro:save-steps', (_e, { macro_id, steps }: any) => { try {  const _r = { ok: dp().saveMacroSteps(macro_id, steps) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:macro:get-steps', (_e, { macro_id }: any) => { try { return dp().getMacroSteps(macro_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:macro:list', (_e, { user_id }: any) => { try { return dp().listMacros(user_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:layout:save', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = dp().saveWorkspaceLayout({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:layout:load', (_e, { user_id, name }: any) => { try { return dp().loadWorkspaceLayout(user_id, name); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:layout:list', (_e, { user_id }: any) => { try { return dp().listWorkspaceLayouts(user_id); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch P: Report Engine (F321-F330) ───
-  ipcMain.handle('feat:custom-report:create', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); const _r = dp().createCustomReport({ ...r, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:custom-report:run', (_e, { report_id, params }: any) => { try {  const _r = dp().runCustomReport(report_id, params); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:pivot:build', (_e, { rows, opts }: any) => { try { return dp().buildPivotTable(rows, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report-sched:save', (_e, s: any) => { try {  const _r = dp().saveReportSchedule(s); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report-sched:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return dp().listScheduledReports(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report-sched:due', () => { try { return dp().listDueReports(); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report-sched:mark-run', (_e, { schedule_id, next_run_at }: any) => { try {  const _r = { ok: dp().markReportRun(schedule_id, next_run_at) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:custom-report:compare', (_e, { report_id, params_a, params_b }: any) => { try { return dp().comparePeriods(report_id, params_a, params_b); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:custom-report:executions', (_e, { report_id, limit }: any) => { try { return dp().listReportExecutions(report_id, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:custom-report:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return dp().listCustomReports(cid, opts); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch Q: Webhook Delivery (F331-F340) ───
-  ipcMain.handle('feat:webhook:register', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return dp().registerWebhook({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook:sign', (_e, { payload, secret }: any) => { try {  const _r = dp().signPayload(payload, secret); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook:verify', (_e, { payload, signature, secret }: any) => { try { return dp().verifySignature(payload, signature, secret); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook:queue', (_e, opts: any) => { try {  const _r = dp().queueWebhookDelivery(opts); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook:due', (_e, { limit }: any = {}) => { try { return dp().listDueWebhookDeliveries(limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook:record-attempt', (_e, { queue_id, success, error_message }: any) => { try {  const _r = dp().recordDeliveryAttempt(queue_id, success, error_message); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook:deliveries', (_e, opts: any = {}) => { try { return dp().listWebhookDeliveries(opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook:retry', (_e, { queue_id }: any) => { try { return { ok: dp().retryDeadLetter(queue_id) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook:stats', (_e, { hours }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return dp().webhookStats(cid, hours); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook:fire-event', (_e, { event_type, payload }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return { queued_count: 0 }; return dp().fireWebhookForEvent(cid, event_type, payload); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch R: Real-time + Activity (F341-F350) ───
-  ipcMain.handle('feat:activity:record', (_e, a: any) => { try { const cid = db.getCurrentCompanyId(); const _r = dp().recordActivity({ ...a, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:activity:feed', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return dp().listActivityFeed(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:lock:acquire', (_e, opts: any) => { try { return dp().lockEntity(opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:lock:release', (_e, { entity_type, entity_id, user_id }: any) => { try { return { ok: dp().unlockEntity(entity_type, entity_id, user_id) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:lock:check', (_e, { entity_type, entity_id }: any) => { try { return dp().checkEntityLock(entity_type, entity_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:presence:heartbeat', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return { ok: dp().heartbeatPresence({ ...opts, company_id: cid }) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:presence:active', (_e, { seconds_window }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return dp().listActivePresence(cid, seconds_window); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:presence:on-entity', (_e, { entity_type, entity_id, seconds_window }: any) => { try { return dp().listUsersOnEntity(entity_type, entity_id, seconds_window); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:activity:summary', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return dp().activitySummary(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:lock:cleanup', () => { try { return dp().cleanExpiredLocks(); } catch (e: any) { return { error: e?.message }; } });
 
   // ═══════════════════════════════════════════════════════════════
   // WAVE 3: 90 features (F351-F440) — IPC handlers
