@@ -21,6 +21,7 @@ import { registerWorkflowsAutomationIpc } from './domains/workflows-automation';
 import { registerInvoiceExpenseFeaturesFeat } from './feat/invoice-expense-features';
 import { registerBankingPayrollFeaturesFeat } from './feat/banking-payroll-features';
 import { registerReportsAnalyticsFeaturesFeat } from './feat/reports-analytics-features';
+import { registerClientVendorDocFeaturesFeat } from './feat/client-vendor-doc-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -143,26 +144,7 @@ export function registerIpcHandlers(): void {
   registerReportsAnalyticsFeaturesFeat(ipcMain, deps);
 
   // ─── Batch 5: Client/Vendor/Document features (10) ───────────
-  const cvd = () => require('../services/client-vendor-doc-features');
-  ipcMain.handle('feat:client:merge', (_e, { primary_id, duplicate_ids }: any) => { try { const r = cvd().mergeClients(primary_id, duplicate_ids); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:client:find-duplicates', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cvd().findClientDuplicates(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tag:add', (_e, record: any) => { try { const cid = db.getCurrentCompanyId(); const r = cvd().addTag({ ...record, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tag:remove', (_e, { id }: any) => { try { const r = { ok: cvd().removeTag(id) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tag:list-entity', (_e, { entity_type, entity_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cvd().listEntityTags(cid, entity_type, entity_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tag:list-all', (_e, { entity_type }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cvd().listAllTags(cid, entity_type); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tag:search', (_e, { entity_type, tag }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cvd().searchByTag(cid, entity_type, tag); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:communication:log', (_e, record: any) => { try { const cid = db.getCurrentCompanyId(); const r = cvd().logCommunication({ ...record, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:communication:list', (_e, { client_id, ...opts }: any) => { try { return cvd().listCommunications(client_id, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:communication:follow-ups', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cvd().pendingFollowUps(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:vendor:1099-status', (_e, { year }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cvd().checkVendor1099Status(cid, year); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:vendor:scorecard', (_e, { vendor_id, lookback_days }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return cvd().computeVendorScorecard(cid, vendor_id, lookback_days); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:vendor:set-contract', (_e, { vendor_id, contract }: any) => { try { const r = { ok: cvd().setVendorContract(vendor_id, contract) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:vendor:expiring-contracts', (_e, { days_ahead }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cvd().getExpiringContracts(cid, days_ahead); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:document:set-expiration', (_e, { document_id, expires_at, reminder_days_before }: any) => { try { const r = { ok: cvd().setDocumentExpiration(document_id, expires_at, reminder_days_before) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:document:expiring', (_e, { days_ahead }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return cvd().expiringDocuments(cid, days_ahead); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:document:add-version', (_e, record: any) => { try { const r = cvd().addDocumentVersion(record); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:document:list-versions', (_e, { document_id }: any) => { try { return cvd().listDocumentVersions(document_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:document:set-encrypted', (_e, { document_id, is_encrypted }: any) => { try { const r = cvd().setDocumentEncrypted(document_id, is_encrypted); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
+  registerClientVendorDocFeaturesFeat(ipcMain, deps);
 
   // ─── Batch 6: Automation & Workflow Engine (20) ───────────
   const am = () => require('../services/automation-features');
