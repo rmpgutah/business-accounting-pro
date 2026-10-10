@@ -52,6 +52,7 @@ export interface IpcDeps {
     newValue?: string,
     performedBy?: string,
   ): void;
+  seedDefaultCategories(companyId: string): { seeded: boolean; count: number };
   VALID_TABLES: Set<string>;
   PROTECTED_TABLES: Set<string>;
 }

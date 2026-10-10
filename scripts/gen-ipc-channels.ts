@@ -6,7 +6,7 @@ const DIRS = ['src/main/ipc', 'src/main/integrations'];
 const LITERAL = /(?:ipcMain|ipc)\.handle\(\s*(['"`])([^'"`]+)\1/g; // ipcMain.handle('x')
 const DEFINE = /defineHandler\([^,]+,[^,]+,\s*(['"])([^'"]+)\1/g; // defineHandler(ipc, deps, 'x', …)
 const TABLE_KEY = /^\s*(['"])((?:feat|[a-z-]+):[^'"]+)\1\s*:\s*\{/gm; // 'feat:x:y': { … }  (table rows)
-const DYNAMIC = /(?:ipcMain|ipc)\.handle\(\s*(?!['"`])/g;
+const DYNAMIC = /(?:ipcMain|ipc)\.handle\(\s*(?![\s'"`])/g;
 
 const found = new Set<string>();
 const walk = (dir: string) => {

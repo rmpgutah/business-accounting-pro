@@ -16,6 +16,7 @@ import { registerStripeIpc } from '../integrations/stripe';
 import { registerEntityGraphIpc, recordRelationBidirectional } from '../integrations/entity-graph';
 import { createIpcDeps, SYNC_SERVER } from './core/deps';
 import { registerDbCrudIpc } from './domains/db-crud';
+import { registerAuthCompanyIpc } from './domains/auth-company';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -42,85 +43,11 @@ import { calculateFullPayroll } from '../services/TaxCalculationEngine';
 import { bootstrapBuiltinCommands } from '../services/CommandRegistry';
 import { eventBus } from '../services/EventBus';
 import { workflowEngine } from '../services/WorkflowEngine';
-import http from 'http';
-import https from 'https';
 
 
 // ─── B3 AI Copilot — active stream registry ──────────────
 const copilotStreams = new Map<string, AbortController>();
 
-
-// Mirror of the server's sanitizeEmail (server/src/routes/backup.ts). Both
-// sides must HMAC over the identical string, so this logic must stay in lockstep
-// with the server: same whitelist, same 100-char cap.
-function sanitizeBackupEmail(email: string): string {
-  return (email || '').replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
-}
-
-// Helper: download backup from server
-function downloadBackup(email: string): Promise<Buffer | null> {
-  return new Promise((resolve) => {
-    const url = new URL(`${SYNC_SERVER}/api/backup/download/${encodeURIComponent(email)}`);
-    const isHttps = url.protocol === 'https:';
-    const transport = isHttps ? https : http;
-
-    // The server authenticates download/status by HMAC over the sanitized
-    // email. We sign the raw email; the server applies the same sanitize +
-    // HMAC and compares. Mirror the upload secret-resolution exactly.
-    const secret = process.env.SYNC_SECRET || 'bap-sync-default';
-    const signature = crypto.createHmac('sha256', secret).update(sanitizeBackupEmail(email)).digest('hex');
-
-    const req = transport.request({
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname,
-      method: 'GET',
-      headers: { 'x-bap-signature': signature },
-    }, (res) => {
-      if (res.statusCode !== 200) { resolve(null); return; }
-      const ct = res.headers['content-type'] || '';
-      if (ct.includes('text/html') || ct.includes('text/plain')) { res.resume(); resolve(null); return; }
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => {
-        const buf = Buffer.concat(chunks);
-        // Validate SQLite magic header before accepting
-        const SQLITE_MAGIC = Buffer.from('SQLite format 3\0');
-        if (buf.length < 16 || !buf.slice(0, 16).equals(SQLITE_MAGIC)) { resolve(null); return; }
-        resolve(buf);
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.end();
-  });
-}
-
-// Helper: register user on server (fire-and-forget)
-function serverRegister(email: string, password: string, displayName: string, userId: string) {
-  try {
-    const payload = JSON.stringify({ email, password, displayName, userId });
-    const url = new URL(`${SYNC_SERVER}/api/auth/register`);
-    const isHttps = url.protocol === 'https:';
-    const transport = isHttps ? https : http;
-
-    const req = transport.request({
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-    }, (res) => {
-      let body = '';
-      res.on('data', (c: string) => body += c);
-      res.on('end', () => console.log('Server register:', res.statusCode, body));
-    });
-    req.on('error', (err) => console.warn('Server register failed:', err.message));
-    req.write(payload);
-    req.end();
-  } catch (err) {
-    console.warn('Server register error:', err);
-  }
-}
 
 // ─── CSV Helpers (shared by import/export handlers) ──────
 function escapeCSVField(val: any): string {
@@ -189,148 +116,6 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
   return { headers, rows };
 }
 
-// ─── Password Hashing (pbkdf2 — no external deps) ──────
-function hashPassword(password: string, salt?: string): { hash: string; salt: string } {
-  const s = salt || crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(password, s, 100000, 64, 'sha512').toString('hex');
-  return { hash: `${s}:${hash}`, salt: s };
-}
-
-function verifyPassword(password: string, stored: string): boolean {
-  const [salt, hash] = stored.split(':');
-  if (!salt || !hash) return false;
-  const check = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
-  return hash === check;
-}
-
-// ─── Category Seed Definitions ──────────────────────────
-const DEFAULT_CATEGORIES: Array<{ name: string; type: 'expense' | 'income'; color: string; icon: string; description: string }> = [
-  // Office & Administration
-  { name: 'Office Supplies',                type: 'expense', color: '#6366f1', icon: '📎', description: 'Pens, paper, binders, and general office supplies' },
-  { name: 'Postage & Shipping',             type: 'expense', color: '#6366f1', icon: '📦', description: 'Stamps, courier services, and shipping costs' },
-  { name: 'Printing & Copying',             type: 'expense', color: '#6366f1', icon: '🖨️', description: 'Print and photocopy expenses' },
-  { name: 'Software Subscriptions',         type: 'expense', color: '#6366f1', icon: '💻', description: 'SaaS tools, apps, and software licenses' },
-  { name: 'Computer Equipment',             type: 'expense', color: '#6366f1', icon: '🖥️', description: 'Laptops, desktops, peripherals, and accessories' },
-  { name: 'Office Furniture',               type: 'expense', color: '#6366f1', icon: '🪑', description: 'Desks, chairs, shelving, and office fixtures' },
-  { name: 'Phone & Internet',               type: 'expense', color: '#6366f1', icon: '📱', description: 'Business phone lines and internet service' },
-  { name: 'Web Hosting',                    type: 'expense', color: '#6366f1', icon: '🌐', description: 'Domain registration and web hosting fees' },
-  { name: 'Cloud Services',                 type: 'expense', color: '#6366f1', icon: '☁️', description: 'Cloud storage, AWS, Azure, GCP, and similar services' },
-  { name: 'IT Support',                     type: 'expense', color: '#6366f1', icon: '🔧', description: 'Technical support and managed IT services' },
-  // Travel & Transport
-  { name: 'Airfare',                        type: 'expense', color: '#f59e0b', icon: '✈️', description: 'Business flights and airline tickets' },
-  { name: 'Hotel & Lodging',                type: 'expense', color: '#f59e0b', icon: '🏨', description: 'Hotel stays and temporary accommodations' },
-  { name: 'Car Rental',                     type: 'expense', color: '#f59e0b', icon: '🚗', description: 'Rental vehicles for business travel' },
-  { name: 'Mileage & Fuel',                 type: 'expense', color: '#f59e0b', icon: '⛽', description: 'Personal vehicle mileage reimbursement and fuel costs' },
-  { name: 'Parking & Tolls',                type: 'expense', color: '#f59e0b', icon: '🅿️', description: 'Parking fees and toll charges' },
-  { name: 'Meals & Entertainment (Travel)', type: 'expense', color: '#f59e0b', icon: '🍽️', description: 'Meals during business travel' },
-  { name: 'Public Transit',                 type: 'expense', color: '#f59e0b', icon: '🚇', description: 'Subway, bus, and public transportation' },
-  { name: 'Rideshare & Taxi',               type: 'expense', color: '#f59e0b', icon: '🚕', description: 'Uber, Lyft, and taxi fares' },
-  // Marketing & Sales
-  { name: 'Advertising',                    type: 'expense', color: '#ec4899', icon: '📣', description: 'General advertising and promotional campaigns' },
-  { name: 'Social Media Ads',               type: 'expense', color: '#ec4899', icon: '📱', description: 'Facebook, Instagram, LinkedIn, and other paid social ads' },
-  { name: 'Print Materials',                type: 'expense', color: '#ec4899', icon: '🗞️', description: 'Brochures, flyers, business cards, and print ads' },
-  { name: 'Trade Shows & Events',           type: 'expense', color: '#ec4899', icon: '🎪', description: 'Conference fees, booth costs, and event sponsorships' },
-  { name: 'Sponsorships',                   type: 'expense', color: '#ec4899', icon: '🤝', description: 'Brand sponsorships and partnerships' },
-  { name: 'PR & Communications',            type: 'expense', color: '#ec4899', icon: '📰', description: 'Public relations, press releases, and media outreach' },
-  { name: 'Market Research',                type: 'expense', color: '#ec4899', icon: '🔍', description: 'Surveys, research services, and competitive analysis' },
-  { name: 'Photography & Video',            type: 'expense', color: '#ec4899', icon: '📷', description: 'Professional photography and video production' },
-  // Professional Services
-  { name: 'Accounting & Bookkeeping',       type: 'expense', color: '#14b8a6', icon: '📊', description: 'CPA, bookkeeper, and accounting services' },
-  { name: 'Legal Fees',                     type: 'expense', color: '#14b8a6', icon: '⚖️', description: 'Attorney fees, contracts, and legal advice' },
-  { name: 'Consulting',                     type: 'expense', color: '#14b8a6', icon: '💼', description: 'Business consultants and advisory services' },
-  { name: 'Recruiting & HR',                type: 'expense', color: '#14b8a6', icon: '👥', description: 'Staffing agencies and HR consulting' },
-  { name: 'Training & Education',           type: 'expense', color: '#14b8a6', icon: '📚', description: 'Employee training, courses, and workshops' },
-  { name: 'Certification & Licensing',      type: 'expense', color: '#14b8a6', icon: '📜', description: 'Professional certifications and license fees' },
-  // Facilities
-  { name: 'Rent & Lease',                   type: 'expense', color: '#8b5cf6', icon: '🏢', description: 'Office, retail, or warehouse rent and lease payments' },
-  { name: 'Utilities (Electric)',           type: 'expense', color: '#8b5cf6', icon: '⚡', description: 'Electricity bills' },
-  { name: 'Utilities (Gas)',                type: 'expense', color: '#8b5cf6', icon: '🔥', description: 'Natural gas bills' },
-  { name: 'Utilities (Water)',              type: 'expense', color: '#8b5cf6', icon: '💧', description: 'Water and sewer bills' },
-  { name: 'Janitorial & Cleaning',          type: 'expense', color: '#8b5cf6', icon: '🧹', description: 'Cleaning services and janitorial supplies' },
-  { name: 'Repairs & Maintenance',          type: 'expense', color: '#8b5cf6', icon: '🔨', description: 'Building and equipment repairs' },
-  { name: 'Security',                       type: 'expense', color: '#8b5cf6', icon: '🔒', description: 'Security systems, guards, and monitoring services' },
-  { name: 'Property Insurance',             type: 'expense', color: '#8b5cf6', icon: '🏠', description: 'Building and property insurance premiums' },
-  // Payroll & HR
-  { name: 'Salaries & Wages',               type: 'expense', color: '#0ea5e9', icon: '💰', description: 'Regular employee salaries and hourly wages' },
-  { name: 'Contract Labor',                 type: 'expense', color: '#0ea5e9', icon: '📋', description: 'Payments to independent contractors and freelancers' },
-  { name: 'Employee Benefits',              type: 'expense', color: '#0ea5e9', icon: '🎁', description: 'Non-insurance employee benefits and perks' },
-  { name: 'Health Insurance',               type: 'expense', color: '#0ea5e9', icon: '🏥', description: 'Employer-paid health, dental, and vision premiums' },
-  { name: 'Retirement Contributions',       type: 'expense', color: '#0ea5e9', icon: '🏦', description: '401(k) and pension employer contributions' },
-  { name: 'Payroll Taxes',                  type: 'expense', color: '#0ea5e9', icon: '🧾', description: 'Employer-side FICA, FUTA, and SUTA taxes' },
-  { name: 'Workers Compensation',           type: 'expense', color: '#0ea5e9', icon: '🦺', description: 'Workers compensation insurance premiums' },
-  // Finance & Banking
-  { name: 'Bank Fees',                      type: 'expense', color: '#ef4444', icon: '🏦', description: 'Monthly maintenance fees and bank service charges' },
-  { name: 'Credit Card Fees',               type: 'expense', color: '#ef4444', icon: '💳', description: 'Merchant processing and credit card transaction fees' },
-  { name: 'Loan Interest',                  type: 'expense', color: '#ef4444', icon: '📈', description: 'Interest paid on business loans and lines of credit' },
-  { name: 'Late Fees',                      type: 'expense', color: '#ef4444', icon: '⏰', description: 'Late payment penalties and fees' },
-  { name: 'Wire Transfer Fees',             type: 'expense', color: '#ef4444', icon: '🔄', description: 'Domestic and international wire transfer charges' },
-  { name: 'Currency Exchange',              type: 'expense', color: '#ef4444', icon: '💱', description: 'Foreign currency exchange fees and losses' },
-  // Cost of Goods
-  { name: 'Inventory Purchases',            type: 'expense', color: '#f97316', icon: '📦', description: 'Finished goods purchased for resale' },
-  { name: 'Raw Materials',                  type: 'expense', color: '#f97316', icon: '🪨', description: 'Raw materials used in production' },
-  { name: 'Packaging Materials',            type: 'expense', color: '#f97316', icon: '📫', description: 'Boxes, bags, and packaging supplies' },
-  { name: 'Freight & Delivery',             type: 'expense', color: '#f97316', icon: '🚚', description: 'Shipping and freight costs for inbound goods' },
-  { name: 'Customs & Duties',               type: 'expense', color: '#f97316', icon: '🛃', description: 'Import duties, tariffs, and customs fees' },
-  // Insurance
-  { name: 'General Liability',              type: 'expense', color: '#64748b', icon: '🛡️', description: 'General liability insurance premiums' },
-  { name: 'Professional Liability (E&O)',   type: 'expense', color: '#64748b', icon: '📑', description: 'Errors and omissions insurance' },
-  { name: 'Commercial Auto',                type: 'expense', color: '#64748b', icon: '🚗', description: 'Business vehicle insurance premiums' },
-  { name: 'Directors & Officers',           type: 'expense', color: '#64748b', icon: '👔', description: 'D&O liability insurance' },
-  // Taxes & Licenses
-  { name: 'Business Licenses',              type: 'expense', color: '#78716c', icon: '📋', description: 'Business operating licenses and permits' },
-  { name: 'State Taxes',                    type: 'expense', color: '#78716c', icon: '🏛️', description: 'State income and franchise taxes' },
-  { name: 'Local Taxes',                    type: 'expense', color: '#78716c', icon: '🏙️', description: 'City, county, and local business taxes' },
-  { name: 'Sales Tax Paid',                 type: 'expense', color: '#78716c', icon: '🧾', description: 'Sales taxes remitted to tax authorities' },
-  { name: 'Import Duties',                  type: 'expense', color: '#78716c', icon: '🛂', description: 'Duties on imported goods' },
-  // Miscellaneous Expense
-  { name: 'Meals & Entertainment',          type: 'expense', color: '#a3a3a3', icon: '🍽️', description: 'Business meals and client entertainment' },
-  { name: 'Subscriptions & Dues',           type: 'expense', color: '#a3a3a3', icon: '📰', description: 'Industry memberships, publications, and dues' },
-  { name: 'Charitable Donations',           type: 'expense', color: '#a3a3a3', icon: '❤️', description: 'Charitable contributions from the business' },
-  { name: 'Depreciation Expense',           type: 'expense', color: '#a3a3a3', icon: '📉', description: 'Scheduled depreciation on fixed assets' },
-  { name: 'Amortization',                   type: 'expense', color: '#a3a3a3', icon: '📊', description: 'Amortization of intangible assets' },
-  { name: 'Bad Debt Expense',               type: 'expense', color: '#a3a3a3', icon: '💸', description: 'Uncollectable accounts written off' },
-  { name: 'Miscellaneous Expense',          type: 'expense', color: '#a3a3a3', icon: '📁', description: 'Other business expenses not classified elsewhere' },
-  // Revenue
-  { name: 'Product Sales',                  type: 'income',  color: '#22c55e', icon: '🛒', description: 'Revenue from selling physical or digital products' },
-  { name: 'Service Revenue',                type: 'income',  color: '#22c55e', icon: '🔧', description: 'Revenue from rendering services' },
-  { name: 'Consulting Revenue',             type: 'income',  color: '#22c55e', icon: '💼', description: 'Consulting and advisory fees earned' },
-  { name: 'Subscription Revenue',           type: 'income',  color: '#22c55e', icon: '🔄', description: 'Recurring subscription or membership income' },
-  { name: 'Licensing Revenue',              type: 'income',  color: '#22c55e', icon: '📜', description: 'Income from licensing intellectual property' },
-  { name: 'Commission Income',              type: 'income',  color: '#22c55e', icon: '💰', description: 'Commissions earned on sales or referrals' },
-  { name: 'Royalty Income',                 type: 'income',  color: '#22c55e', icon: '👑', description: 'Royalties received from IP or content licensing' },
-  // Other Income
-  { name: 'Interest Income',                type: 'income',  color: '#4ade80', icon: '📈', description: 'Interest earned on deposits and investments' },
-  { name: 'Dividend Income',                type: 'income',  color: '#4ade80', icon: '💵', description: 'Dividends received from investments' },
-  { name: 'Rental Income',                  type: 'income',  color: '#4ade80', icon: '🏠', description: 'Income from renting property or equipment' },
-  { name: 'Gain on Asset Sale',             type: 'income',  color: '#4ade80', icon: '📊', description: 'Profit from selling business assets' },
-  { name: 'Grant Income',                   type: 'income',  color: '#4ade80', icon: '🏆', description: 'Government or foundation grant awards' },
-  { name: 'Refunds Received',               type: 'income',  color: '#4ade80', icon: '↩️', description: 'Vendor refunds and rebates received' },
-  { name: 'Other Income',                   type: 'income',  color: '#4ade80', icon: '➕', description: 'Miscellaneous income not classified elsewhere' },
-];
-
-function seedDefaultCategories(companyId: string): { seeded: boolean; count: number } {
-  const dbInstance = db.getDb();
-  const existing = dbInstance.prepare('SELECT COUNT(*) as cnt FROM categories WHERE company_id = ?').get(companyId) as { cnt: number };
-  if (existing && existing.cnt > 0) {
-    return { seeded: false, count: existing.cnt };
-  }
-  const insertStmt = dbInstance.prepare(`
-    INSERT OR IGNORE INTO categories (id, company_id, name, type, color, icon, description, schedule_c_line, is_deductible, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-  `);
-  const insertMany = dbInstance.transaction((rows: typeof DEFAULT_CATEGORIES) => {
-    for (const row of rows) {
-      const sc = SCHEDULE_C_BY_CATEGORY[row.name];
-      insertStmt.run(
-        uuid(), companyId, row.name, row.type, row.color, row.icon, row.description,
-        sc ? sc.line : '', sc ? (sc.deductible ? 1 : 0) : 1,
-      );
-    }
-  });
-  insertMany(DEFAULT_CATEGORIES);
-  return { seeded: true, count: DEFAULT_CATEGORIES.length };
-}
-
 // Backfill Schedule C line + deductibility onto EXISTING categories (companies
 // seeded before the canonical mapping existed). Matches by exact category name
 // and only fills rows whose schedule_c_line is still blank, so it never
@@ -376,9 +161,9 @@ export function registerIpcHandlers(): void {
 
   const deps = createIpcDeps();
   const {
-    scheduleAutoBackup, cancelAutoBackup, getLastLoginEmail, setLastLoginEmail, findClosedPeriod, postJournalEntry,
+    scheduleAutoBackup, getLastLoginEmail, findClosedPeriod, postJournalEntry,
     validateTable, cleanupReferencesBeforeDelete, buildInvoiceMetadata,
-    scheduleReindex, logDebtAudit,
+    scheduleReindex, logDebtAudit, seedDefaultCategories,
   } = deps;
 
   // Advanced System (2026-04-28) — register built-in commands for Cmd+K palette
@@ -983,24 +768,8 @@ export function registerIpcHandlers(): void {
       scheduleAutoBackup(); return r;
     } catch (e: any) { return { error: e?.message }; }
   });
-  // User invitations
-  ipcMain.handle('admin:invitations:create', (_event, { email, role, invited_by, expires_in_days }: any) => {
-    try { const cid = db.getCurrentCompanyId(); if (!cid) return { error: 'No active company' };
-      const { createInvitation } = require('../services/admin-features');
-      const r = createInvitation(cid, email, role, invited_by, expires_in_days);
-      scheduleAutoBackup(); return r;
-    } catch (e: any) { return { error: e?.message }; }
-  });
-  ipcMain.handle('admin:invitations:list', (_event, { include_expired_revoked }: any = {}) => {
-    try { const cid = db.getCurrentCompanyId(); if (!cid) return [];
-      const { listInvitations } = require('../services/admin-features');
-      return listInvitations(cid, !!include_expired_revoked);
-    } catch (e: any) { return { error: e?.message }; }
-  });
-  ipcMain.handle('admin:invitations:revoke', (_event, { id }: any) => {
-    try { const { revokeInvitation } = require('../services/admin-features'); const r = { ok: revokeInvitation(id) }; scheduleAutoBackup(); return r; }
-    catch (e: any) { return { error: e?.message }; }
-  });
+  registerAuthCompanyIpc(ipcMain, deps);
+
   // Password policy
   ipcMain.handle('admin:password-policy:get', () => {
     try { const cid = db.getCurrentCompanyId(); if (!cid) return null;
@@ -3965,41 +3734,6 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  // ─── Company Management ──────────────────────────────
-  ipcMain.handle('company:list', () => {
-    const companies = db.queryAll('companies');
-    // Auto-switch to the first company if currentCompanyId is not yet set
-    // (happens on cold start before renderer calls company:switch)
-    if (!db.getCurrentCompanyId() && companies.length > 0) {
-      db.switchCompany(companies[0].id);
-    }
-    return companies;
-  });
-
-  ipcMain.handle('company:get', (_event, id) => {
-    return db.getById('companies', id);
-  });
-
-  ipcMain.handle('company:create', (_event, data) => {
-    const company = db.create('companies', data);
-    db.seedDefaultAccounts(company.id);
-    // Seed default categories for new company
-    seedDefaultCategories(company.id);
-    db.switchCompany(company.id);
-    scheduleAutoBackup();
-    return company;
-  });
-
-  ipcMain.handle('company:update', (_event, { id, data }) => {
-    const result = db.update('companies', id, data);
-    scheduleAutoBackup();
-    return result;
-  });
-
-  ipcMain.handle('company:switch', (_event, companyId) => {
-    db.switchCompany(companyId);
-  });
-
   // ─── Global Search ───────────────────────────────────
   ipcMain.handle('search:index', (_e, { query, limit }: { query: string; limit?: number }) => {
     const companyId = db.getCurrentCompanyId();
@@ -5462,199 +5196,6 @@ export function registerIpcHandlers(): void {
 
   // ─── CSV Export ────────────────────────────────────────
   // ─── Auth ──────────────────────────────────────────────
-
-  ipcMain.handle('auth:register', (_event, { email, password, displayName }: { email: string; password: string; displayName: string }) => {
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Invalid email format' };
-    if (!password || password.length < 6) return { error: 'Password must be at least 6 characters' };
-    // Check if any users exist (first user becomes owner)
-    const existing = db.runQuery('SELECT COUNT(*) as count FROM users');
-    const isFirst = existing[0]?.count === 0;
-
-    // Check email uniqueness
-    const dup = db.runQuery('SELECT id FROM users WHERE email = ?', [email]);
-    if (dup.length > 0) throw new Error('An account with this email already exists');
-
-    const { hash } = hashPassword(password);
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
-    db.execQuery(
-      'INSERT INTO users (id, email, display_name, password_hash, role, last_login, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, email, displayName, hash, isFirst ? 'owner' : 'accountant', now, now, now]
-    );
-
-    // Also register on server (non-blocking)
-    setLastLoginEmail(email);
-    serverRegister(email, password, displayName, id);
-    scheduleAutoBackup();
-
-    return { id, email, display_name: displayName, role: isFirst ? 'owner' : 'accountant', avatar_color: '#3b82f6' };
-  });
-
-  ipcMain.handle('auth:login', async (_event, { email, password }: { email: string; password: string }) => {
-    let rows = db.runQuery('SELECT * FROM users WHERE email = ?', [email]);
-
-    // If user not found locally, try restoring from server backup
-    if (rows.length === 0) {
-      console.log('User not found locally, checking server for backup...');
-      const backup = await downloadBackup(email);
-      if (backup && backup.length > 1000) {
-        // CONCURRENCY: cancel any pending auto-backup so it doesn't race
-        // against the restore (would re-upload the soon-to-be-overwritten
-        // empty DB right as we restore the real one), then close the DB
-        // *before* overwriting the file so we don't tear out from under any
-        // open prepared statements / WAL state.
-        cancelAutoBackup();
-        const dbPath = db.getDbPath();
-        try {
-          db.getDb().pragma('wal_checkpoint(TRUNCATE)');
-          db.getDb().close();
-        } catch (_) {}
-        // Also remove -wal and -shm so the restored DB isn't paired with a
-        // stale WAL from the old empty database.
-        try { fs.unlinkSync(dbPath + '-wal'); } catch (_) {}
-        try { fs.unlinkSync(dbPath + '-shm'); } catch (_) {}
-        fs.writeFileSync(dbPath, backup);
-        console.log(`Restored ${backup.length} byte backup from server for ${email}`);
-        // Reinitialize database
-        db.reinitDatabase();
-        rows = db.runQuery('SELECT * FROM users WHERE email = ?', [email]);
-      }
-    }
-
-    if (rows.length === 0) throw new Error('Invalid email or password');
-
-    const user = rows[0];
-    if (!verifyPassword(password, user.password_hash)) throw new Error('Invalid email or password');
-
-    // Update last_login
-    db.execQuery('UPDATE users SET last_login = ? WHERE id = ?', [new Date().toISOString(), user.id]);
-    setLastLoginEmail(email);
-
-    // WHO SYSTEM: set the authenticated user in main-process state so
-    // logAudit() and other who-tracking code can attribute writes to a
-    // real user instead of the placeholder 'user' string.
-    db.setCurrentUser(user.id, user.email);
-
-    // Get user's companies
-    const companies = db.runQuery(
-      'SELECT c.*, uc.role as user_role FROM companies c JOIN user_companies uc ON c.id = uc.company_id WHERE uc.user_id = ?',
-      [user.id]
-    );
-
-    // Upload current DB to server (non-blocking)
-    scheduleAutoBackup();
-
-    return {
-      user: { id: user.id, email: user.email, display_name: user.display_name, role: user.role, avatar_color: user.avatar_color },
-      companies,
-    };
-  });
-
-  // WHO SYSTEM: explicit logout handler so the renderer can signal main
-  // to clear the current-user state. Until this is called the user
-  // remains authenticated for audit purposes (e.g. logout-on-Cmd-Q is
-  // a soft logout — main still attributes writes to them).
-  ipcMain.handle('auth:logout', () => {
-    try {
-      db.clearCurrentUser();
-      setLastLoginEmail('');
-      return { ok: true };
-    } catch (err: any) {
-      console.error('auth:logout failed:', err);
-      return { error: err?.message };
-    }
-  });
-
-  // WHO SYSTEM: lets the renderer ask "who does main think is logged in?"
-  // Useful for the Activity panel showing "current user" header, plus
-  // for debugging when the renderer's authStore drifts from main state.
-  ipcMain.handle('auth:current-user', () => {
-    return {
-      user_id: db.getCurrentUserId(),
-      user_email: db.getCurrentUserEmail(),
-    };
-  });
-
-  // WHO SYSTEM: renderer restored a persisted authStore on Cmd+R / app
-  // launch and needs to re-establish the main-process user state.
-  // Verifies the user_id actually exists in the DB (defense against a
-  // tampered localStorage) before setting state.
-  ipcMain.handle('auth:resume-session', (_event, { userId }: { userId: string }) => {
-    try {
-      if (!userId) return { error: 'userId required' };
-      const rows = db.runQuery('SELECT id, email FROM users WHERE id = ?', [userId]);
-      if (rows.length === 0) {
-        db.clearCurrentUser();
-        return { error: 'User not found — session cleared' };
-      }
-      const u = rows[0];
-      db.setCurrentUser(u.id, u.email);
-      setLastLoginEmail(u.email);
-      return { ok: true, user_id: u.id, user_email: u.email };
-    } catch (err: any) {
-      console.error('auth:resume-session failed:', err);
-      return { error: err?.message };
-    }
-  });
-
-  ipcMain.handle('auth:has-users', () => {
-    try {
-      const rows = db.runQuery('SELECT COUNT(*) as count FROM users');
-      return rows[0]?.count > 0;
-    } catch (err) {
-      console.error('auth:has-users failed:', err);
-      return false;
-    }
-  });
-
-  ipcMain.handle('auth:list-users', () => {
-    try {
-      return db.runQuery('SELECT id, email, display_name, role, avatar_color, last_login FROM users ORDER BY created_at');
-    } catch (err) {
-      console.error('auth:list-users failed:', err);
-      return [];
-    }
-  });
-
-  ipcMain.handle('auth:link-user-company', (_event, { userId, companyId, role }: { userId: string; companyId: string; role?: string }) => {
-    // SQLite's INSERT OR IGNORE does NOT suppress FOREIGN KEY violations — catch explicitly.
-    // If the user doesn't exist in the DB (stale localStorage), skip the link gracefully.
-    try {
-      db.execQuery(
-        'INSERT OR IGNORE INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)',
-        [userId, companyId, role || 'owner']
-      );
-      scheduleAutoBackup();
-    } catch (_) {
-      // FOREIGN KEY failure: user not in DB (stale session). Company still usable.
-    }
-    return true;
-  });
-
-  // SECURITY: Replaces a renderer-driven `DELETE FROM users` via rawQuery.
-  // Routing account deletion through a named handler keeps the protected-table
-  // guard intact and lets us scope the delete to the caller's own user id.
-  ipcMain.handle('auth:delete-account', (_event, { userId }: { userId: string }) => {
-    if (!userId || typeof userId !== 'string') return { error: 'Invalid userId' };
-    try {
-      db.execQuery('DELETE FROM user_companies WHERE user_id = ?', [userId]);
-      db.execQuery('DELETE FROM users WHERE id = ?', [userId]);
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err) {
-      console.error('auth:delete-account failed:', err);
-      return { error: err instanceof Error ? err.message : String(err) };
-    }
-  });
-
-  ipcMain.handle('auth:validate-session', (_event, { userId }: { userId: string }) => {
-    try {
-      const rows = db.runQuery('SELECT id, email, display_name, role, avatar_color FROM users WHERE id = ?', [userId]);
-      return rows.length > 0 ? rows[0] : null;
-    } catch {
-      return null;
-    }
-  });
 
   ipcMain.handle('export:csv', async (_event, { table, filters }: { table: string; filters?: Record<string, any> }) => {
     if (!validateTable(table)) return { error: 'Invalid table' };
