@@ -13,6 +13,7 @@
     "test:loan": "npm run build:main && node scripts/test-loan-calculator.cjs",
     "test:attachments": "npm run build:main && node scripts/test-document-storage.cjs",
     "test:search": "npm run build:main && node scripts/test-search-index.cjs",
+    "test:migrations": "npm run build:main && node scripts/test-migrations.cjs",
     "test:cockpit": "node scripts/test-cockpit-layout.cjs",
     "test:classic": "node scripts/test-classic-styles.cjs",
     "test:micr": "node scripts/test-micr.cjs",
