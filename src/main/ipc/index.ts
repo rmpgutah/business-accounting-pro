@@ -6,7 +6,7 @@ import path from 'path';
 import os from 'os';
 import { copyIntoDocumentsStore } from '../services/document-storage';
 import { registerStripeIpc } from '../integrations/stripe';
-import { registerEntityGraphIpc, recordRelationBidirectional } from '../integrations/entity-graph';
+import { registerEntityGraphIpc } from '../integrations/entity-graph';
 import { createIpcDeps } from './core/deps';
 import { registerDbCrudIpc } from './domains/db-crud';
 import { registerAuthCompanyIpc } from './domains/auth-company';
@@ -122,8 +122,8 @@ export function registerIpcHandlers(): void {
 
   const deps = createIpcDeps();
   const {
-    scheduleAutoBackup, findClosedPeriod, postJournalEntry, validateTable, cleanupReferencesBeforeDelete, scheduleReindex,
-    localToday, ensureDefaultEmailTemplates, resolveTemplateTokens, buildTemplateContext, eu,
+    scheduleAutoBackup, findClosedPeriod, validateTable, cleanupReferencesBeforeDelete, scheduleReindex, localToday,
+    ensureDefaultEmailTemplates, resolveTemplateTokens, buildTemplateContext, eu,
   } = deps;
 
   // Advanced System (2026-04-28) — register built-in commands for Cmd+K palette
@@ -1546,51 +1546,7 @@ export function registerIpcHandlers(): void {
   registerPrintPdfIpc(ipcMain, deps);
 
 
-  // ─── B13: Tax deduction finder ─────────────────────────
-  ipcMain.handle('tax:deduction-scan', (_event, opts?: { year?: number }) => {
-    try {
-      const cid = db.getCurrentCompanyId();
-      if (!cid) return null;
-      const { scanDeductions } = require('../services/tax-deduction-finder');
-      return scanDeductions(cid, opts?.year);
-    } catch (err: any) {
-      return { error: err?.message };
-    }
-  });
 
-  // ─── B5: PDF/image receipt OCR + parsing ───────────────
-  // Two flows:
-  //   1. ocr:scan-receipt-file  — caller already has a path
-  //   2. ocr:scan-receipt-pick  — opens a file dialog first
-  // tesseract.js workers are ~50MB resident — lazy-loaded on first
-  // call; shutdown on app quit (see main.ts).
-  ipcMain.handle('ocr:scan-receipt-file', async (_event, { filePath }: { filePath: string }) => {
-    try {
-      const { scanReceipt } = require('../services/receipt-ocr');
-      const parsed = await scanReceipt(filePath);
-      return { ok: true, parsed };
-    } catch (err: any) {
-      console.error('[ocr] scan failed:', err);
-      return { ok: false, error: err?.message || 'OCR failed' };
-    }
-  });
-  ipcMain.handle('ocr:scan-receipt-pick', async () => {
-    try {
-      const { filePaths, canceled } = await dialog.showOpenDialog({
-        properties: ['openFile'],
-        filters: [
-          { name: 'Receipts', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'] },
-          { name: 'All Files', extensions: ['*'] },
-        ],
-      });
-      if (canceled || !filePaths?.[0]) return { cancelled: true };
-      const { scanReceipt } = require('../services/receipt-ocr');
-      const parsed = await scanReceipt(filePaths[0]);
-      return { ok: true, parsed, filePath: filePaths[0] };
-    } catch (err: any) {
-      return { ok: false, error: err?.message || 'OCR failed' };
-    }
-  });
 
 
 
@@ -2284,206 +2240,12 @@ export function registerIpcHandlers(): void {
     return db.queryAll('settings', { company_id: companyId });
   });
 
-  // ─── Bills / Accounts Payable ─────────────────────────────
 
-  ipcMain.handle('bills:next-number', () => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return 'BILL-1001';
-    const dbInstance = db.getDb();
-    const row = dbInstance.prepare(`
-      SELECT bill_number FROM bills WHERE company_id = ?
-      ORDER BY created_at DESC LIMIT 1
-    `).get(companyId) as any;
-    if (!row) return 'BILL-1001';
-    const match = row.bill_number.match(/(\d+)$/);
-    if (!match) return 'BILL-1001';
-    const next = parseInt(match[1], 10) + 1;
-    const prefix = row.bill_number.replace(/\d+$/, '');
-    return `${prefix}${String(next).padStart(4, '0')}`;
-  });
 
-  ipcMain.handle('bills:pay', (_event, { billId, amount, date, accountId, paymentMethod, reference, notes }: any) => {
-    if (!amount || amount <= 0) return { error: 'Amount must be greater than zero' };
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) throw new Error('No active company');
-    const dbInstance = db.getDb();
 
-    // D3: refuse to record a payment whose date falls in a closed period
-    {
-      const period = findClosedPeriod(companyId, date);
-      if (period) {
-        return { error: 'Cannot record payment: ' + date + ' falls in a closed accounting period (' +
-          period.period_start + ' to ' + period.period_end + '). Reopen the period in Settings.' };
-      }
-    }
 
-    const payTx = dbInstance.transaction(() => {
-      const paymentId = uuid();
-      dbInstance.prepare(`
-        INSERT INTO bill_payments (id, company_id, bill_id, amount, date, payment_method, reference, account_id, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(paymentId, companyId, billId, amount, date, paymentMethod || 'check', reference || '', accountId || null, notes || '');
 
-      const bill = dbInstance.prepare('SELECT * FROM bills WHERE id = ?').get(billId) as any;
-      if (!bill) throw new Error('Bill not found');
 
-      // INTEGRITY: roundCents prevents float drift across multiple partial pays.
-      const newAmountPaid = db.roundCents((bill.amount_paid || 0) + Number(amount));
-      let newStatus = bill.status;
-      if (newAmountPaid >= db.roundCents(bill.total)) {
-        newStatus = 'paid';
-      } else if (newAmountPaid > 0) {
-        newStatus = 'partial';
-      }
-
-      dbInstance.prepare(`UPDATE bills SET amount_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?`)
-        .run(newAmountPaid, newStatus, billId);
-
-      postJournalEntry(dbInstance, companyId, date, `Bill payment - ${bill.bill_number || billId}`, [
-        { nameHint: 'Payable', debit: amount, credit: 0, note: `AP cleared for bill ${bill.bill_number || billId}` },
-        { nameHint: 'Cash', debit: 0, credit: amount, note: `Cash paid for bill ${bill.bill_number || billId}` },
-      ]);
-
-      return { paymentId, newStatus, newAmountPaid };
-    });
-
-    const result = payTx();
-    // (bill_payment ↔ bill) bidirectional with payment metadata for the timeline.
-    try {
-      recordRelationBidirectional(
-        companyId, 'bill_payment', result.paymentId, 'bill', billId, 'paid',
-        { amount, date, payment_method: paymentMethod || 'check', reference: reference || '' },
-      );
-    } catch (err) {
-      console.warn('bills:pay recordRelation failed:', (err as Error)?.message);
-    }
-    scheduleAutoBackup();
-    // Reactive engine: emit bill.paid for workflows.
-    try {
-      if (companyId && billId) {
-        eventBus.emit({
-          type: result.newStatus === 'paid' ? 'bill.paid' : 'bill.updated',
-          companyId,
-          entityType: 'bill',
-          entityId: billId,
-          data: {
-            payment_id: result.paymentId,
-            amount,
-            date,
-            payment_method: paymentMethod || 'check',
-            new_status: result.newStatus,
-            amount_paid: result.newAmountPaid,
-          },
-        }).catch(() => {});
-      }
-    } catch { /* fire-and-forget */ }
-    return result;
-  });
-
-  ipcMain.handle('bills:stats', () => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { total_unpaid: 0, overdue: 0, due_soon: 0, paid_this_month: 0 };
-    const dbInstance = db.getDb();
-
-    const row = dbInstance.prepare(`
-      SELECT
-        COALESCE(SUM(CASE WHEN status NOT IN ('paid','void','draft') THEN total - amount_paid ELSE 0 END), 0) as total_unpaid,
-        COALESCE(SUM(CASE WHEN due_date < date('now') AND status NOT IN ('paid','void','draft') THEN total - amount_paid ELSE 0 END), 0) as overdue,
-        COALESCE(SUM(CASE WHEN due_date BETWEEN date('now') AND date('now', '+7 days') AND status NOT IN ('paid','void','draft') THEN total - amount_paid ELSE 0 END), 0) as due_soon,
-        COALESCE(SUM(CASE WHEN status = 'paid' AND strftime('%Y-%m', updated_at) = strftime('%Y-%m', 'now') THEN amount_paid ELSE 0 END), 0) as paid_this_month
-      FROM bills WHERE company_id = ?
-    `).get(companyId);
-    return row;
-  });
-
-  ipcMain.handle('bills:overdue-check', () => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return 0;
-    const dbInstance = db.getDb();
-    const result = dbInstance.prepare(`
-      UPDATE bills SET status = 'overdue', updated_at = datetime('now')
-      WHERE company_id = ? AND status IN ('pending','received','approved','partial')
-        AND due_date < date('now')
-    `).run(companyId);
-    if (result.changes > 0) scheduleAutoBackup();
-    return result.changes;
-  });
-
-  // ─── Purchase Orders ──────────────────────────────────────
-
-  ipcMain.handle('po:next-number', () => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return 'PO-1001';
-    const dbInstance = db.getDb();
-    const row = dbInstance.prepare(`SELECT po_number FROM purchase_orders WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(companyId) as any;
-    if (!row) return 'PO-1001';
-    const match = row.po_number.match(/(\d+)$/);
-    if (!match) return 'PO-1001';
-    const next = parseInt(match[1], 10) + 1;
-    return `PO-${String(next).padStart(4, '0')}`;
-  });
-
-  ipcMain.handle('po:approve', (_event, { poId, approvedBy }: { poId: string; approvedBy?: string }) => {
-    const dbInstance = db.getDb();
-    dbInstance.prepare(`UPDATE purchase_orders SET status = 'approved', approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`)
-      .run(approvedBy || '', poId);
-    scheduleAutoBackup();
-    return { success: true };
-  });
-
-  ipcMain.handle('po:convert-bill', (_event, { poId }: { poId: string }) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) throw new Error('No active company');
-    const dbInstance = db.getDb();
-
-    const convertTx = dbInstance.transaction(() => {
-      const po = dbInstance.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(poId) as any;
-      if (!po) throw new Error('PO not found');
-
-      const poItems = dbInstance.prepare('SELECT * FROM po_line_items WHERE po_id = ?').all(poId) as any[];
-
-      // Generate bill number
-      const row = dbInstance.prepare(`SELECT bill_number FROM bills WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(companyId) as any;
-      let billNumber = 'BILL-1001';
-      if (row) {
-        const match = row.bill_number.match(/(\d+)$/);
-        if (match) billNumber = `BILL-${String(parseInt(match[1], 10) + 1).padStart(4, '0')}`;
-      }
-
-      const billId = uuid();
-      // Carry the PO's tax_amount onto the bill — omitting it left the bill's
-      // subtotal+tax out of sync with its (tax-inclusive) total and undercounted
-      // any tax reporting that reads bills.tax_amount.
-      dbInstance.prepare(`
-        INSERT INTO bills (id, company_id, vendor_id, bill_number, status, issue_date, due_date, subtotal, tax_amount, total, notes, reference)
-        VALUES (?, ?, ?, ?, 'received', date('now'), date('now', '+30 days'), ?, ?, ?, ?, ?)
-      `).run(billId, companyId, po.vendor_id, billNumber, po.subtotal || 0, po.tax_amount || 0, po.total || 0, po.notes || '', `PO: ${po.po_number}`);
-
-      for (const item of poItems) {
-        dbInstance.prepare(`
-          INSERT INTO bill_line_items (id, bill_id, description, quantity, unit_price, amount, account_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(uuid(), billId, item.description, item.quantity, item.unit_price, item.amount, item.account_id);
-      }
-
-      dbInstance.prepare(`UPDATE purchase_orders SET status = 'received', updated_at = datetime('now') WHERE id = ?`).run(poId);
-
-      return { billId, billNumber };
-    });
-
-    const result = convertTx();
-    // (bill ↔ purchase_order) bidirectional, relation: 'fulfills'
-    try {
-      recordRelationBidirectional(
-        companyId, 'bill', result.billId, 'purchase_order', poId, 'fulfills',
-        { converted_at: new Date().toISOString(), bill_number: result.billNumber },
-      );
-    } catch (err) {
-      console.warn('po:convert-bill recordRelation failed:', (err as Error)?.message);
-    }
-    scheduleAutoBackup();
-    return result;
-  });
 
 
 
@@ -3213,28 +2975,8 @@ export function registerIpcHandlers(): void {
 
 
 
-  ipcMain.handle('approval:list', (_event, { company_id, status }: { company_id: string; status?: string }) => {
-    let sql = `SELECT aq.*, r.category FROM approval_queue aq LEFT JOIN rules r ON aq.rule_id = r.id WHERE aq.company_id = ?`;
-    const params: unknown[] = [company_id];
-    if (status) { sql += ` AND aq.status = ?`; params.push(status); }
-    sql += ` ORDER BY aq.created_at DESC`;
-    return db.getDb().prepare(sql).all(...params);
-  });
 
-  ipcMain.handle('approval:resolve', (_event, { id, status, notes }: { id: string; status: 'approved' | 'rejected'; notes?: string }) => {
-    try {
-      db.getDb().prepare(`UPDATE approval_queue SET status = ?, notes = ?, resolved_at = datetime('now') WHERE id = ?`).run(status, notes ?? null, id);
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err: any) {
-      return { error: err?.message || 'Failed to resolve approval' };
-    }
-  });
 
-  ipcMain.handle('approval:pending-count', (_event, company_id: string) => {
-    const row = db.getDb().prepare(`SELECT COUNT(*) as count FROM approval_queue WHERE company_id = ? AND status = 'pending'`).get(company_id) as { count: number };
-    return row.count;
-  });
 
   ipcMain.handle('record:clone', (_event, { table, id }: { table: string; id: string }) => {
     const CLONEABLE_TABLES = ['invoices', 'expenses', 'bills'];
