@@ -1520,6 +1520,255 @@ export function seedDefaultCategories(companyId: string): { seeded: boolean; cou
   return { seeded: true, count: DEFAULT_CATEGORIES.length };
 }
 
+const DEFAULT_EMAIL_TEMPLATES: Record<
+  string,
+  { label: string; subject: string; body: string; tokens: string[] }
+> = {
+  invoice_send: {
+    label: 'Invoice — Send',
+    subject: 'Invoice {{invoice_number}} from {{company_name}}',
+    body: 'Hi {{client_name}},\n\nPlease find attached invoice **{{invoice_number}}** for **{{total_due}}** due on **{{due_date}}**.\n\nPay online: {{payment_link}}\n\nThanks,\n{{company_name}}',
+    tokens: [
+      'client_name',
+      'invoice_number',
+      'total_due',
+      'due_date',
+      'company_name',
+      'payment_link',
+    ],
+  },
+  payment_reminder_1: {
+    label: 'Payment Reminder — First',
+    subject: 'Friendly reminder: Invoice {{invoice_number}}',
+    body: 'Hi {{client_name}},\n\nThis is a friendly reminder that invoice **{{invoice_number}}** for **{{total_due}}** was due on **{{due_date}}**.\n\nPay online: {{payment_link}}\n\nThanks,\n{{company_name}}',
+    tokens: [
+      'client_name',
+      'invoice_number',
+      'total_due',
+      'due_date',
+      'company_name',
+      'payment_link',
+    ],
+  },
+  payment_reminder_2: {
+    label: 'Payment Reminder — Second',
+    subject: 'Past due: Invoice {{invoice_number}} — {{days_overdue}} days',
+    body: 'Hi {{client_name}},\n\nInvoice **{{invoice_number}}** for **{{total_due}}** is now **{{days_overdue}} days** past due.\n\nPlease remit payment as soon as possible: {{payment_link}}\n\nThanks,\n{{company_name}}',
+    tokens: [
+      'client_name',
+      'invoice_number',
+      'total_due',
+      'due_date',
+      'days_overdue',
+      'company_name',
+      'payment_link',
+    ],
+  },
+  overdue_notice: {
+    label: 'Overdue Notice',
+    subject: 'OVERDUE: Invoice {{invoice_number}} — {{days_overdue}} days past due',
+    body: 'Dear {{client_name}},\n\nDespite previous reminders, invoice **{{invoice_number}}** for **{{total_due}}** remains unpaid and is now **{{days_overdue}} days** overdue.\n\nThis matter requires your immediate attention.\n\n{{company_name}}',
+    tokens: ['client_name', 'invoice_number', 'total_due', 'days_overdue', 'company_name'],
+  },
+  quote_send: {
+    label: 'Quote — Send',
+    subject: 'Quote {{invoice_number}} from {{company_name}}',
+    body: 'Hi {{client_name}},\n\nPlease find attached quote **{{invoice_number}}** for **{{total_due}}**.\n\nThis quote is valid until **{{due_date}}**.\n\nThanks,\n{{company_name}}',
+    tokens: ['client_name', 'invoice_number', 'total_due', 'due_date', 'company_name'],
+  },
+  statement: {
+    label: 'Account Statement',
+    subject: 'Statement of Account — {{client_name}}',
+    body: 'Hi {{client_name}},\n\nPlease find attached your statement showing a balance of **{{total_due}}**.\n\nThanks,\n{{company_name}}',
+    tokens: ['client_name', 'total_due', 'company_name'],
+  },
+  welcome: {
+    label: 'Welcome',
+    subject: 'Welcome to {{company_name}}',
+    body: 'Hi {{client_name}},\n\nThanks for choosing **{{company_name}}**. We look forward to working with you.\n\nBest,\n{{company_name}}',
+    tokens: ['client_name', 'company_name'],
+  },
+  demand_letter: {
+    label: 'Demand Letter',
+    subject: 'Final Demand — Invoice {{invoice_number}}',
+    body: 'Dear {{client_name}},\n\nThis is a **final demand** for payment of invoice **{{invoice_number}}** in the amount of **{{total_due}}**, currently **{{days_overdue}} days** overdue.\n\nFailure to pay within 10 days may result in legal action.\n\n{{company_name}}',
+    tokens: ['client_name', 'invoice_number', 'total_due', 'days_overdue', 'company_name'],
+  },
+};
+
+export function ensureDefaultEmailTemplates(companyId: string) {
+  for (const [key, t] of Object.entries(DEFAULT_EMAIL_TEMPLATES)) {
+    const existing = db
+      .getDb()
+      .prepare(`SELECT id FROM email_templates WHERE company_id = ? AND key = ?`)
+      .get(companyId, key) as any;
+    if (existing) continue;
+    const defaultTo = 'client.email';
+    db.getDb()
+      .prepare(
+        `INSERT INTO email_templates (id, company_id, key, label, subject, body, body_format, available_tokens_json, default_to)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        uuid(),
+        companyId,
+        key,
+        t.label,
+        t.subject,
+        t.body,
+        'markdown',
+        JSON.stringify(t.tokens),
+        defaultTo,
+      );
+  }
+}
+
+export function resolveTemplateTokens(body: string, ctx: Record<string, any>): string {
+  return body.replace(/\{\{\s*([\w_]+)\s*\}\}/g, (_m, key) => {
+    const v = ctx[key];
+    if (v === undefined || v === null) return `{{${key}}}`;
+    return String(v);
+  });
+}
+
+// Format an amount in a specific ISO 4217 currency (mirrors renderer's
+// formatCurrency) so {{total_due}} reflects the document's currency
+// rather than always defaulting to USD.
+function fmtMoney(amount: number, currency?: string | null): string {
+  const code = (currency || 'USD').toString().trim().toUpperCase();
+  const n = Number.isFinite(amount) ? amount : 0;
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(n);
+  } catch {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+  }
+}
+
+// Resolve the portal deep-link for an invoice — looks up the token in
+// invoice_tokens (creating one would require side effects, so we just
+// look it up). Returns empty string if no token exists yet.
+//
+// The base URL supports three formats so admins can swap portal
+// endpoints without recompiling:
+//   1. {token} placeholder substitution
+//   2. /login → appends ?invoice=<token> query param
+//   3. anything else → appends /<token> path segment
+// Default points at https://rmpgutahps.us/client/login (RMPG Pro
+// Services portal). Override per-tenant via the portal_base_url
+// setting (settings table, key='portal_base_url').
+function buildPortalUrl(base: string, token: string): string {
+  const url = (base || '').trim();
+  if (!url) return '';
+  if (url.includes('{token}')) return url.replace(/\{token\}/g, token);
+  const noTrail = url.replace(/\/$/, '');
+  if (/\/login$/i.test(noTrail)) return `${noTrail}?invoice=${encodeURIComponent(token)}`;
+  return `${noTrail}/${token}`;
+}
+
+function resolvePortalLink(
+  invoiceId: string,
+  fallbackBase: string = 'https://rmpgutahps.us/client/login',
+): string {
+  try {
+    // Allow per-company override via settings table
+    const companyId = db.getCurrentCompanyId();
+    let base = fallbackBase;
+    if (companyId) {
+      const setting = db
+        .getDb()
+        .prepare("SELECT value FROM settings WHERE company_id = ? AND key = 'portal_base_url'")
+        .get(companyId) as any;
+      if (setting?.value) base = setting.value;
+    }
+    const row = db
+      .getDb()
+      .prepare(
+        `SELECT token FROM invoice_tokens WHERE invoice_id = ? AND expires_at > 0 ORDER BY expires_at DESC LIMIT 1`,
+      )
+      .get(invoiceId) as any;
+    if (row?.token) return buildPortalUrl(base, row.token);
+  } catch {
+    /* ignore */
+  }
+  return '';
+}
+
+export function buildTemplateContext(
+  companyId: string,
+  entityType: string,
+  entityId: string,
+): Record<string, any> {
+  const ctx: Record<string, any> = {};
+  try {
+    const co = db.getById('companies', companyId);
+    ctx.company_name = co?.name || '';
+    ctx.company_email = co?.email || '';
+    ctx.company_phone = co?.phone || '';
+  } catch {}
+  try {
+    if (entityType === 'invoice') {
+      const inv = db.getById('invoices', entityId);
+      if (inv) {
+        ctx.invoice_number = inv.invoice_number || '';
+        // Use real `total` field (schema correction) and honor currency
+        const totalNum = Number(inv.total ?? inv.total_amount ?? 0);
+        const paid = Number(inv.amount_paid ?? 0);
+        ctx.total_due = fmtMoney(totalNum, inv.currency);
+        ctx.balance_due = fmtMoney(Math.max(0, totalNum - paid), inv.currency);
+        ctx.amount_paid = fmtMoney(paid, inv.currency);
+        ctx.due_date = inv.due_date || '';
+        ctx.issue_date = inv.issue_date || '';
+        if (inv.due_date) {
+          const days = Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86400000);
+          ctx.days_overdue = String(Math.max(0, days));
+        }
+        if (inv.client_id) {
+          const client = db.getById('clients', inv.client_id);
+          ctx.client_name = client?.name || '';
+          ctx.client_email = client?.email || '';
+          ctx.client_phone = client?.phone || '';
+        }
+        // Deep-link to the per-invoice portal page (capability URL)
+        ctx.payment_link = resolvePortalLink(inv.id);
+        ctx.portal_link = ctx.payment_link;
+      }
+    } else if (entityType === 'quote') {
+      const q = db.getById('quotes', entityId);
+      if (q) {
+        ctx.invoice_number = q.quote_number || '';
+        const totalNum = Number(q.total ?? q.total_amount ?? 0);
+        ctx.total_due = fmtMoney(totalNum, q.currency);
+        ctx.due_date = q.valid_until || q.expires_at || '';
+        ctx.issue_date = q.issue_date || '';
+        if (q.client_id) {
+          const client = db.getById('clients', q.client_id);
+          ctx.client_name = client?.name || '';
+          ctx.client_email = client?.email || '';
+        }
+      }
+    } else if (entityType === 'debt') {
+      const d = db.getById('debts', entityId);
+      if (d) {
+        ctx.invoice_number = d.debt_number || d.invoice_number || '';
+        ctx.total_due = `$${Number(d.balance || d.original_amount || 0).toFixed(2)}`;
+        ctx.due_date = d.original_due_date || '';
+        if (d.original_due_date) {
+          const days = Math.floor(
+            (Date.now() - new Date(d.original_due_date).getTime()) / 86400000,
+          );
+          ctx.days_overdue = String(Math.max(0, days));
+        }
+        if (d.client_id) {
+          const client = db.getById('clients', d.client_id);
+          ctx.client_name = client?.name || '';
+          ctx.client_email = client?.email || '';
+        }
+      }
+    }
+  } catch {}
+  return ctx;
+}
+
 export function createIpcDeps(): IpcDeps {
   return Object.freeze({
     scheduleAutoBackup,
@@ -1540,5 +1789,8 @@ export function createIpcDeps(): IpcDeps {
     logDebtAudit,
     seedDefaultCategories,
     localToday,
+    ensureDefaultEmailTemplates,
+    resolveTemplateTokens,
+    buildTemplateContext,
   });
 }

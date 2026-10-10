@@ -54,6 +54,13 @@ export interface IpcDeps {
   ): void;
   seedDefaultCategories(companyId: string): { seeded: boolean; count: number };
   localToday(): string;
+  ensureDefaultEmailTemplates(companyId: string): void;
+  resolveTemplateTokens(body: string, ctx: Record<string, any>): string;
+  buildTemplateContext(
+    companyId: string,
+    entityType: string,
+    entityId: string,
+  ): Record<string, any>;
   VALID_TABLES: Set<string>;
   PROTECTED_TABLES: Set<string>;
 }
