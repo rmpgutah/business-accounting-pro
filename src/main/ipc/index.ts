@@ -1,7 +1,5 @@
-import { ipcMain, dialog, shell } from 'electron';
+import { ipcMain } from 'electron';
 import * as db from '../database';
-import fs from 'fs';
-import path from 'path';
 import { registerStripeIpc } from '../integrations/stripe';
 import { registerEntityGraphIpc } from '../integrations/entity-graph';
 import { createIpcDeps } from './core/deps';
@@ -16,6 +14,7 @@ import { registerLoansAdvancedIpc } from './domains/loans-advanced';
 import { registerDebtCollectionIpc } from './domains/debt-collection';
 import { registerReportsIpc } from './domains/reports';
 import { registerHrPayrollIpc } from './domains/hr-payroll';
+import { registerMiscIpc } from './domains/misc';
 import { registerSyncBackupIpc } from './domains/sync-backup';
 import { registerAdminSettingsIpc } from './domains/admin-settings';
 import { registerWorkflowsAutomationIpc } from './domains/workflows-automation';
@@ -1368,17 +1367,7 @@ export function registerIpcHandlers(): void {
 
 
 
-  // ─── File Dialog ────────────────────────────────────────
-  ipcMain.handle('dialog:open-file', async (_event, options?: { filters?: Array<{ name: string; extensions: string[] }> }) => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: options?.filters || [{ name: 'All Files', extensions: ['*'] }],
-    });
-    if (result.canceled || !result.filePaths.length) return null;
-    const filePath = result.filePaths[0];
-    const stats = fs.statSync(filePath);
-    return { path: filePath, name: path.basename(filePath), size: stats.size };
-  });
+  registerMiscIpc(ipcMain, deps);
 
 
 
@@ -1408,17 +1397,6 @@ export function registerIpcHandlers(): void {
   registerDebtCollectionIpc(ipcMain, deps);
 
 
-  // SECURITY: only http(s) URLs reach the OS shell; rejects mailto/file/etc.
-  ipcMain.handle('shell:open-external', (_event, url: string) => {
-    if (typeof url !== 'string') return { ok: false };
-    if (!/^https?:\/\//i.test(url)) return { ok: false };
-    try {
-      shell.openExternal(url).catch(() => {});
-      return { ok: true };
-    } catch (err: any) {
-      return { ok: false, error: err?.message };
-    }
-  });
 
 
 
