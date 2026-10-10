@@ -43,4 +43,21 @@ describe('workflows-automation domain', () => {
     expect(rows).toHaveLength(1);
     expect(scheduleAutoBackup).toHaveBeenCalled();
   });
+
+  it('macro:list returns an array', async () => {
+    const res = await ipc.invoke('macro:list', { user_id: 'u1' });
+    expect(Array.isArray(res)).toBe(true);
+  });
+
+  it('macro:save inserts a macro and schedules a backup', async () => {
+    const res = await ipc.invoke('macro:save', {
+      user_id: 'u1',
+      name: 'Close month',
+      action_sequence: [],
+    });
+    expect(res.success).toBe(true);
+    const rows = db.getDb().prepare('SELECT id FROM macros WHERE company_id = ?').all(companyId);
+    expect(rows).toHaveLength(1);
+    expect(scheduleAutoBackup).toHaveBeenCalled();
+  });
 });

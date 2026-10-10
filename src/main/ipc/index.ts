@@ -120,8 +120,8 @@ export function registerIpcHandlers(): void {
 
   const deps = createIpcDeps();
   const {
-    scheduleAutoBackup, findClosedPeriod, validateTable, cleanupReferencesBeforeDelete, scheduleReindex, localToday,
-    ensureDefaultEmailTemplates, resolveTemplateTokens, buildTemplateContext, eu,
+    scheduleAutoBackup, findClosedPeriod, validateTable, cleanupReferencesBeforeDelete, localToday, ensureDefaultEmailTemplates,
+    resolveTemplateTokens, buildTemplateContext, eu,
   } = deps;
 
   // Advanced System (2026-04-28) — register built-in commands for Cmd+K palette
@@ -1599,69 +1599,9 @@ export function registerIpcHandlers(): void {
   });
 
 
-  // ─── Global Search ───────────────────────────────────
-  ipcMain.handle('search:index', (_e, { query, limit }: { query: string; limit?: number }) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId || !query) return [];
-    try {
-      const { search } = require('../services/intelligence/searchIndex');
-      return search(db.getDb(), companyId, query, Math.min(limit || 20, 50));
-    } catch (e) { console.warn('[search:index] failed', e); return []; }
-  });
 
-  ipcMain.handle('search:backfill', () => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { indexed: 0 };
-    try {
-      const { backfillCompany } = require('../services/intelligence/searchIndex');
-      return { indexed: backfillCompany(db.getDb(), companyId) };
-    } catch (e) { console.warn('[search:backfill] failed', e); return { indexed: 0, error: String(e) }; }
-  });
 
-  // Intelligence Core (B1) — role-checked mutation dispatch. Role enforced in main; never trust renderer.
-  ipcMain.handle('action:invoke', (_e, { actionId, params }: { actionId: string; params?: any }) => {
-    const companyId = db.getCurrentCompanyId();
-    const userId = db.getCurrentUserId();
-    if (!companyId || !userId) return { error: 'Not authenticated' };
-    const { MUTATE_ACTIONS, ROLE_RANK } = require('../../shared/action-registry');
-    const action = MUTATE_ACTIONS.find((a: any) => a.id === actionId);
-    if (!action) return { error: 'Unknown or non-mutating action' };
-    // Role check — never trust the renderer.
-    const userRow: any = db.runQuery('SELECT role FROM users WHERE id = ?', [userId])[0];
-    const role = (userRow?.role || 'viewer');
-    if (action.requiredRole && (ROLE_RANK[role] ?? 0) < ROLE_RANK[action.requiredRole]) {
-      return { error: `Requires ${action.requiredRole} role` };
-    }
-    try {
-      let result: any;
-      if (actionId === 'invoice.markPaid') {
-        if (!params?.invoiceId) return { error: 'invoiceId required' };
-        result = db.update('invoices', params.invoiceId, { status: 'paid' });
-        db.logAudit(companyId, 'invoices', params.invoiceId, 'update', { status: { new: 'paid' } });
-      } else if (actionId === 'client.createQuick') {
-        if (!params?.name) return { error: 'name required' };
-        result = db.create('clients', { company_id: companyId, name: params.name, email: params.email || '' });
-        db.logAudit(companyId, 'clients', result.id, 'create');
-      } else {
-        return { error: 'No handler' };
-      }
-      scheduleReindex(actionId.startsWith('invoice') ? 'invoices' : 'clients',
-        (params.invoiceId || result.id), 'upsert');
-      scheduleAutoBackup();
-      return { ok: true, result };
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
-  });
 
-  ipcMain.handle('search:global', (_event, query) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId || !query || String(query).length > 200) return [];
-    try {
-      const { search } = require('../services/intelligence/searchIndex');
-      return search(db.getDb(), companyId, String(query), 20).map((h: any) => ({
-        type: h.entity_type, id: h.entity_id, title: h.title, subtitle: h.subtitle || '',
-      }));
-    } catch (e) { console.warn('[search:global] failed', e); return []; }
-  });
 
 
 
@@ -2080,66 +2020,12 @@ export function registerIpcHandlers(): void {
 
 
 
-  // ─── Financial Intelligence ─────────────────────────
-  ipcMain.handle('intelligence:anomalies', () => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return [];
-    return db.getDb().prepare(
-      `SELECT * FROM financial_anomalies WHERE company_id = ? AND dismissed = 0 ORDER BY detected_at DESC LIMIT 20`
-    ).all(companyId);
-  });
-
-  ipcMain.handle('intelligence:dismiss-anomaly', (_e, id: string) => {
-    db.getDb().prepare(`UPDATE financial_anomalies SET dismissed = 1 WHERE id = ?`).run(id);
-    scheduleAutoBackup();
-  });
 
 
 
 
-  ipcMain.handle('intelligence:cash-projection', (_e, { days }: { days: number }) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { inflow: [], outflow: [] };
-    const d = Math.min(Math.max(Number.isFinite(Number(days)) ? Number(days) : 30, 1), 90);
-    const dbInstance = db.getDb();
-    const inflow = dbInstance.prepare(`
-      SELECT SUM(total) as amount, due_date
-      FROM invoices
-      WHERE company_id = ? AND status NOT IN ('paid','void','draft')
-        AND due_date BETWEEN date('now') AND date('now', '+' || ? || ' days')
-      GROUP BY due_date ORDER BY due_date
-    `).all(companyId, d);
-    const outflow = dbInstance.prepare(`
-      SELECT SUM(total_amount) as amount, due_date
-      FROM bills
-      WHERE company_id = ? AND status NOT IN ('paid','void','draft')
-        AND due_date BETWEEN date('now') AND date('now', '+' || ? || ' days')
-      GROUP BY due_date ORDER BY due_date
-    `).all(companyId, d);
-    return { inflow, outflow };
-  });
 
-  ipcMain.handle('intelligence:entity-hint', (_e, { entityType, id }: { entityType: string; id: string }) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId || !id) return '';
-    try {
-      if (entityType === 'client') {
-        const row: any = db.runQuery(
-          `SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS amt FROM invoices
-           WHERE company_id = ? AND client_id = ? AND status NOT IN ('paid','cancelled','draft')
-             AND COALESCE(due_date,'') <> '' AND date(due_date) < date('now')`,
-          [companyId, id])[0];
-        if (row?.n > 0) return `${row.n} overdue invoice${row.n > 1 ? 's' : ''} ($${Math.round(row.amt).toLocaleString()})`;
-      } else if (entityType === 'vendor') {
-        const row: any = db.runQuery(
-          `SELECT COUNT(*) AS n FROM expenses WHERE company_id = ? AND vendor_id = ?
-             AND instr(COALESCE(tags,''),'anomaly') > 0`,
-          [companyId, id])[0];
-        if (row?.n > 0) return `${row.n} flagged charge${row.n > 1 ? 's' : ''}`;
-      }
-      return '';
-    } catch { return ''; }
-  });
+
 
 
 
@@ -2329,67 +2215,11 @@ export function registerIpcHandlers(): void {
 
 
 
-  ipcMain.handle('shortcut:list', (_event, { user_id }: { user_id?: string }) => {
-    const dbI = db.getDb();
-    return dbI.prepare(`SELECT * FROM custom_shortcuts WHERE user_id = ?`).all(user_id || 'anon');
-  });
 
-  ipcMain.handle('shortcut:save', (_event, { user_id, key_combo, command_id, params }: any) => {
-    const dbI = db.getDb();
-    const existing = dbI.prepare(
-      `SELECT id FROM custom_shortcuts WHERE user_id = ? AND key_combo = ?`
-    ).get(user_id || 'anon', key_combo) as any;
-    if (existing) {
-      dbI.prepare(
-        `UPDATE custom_shortcuts SET command_id = ?, params_json = ?, updated_at = datetime('now') WHERE id = ?`
-      ).run(command_id, JSON.stringify(params || {}), existing.id);
-      scheduleAutoBackup();
-      return { success: true, id: existing.id };
-    }
-    const id = uuid();
-    dbI.prepare(
-      `INSERT INTO custom_shortcuts (id, user_id, key_combo, command_id, params_json) VALUES (?, ?, ?, ?, ?)`
-    ).run(id, user_id || 'anon', key_combo, command_id, JSON.stringify(params || {}));
-    scheduleAutoBackup();
-    return { success: true, id };
-  });
 
-  ipcMain.handle('shortcut:delete', (_event, { id }: { id: string }) => {
-    db.getDb().prepare(`DELETE FROM custom_shortcuts WHERE id = ?`).run(id);
-    scheduleAutoBackup();
-    return { success: true };
-  });
 
-  ipcMain.handle('macro:list', (_event, { user_id }: { user_id?: string }) => {
-    const companyId = db.getCurrentCompanyId();
-    return db.getDb().prepare(
-      `SELECT * FROM macros WHERE (user_id = ? OR is_shared = 1) AND company_id = ? ORDER BY name`
-    ).all(user_id || 'anon', companyId);
-  });
 
-  ipcMain.handle('macro:save', (_event, { id, user_id, name, description, action_sequence, is_shared }: any) => {
-    const companyId = db.getCurrentCompanyId();
-    const dbI = db.getDb();
-    const seqJson = JSON.stringify(action_sequence || []);
-    if (id) {
-      dbI.prepare(
-        `UPDATE macros SET name = ?, description = ?, action_sequence_json = ?, is_shared = ?, updated_at = datetime('now') WHERE id = ?`
-      ).run(name || '', description || '', seqJson, is_shared ? 1 : 0, id);
-      return { success: true, id };
-    }
-    const newId = uuid();
-    dbI.prepare(
-      `INSERT INTO macros (id, user_id, company_id, name, description, action_sequence_json, is_shared) VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(newId, user_id || 'anon', companyId, name || '', description || '', seqJson, is_shared ? 1 : 0);
-    scheduleAutoBackup();
-    return { success: true, id: newId };
-  });
 
-  ipcMain.handle('macro:delete', (_event, { id }: { id: string }) => {
-    db.getDb().prepare(`DELETE FROM macros WHERE id = ?`).run(id);
-    scheduleAutoBackup();
-    return { success: true };
-  });
 
 
 
