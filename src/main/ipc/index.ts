@@ -15,6 +15,7 @@ import { monthlyDepreciation } from '../services/depreciation';
 import { sendInvoiceEmail } from '../services/email-sender';
 import { registerStripeIpc } from '../integrations/stripe';
 import { registerEntityGraphIpc, recordRelationBidirectional } from '../integrations/entity-graph';
+import { createIpcDeps, SYNC_SERVER } from './core/deps';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -46,69 +47,10 @@ import { INDEXED_TABLES } from '../services/intelligence/indexConfig';
 import http from 'http';
 import https from 'https';
 
-// ─── Server Sync Config ──────────────────────────────────
-const SYNC_SERVER = process.env.SYNC_SERVER_URL || 'https://accounting.rmpgutah.us';
 
 // ─── B3 AI Copilot — active stream registry ──────────────
 const copilotStreams = new Map<string, AbortController>();
 
-// Debounced auto-backup: waits 30s after last write, then uploads DB to server
-// CONCURRENCY: a single global timer is correct here — the SQLite file holds
-// ALL companies for the logged-in user, and the backup is keyed on user email.
-// Per-company debouncing would unnecessarily upload the same file N times.
-let autoBackupTimer: ReturnType<typeof setTimeout> | null = null;
-
-function scheduleAutoBackup() {
-  if (autoBackupTimer) clearTimeout(autoBackupTimer);
-  autoBackupTimer = setTimeout(async () => {
-    try {
-      const dbPath = db.getDbPath();
-      if (!fs.existsSync(dbPath)) return;
-      try { db.getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
-
-      // Perf: async read so other IPC handlers aren't blocked while the DB
-      // file is loaded into memory for HMAC + upload (runs every 30s).
-      const fileData = await fs.promises.readFile(dbPath);
-      const email = getLastLoginEmail();
-      if (!email) return;
-
-      const secret = process.env.SYNC_SECRET || 'bap-sync-default';
-      const signature = crypto.createHmac('sha256', secret).update(fileData).digest('hex');
-
-      const url = new URL(`${SYNC_SERVER}/api/backup/upload`);
-      const isHttps = url.protocol === 'https:';
-      const transport = isHttps ? https : http;
-
-      const req = transport.request({
-        hostname: url.hostname,
-        port: url.port || (isHttps ? 443 : 80),
-        path: url.pathname,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': fileData.length,
-          'x-bap-signature': signature,
-          'x-bap-email': email,
-        },
-      }, (res) => {
-        let body = '';
-        res.on('data', (chunk: string) => body += chunk);
-        res.on('end', () => {
-          if (res.statusCode === 200) {
-            console.log('Auto-backup uploaded successfully');
-          } else {
-            console.warn('Auto-backup response:', res.statusCode, body);
-          }
-        });
-      });
-      req.on('error', (err) => console.warn('Auto-backup failed (network):', err.message));
-      req.write(fileData);
-      req.end();
-    } catch (err) {
-      console.warn('Auto-backup error:', err);
-    }
-  }, 30000); // 30 second debounce
-}
 
 // Coalesce rapid re-index calls per (table,id) onto a microtask-ish timer so
 // bulk writes don't thrash FTS. Best-effort; never throws into the write path.
@@ -128,9 +70,6 @@ function scheduleReindex(table: string, id: string, op: 'upsert' | 'delete'): vo
   }, 150));
 }
 
-let _lastLoginEmail: string | null = null;
-function setLastLoginEmail(email: string) { _lastLoginEmail = email; }
-function getLastLoginEmail(): string | null { return _lastLoginEmail; }
 
 // Mirror of the server's sanitizeEmail (server/src/routes/backup.ts). Both
 // sides must HMAC over the identical string, so this logic must stay in lockstep
@@ -434,88 +373,6 @@ function backfillCategoryScheduleC(companyId: string): { updated: number } {
   return { updated };
 }
 
-// ─── Journal Entry Auto-Poster ────────────────────────────
-// ─── Account Lookup (multi-strategy) ─────────────────────
-// Tries multiple strategies to find an account by name hint:
-// 1. Exact name match
-// 2. LIKE name match
-// 3. Alias mapping (common name → default account names)
-// 4. Type + subtype fallback
-const ACCOUNT_ALIASES: Record<string, string[]> = {
-  'Cash':                  ['Cash', 'Checking Account', 'Bank Account'],
-  'Receivable':            ['Accounts Receivable', 'Trade Receivable', 'A/R'],
-  'Payable':               ['Accounts Payable', 'Trade Payable', 'A/P'],
-  'Wages Expense':         ['Wages & Salaries', 'Payroll Expense', 'Wages Expense', 'Salary Expense', 'Wage Expense'],
-  'Wages Payable':         ['Payroll Liabilities', 'Wages Payable', 'Salary Payable', 'Payroll Payable'],
-  'Federal Withholding':   ['Federal Tax Payable', 'Federal Withholding', 'Federal Income Tax Payable'],
-  'State Withholding':     ['State Tax Payable', 'State Withholding', 'State Income Tax Payable'],
-  'Social Security Payable': ['Payroll Liabilities', 'Social Security Payable', 'FICA Payable', 'Payroll Tax Expense — FICA'],
-  'Medicare Payable':      ['Payroll Liabilities', 'Medicare Payable', 'FICA Payable', 'Payroll Tax Expense — FICA'],
-  'FUTA Payable':          ['Payroll Liabilities', 'FUTA Payable', 'Payroll Tax Expense — FUTA', 'Federal Unemployment Payable'],
-  'SUI Payable':           ['Payroll Liabilities', 'SUI Payable', 'SUTA Payable', 'State Unemployment Payable', 'Payroll Tax Expense — SUTA'],
-  'Revenue':               ['Service Revenue', 'Sales Revenue', 'Revenue', 'Consulting Revenue', 'Project Revenue', 'Income'],
-  'Expense':               ['Cost of Services', 'Cost of Goods Sold', 'Office Supplies', 'Miscellaneous Expense', 'General Expense', 'Operating Expense'],
-  'Advertising':           ['Advertising & Marketing', 'Marketing', 'Advertising'],
-  'Bank Fees':             ['Bank Fees & Service Charges', 'Bank Fees', 'Bank Charges', 'Service Charges'],
-  'Contractors':           ['Contract Labor', 'Contractors', 'Subcontractors'],
-  'Insurance':             ['Insurance — General Liability', 'Insurance', 'Business Insurance'],
-  'Office Supplies':       ['Office Supplies', 'Supplies'],
-  'Professional Fees':     ['Legal Fees', 'Accounting & Tax Preparation', 'Professional Services — Other', 'Professional Fees', 'Legal & Professional'],
-  'Rent':                  ['Rent — Office / Workspace', 'Rent', 'Rent Expense', 'Office Rent'],
-  'Software':              ['Software & Subscriptions', 'Software', 'Subscriptions'],
-  'Travel':                ['Travel — Airfare', 'Travel — Lodging', 'Travel & Meals', 'Travel', 'Travel Expense'],
-  'Utilities':             ['Utilities — Electric', 'Utilities — Telephone / Internet', 'Utilities', 'Utility Expense'],
-  'Depreciation':          ['Depreciation Expense', 'Section 179 Expense', 'Amortization Expense'],
-  'Meals':                 ['Meals — Business (50% deductible)', 'Meals', 'Business Meals'],
-  'Vehicle':               ['Vehicle Expense', 'Auto Expense', 'Mileage'],
-  'Repairs':               ['Repairs & Maintenance', 'Repairs', 'Maintenance'],
-  'Interest':              ['Interest — Other Business Loans', 'Interest Expense', 'Loan Interest'],
-  'Taxes':                 ['Taxes — Business License & Permits', 'Taxes — Property', 'Business Taxes'],
-  'Education':             ['Education & Training', 'Training', 'Professional Development'],
-  'Dues':                  ['Dues & Memberships', 'Memberships', 'Professional Dues'],
-  'Bad Debts':             ['Bad Debts', 'Bad Debt Expense', 'Uncollectible Accounts'],
-  'Shipping':              ['Postage & Shipping', 'Shipping', 'Postage', 'Freight'],
-  'Processing Fees':       ['Stripe Processing Fees', 'Credit Card Processing Fees', 'Payment Processing'],
-};
-
-const ACCOUNT_TYPE_FALLBACK: Record<string, { type: string; subtype?: string }> = {
-  'Cash':                  { type: 'asset', subtype: 'current' },
-  'Receivable':            { type: 'asset', subtype: 'current' },
-  'Payable':               { type: 'liability', subtype: 'current' },
-  'Wages Expense':         { type: 'expense', subtype: 'payroll' },
-  'Wages Payable':         { type: 'liability', subtype: 'current' },
-  'Federal Withholding':   { type: 'liability', subtype: 'current' },
-  'State Withholding':     { type: 'liability', subtype: 'current' },
-  'Social Security Payable': { type: 'liability', subtype: 'current' },
-  'Medicare Payable':      { type: 'liability', subtype: 'current' },
-  'FUTA Payable':          { type: 'liability', subtype: 'current' },
-  'SUI Payable':           { type: 'liability', subtype: 'current' },
-  'Pre-tax Deductions Payable': { type: 'liability', subtype: 'current' },
-  'Post-tax Deductions Payable': { type: 'liability', subtype: 'current' },
-  'Revenue':               { type: 'revenue' },
-  'Expense':               { type: 'expense', subtype: 'operating' },
-  'Advertising':           { type: 'expense', subtype: 'operating' },
-  'Bank Fees':             { type: 'expense', subtype: 'operating' },
-  'Contractors':           { type: 'expense', subtype: 'operating' },
-  'Insurance':             { type: 'expense', subtype: 'operating' },
-  'Office Supplies':       { type: 'expense', subtype: 'operating' },
-  'Professional Fees':     { type: 'expense', subtype: 'operating' },
-  'Rent':                  { type: 'expense', subtype: 'operating' },
-  'Software':              { type: 'expense', subtype: 'operating' },
-  'Travel':                { type: 'expense', subtype: 'operating' },
-  'Utilities':             { type: 'expense', subtype: 'operating' },
-  'Depreciation':          { type: 'expense', subtype: 'operating' },
-  'Meals':                 { type: 'expense', subtype: 'operating' },
-  'Vehicle':               { type: 'expense', subtype: 'operating' },
-  'Repairs':               { type: 'expense', subtype: 'operating' },
-  'Interest':              { type: 'expense', subtype: 'operating' },
-  'Taxes':                 { type: 'expense', subtype: 'taxes' },
-  'Education':             { type: 'expense', subtype: 'operating' },
-  'Dues':                  { type: 'expense', subtype: 'operating' },
-  'Bad Debts':             { type: 'expense', subtype: 'other' },
-  'Shipping':              { type: 'expense', subtype: 'operating' },
-  'Processing Fees':       { type: 'expense', subtype: 'operating' },
-};
 
 // DATE: today's date as YYYY-MM-DD in the user's local timezone. Use this
 // instead of new Date().toISOString().slice(0,10), which UTC-shifts the day
@@ -526,156 +383,6 @@ function localToday(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function findAccount(dbInstance: any, companyId: string, nameHint: string): string | null {
-  // Determine expected account type (if known) to prevent cross-type matching
-  const expectedType = ACCOUNT_TYPE_FALLBACK[nameHint]?.type;
-  const typeFilter = expectedType ? ` AND type = '${expectedType}'` : '';
-
-  // Strategy 1: Exact name match (type-filtered if known)
-  let acct = dbInstance.prepare(
-    `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ?${typeFilter} LIMIT 1`
-  ).get(companyId, nameHint) as any;
-  if (acct) return acct.id;
-
-  // Strategy 1b: Exact name match without type filter
-  if (typeFilter) {
-    acct = dbInstance.prepare(
-      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ? LIMIT 1`
-    ).get(companyId, nameHint) as any;
-    if (acct) return acct.id;
-  }
-
-  // Strategy 2: LIKE match (type-filtered to prevent cross-type matches like "Prepaid Expenses" for expense hint)
-  if (typeFilter) {
-    acct = dbInstance.prepare(
-      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ?${typeFilter} ORDER BY code LIMIT 1`
-    ).get(companyId, `%${nameHint}%`) as any;
-    if (acct) return acct.id;
-  } else {
-    acct = dbInstance.prepare(
-      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? ORDER BY code LIMIT 1`
-    ).get(companyId, `%${nameHint}%`) as any;
-    if (acct) return acct.id;
-  }
-
-  // Strategy 3: Try known aliases (exact match first, then LIKE)
-  const aliases = ACCOUNT_ALIASES[nameHint];
-  if (aliases) {
-    for (const alias of aliases) {
-      acct = dbInstance.prepare(
-        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ? LIMIT 1`
-      ).get(companyId, alias) as any;
-      if (acct) return acct.id;
-    }
-    for (const alias of aliases) {
-      acct = dbInstance.prepare(
-        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? ORDER BY code LIMIT 1`
-      ).get(companyId, `%${alias}%`) as any;
-      if (acct) return acct.id;
-    }
-  }
-
-  // Strategy 4: Fall back to type + subtype
-  const fallback = ACCOUNT_TYPE_FALLBACK[nameHint];
-  if (fallback) {
-    // Try with subtype first
-    if (fallback.subtype) {
-      acct = dbInstance.prepare(
-        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? AND subtype = ? ORDER BY code LIMIT 1`
-      ).get(companyId, fallback.type, fallback.subtype) as any;
-      if (acct) return acct.id;
-    }
-    // Then try any account of that type
-    acct = dbInstance.prepare(
-      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? ORDER BY code LIMIT 1`
-    ).get(companyId, fallback.type) as any;
-    if (acct) return acct.id;
-  }
-
-  return null;
-}
-
-// Posts a balanced journal entry using multi-strategy account lookup.
-// Silently no-ops if any required account is missing — best-effort for
-// companies that haven't configured a full chart of accounts.
-function postJournalEntry(
-  dbInstance: ReturnType<typeof db.getDb>,
-  companyId: string,
-  date: string,
-  description: string,
-  lines: Array<{ nameHint: string; debit: number; credit: number; note?: string }>
-): void {
-  // Skip lines with zero amounts
-  const nonZero = lines.filter(l => l.debit > 0 || l.credit > 0);
-  if (nonZero.length === 0) return;
-
-  const resolved: Array<{ accountId: string; debit: number; credit: number; note: string }> = [];
-  for (const line of nonZero) {
-    const accountId = findAccount(dbInstance as any, companyId, line.nameHint);
-    if (!accountId) {
-      // SAFETY: a missing account means the entry would be silently dropped,
-      // which surfaces upstream as "saved but no ledger record." Log so we
-      // can spot the missing-account case in the console.
-      console.warn(`[postJournalEntry] Could not resolve account for nameHint="${line.nameHint}". Skipping entire JE.`);
-      return;
-    }
-    resolved.push({ accountId, debit: line.debit, credit: line.credit, note: line.note ?? '' });
-  }
-
-  // BALANCE CHECK: validate locally BEFORE the trigger so we surface a
-  // clearer error than the SQL "Posted journal entry must balance" rabbit
-  // hole. The trigger fires from raw line totals — but if we round each
-  // leg to cents BEFORE insert, both sides round identically and we
-  // can't drift.
-  const totalDebit = Math.round(resolved.reduce((s, l) => s + (l.debit || 0), 0) * 100) / 100;
-  const totalCredit = Math.round(resolved.reduce((s, l) => s + (l.credit || 0), 0) * 100) / 100;
-  if (Math.abs(totalDebit - totalCredit) > 0.005) {
-    const lineSummary = resolved.map((l, i) => `  line ${i}: debit=${l.debit.toFixed(2)} credit=${l.credit.toFixed(2)}`).join('\n');
-    console.error(`[postJournalEntry] Unbalanced JE rejected before insert:\n  description="${description}"\n  total_debit=${totalDebit.toFixed(2)} total_credit=${totalCredit.toFixed(2)} diff=${(totalDebit - totalCredit).toFixed(4)}\n${lineSummary}`);
-    throw new Error(`Journal entry unbalanced: debits ${totalDebit.toFixed(2)} ≠ credits ${totalCredit.toFixed(2)} (diff ${(totalDebit - totalCredit).toFixed(2)}). Source: "${description}"`);
-  }
-  // Round each line to cents to match the totals we just validated.
-  for (const l of resolved) {
-    l.debit = Math.round(l.debit * 100) / 100;
-    l.credit = Math.round(l.credit * 100) / 100;
-  }
-
-  // Find the highest entry number by extracting the numeric suffix.
-  // Cannot rely on created_at (same timestamp during bulk operations like gl:rebuild).
-  const lastJE = (dbInstance as any).prepare(
-    `SELECT entry_number FROM journal_entries WHERE company_id = ?
-     ORDER BY CAST(SUBSTR(entry_number, INSTR(entry_number, '-') + 1) AS INTEGER) DESC LIMIT 1`
-  ).get(companyId) as any;
-  let nextNum = 'JE-1001';
-  if (lastJE?.entry_number) {
-    const m = lastJE.entry_number.match(/(\d+)$/);
-    if (m) {
-      const prefix = lastJE.entry_number.slice(0, lastJE.entry_number.length - m[1].length);
-      nextNum = `${prefix}${String(parseInt(m[1], 10) + 1).padStart(m[1].length, '0')}`;
-    }
-  }
-
-  const jeId = uuid();
-  // BUG FIX: insert as draft (is_posted=0) so line-level balance triggers
-  // don't fire on the first line insert (which would see an unbalanced
-  // single-sided entry). All lines are inserted first, then is_posted is
-  // flipped to 1, which triggers trg_je_balanced_on_post to validate balance.
-  (dbInstance as any).prepare(`
-    INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted)
-    VALUES (?, ?, ?, ?, ?, 0)
-  `).run(jeId, companyId, nextNum, date, description);
-
-  for (const line of resolved) {
-    (dbInstance as any).prepare(`
-      INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(uuid(), jeId, line.accountId, line.debit, line.credit, line.note);
-  }
-
-  (dbInstance as any).prepare(`
-    UPDATE journal_entries SET is_posted = 1 WHERE id = ?
-  `).run(jeId);
-}
 
 // CONCURRENCY: ipcMain.handle throws if the same channel is registered twice.
 // Without this guard, calling registerIpcHandlers a second time (e.g. after a
@@ -687,6 +394,13 @@ let _ipcHandlersRegistered = false;
 export function registerIpcHandlers(): void {
   if (_ipcHandlersRegistered) return;
   _ipcHandlersRegistered = true;
+
+  const deps = createIpcDeps();
+  const {
+    scheduleAutoBackup, cancelAutoBackup, getLastLoginEmail, setLastLoginEmail, findClosedPeriod, postJournalEntry,
+    validateTable, cleanupReferencesBeforeDelete, isRawQueryAllowed, buildInvoiceMetadata,
+    PROTECTED_TABLES,
+  } = deps;
 
   // Advanced System (2026-04-28) — register built-in commands for Cmd+K palette
   // and ensure EventBus singleton is initialized.
@@ -704,43 +418,6 @@ export function registerIpcHandlers(): void {
   registerEntityGraphIpc(ipcMain);
 
   // ─── Input Validation Helpers ──────────────────────────
-  const VALID_TABLES = new Set([
-    'invoices', 'invoice_line_items', 'expenses', 'expense_line_items',
-    'clients', 'vendors', 'accounts', 'journal_entries', 'journal_entry_lines',
-    'projects', 'employees', 'employee_deductions', 'time_entries',
-    'categories', 'payments', 'budgets', 'budget_lines',
-    'bank_accounts', 'bank_transactions', 'bank_reconciliation_matches',
-    'documents', 'recurring_templates', 'tax_categories', 'tax_payments',
-    'inventory_items', 'inventory_movements', 'quotes', 'quote_line_items',
-    'quote_activity_log', 'quote_templates',
-    'bills', 'bill_line_items', 'bill_payments', 'purchase_orders', 'po_line_items',
-    'fixed_assets', 'asset_depreciation_entries',
-    'debts', 'debt_contacts', 'debt_communications', 'debt_payments',
-    'debt_pipeline_stages', 'debt_evidence', 'debt_legal_actions',
-    'debt_notes', 'debt_promises', 'debt_payment_plans', 'debt_plan_installments',
-    'debt_settlements', 'debt_compliance_log', 'debt_disputes', 'debt_audit_log',
-    'debt_payment_matches', 'debt_automation_rules', 'debt_templates',
-    'companies', 'users', 'user_companies', 'settings', 'notifications',
-    'audit_log', 'email_log', 'stripe_transactions',
-    'invoice_settings', 'invoice_catalog_items', 'invoice_reminders',
-    'invoice_payment_schedule', 'invoice_tokens', 'invoice_debt_links',
-    'client_contacts', 'credit_notes', 'credit_note_items',
-    'rules', 'rule_logs', 'saved_views', 'custom_field_defs',
-    'payroll_runs', 'pay_stubs', 'federal_payroll_constants',
-    'employee_equipment', 'equipment_penalties', 'employee_credentials',
-    'employee_checklist_items', 'employee_reviews', 'employee_disciplinary',
-    'pto_policies', 'pto_balances', 'pto_transactions', 'departments',
-    'state_tax_brackets', 'approval_queue',
-    'je_comments',
-    // Workflow + numbering + email templates (2026-04-23)
-    'custom_statuses', 'status_transitions', 'entity_status_history',
-    'number_sequences', 'email_templates', 'email_template_history',
-    'email_schedules',
-  ]);
-
-  function validateTable(table: string): boolean {
-    return VALID_TABLES.has(table);
-  }
 
   // ─── Generic CRUD ────────────────────────────────────
   ipcMain.handle('db:query', (_event, { table, filters, sort, limit, offset }) => {
@@ -759,13 +436,6 @@ export function registerIpcHandlers(): void {
   // SCHEMA: imported from tableConfig.ts for single source of truth.
   const tablesWithoutCompanyId = TABLES_WITHOUT_COMPANY_ID;
 
-  // SECURITY: Tables that hold credentials/secrets must not be writable via the
-  // generic CRUD IPC — those mutations have to go through dedicated handlers
-  // (auth:register/auth:login etc.) that enforce password hashing, email
-  // uniqueness, and audit logging. Without this guard the renderer could
-  // INSERT a user with an attacker-controlled password_hash, or UPDATE another
-  // user's hash to log in as them.
-  const PROTECTED_TABLES = new Set(['users']);
   ipcMain.handle('db:create', (_event, { table, data }) => {
     if (!validateTable(table)) return { error: 'Invalid table' };
     if (PROTECTED_TABLES.has(table)) return { error: `Direct writes to ${table} are not allowed — use dedicated handler` };
@@ -899,108 +569,6 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  // FK cleanup map: tables whose deletion requires nulling/deleting related rows
-  // because the referencing FKs are NOT ON DELETE CASCADE.
-  // Each entry returns SQL statements to run BEFORE the parent delete.
-  const cleanupReferencesBeforeDelete = (table: string, id: string): void => {
-    const dbI = db.getDb();
-    const run = (sql: string) => { try { dbI.prepare(sql).run(id); } catch {} };
-    switch (table) {
-      case 'invoices':
-        // Delete payments (NOT NULL FK — can't null it)
-        run(`DELETE FROM payments WHERE invoice_id = ?`);
-        // Null FK references (optional FKs)
-        run(`UPDATE time_entries SET invoice_id = NULL, is_invoiced = 0 WHERE invoice_id = ?`);
-        run(`UPDATE stripe_transactions SET invoice_id = NULL WHERE invoice_id = ?`);
-        run(`UPDATE credit_notes SET invoice_id = NULL WHERE invoice_id = ?`);
-        run(`UPDATE quotes SET converted_invoice_id = NULL WHERE converted_invoice_id = ?`);
-        run(`DELETE FROM invoice_debt_links WHERE invoice_id = ?`);
-        run(`DELETE FROM invoice_reminders WHERE invoice_id = ?`);
-        run(`DELETE FROM invoice_payment_schedule WHERE invoice_id = ?`);
-        run(`DELETE FROM invoice_coupon_redemptions WHERE invoice_id = ?`);
-        run(`DELETE FROM payment_intents WHERE invoice_id = ?`);
-        // invoice_line_items has ON DELETE CASCADE, no manual cleanup needed
-        break;
-      case 'clients':
-        // Null FKs in many tables that reference clients
-        run(`UPDATE invoices SET client_id = NULL WHERE client_id = ?`);
-        run(`UPDATE expenses SET client_id = NULL WHERE client_id = ?`);
-        run(`UPDATE time_entries SET client_id = NULL WHERE client_id = ?`);
-        run(`UPDATE projects SET client_id = NULL WHERE client_id = ?`);
-        run(`UPDATE quotes SET client_id = NULL WHERE client_id = ?`);
-        run(`UPDATE debts SET client_id = NULL WHERE client_id = ?`);
-        run(`DELETE FROM client_contacts WHERE client_id = ?`);
-        break;
-      case 'vendors':
-        run(`UPDATE expenses SET vendor_id = NULL WHERE vendor_id = ?`);
-        run(`UPDATE bills SET vendor_id = NULL WHERE vendor_id = ?`);
-        run(`UPDATE purchase_orders SET vendor_id = NULL WHERE vendor_id = ?`);
-        break;
-      case 'projects':
-        run(`UPDATE expenses SET project_id = NULL WHERE project_id = ?`);
-        run(`UPDATE time_entries SET project_id = NULL WHERE project_id = ?`);
-        run(`UPDATE invoice_line_items SET project_id = NULL WHERE project_id = ?`);
-        break;
-      case 'employees':
-        run(`UPDATE time_entries SET employee_id = NULL WHERE employee_id = ?`);
-        run(`DELETE FROM employee_deductions WHERE employee_id = ?`);
-        // pay_stubs has FK without cascade — but deleting an employee with
-        // pay history would be destructive. Block with clear error if any.
-        try {
-          const stubs = dbI.prepare(`SELECT COUNT(*) as c FROM pay_stubs WHERE employee_id = ?`).get(id) as any;
-          if (stubs?.c > 0) {
-            throw new Error(`Cannot delete employee with ${stubs.c} pay stub(s). Mark inactive instead.`);
-          }
-        } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
-        break;
-      case 'bills':
-        run(`DELETE FROM bill_payments WHERE bill_id = ?`);
-        run(`DELETE FROM bill_line_items WHERE bill_id = ?`);
-        break;
-      case 'purchase_orders':
-        run(`DELETE FROM po_line_items WHERE po_id = ?`);
-        run(`UPDATE bills SET purchase_order_id = NULL WHERE purchase_order_id = ?`);
-        break;
-      case 'fixed_assets':
-        run(`DELETE FROM asset_depreciation_entries WHERE asset_id = ?`);
-        break;
-      case 'budgets':
-        run(`DELETE FROM budget_lines WHERE budget_id = ?`);
-        break;
-      case 'quotes':
-        run(`DELETE FROM quote_line_items WHERE quote_id = ?`);
-        break;
-      case 'debts':
-        // Most debt child tables have ON DELETE CASCADE in schema
-        // but invoice_debt_links does not
-        run(`DELETE FROM invoice_debt_links WHERE debt_id = ?`);
-        break;
-      case 'payroll_runs':
-        run(`DELETE FROM pay_stubs WHERE payroll_run_id = ?`);
-        break;
-      case 'inventory_items':
-        run(`DELETE FROM inventory_movements WHERE item_id = ?`);
-        break;
-      case 'accounts':
-        // Accounts can't be deleted if they have journal entries — block
-        try {
-          const lines = dbI.prepare(`SELECT COUNT(*) as c FROM journal_entry_lines WHERE account_id = ?`).get(id) as any;
-          if (lines?.c > 0) {
-            throw new Error(`Cannot delete account with ${lines.c} journal entry line(s). Use soft delete (mark inactive) instead.`);
-          }
-        } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
-        break;
-      case 'departments':
-        // Departments can't be deleted while employees are still assigned — block
-        try {
-          const assigned = dbI.prepare(`SELECT COUNT(*) as c FROM employees WHERE department_id = ?`).get(id) as any;
-          if (assigned?.c > 0) {
-            throw new Error(`Cannot delete department with ${assigned.c} employee(s) assigned. Reassign them first.`);
-          }
-        } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
-        break;
-    }
-  };
 
   ipcMain.handle('db:delete', (_event, { table, id }) => {
     if (!validateTable(table)) return { error: 'Invalid table' };
@@ -1454,10 +1022,10 @@ export function registerIpcHandlers(): void {
       return { error: err?.message };
     }
   });
-  registerLoanIpc(ipcMain, { scheduleAutoBackup, findClosedPeriod, postJournalEntry });
-  registerExpenseDebtIpc(ipcMain, { scheduleAutoBackup });
-  registerHrPortalIpc(ipcMain, { scheduleAutoBackup });
-  registerDebtWaveIpc(ipcMain, { scheduleAutoBackup });
+  registerLoanIpc(ipcMain, deps);
+  registerExpenseDebtIpc(ipcMain, deps);
+  registerHrPortalIpc(ipcMain, deps);
+  registerDebtWaveIpc(ipcMain, deps);
   registerEquipmentAssessmentIpc();
 
   // ─── A7: Line-item snippets (reusable templates) ──────
@@ -1525,16 +1093,6 @@ export function registerIpcHandlers(): void {
   // attempting the mutation, but the server-side gate is the source
   // of truth.
 
-  // Returns the active closed period covering the given date, or null.
-  function findClosedPeriod(companyId: string, date: string): { id: string; period_start: string; period_end: string; close_reason: string } | null {
-    if (!companyId || !date) return null;
-    try {
-      return db.getDb().prepare(
-        "SELECT id, period_start, period_end, close_reason FROM closed_periods " +
-        "WHERE company_id = ? AND is_active = 1 AND period_start <= ? AND period_end >= ? LIMIT 1"
-      ).get(companyId, date, date) as any;
-    } catch { return null; }
-  }
 
   ipcMain.handle('period:list', () => {
     try {
@@ -4204,35 +3762,6 @@ export function registerIpcHandlers(): void {
   //   • Reject DDL & sensitive verbs (DROP, ALTER, CREATE, ATTACH, DETACH, PRAGMA, VACUUM, REINDEX).
   //   • Allow only SELECT/WITH/INSERT/UPDATE/DELETE/REPLACE as the leading verb.
   // Any further tightening (e.g. table allowlist for writes) lives in the per-table CRUD handlers.
-  function isRawQueryAllowed(sql: string): { ok: boolean; reason?: string } {
-    if (typeof sql !== 'string' || !sql.trim()) return { ok: false, reason: 'Empty SQL' };
-    // Strip string/identifier literals and comments before scanning for ';' — inline literals
-    // can legitimately contain semicolons; we only want to block stacked statements.
-    let stripped = sql
-      .replace(/--[^\n]*/g, '')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/'(?:''|[^'])*'/g, "''")
-      .replace(/"(?:""|[^"])*"/g, '""');
-    // Allow a single trailing semicolon
-    stripped = stripped.replace(/;\s*$/, '');
-    if (stripped.includes(';')) return { ok: false, reason: 'Multi-statement SQL not allowed' };
-    const head = stripped.trim().toUpperCase();
-    const FORBIDDEN = /\b(DROP|ALTER|CREATE|ATTACH|DETACH|PRAGMA|VACUUM|REINDEX|TRUNCATE)\b/;
-    if (FORBIDDEN.test(head)) return { ok: false, reason: 'Forbidden SQL verb' };
-    const ALLOWED_LEAD = /^(SELECT|WITH|INSERT|UPDATE|DELETE|REPLACE)\b/;
-    if (!ALLOWED_LEAD.test(head)) return { ok: false, reason: 'Only SELECT/WITH/INSERT/UPDATE/DELETE/REPLACE allowed' };
-    // SECURITY: Block writes to credential tables and *modifications* to
-    // audit tables via raw SQL. INSERT/DELETE on audit_log remain permitted
-    // so legitimate flows (logging new events, full company wipe) work, but
-    // UPDATE/REPLACE would let the renderer alter audit history in place.
-    if (/^(UPDATE|REPLACE)\b/.test(head) && /\b(users|audit_log|debt_audit_log|debt_compliance_log)\b/.test(head)) {
-      return { ok: false, reason: 'UPDATE/REPLACE on credential/audit tables not allowed via raw SQL' };
-    }
-    if (/^(INSERT|DELETE)\b/.test(head) && /\busers\b/.test(head)) {
-      return { ok: false, reason: 'INSERT/DELETE on users not allowed via raw SQL — use auth handlers' };
-    }
-    return { ok: true };
-  }
   ipcMain.handle('db:raw-query', (_event, { sql, params }) => {
     const check = isRawQueryAllowed(sql);
     if (!check.ok) {
@@ -5056,66 +4585,6 @@ export function registerIpcHandlers(): void {
     return openPathInOS(filePath);
   });
 
-  // ─── PDF Metadata Builder (P1.6) ─────────────────────────
-  // Builds a PDFMetadata object that pdf-lib will write into the PDF
-  // Info dictionary. Pop into Finder "Get Info" or Adobe File →
-  // Properties to verify. Spotlight uses these fields for indexing.
-  function buildInvoiceMetadata(invoice: any, company: any, client: any): import('../services/print-preview').PDFMetadata {
-    const num = invoice?.invoice_number || invoice?.id || '';
-    const cur = (invoice?.currency || 'USD').toUpperCase();
-    const total = Number(invoice?.total ?? invoice?.total_amount ?? 0);
-    const totalStr = (() => {
-      try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(total); }
-      catch { return `${cur} ${total.toFixed(2)}`; }
-    })();
-    const due = invoice?.due_date || '';
-    const isCredit = invoice?.invoice_type === 'credit_note';
-    const isQuote = invoice?.invoice_type === 'quote';
-    const docType = isCredit ? 'Credit Note' : isQuote ? 'Quote' : 'Invoice';
-    return {
-      title: `${docType} ${num}${client?.name ? ' — ' + client.name : ''}`,
-      author: company?.name || 'Business Accounting Pro',
-      subject: `${docType} #${num} for ${totalStr}${due ? ' — Due ' + due : ''}`,
-      keywords: [
-        docType.toLowerCase(),
-        String(num),
-        client?.name || '',
-        cur,
-        invoice?.status || '',
-        invoice?.po_number ? `po-${invoice.po_number}` : '',
-      ].filter(Boolean),
-      creator: 'Business Accounting Pro',
-    };
-  }
-
-  function _buildBillMetadata(bill: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
-    const num = bill?.bill_number || bill?.id || '';
-    const cur = (bill?.currency || 'USD').toUpperCase();
-    const total = Number(bill?.total ?? 0);
-    const totalStr = (() => {
-      try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(total); }
-      catch { return `${cur} ${total.toFixed(2)}`; }
-    })();
-    return {
-      title: `Bill ${num}${vendor?.name ? ' — ' + vendor.name : ''}`,
-      author: company?.name || 'Business Accounting Pro',
-      subject: `Bill #${num} from ${vendor?.name || 'vendor'} for ${totalStr}`,
-      keywords: ['bill', 'accounts-payable', String(num), vendor?.name || '', cur].filter(Boolean),
-      creator: 'Business Accounting Pro',
-    };
-  }
-
-  function _buildPOMetadata(po: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
-    const num = po?.po_number || po?.id || '';
-    const cur = (po?.currency || 'USD').toUpperCase();
-    return {
-      title: `Purchase Order ${num}${vendor?.name ? ' — ' + vendor.name : ''}`,
-      author: company?.name || 'Business Accounting Pro',
-      subject: `PO #${num} to ${vendor?.name || 'vendor'}`,
-      keywords: ['purchase-order', 'po', String(num), vendor?.name || '', cur].filter(Boolean),
-      creator: 'Business Accounting Pro',
-    };
-  }
 
   function _buildExpenseMetadata(expense: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
     const ref = expense?.reference || expense?.id || '';
@@ -6326,10 +5795,7 @@ export function registerIpcHandlers(): void {
         // empty DB right as we restore the real one), then close the DB
         // *before* overwriting the file so we don't tear out from under any
         // open prepared statements / WAL state.
-        if (autoBackupTimer) {
-          clearTimeout(autoBackupTimer);
-          autoBackupTimer = null;
-        }
+        cancelAutoBackup();
         const dbPath = db.getDbPath();
         try {
           db.getDb().pragma('wal_checkpoint(TRUNCATE)');
