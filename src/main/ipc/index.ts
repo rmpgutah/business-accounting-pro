@@ -28,6 +28,7 @@ import { registerInventoryProjectsFeaturesFeat } from './feat/inventory-projects
 import { registerCrmSalesFeaturesFeat } from './feat/crm-sales-features';
 import { registerComplianceSecurityFeaturesFeat } from './feat/compliance-security-features';
 import { registerAccountingGlFeaturesFeat } from './feat/accounting-gl-features';
+import { registerAccountingAnalyticsFeaturesFeat } from './feat/accounting-analytics-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -262,7 +263,7 @@ export function registerIpcHandlers(): void {
   // ACCOUNTING DEEP-DIVE: 90 features (F171-F260) — IPC handlers
   // ═══════════════════════════════════════════════════════════════
   registerAccountingGlFeaturesFeat(ipcMain, deps);
-  const aa = () => require('../services/accounting-analytics-features');
+  registerAccountingAnalyticsFeaturesFeat(ipcMain, deps);
 
   // ─── Batch A: GL & JE Operations ───
 
@@ -275,95 +276,12 @@ export function registerIpcHandlers(): void {
   // ─── Batch E: Revenue Recognition ───
 
   // ─── Batch F: Cost Accounting ───
-  ipcMain.handle('feat:cost-center:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertCostCenter({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cost-center:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listCostCenters(cid, !!active_only); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cost-alloc:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertCostAllocationRule({ ...r, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cost-alloc:run', (_e, { rule_id, amount }: any) => { try {  const _r = aa().runCostAllocation(rule_id, amount); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cost-alloc:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listAllocationRulesF(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:dept:upsert', (_e, d: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertDepartment({ ...d, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:dept:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listDepartments(cid, !!active_only); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:dept:pl', (_e, { department_id, period_start, period_end }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return aa().departmentPL(cid, department_id, period_start, period_end); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cost-pool:upsert', (_e, p: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertCostPool({ ...p, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cost-pool:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listCostPools(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:std-cost:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertStandardCost({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:std-cost:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listStandardCosts(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:variance:calc', (_e, v: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().calculateVariance({ ...v, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:variance:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listVarianceAnalyses(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:overhead:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertOverheadRate({ ...r, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:overhead:apply', (_e, { rate_id, units }: any) => { try {  const _r = aa().applyOverhead(rate_id, units); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:overhead:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listOverheadRates(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:wip:upsert', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertWIP({ ...w, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:wip:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listWIP(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cogs:compute', (_e, { period_start, period_end }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return aa().computeCOGS(cid, period_start, period_end); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:burden:upsert', (_e, b: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertBurdenRate({ ...b, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:burden:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listBurdenRates(cid); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch G: Audit & Controls ───
-  ipcMain.handle('feat:tb-snap:capture', (_e, { period_end, fiscal_year }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; const _r = aa().captureTBSnapshot(cid, period_end, fiscal_year); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tb-snap:compare', (_e, { period_end_1, period_end_2 }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().compareTBSnapshots(cid, period_end_1, period_end_2); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tb-snap:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listTBSnapshots(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:materiality:calc', (_e, m: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().calculateMateriality({ ...m, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:materiality:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listMaterialityCalcs(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:audit-sample:generate', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return aa().generateAuditSample({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:audit-sample:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listAuditSamples(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:audit-confirm:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertAuditConfirmation({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:audit-confirm:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listAuditConfirmations(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:walkthrough:record', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().recordWalkthrough({ ...w, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:walkthrough:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listWalkthroughs(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:sod:declare', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); return aa().declareSoDConflict({ ...c, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:sod:assign', (_e, a: any) => { try { const cid = db.getCurrentCompanyId(); return aa().assignUserFunction({ ...a, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:sod:check', (_e, { user_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return aa().checkSoDForUser(cid, user_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:sod:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listSoDConflicts(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:rcsa:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertRCSA({ ...r, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:rcsa:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listRCSAs(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:audit-issue:upsert', (_e, i: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertAuditIssue({ ...i, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:audit-issue:resolve', (_e, { id, resolution_notes }: any) => { try { return { ok: aa().resolveAuditIssue(id, resolution_notes) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:audit-issue:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listAuditIssues(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:control-def:log', (_e, d: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().logControlDeficiency({ ...d, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:control-def:remediate', (_e, { id }: any) => { try { return { ok: aa().remediateDeficiency(id) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:control-def:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listControlDeficiencies(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:auditor-inq:log', (_e, i: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().logAuditorInquiry({ ...i, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:auditor-inq:respond', (_e, { id, response_text, response_by, supporting_docs }: any) => { try { return { ok: aa().respondToInquiry(id, response_text, response_by, supporting_docs) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:auditor-inq:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listAuditorInquiries(cid, opts); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch H: Budgeting & Forecasting Advanced ───
-  ipcMain.handle('feat:roll-fcst:upsert', (_e, f: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertRollingForecast({ ...f, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:roll-fcst:set-lines', (_e, { forecast_id, lines }: any) => { try {  const _r = aa().setForecastLines(forecast_id, lines || []); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:roll-fcst:get-lines', (_e, { forecast_id }: any) => { try { return aa().getForecastLines(forecast_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:roll-fcst:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listRollingForecasts(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:scenario:create', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().createScenario({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:scenario:apply', (_e, { base_lines, assumptions }: any) => { try {  const _r = aa().applyAssumptions(base_lines || [], assumptions || {}); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:scenario:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listScenarios(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:variance-expl:record', (_e, v: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().recordVarianceExplanation({ ...v, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:variance-expl:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listVarianceExplanations(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:driver:upsert', (_e, d: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertBudgetDriver({ ...d, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:driver:project', (_e, { driver_id, periods }: any) => { try { return aa().projectFromDriver(driver_id, periods); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:driver:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listBudgetDrivers(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:budget-cons:create', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().createBudgetConsolidation({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:budget-cons:approve', (_e, { id, approved_by }: any) => { try {  const _r = { ok: aa().approveBudgetConsolidation(id, approved_by) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:budget-cons:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listBudgetConsolidations(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:budget-appr:log', (_e, a: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().logBudgetApproval({ ...a, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:budget-appr:list', (_e, { budget_id }: any) => { try { return aa().listBudgetApprovals(budget_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:fcst-acc:record', (_e, a: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().recordForecastAccuracy({ ...a, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:fcst-acc:summary', (_e, { forecast_id }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return aa().summarizeForecastAccuracy(cid, forecast_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:direct-cash:upsert', (_e, f: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertDirectCashForecast({ ...f, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:direct-cash:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listDirectCashForecasts(cid, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:headcount:upsert', (_e, h: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertHeadcountBudget({ ...h, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:headcount:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listHeadcountBudgets(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:capex:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertCapEx({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:capex:approve', (_e, { id, approved_cost, approved_by }: any) => { try {  const _r = { ok: aa().approveCapEx(id, approved_cost, approved_by) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:capex:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listCapEx(cid, opts); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch I: Financial Statements + Analysis ───
-  ipcMain.handle('feat:stmt-cfg:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertStatementConfig({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:stmt-cfg:list', (_e, { statement_type }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listStatementConfigs(cid, statement_type); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:common-size', (_e, { lines, base_amount }: any) => { try { return aa().commonSizeStatement(lines || [], base_amount); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:ratios:calc', (_e, { as_of_date }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; const _r = aa().calculateRatios(cid, as_of_date); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:ratios:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listRatios(cid, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:kpi:upsert', (_e, k: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertKPI({ ...k, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:kpi:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listKPIs(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:footnote:upsert', (_e, f: any) => { try { const cid = db.getCurrentCompanyId(); const _r = aa().upsertFootnote({ ...f, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:footnote:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return aa().listFootnotes(cid, opts); } catch (e: any) { return { error: e?.message }; } });
 
   // ═══════════════════════════════════════════════════════════════
   // DYNAMIC WAVE: 90 runtime functions (F261-F350) — IPC handlers
