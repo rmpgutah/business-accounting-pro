@@ -791,6 +791,15 @@ function buildPOMetadata(po: any, company: any, vendor: any): PDFMetadata {
   };
 }
 
+// DATE: today's date as YYYY-MM-DD in the user's local timezone. Use this
+// instead of new Date().toISOString().slice(0,10), which UTC-shifts the day
+// for any local time outside the [00:00, 24:00 - tzoffset] window. Affects
+// JE posting dates, settlement accept dates, and any "now" we persist.
+export function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // Coalesce rapid re-index calls per (table,id) onto a microtask-ish timer so
 // bulk writes don't thrash FTS. Best-effort; never throws into the write path.
 const reindexTimers = new Map<string, NodeJS.Timeout>();
@@ -1530,5 +1539,6 @@ export function createIpcDeps(): IpcDeps {
     scheduleReindex,
     logDebtAudit,
     seedDefaultCategories,
+    localToday,
   });
 }

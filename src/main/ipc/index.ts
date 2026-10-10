@@ -138,16 +138,6 @@ function backfillCategoryScheduleC(companyId: string): { updated: number } {
 }
 
 
-// DATE: today's date as YYYY-MM-DD in the user's local timezone. Use this
-// instead of new Date().toISOString().slice(0,10), which UTC-shifts the day
-// for any local time outside the [00:00, 24:00 - tzoffset] window. Affects
-// JE posting dates, settlement accept dates, and any "now" we persist.
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-
 // CONCURRENCY: ipcMain.handle throws if the same channel is registered twice.
 // Without this guard, calling registerIpcHandlers a second time (e.g. after a
 // restore-from-backup reinit, or if main.ts startup runs twice) would crash
@@ -163,7 +153,7 @@ export function registerIpcHandlers(): void {
   const {
     scheduleAutoBackup, getLastLoginEmail, findClosedPeriod, postJournalEntry,
     validateTable, cleanupReferencesBeforeDelete, buildInvoiceMetadata,
-    scheduleReindex, logDebtAudit, seedDefaultCategories,
+    scheduleReindex, logDebtAudit, seedDefaultCategories, localToday,
   } = deps;
 
   // Advanced System (2026-04-28) — register built-in commands for Cmd+K palette
