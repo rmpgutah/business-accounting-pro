@@ -103,7 +103,14 @@ function checkSchemaVersionOrThrow(database: Database.Database): void {
 }
 
 export function initDatabase(): Database.Database {
-  const dbPath = getDbPath();
+  return initDatabaseAt(getDbPath());
+}
+
+// Opens (or creates) the database at an explicit path and runs the full
+// schema + migration list against it. `initDatabase()` delegates here with
+// the Electron userData path; tests call it directly with ':memory:' so the
+// migration list can be exercised on a fresh DB without Electron.
+export function initDatabaseAt(dbPath: string): Database.Database {
   db = new Database(dbPath);
   applyPerformancePragmas(db);
   checkSchemaVersionOrThrow(db);
@@ -1115,8 +1122,12 @@ export function initDatabase(): Database.Database {
     validation_json TEXT NOT NULL DEFAULT '{}',
     show_on_print INTEGER NOT NULL DEFAULT 0,
     deleted_at TEXT DEFAULT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
+  // Existing installs created this table before is_active existed; the
+  // idx_custom_fields_company_entity index (Batch 1, below) needs it.
+  "ALTER TABLE custom_field_definitions ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
   "CREATE UNIQUE INDEX IF NOT EXISTS uq_cfd_key ON custom_field_definitions(company_id, entity_type, key)",
   `CREATE TABLE IF NOT EXISTS custom_field_values (
     id TEXT PRIMARY KEY,
@@ -1702,6 +1713,8 @@ export function initDatabase(): Database.Database {
     bank_transaction_id TEXT DEFAULT NULL,           -- linked imported bank line
     journal_entry_id TEXT DEFAULT NULL,              -- linked GL posting
     notes TEXT DEFAULT '',
+    related_expense_id TEXT,                         -- auto-created expense row (interest / combined)
+    related_principal_expense_id TEXT,               -- auto-created expense row (principal)
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
