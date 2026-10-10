@@ -1121,4 +1121,303 @@ export function registerReportsIpc(ipcMain: IpcMain, _deps: IpcDeps): void {
       return { error: err.message };
     }
   });
+  // ─── Dashboard Aggregation ───────────────────────────
+  ipcMain.handle('dashboard:stats', (_event, { startDate, endDate }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return null;
+    const dbInstance = db.getDb();
+
+    // Current period
+    const revenue = dbInstance
+      .prepare(
+        'SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE company_id = ? AND issue_date >= ? AND issue_date <= ?',
+      )
+      .get(companyId, startDate, endDate) as any;
+
+    const expenseTotal = dbInstance
+      .prepare(
+        'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE company_id = ? AND date >= ? AND date <= ?',
+      )
+      .get(companyId, startDate, endDate) as any;
+
+    const outstanding = dbInstance
+      .prepare(
+        "SELECT COALESCE(SUM(total - amount_paid), 0) as total, COUNT(*) as count FROM invoices WHERE company_id = ? AND status IN ('sent', 'overdue', 'partial')",
+      )
+      .get(companyId) as any;
+
+    const overdue = dbInstance
+      .prepare("SELECT COUNT(*) as count FROM invoices WHERE company_id = ? AND status = 'overdue'")
+      .get(companyId) as any;
+
+    // Previous period of same length for change percentages
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const periodMs = end.getTime() - start.getTime();
+    const prevEnd = new Date(start.getTime() - 1); // day before current start
+    const prevStart = new Date(prevEnd.getTime() - periodMs);
+    const prevStartStr = prevStart.toISOString().slice(0, 10);
+    const prevEndStr = prevEnd.toISOString().slice(0, 10);
+
+    const prevRevenue = dbInstance
+      .prepare(
+        'SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE company_id = ? AND issue_date >= ? AND issue_date <= ?',
+      )
+      .get(companyId, prevStartStr, prevEndStr) as any;
+
+    const prevExpense = dbInstance
+      .prepare(
+        'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE company_id = ? AND date >= ? AND date <= ?',
+      )
+      .get(companyId, prevStartStr, prevEndStr) as any;
+
+    const curRevenue = revenue?.total || 0;
+    const curExpenses = expenseTotal?.total || 0;
+    const curNet = curRevenue - curExpenses;
+    const prvRevenue = prevRevenue?.total || 0;
+    const prvExpenses = prevExpense?.total || 0;
+    const prvNet = prvRevenue - prvExpenses;
+
+    const pctChange = (cur: number, prev: number): number => {
+      if (prev === 0) return cur > 0 ? 100 : 0;
+      return ((cur - prev) / Math.abs(prev)) * 100;
+    };
+
+    return {
+      revenue: curRevenue,
+      revenueChange: pctChange(curRevenue, prvRevenue),
+      expenses: curExpenses,
+      expensesChange: pctChange(curExpenses, prvExpenses),
+      netIncome: curNet,
+      netIncomeChange: pctChange(curNet, prvNet),
+      outstanding: outstanding?.total || 0,
+      outstandingChange: 0,
+      outstandingCount: outstanding?.count || 0,
+      overdueCount: overdue?.count || 0,
+    };
+  });
+  // ─── Cash Flow Data ──────────────────────────────────
+  ipcMain.handle('dashboard:cashflow', (_event, { startDate, endDate }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    const dbInstance = db.getDb();
+
+    const inflow = dbInstance
+      .prepare(
+        "SELECT strftime('%Y-%m', issue_date) as month, SUM(amount_paid) as total FROM invoices WHERE company_id = ? AND issue_date >= ? AND issue_date <= ? GROUP BY month ORDER BY month",
+      )
+      .all(companyId, startDate, endDate) as any[];
+
+    const outflow = dbInstance
+      .prepare(
+        "SELECT strftime('%Y-%m', date) as month, SUM(amount) as total FROM expenses WHERE company_id = ? AND date >= ? AND date <= ? GROUP BY month ORDER BY month",
+      )
+      .all(companyId, startDate, endDate) as any[];
+
+    const months = new Set([
+      ...inflow.map((r: any) => r.month),
+      ...outflow.map((r: any) => r.month),
+    ]);
+    const sorted = Array.from(months).sort();
+
+    return sorted.map((month) => ({
+      month,
+      income: inflow.find((r: any) => r.month === month)?.total || 0,
+      expenses: outflow.find((r: any) => r.month === month)?.total || 0,
+    }));
+  });
+  // ─── Enhanced Dashboard Activity ─────────────────────
+  ipcMain.handle('dashboard:activity', (_event, opts?: { entityType?: string; limit?: number }) => {
+    const companyId = db.getCurrentCompanyId();
+    if (!companyId) return [];
+    const dbInstance = db.getDb();
+
+    let sql = `
+      SELECT al.*,
+        CASE
+          WHEN al.entity_type = 'invoices' THEN (
+            SELECT json_object('invoice_number', i.invoice_number, 'total', i.total, 'client_name', c.name)
+            FROM invoices i LEFT JOIN clients c ON i.client_id = c.id WHERE i.id = al.entity_id
+          )
+          WHEN al.entity_type = 'expenses' THEN (
+            SELECT json_object('description', e.description, 'amount', e.amount, 'vendor_name', v.name)
+            FROM expenses e LEFT JOIN vendors v ON e.vendor_id = v.id WHERE e.id = al.entity_id
+          )
+          WHEN al.entity_type = 'clients' THEN (
+            SELECT json_object('name', cl.name, 'email', cl.email)
+            FROM clients cl WHERE cl.id = al.entity_id
+          )
+          WHEN al.entity_type = 'payments' THEN (
+            SELECT json_object('amount', p.amount, 'invoice_number', i.invoice_number)
+            FROM payments p LEFT JOIN invoices i ON p.invoice_id = i.id WHERE p.id = al.entity_id
+          )
+          ELSE NULL
+        END as entity_details
+      FROM audit_log al
+      WHERE al.company_id = ?
+    `;
+    const params: any[] = [companyId];
+
+    if (opts?.entityType && opts.entityType !== 'all') {
+      sql += ' AND al.entity_type = ?';
+      params.push(opts.entityType);
+    }
+
+    sql += ' ORDER BY al.timestamp DESC LIMIT ?';
+    params.push(opts?.limit || 15);
+
+    return dbInstance.prepare(sql).all(...params);
+  });
+  // ─── Project Profitability ───────────────────────────────
+  ipcMain.handle('project:profitability', (_event, { projectId }: { projectId: string }) => {
+    const dbI = db.getDb();
+
+    // Revenue = sum of line item amounts on invoices linked to this project
+    // (invoices don't have project_id; the link is via invoice_line_items.project_id)
+    const revenue = dbI
+      .prepare(
+        `
+      SELECT COALESCE(SUM(ili.amount), 0) as total
+      FROM invoice_line_items ili
+      JOIN invoices i ON i.id = ili.invoice_id
+      WHERE ili.project_id = ?
+        AND i.status IN ('sent', 'paid', 'partial')
+    `,
+      )
+      .get(projectId) as any;
+    const costs = dbI
+      .prepare('SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE project_id = ?')
+      .get(projectId) as any;
+    const timeCost = dbI
+      .prepare(
+        `
+      SELECT COALESCE(SUM(te.duration_minutes / 60.0 * COALESCE(e.pay_rate, 0)), 0) as total
+      FROM time_entries te LEFT JOIN employees e ON te.employee_id = e.id
+      WHERE te.project_id = ?
+    `,
+      )
+      .get(projectId) as any;
+    const hours = dbI
+      .prepare(
+        'SELECT COALESCE(SUM(duration_minutes), 0) as total FROM time_entries WHERE project_id = ?',
+      )
+      .get(projectId) as any;
+    const project = dbI.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as any;
+
+    const totalRevenue = revenue?.total || 0;
+    const totalCosts = (costs?.total || 0) + (timeCost?.total || 0);
+    const profit = totalRevenue - totalCosts;
+    const margin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+    return {
+      revenue: totalRevenue,
+      direct_costs: costs?.total || 0,
+      labor_costs: timeCost?.total || 0,
+      total_costs: totalCosts,
+      profit,
+      margin: Math.round(margin * 10) / 10,
+      total_hours: Math.round(((hours?.total || 0) / 60) * 10) / 10,
+      effective_rate:
+        hours?.total > 0 ? Math.round((totalRevenue / ((hours.total || 1) / 60)) * 100) / 100 : 0,
+      budget: project?.budget || 0,
+      budget_used_pct:
+        project?.budget > 0 ? Math.round((totalCosts / project.budget) * 1000) / 10 : 0,
+    };
+  });
+  // ─── Analytics Dashboard ──────────────────────────────
+  ipcMain.handle('analytics:dashboard-data', (_event, { companyId }: { companyId: string }) => {
+    try {
+      const d = db.getDb();
+      const today = new Date();
+      const months = Array.from({ length: 12 }, (_, i) => {
+        const dt = new Date(today.getFullYear(), today.getMonth() - 11 + i, 1);
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      });
+      const firstMonth = months[0] + '-01';
+
+      const revenueByMonth = d
+        .prepare(
+          `
+        SELECT strftime('%Y-%m', issue_date) as month, COALESCE(SUM(total),0) as total
+        FROM invoices WHERE company_id = ? AND status IN ('paid','sent','partial')
+        AND issue_date >= ? GROUP BY month`,
+        )
+        .all(companyId, firstMonth);
+
+      const expenseByMonth = d
+        .prepare(
+          `
+        SELECT strftime('%Y-%m', date) as month, COALESCE(SUM(amount),0) as total
+        FROM expenses WHERE company_id = ? AND date >= ? GROUP BY month`,
+        )
+        .all(companyId, firstMonth);
+
+      const arAging = d
+        .prepare(
+          `
+        SELECT
+          SUM(CASE WHEN julianday('now') - julianday(due_date) <= 0 THEN total - amount_paid ELSE 0 END) as current_amt,
+          SUM(CASE WHEN julianday('now') - julianday(due_date) BETWEEN 1 AND 30 THEN total - amount_paid ELSE 0 END) as days_1_30,
+          SUM(CASE WHEN julianday('now') - julianday(due_date) BETWEEN 31 AND 60 THEN total - amount_paid ELSE 0 END) as days_31_60,
+          SUM(CASE WHEN julianday('now') - julianday(due_date) > 60 THEN total - amount_paid ELSE 0 END) as days_60_plus
+        FROM invoices WHERE company_id = ? AND status IN ('sent','overdue','partial')`,
+        )
+        .get(companyId);
+
+      const topClients = d
+        .prepare(
+          `
+        SELECT c.name as client_name, COALESCE(SUM(i.total),0) as total_revenue
+        FROM invoices i JOIN clients c ON i.client_id = c.id
+        WHERE i.company_id = ? AND i.status IN ('paid','sent','partial')
+        GROUP BY c.id ORDER BY total_revenue DESC LIMIT 8`,
+        )
+        .all(companyId);
+
+      const totalInvoiced = d
+        .prepare(
+          `SELECT COALESCE(SUM(total),0) as v FROM invoices WHERE company_id = ? AND status != 'draft'`,
+        )
+        .get(companyId) as any;
+      const totalPaid = d
+        .prepare(
+          `SELECT COALESCE(SUM(total),0) as v FROM invoices WHERE company_id = ? AND status = 'paid'`,
+        )
+        .get(companyId) as any;
+      const totalExpenses = d
+        .prepare(`SELECT COALESCE(SUM(amount),0) as v FROM expenses WHERE company_id = ?`)
+        .get(companyId) as any;
+      const overdueCount = d
+        .prepare(`SELECT COUNT(*) as v FROM invoices WHERE company_id = ? AND status = 'overdue'`)
+        .get(companyId) as any;
+      const sentCount = d
+        .prepare(
+          `SELECT COUNT(*) as v FROM invoices WHERE company_id = ? AND status IN ('sent','overdue','partial')`,
+        )
+        .get(companyId) as any;
+      const avgDso = d
+        .prepare(
+          `
+        SELECT AVG(julianday(updated_at) - julianday(issue_date)) as v
+        FROM invoices WHERE company_id = ? AND status = 'paid' AND updated_at IS NOT NULL`,
+        )
+        .get(companyId) as any;
+
+      const collectionRate = totalInvoiced.v > 0 ? totalPaid.v / totalInvoiced.v : 1;
+      const expenseRatio = totalInvoiced.v > 0 ? totalExpenses.v / totalInvoiced.v : 0;
+      const overdueRate = sentCount.v > 0 ? 1 - overdueCount.v / sentCount.v : 1;
+      const dso = Number(avgDso.v || 0);
+      const dsoScore = dso <= 30 ? 20 : dso <= 45 ? 15 : dso <= 60 ? 10 : 5;
+      const healthScore = Math.round(
+        Math.min(collectionRate, 1) * 30 +
+          Math.max(0, Math.min(1 - expenseRatio, 1)) * 25 +
+          Math.min(overdueRate, 1) * 25 +
+          dsoScore,
+      );
+
+      return { months, revenueByMonth, expenseByMonth, arAging, topClients, healthScore, dso };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
 }

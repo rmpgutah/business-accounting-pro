@@ -46,4 +46,24 @@ describe('expenses domain', () => {
     expect(rows).toHaveLength(1);
     expect(scheduleAutoBackup).toHaveBeenCalled();
   });
+
+  it('bills:next-number starts at BILL-1001 for a company with no bills', async () => {
+    expect(await ipc.invoke('bills:next-number')).toBe('BILL-1001');
+  });
+
+  it('po:approve marks the purchase order approved and schedules a backup', async () => {
+    const po = db.create('purchase_orders', {
+      company_id: db.getCurrentCompanyId(),
+      po_number: 'PO-1',
+      issue_date: '2026-01-01',
+    });
+    const res = await ipc.invoke('po:approve', { poId: po.id, approvedBy: 'tester' });
+    expect(res).toEqual({ success: true });
+    const row = db
+      .getDb()
+      .prepare('SELECT status FROM purchase_orders WHERE id = ?')
+      .get(po.id) as any;
+    expect(row.status).toBe('approved');
+    expect(scheduleAutoBackup).toHaveBeenCalled();
+  });
 });

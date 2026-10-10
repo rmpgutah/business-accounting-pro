@@ -50,4 +50,24 @@ describe('accounts-gl domain', () => {
     expect(lines.reduce((s, l) => s + l.debit, 0)).toBe(lines.reduce((s, l) => s + l.credit, 0));
     expect(scheduleAutoBackup).toHaveBeenCalled();
   });
+
+  it('assets:next-code starts at AST-001 for a company with no assets', async () => {
+    expect(await ipc.invoke('assets:next-code')).toBe('AST-001');
+  });
+
+  it('assets:delete (hard) removes the asset and schedules a backup', async () => {
+    const asset = db.create('fixed_assets', {
+      company_id: companyId,
+      asset_code: 'AST-001',
+      name: 'Laptop',
+      purchase_date: '2026-01-01',
+      purchase_price: 1000,
+    });
+    const res = await ipc.invoke('assets:delete', { id: asset.id, hard: true });
+    expect(res.error).toBeUndefined();
+    expect(res.ok).toBe(true);
+    const rows = db.getDb().prepare('SELECT id FROM fixed_assets WHERE id = ?').all(asset.id);
+    expect(rows).toHaveLength(0);
+    expect(scheduleAutoBackup).toHaveBeenCalled();
+  });
 });

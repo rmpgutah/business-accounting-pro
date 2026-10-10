@@ -46,4 +46,14 @@ describe('reports domain', () => {
     // The original handlers never scheduled a backup for this domain (moved verbatim).
     expect(scheduleAutoBackup).not.toHaveBeenCalled();
   });
+
+  it('dashboard:stats returns stats for the period without error', async () => {
+    const res = await ipc.invoke('dashboard:stats', {
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+    });
+    expect(res?.error).toBeUndefined();
+    expect(res).toBeTruthy();
+    expect(scheduleAutoBackup).not.toHaveBeenCalled();
+  });
 });
