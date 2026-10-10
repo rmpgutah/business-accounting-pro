@@ -33,6 +33,7 @@ import { registerDynamicSearchBulkFeaturesFeat } from './feat/dynamic-search-bul
 import { registerDynamicPowerFeaturesFeat } from './feat/dynamic-power-features';
 import { registerPayrollTaxConsolidationFeaturesFeat } from './feat/payroll-tax-consolidation-features';
 import { registerPortalTimeDocFeaturesFeat } from './feat/portal-time-doc-features';
+import { registerCollabIntegrationFeaturesFeat } from './feat/collab-integration-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -316,7 +317,7 @@ export function registerIpcHandlers(): void {
   // ═══════════════════════════════════════════════════════════════
   registerPayrollTaxConsolidationFeaturesFeat(ipcMain, deps);
   registerPortalTimeDocFeaturesFeat(ipcMain, deps);
-  const ci = () => require('../services/collab-integration-features');
+  registerCollabIntegrationFeaturesFeat(ipcMain, deps);
 
   // Batch S — Payroll deep-dive
 
@@ -333,46 +334,8 @@ export function registerIpcHandlers(): void {
   // Batch Y — Document Intelligence
 
   // Batch Z — Collaboration
-  ipcMain.handle('feat:mentions:parse', (_e, { body }: any) => { try { return ci().parseMentions(body); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:mentions:list', (_e, { user_id, ...opts }: any) => { try { return ci().listMentions(user_id, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:mentions:mark-read', (_e, { id }: any) => { try {  const _r = { ok: ci().markMentionRead(id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:comment:add', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ci().addComment({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:comment:list', (_e, { entity_type, entity_id, ...opts }: any) => { try { return ci().listComments(entity_type, entity_id, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:comment:edit', (_e, { id, body }: any) => { try { return { ok: ci().editComment(id, body) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:comment:delete', (_e, { id }: any) => { try {  const _r = { ok: ci().deleteComment(id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reaction:add', (_e, { comment_id, user_id, emoji }: any) => { try {  const _r = ci().addReaction(comment_id, user_id, emoji); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reaction:remove', (_e, { comment_id, user_id, emoji }: any) => { try {  const _r = { ok: ci().removeReaction(comment_id, user_id, emoji) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:reaction:list', (_e, { comment_id }: any) => { try { return ci().listReactions(comment_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:internal-note:add', (_e, n: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ci().addInternalNote({ ...n, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:internal-note:list', (_e, { entity_type, entity_id }: any) => { try { return ci().listInternalNotes(entity_type, entity_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:draft:create', (_e, d: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ci().createSharedDraft({ ...d, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:draft:mine', (_e, { user_id }: any) => { try { return ci().listMyDrafts(user_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:watch:add', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ci().watchEntity({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:watch:remove', (_e, { user_id, entity_type, entity_id }: any) => { try {  const _r = { ok: ci().unwatchEntity(user_id, entity_type, entity_id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:watch:list-for-entity', (_e, { entity_type, entity_id }: any) => { try { return ci().listWatchersForEntity(entity_type, entity_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:inbox:provision', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ci().provisionInboxAddress({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:inbox:match', (_e, { inbox_address }: any) => { try { return ci().recordIncomingEmailMatch(inbox_address); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:chat:send', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ci().sendChatMessage({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:chat:list', (_e, opts: any) => { try { return ci().listChatMessages(opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:chat:mark-read', (_e, { id }: any) => { try {  const _r = { ok: ci().markChatRead(id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
 
   // Batch AA — Integration Sync
-  ipcMain.handle('feat:stripe:record', (_e, opts: any) => { try {  const _r = ci().recordStripeEvent(opts); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:plaid-link:create', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ci().createPlaidLink({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:plaid-link:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ci().listPlaidLinks(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:plaid-tx:sync', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); return ci().syncPlaidTransaction({ ...t, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:plaid-tx:unmatched', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ci().listUnmatchedPlaidTransactions(cid, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:plaid-tx:match', (_e, { id, entity_type, entity_id }: any) => { try { return { ok: ci().matchPlaidTransaction(id, entity_type, entity_id) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:qb-export:run', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ci().exportToQuickBooks({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:qb-export:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ci().listQuickBooksExports(cid, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:gmail:sync', (_e, m: any) => { try { const cid = db.getCurrentCompanyId(); return ci().syncGmailMessage({ ...m, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cloud-file:record', (_e, f: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ci().recordCloudFile({ ...f, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cloud-file:list', (_e, { provider }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ci().listCloudFiles(cid, provider); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:calendar:link', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ci().linkCalendar({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:calendar:integrations', (_e, { user_id }: any) => { try { return ci().listCalendarIntegrations(user_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook-recv:provision', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ci().provisionWebhookEndpoint({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook-recv:received', (_e, { endpoint_path }: any) => { try { return { ok: ci().recordWebhookReceived(endpoint_path) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook-recv:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ci().listWebhookReceiverEndpoints(cid); } catch (e: any) { return { error: e?.message }; } });
 
   // ═══════════════════════════════════════════════════════════════
   // FINANCE WAVE: 100 features (F441-F540) — IPC handlers
