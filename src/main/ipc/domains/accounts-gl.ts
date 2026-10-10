@@ -10,7 +10,7 @@ export function registerAccountsGlIpc(ipcMain: IpcMain, deps: IpcDeps): void {
   // One-click month-end close (dry-run preview + real run).
   ipcMain.handle('close:preview-month', (_e, { year, month }: { year: number; month: number }) => {
     try {
-      const { getMonthEndPreview } = require('../services/month-end-close');
+      const { getMonthEndPreview } = require('../../services/month-end-close');
       return getMonthEndPreview(db.getCurrentCompanyId(), year, month);
     } catch (err: any) {
       return { error: err?.message };
@@ -19,7 +19,7 @@ export function registerAccountsGlIpc(ipcMain: IpcMain, deps: IpcDeps): void {
 
   ipcMain.handle('close:run-month', (_e, { year, month }: { year: number; month: number }) => {
     try {
-      const { runMonthEndClose } = require('../services/month-end-close');
+      const { runMonthEndClose } = require('../../services/month-end-close');
       const r = runMonthEndClose({
         companyId: db.getCurrentCompanyId(),
         year,
