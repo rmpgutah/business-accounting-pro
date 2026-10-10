@@ -29,6 +29,7 @@ import { registerCrmSalesFeaturesFeat } from './feat/crm-sales-features';
 import { registerComplianceSecurityFeaturesFeat } from './feat/compliance-security-features';
 import { registerAccountingGlFeaturesFeat } from './feat/accounting-gl-features';
 import { registerAccountingAnalyticsFeaturesFeat } from './feat/accounting-analytics-features';
+import { registerDynamicSearchBulkFeaturesFeat } from './feat/dynamic-search-bulk-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -286,57 +287,16 @@ export function registerIpcHandlers(): void {
   // ═══════════════════════════════════════════════════════════════
   // DYNAMIC WAVE: 90 runtime functions (F261-F350) — IPC handlers
   // ═══════════════════════════════════════════════════════════════
-  const ds = () => require('../services/dynamic-search-bulk-features');
+  registerDynamicSearchBulkFeaturesFeat(ipcMain, deps);
   const dp = () => require('../services/dynamic-power-features');
 
   // ─── Batch J: Global Search (F261-F270) ───
-  ipcMain.handle('feat:search:global', (_e, { query, opts }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ds().globalSearch(cid, query, opts || {}); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:search:record-history', (_e, { user_id, query, result_count }: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ds().recordSearchHistory(user_id, cid, query, result_count); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:search:recent', (_e, { user_id, limit }: any) => { try { return ds().listRecentSearches(user_id, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:recently-viewed:list', (_e, { user_id, ...opts }: any) => { try { return ds().listRecentlyViewed(user_id, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:recently-viewed:record', (_e, { user_id, entity_type, entity_id, entity_label }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return false; ds().recordEntityView(user_id, cid, entity_type, entity_id, entity_label); const _r = { ok: true }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:pin:add', (_e, { user_id, entity_type, entity_id, entity_label }: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ds().pinEntity(user_id, cid, entity_type, entity_id, entity_label); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:pin:remove', (_e, { user_id, entity_type, entity_id }: any) => { try {  const _r = { ok: ds().unpinEntity(user_id, entity_type, entity_id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:pin:list', (_e, { user_id, entity_type }: any) => { try { return ds().listPinnedEntities(user_id, entity_type); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:search:pattern', (_e, { pattern, entity_type, opts }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ds().searchByPattern(cid, pattern, entity_type, opts || {}); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:fuzzy-match', (_e, { name, entity_type, threshold }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ds().fuzzyMatchEntity(cid, name, entity_type, threshold); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:cross-ref', (_e, { entity_type, entity_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ds().crossReferenceEntity(cid, entity_type, entity_id); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch K: Notifications & Alerts (F271-F280) ───
-  ipcMain.handle('feat:notif:create', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ds().createNotification({ company_id: cid, ...opts }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:notif:list', (_e, { user_id, ...opts }: any) => { try { return ds().listUserNotifications(user_id, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:notif:mark-read', (_e, { id }: any) => { try {  const _r = { ok: ds().markNotificationRead(id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:notif:mark-all-read', (_e, { user_id }: any) => { try {  const _r = { marked: ds().markAllRead(user_id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:notif:snooze', (_e, { id, until_date }: any) => { try { return { ok: ds().snoozeNotification(id, until_date) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:notif:set-pref', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ds().setNotificationPreference({ company_id: cid, ...opts }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:notif:get-prefs', (_e, { user_id }: any) => { try { return ds().getNotificationPrefs(user_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:alert-rule:create', (_e, rule: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ds().createAlertRule({ ...rule, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:alert-rule:evaluate', (_e, { entity_type, entity_data }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ds().evaluateAlertRules(cid, entity_type, entity_data); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:digest:build', (_e, { user_id, period }: any) => { try { return ds().buildDigestEmail(user_id, period || 'daily'); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch L: Import / Export (F281-F290) ───
-  ipcMain.handle('feat:csv:parse', (_e, { text }: any) => { try { return ds().parseCSVForImport(text); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:csv:detect-mapping', (_e, { headers, entity_type }: any) => { try { return ds().detectColumnMapping(headers, entity_type); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:csv:validate', (_e, { rows, mapping, entity_type }: any) => { try { return ds().validateImportRows(rows, mapping, entity_type); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:import-tpl:save', (_e, tpl: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ds().saveImportTemplate({ ...tpl, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:import-tpl:list', (_e, { entity_type }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; const _r = ds().listImportTemplates(cid, entity_type); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:export:csv', (_e, { rows, columns }: any) => { try {  const _r = ds().exportToCSV(rows, columns); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:export:iif', (_e, { transactions }: any) => { try {  const _r = ds().exportToQuickBooksIIF(transactions); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:export-job:create', (_e, j: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ds().createExportJob({ ...j, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:export-job:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; const _r = ds().listExportJobs(cid, active_only !== false); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:export-job:mark-run', (_e, { job_id, output_path }: any) => { try {  const _r = { ok: ds().markExportRun(job_id, output_path) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch M: Bulk Actions (F291-F300) ───
-  ipcMain.handle('feat:bulk:update', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ds().bulkUpdate({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bulk:delete', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ds().bulkDelete({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bulk:archive', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ds().bulkArchive({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bulk:change-status', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ds().bulkChangeStatus({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bulk:assign', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ds().bulkAssign({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bulk:tag', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ds().bulkTag({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bulk:untag', (_e, opts: any) => { try { return ds().bulkUntag(opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:undo:list', (_e, { user_id, limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ds().listUndoableOperations(cid, user_id, limit); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:undo:apply', (_e, { snapshot_id }: any) => { try {  const _r = ds().undoBulkOperation(snapshot_id); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:undo:create-snapshot', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ds().createUndoSnapshot({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch N: Smart Helpers (F301-F310) ───
   ipcMain.handle('feat:smart:anomalies', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return dp().detectAnomalies(cid, opts); } catch (e: any) { return { error: e?.message }; } });
