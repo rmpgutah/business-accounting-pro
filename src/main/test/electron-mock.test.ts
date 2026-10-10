@@ -29,7 +29,7 @@ describe('ipcMain mock', () => {
 
   it('channels() lists registered names and reset() empties', async () => {
     ipcMain.handle('a', () => 'x');
-    ipcMain.handle('b', (_e, v) => v);
+    ipcMain.handle('b', (_e: unknown, v: unknown) => v);
     expect(ipcMain.channels()).toEqual(['a', 'b']);
     expect(await ipcMain.invoke('b', 7)).toBe(7);
     ipcMain.reset();
