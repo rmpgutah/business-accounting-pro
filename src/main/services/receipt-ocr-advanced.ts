@@ -94,7 +94,7 @@ export async function enhanceImage(
   outputPath: string,
   opts?: Partial<EnhancementOptions>
 ): Promise<void> {
-  const options: EnhancementOptions = {
+  const _options: EnhancementOptions = {
     deskew: true,
     contrast: 1.2,
     sharpen: false,
@@ -182,7 +182,7 @@ export async function runOcr(
 
 // ─── Barcode / QR Decoding ──────────────────────────────
 
-export async function decodeBarcodes(imagePath: string): Promise<BarcodeData[]> {
+export async function decodeBarcodes(_imagePath: string): Promise<BarcodeData[]> {
   // Uses jsQR for QR codes, quagga2 for 1D barcodes
   // Implementation deferred until native deps are added
   return [];
@@ -204,7 +204,7 @@ export function advancedFieldExtraction(
   text: string,
   baseResult: ParsedReceiptAdvanced
 ): ParsedReceiptAdvanced {
-  const lines = text.split('\n');
+  const _lines = text.split('\n');
 
   // Phone number
   const phoneMatch = text.match(PATTERN_VENDOR_PHONE);
@@ -267,9 +267,9 @@ interface TaxJurisdictionRate {
 }
 
 export function detectSalesTaxJurisdiction(
-  taxAmount: number,
-  totalAmount: number,
-  vendorAddress: string | null
+  _taxAmount: number,
+  _totalAmount: number,
+  _vendorAddress: string | null
 ): TaxJurisdictionRate | null {
   // If we have vendor address, look up jurisdiction rates
   // For now, returns null — requires tax rate DB integration
@@ -289,8 +289,8 @@ export interface ReceiptMatchCandidate {
 }
 
 export async function matchReceiptToEntity(
-  parsed: ParsedReceiptAdvanced,
-  companyId: string
+  _parsed: ParsedReceiptAdvanced,
+  _companyId: string
 ): Promise<ReceiptMatchCandidate[]> {
   // Matches OCR result against existing expenses/invoices/bills
   // by amount proximity, vendor name fuzzy match, date proximity

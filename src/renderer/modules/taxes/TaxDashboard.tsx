@@ -4,7 +4,6 @@ import {
   TrendingUp,
   Calculator,
   AlertTriangle,
-  Calendar,
   CheckCircle,
   Clock,
 } from 'lucide-react';

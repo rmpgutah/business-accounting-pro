@@ -25,7 +25,7 @@ export function upsertExpenseCustomField(f: any): { id: string } {
   return { id };
 }
 
-export function listExpenseCustomFields(companyId: string, categoryId?: string): any[] {
+export function listExpenseCustomFields(companyId: string, _categoryId?: string): any[] {
   const dbi = db.getDb();
   const params: any[] = [companyId];
   let where = 'company_id = ? AND is_active = 1';

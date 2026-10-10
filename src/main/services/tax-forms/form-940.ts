@@ -118,7 +118,7 @@ export function computeForm940(
   const empYTD = new Map<string, number>();
   let line3 = 0;        // total payments
   let line5 = 0;         // wages > $7K (NOT taxable)
-  let futaTaxable = 0;   // wages ≤ $7K (taxable base)
+  let _futaTaxable = 0;   // wages ≤ $7K (taxable base)
   // Quarterly liability accumulators
   const qLiability = [0, 0, 0, 0];
 
@@ -137,12 +137,12 @@ export function computeForm940(
       line5 += gross;
     } else if (newYTD <= FUTA_WAGE_BASE) {
       // Entirely under cap
-      futaTaxable += gross;
+      _futaTaxable += gross;
     } else {
       // Straddles cap
       const taxablePortion = FUTA_WAGE_BASE - prevYTD;
       const excessPortion = gross - taxablePortion;
-      futaTaxable += taxablePortion;
+      _futaTaxable += taxablePortion;
       line5 += excessPortion;
     }
 

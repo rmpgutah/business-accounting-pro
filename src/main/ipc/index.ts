@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog, shell, app } from 'electron';
+import { ipcMain, dialog, shell, app } from 'electron';
 import { v4 as uuid } from 'uuid';
 import Anthropic from '@anthropic-ai/sdk';
 import * as db from '../database';
@@ -5088,7 +5088,7 @@ export function registerIpcHandlers(): void {
     };
   }
 
-  function buildBillMetadata(bill: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
+  function _buildBillMetadata(bill: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
     const num = bill?.bill_number || bill?.id || '';
     const cur = (bill?.currency || 'USD').toUpperCase();
     const total = Number(bill?.total ?? 0);
@@ -5105,7 +5105,7 @@ export function registerIpcHandlers(): void {
     };
   }
 
-  function buildPOMetadata(po: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
+  function _buildPOMetadata(po: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
     const num = po?.po_number || po?.id || '';
     const cur = (po?.currency || 'USD').toUpperCase();
     return {
@@ -5117,7 +5117,7 @@ export function registerIpcHandlers(): void {
     };
   }
 
-  function buildExpenseMetadata(expense: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
+  function _buildExpenseMetadata(expense: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
     const ref = expense?.reference || expense?.id || '';
     const cur = (expense?.currency || 'USD').toUpperCase();
     const amt = Number(expense?.amount ?? expense?.total ?? 0);
@@ -6169,7 +6169,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('invoice:payment-schedule-list', (_event, invoiceId: string) => {
     try {
       return db.queryAll('invoice_payment_schedule', { invoice_id: invoiceId }, { field: 'sort_order', dir: 'asc' });
-    } catch (err) {
+    } catch {
       return [];
     }
   });
@@ -7801,7 +7801,7 @@ export function registerIpcHandlers(): void {
         HAVING total_spend > 0
         ORDER BY total_spend DESC
       `).all(companyId, startDate, endDate, companyId);
-    } catch (err: any) {
+    } catch {
       return [];
     }
   });
@@ -11155,7 +11155,7 @@ export function registerIpcHandlers(): void {
         ORDER BY dpi.due_date ASC
       `).all(debtId);
       return rows;
-    } catch (err: any) {
+    } catch {
       return [];
     }
   });
@@ -11501,7 +11501,7 @@ export function registerIpcHandlers(): void {
       const debts = dbInstance.prepare(
         `SELECT id, balance_due, statute_of_limitations_date FROM debts WHERE company_id = ? AND status NOT IN ('settled','written_off')`
       ).all(companyId) as any[];
-      const today = localToday();
+      const _today = localToday();
       let updated = 0;
       const tx = dbInstance.transaction(() => {
         for (const d of debts) {
@@ -11530,7 +11530,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('debt:campaign-list', (_event, { companyId }: { companyId: string }) => {
     try {
       return db.queryAll('debt_campaigns', { company_id: companyId }, { field: 'created_at', dir: 'desc' });
-    } catch (err: any) {
+    } catch {
       return [];
     }
   });
@@ -11594,7 +11594,7 @@ export function registerIpcHandlers(): void {
       const companyId = db.getCurrentCompanyId();
       if (!companyId) return { applied: 0 };
       const dbInstance = db.getDb();
-      const today = localToday();
+      const _today = localToday();
       const overdue = dbInstance.prepare(`
         SELECT id, total, late_fee_pct, late_fee_grace_days, due_date
         FROM invoices
@@ -11689,7 +11689,7 @@ export function registerIpcHandlers(): void {
       `).all(employeeId, yearStart);
 
       return { ytd: ytd || {}, deductions };
-    } catch (err: any) {
+    } catch {
       return { ytd: {}, deductions: [] };
     }
   });
@@ -12027,7 +12027,7 @@ export function registerIpcHandlers(): void {
       const withholding = stateTaxEngine.getStateWithholding(state, grossPay, allowances, periodsPerYear);
       const sdi = stateTaxEngine.getSdiWithholding(state, grossPay);
       return { withholding, sdi, total: withholding + sdi };
-    } catch (err) {
+    } catch {
       return { withholding: grossPay * 0.05, sdi: 0, total: grossPay * 0.05 };
     }
   });
@@ -12042,7 +12042,7 @@ export function registerIpcHandlers(): void {
   };
 
   // Feature 9: Policy violation check
-  ipcMain.handle('expense:check-policy', (_event, { expense, lineItems }: { expense: any; lineItems?: any[] }) => {
+  ipcMain.handle('expense:check-policy', (_event, { expense, lineItems: _lineItems }: { expense: any; lineItems?: any[] }) => {
     const violations: Array<{ code: string; message: string; severity: 'error' | 'warning' }> = [];
     const amount = Number(expense.amount || 0);
     if (amount > 500 && !expense.receipt_path) {
@@ -14886,7 +14886,7 @@ export function registerIpcHandlers(): void {
         else to = tmpl.default_to || '';
       }
       const mailto = `mailto:${encodeURIComponent(to || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      try { shell.openExternal(mailto); } catch {}
+      try { shell.openExternal(mailto).catch((err) => console.error('ipc/index:', err)); } catch {}
       try {
         db.create('email_log', {
           company_id: companyId,
@@ -17028,7 +17028,7 @@ export function registerIpcHandlers(): void {
       INSERT INTO esign_signatures (id, document_id, signer_type, signer_id, signer_name, typed_name, signature_hash, signed_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(sigId, documentId, signerType || 'user', signerId || '', signerName || userEmail, typedName, signatureHash, effectiveSignedAt);
-    const allSignatures = db.getDb().prepare('SELECT COUNT(*) as cnt FROM esign_signatures WHERE document_id = ?').get(documentId) as any;
+    const _allSignatures = db.getDb().prepare('SELECT COUNT(*) as cnt FROM esign_signatures WHERE document_id = ?').get(documentId) as any;
     db.getDb().prepare(`
       INSERT INTO esign_audit_log (id, document_id, action, performed_by, details, created_at)
       VALUES (?, ?, 'signed', ?, ?, datetime('now'))

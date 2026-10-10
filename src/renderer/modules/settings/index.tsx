@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings as SettingsIcon, Building2, Percent, Mail, CreditCard,
-  Database, Save, HardDrive, Trash2, AlertTriangle, UserX, Cloud, CloudOff, Download, PenTool,
+  Database, Save, HardDrive, Trash2, AlertTriangle, UserX, Cloud, Download, PenTool,
   Calculator, Landmark, Keyboard, Plus,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -146,7 +146,7 @@ const VpsBackup: React.FC = () => {
 // ─── Danger Zone ───────────────────────────────────────
 const DangerZone: React.FC = () => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
-  const companies = useCompanyStore((s) => s.companies);
+  const _companies = useCompanyStore((s) => s.companies);
   const setCompanies = useCompanyStore((s) => s.setCompanies);
   const setActiveCompany = useCompanyStore((s) => s.setActiveCompany);
   const authUser = useAuthStore((s) => s.user);
@@ -322,7 +322,7 @@ const DangerZone: React.FC = () => {
 // ─── Component ──────────────────────────────────────────
 export default function SettingsModule() {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
-  const [settings, setSettings] = useState<SettingsMap>({});
+  const [_settings, setSettings] = useState<SettingsMap>({});
   const [loading, setLoading] = useState(true);
   const [savingSection, setSavingSection] = useState('');
   const [taxRatesError, setTaxRatesError] = useState('');

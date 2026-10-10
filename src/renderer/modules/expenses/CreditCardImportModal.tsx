@@ -2,7 +2,7 @@
 // Parses Chase / AmEx (and generic) CSV exports, lets user map columns,
 // previews, and inserts as draft (status=pending) expenses.
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { X, Upload, CheckCircle } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';

@@ -210,7 +210,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({
           width,
           height,
           border: '1.5px solid #333',
-          borderRadius: '6px',
+          borderRadius: 'var(--app-radius)',
           background: '#fff',
           position: 'relative',
           cursor: 'crosshair',
@@ -280,7 +280,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({
           onClick={handleSave}
           disabled={!hasStrokes}
           className="block-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-          style={{ borderRadius: '6px', opacity: hasStrokes ? 1 : 0.4 }}
+          style={{ borderRadius: 'var(--app-radius)', opacity: hasStrokes ? 1 : 0.4 }}
         >
           <Check size={13} />
           Save Signature
@@ -288,7 +288,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({
         <button
           onClick={handleClear}
           className="block-btn flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text-primary"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <Trash2 size={13} />
           Clear
@@ -296,7 +296,7 @@ const SignaturePad: React.FC<SignaturePadProps> = ({
         <button
           onClick={handleUpload}
           className="block-btn flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text-primary"
-          style={{ borderRadius: '6px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           <Upload size={13} />
           Upload Image

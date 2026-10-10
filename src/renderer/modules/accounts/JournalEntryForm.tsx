@@ -140,7 +140,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
   const [reverseOnDate, setReverseOnDate] = useState<string>(entry?.reverse_on_date ?? '');
 
   const [referenceSuggestions, setReferenceSuggestions] = useState<string[]>([]);
-  const [showRefSuggestions, setShowRefSuggestions] = useState(false);
+  const [_showRefSuggestions, setShowRefSuggestions] = useState(false);
 
   // Comments + attachments (only meaningful when editing)
   const [comments, setComments] = useState<Array<{ id: string; body: string; user_id: string; created_at: string }>>([]);
@@ -1058,7 +1058,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                       : (dVal > 0 && cVal > 0) ? 'A line cannot have both debit & credit'
                       : (line.account_id && dVal === 0 && cVal === 0) ? 'Account set but no amount'
                       : '';
-                    const errBorder = lineErr ? 'border-accent-expense' : 'border-border-primary';
+                    const _errBorder = lineErr ? 'border-accent-expense' : 'border-border-primary';
                     return (
                     <tr key={line.key} className={`border-b border-border-primary ${line.is_locked ? 'bg-bg-tertiary/50' : ''}`}
                         tabIndex={0}

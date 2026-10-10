@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Receipt, Building2, ShieldCheck, Settings, CheckSquare, Wallet, BarChart3, LayoutDashboard, TrendingUp, TrendingDown, Clock, DollarSign, FileText, ArrowRight, Plus, CreditCard, Sparkles, Lightbulb } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Receipt, Building2, ShieldCheck, Settings, CheckSquare, Wallet, BarChart3, LayoutDashboard, TrendingUp, TrendingDown, DollarSign, ArrowRight, Plus, CreditCard, Sparkles, Lightbulb } from 'lucide-react';
 import ExpenseList from './ExpenseList';
 import ExpenseForm from './ExpenseForm';
 import ExpenseDetail from './ExpenseDetail';
@@ -494,7 +494,7 @@ const ExpensesModule: React.FC = () => {
                               <div style={{
                                 width: '100%', height: `${h}%`,
                                 background: isAboveAvg ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)',
-                                borderRadius: '3px 3px 0 0', transition: 'height 0.3s ease', opacity: 0.85,
+                                borderRadius: 'var(--app-radius) var(--app-radius) 0 0', transition: 'height 0.3s ease', opacity: 0.85,
                               }} />
                               <div className="text-[9px] text-text-muted mt-1">{monthLabel}</div>
                             </div>

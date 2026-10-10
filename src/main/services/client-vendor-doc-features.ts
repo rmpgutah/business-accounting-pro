@@ -30,7 +30,7 @@ export function mergeClients(primaryClientId: string, duplicateClientIds: string
   return transaction();
 }
 
-export function findClientDuplicates(companyId: string, opts?: { name_threshold?: number }): any[] {
+export function findClientDuplicates(companyId: string, _opts?: { name_threshold?: number }): any[] {
   const dbi = db.getDb();
   // Group clients with same email or very similar name
   const rows = dbi.prepare(`SELECT id, name, email, phone FROM clients WHERE company_id = ? AND COALESCE(deleted_at, '') = ''`).all(companyId) as any[];

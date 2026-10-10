@@ -11,7 +11,6 @@ import {
   CheckCircle,
   ArrowRight,
   Plus,
-  Send,
   Bell,
   Printer,
   Sparkles,
@@ -29,7 +28,7 @@ import InvoicesUpgradesPanel from './upgrades';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'dashboard' | 'invoices' | 'recurring' | 'analytics' | 'upgrades';
-type InvoiceView = 'list' | 'detail' | 'form';
+type _InvoiceView = 'list' | 'detail' | 'form';
 
 type View =
   | { type: 'list' }

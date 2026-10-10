@@ -23,7 +23,7 @@ import QuoteFollowUp from './QuoteFollowUp';
 import api from '../../lib/api';
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatDate } from '../../lib/format';
 import EntityChip from '../../components/EntityChip';
 
 // ─── Types ──────────────────────────────────────────────
@@ -587,7 +587,7 @@ ${topClients
                               style={{
                                 width: `${pct}%`,
                                 background: s.color,
-                                color: '#fff',
+                                color: 'var(--color-text-on-accent)',
                                 fontSize: '10px',
                                 fontWeight: 600,
                                 display: 'flex',

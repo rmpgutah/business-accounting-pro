@@ -136,7 +136,7 @@ const AuthScreen: React.FC = () => {
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '14px 16px', fontSize: '14px',
     background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: 'var(--app-radius)', color: '#fff', outline: 'none',
+    borderRadius: 'var(--app-radius)', color: 'var(--color-text-on-accent)', outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
   };
   const inputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -274,7 +274,7 @@ const AuthScreen: React.FC = () => {
           ].map(({ Icon, text }) => (
             <div key={text} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{
-                width: '32px', height: '32px', borderRadius: '6px',
+                width: '32px', height: '32px', borderRadius: 'var(--app-radius)',
                 background: 'rgba(255,255,255,0.04)',
                 border: '1px solid rgba(255,255,255,0.08)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
@@ -316,12 +316,12 @@ const AuthScreen: React.FC = () => {
                   style={{
                     display: 'flex', alignItems: 'center', gap: '12px', padding: '14px',
                     background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '10px', cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 0.2s',
+                    borderRadius: 'var(--app-radius)', cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 0.2s',
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
                 >
-                  <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: u.avatar_color || '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: 'white', flexShrink: 0 }}>
+                  <div style={{ width: '42px', height: '42px', borderRadius: 'var(--app-radius)', background: u.avatar_color || '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: 'white', flexShrink: 0 }}>
                     {u.display_name.charAt(0).toUpperCase()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -408,7 +408,7 @@ const AuthScreen: React.FC = () => {
 
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', cursor: 'pointer', userSelect: 'none' }}>
                 <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#ef4444' }} />
+                  style={{ width: '16px', height: '16px', accentColor: 'var(--color-accent-expense)' }} />
                 <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>Remember me</span>
               </label>
 

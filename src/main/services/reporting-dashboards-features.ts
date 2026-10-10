@@ -495,7 +495,7 @@ export function getKpiTimeSeries(key: string, opts?: { from?: string; to?: strin
 }
 
 // F775: KPI delta vs prior period
-export function kpiDelta(key: string, comparePeriodDays = 30) {
+export function kpiDelta(key: string, _comparePeriodDays = 30) {
   try {
     const snaps = db.getDb().prepare(`SELECT * FROM kpi_snapshots WHERE company_id = ? AND kpi_key = ? ORDER BY snapshot_at DESC LIMIT 2`).all(db.getCurrentCompanyId(), key) as any[];
     if (snaps.length < 2) return { delta: null, reason: 'Need ≥2 snapshots' };
@@ -628,7 +628,7 @@ export function applyFiltersToRows(rows: any[], filters: any[]): any[] {
       }
       return true;
     });
-  } catch (e: any) { return [] as any[]; }
+  } catch { return [] as any[]; }
 }
 
 // F784: Group result rows by a column (returns { groupKey: rows[] })

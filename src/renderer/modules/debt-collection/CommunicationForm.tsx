@@ -54,7 +54,7 @@ const CommunicationForm: React.FC<CommunicationFormProps> = ({ debtId, editId, o
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
-  const [loadingEdit, setLoadingEdit] = useState(!!editId);
+  const [_loadingEdit, setLoadingEdit] = useState(!!editId);
   const [saveError, setSaveError] = useState('');
 
   useEffect(() => {

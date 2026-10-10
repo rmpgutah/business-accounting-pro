@@ -90,10 +90,10 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadURL('http://localhost:5173').catch((err) => console.error('main:', err));
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
+    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html')).catch((err) => console.error('main:', err));
   }
 
   mainWindow.on('closed', () => {
@@ -459,7 +459,7 @@ function startBackgroundServices() {
   walCheckpointInterval = setInterval(() => {
     try {
       getDb().pragma('wal_checkpoint(TRUNCATE)');
-    } catch (err) {
+    } catch {
       // DB may be reinitializing — safe to skip a tick
     }
   }, 5 * 60 * 1000);
@@ -593,7 +593,7 @@ app.whenReady().then(() => {
       }
     }
   });
-});
+}).catch((err) => console.error('main:', err));
 
 app.on('window-all-closed', () => {
   stopBackgroundServices();

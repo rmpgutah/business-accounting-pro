@@ -211,7 +211,7 @@ export function vendorFullSnapshot(cid: string, vendorId: string) {
   };
 }
 export function vendorHealthCheck(cid: string) {
-  const dbi = db.getDb();
+  const _dbi = db.getDb();
   const issues: { vendor: string; issue: string; severity: string }[] = [];
   const expiredIns = vendorsWithExpiredInsurance(cid) as any[];
   for (const v of expiredIns) issues.push({ vendor: v.name, issue: 'Insurance expired', severity: 'high' });

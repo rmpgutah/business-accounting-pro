@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Receipt, Plus, Search, Filter, DollarSign, CheckCircle, Trash2, Download, Copy, FileText, Settings, Star, ChevronDown, ChevronRight, Edit, Banknote, CreditCard, Save, Scale } from 'lucide-react';
+import { Receipt, Plus, CheckCircle, Trash2, Download, Copy, FileText, Settings, Star, ChevronDown, ChevronRight, Edit, Banknote, CreditCard, Save, Scale } from 'lucide-react';
 import { EmptyState } from '../../components/EmptyState';
 import ErrorBanner from '../../components/ErrorBanner';
 import api from '../../lib/api';
@@ -15,7 +15,7 @@ import {
   formatExpenseDate,
 } from '../../customization/expenses-prefs';
 import { SummaryBar } from '../../components/SummaryBar';
-import { formatCurrency, formatDate, formatStatus } from '../../lib/format';
+import { formatCurrency, formatStatus } from '../../lib/format';
 import { todayLocal } from '../../lib/date-helpers';
 import { ImportWizard } from '../../components/ImportWizard';
 import { useNavigation } from '../../lib/navigation';
@@ -128,7 +128,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
   const activeCompany = useCompanyStore((s) => s.activeCompany);
   const authUser = useAuthStore((s) => s.user);
   const userId = authUser?.id || 'anon';
-  const nav = useNavigation();
+  const _nav = useNavigation();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -1622,7 +1622,7 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ onNew, onEdit, onView }) => {
                 className="text-xs font-semibold"
                 onClick={handleBatchDelete}
                 disabled={batchLoading}
-                style={{ background: 'var(--color-accent-expense)', color: '#fff', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
+                style={{ background: 'var(--color-accent-expense)', color: 'var(--color-text-on-accent)', border: 'none', borderRadius: 'var(--app-radius)', padding: '5px 10px', cursor: 'pointer' }}
               >
                 Yes, Delete
               </button>

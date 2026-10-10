@@ -10,7 +10,7 @@ import { randomUUID as uuid } from 'crypto';
 import * as db from '../database';
 
 const now = (): string => new Date().toISOString();
-const today = (): string => now().slice(0, 10);
+const _today = (): string => now().slice(0, 10);
 const round2 = (n: number): number => Math.round((n || 0) * 100) / 100;
 
 // ════════════════════════════════════════════════════════════════

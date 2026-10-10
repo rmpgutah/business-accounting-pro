@@ -12,10 +12,8 @@ import {
   Printer,
   Send,
   Tag as TagIcon,
-  Calendar,
   ArrowUp,
   ArrowDown,
-  AlertTriangle,
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
@@ -1244,7 +1242,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 disabled={batchLoading}
                 style={{
                   background: 'var(--color-accent-expense)',
-                  color: '#fff',
+                  color: 'var(--color-text-on-accent)',
                   border: 'none',
                   borderRadius: 'var(--app-radius)',
                   padding: '5px 10px',
@@ -1282,7 +1280,7 @@ ${items.map((q) => `<tr><td>${q.quote_number}</td><td>${q.client_name || '-'}</t
                 disabled={batchLoading || !bulkTagValue.trim()}
                 style={{
                   background: 'var(--color-accent-blue)',
-                  color: '#fff',
+                  color: 'var(--color-text-on-accent)',
                   border: 'none',
                   borderRadius: 'var(--app-radius)',
                   padding: '5px 10px',

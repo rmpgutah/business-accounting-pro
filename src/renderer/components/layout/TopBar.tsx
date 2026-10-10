@@ -186,7 +186,7 @@ const TopBar: React.FC = () => {
         <div className="flex items-center gap-2 min-w-0" style={{ WebkitAppRegion: 'no-drag' }}>
           <button
             className="flex items-center gap-2 px-2.5 py-1.5 min-w-0 text-text-primary transition-all duration-150"
-            style={{ borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.06)' }}
+            style={{ borderRadius: 'var(--app-radius)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.06)' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
           >
@@ -203,7 +203,7 @@ const TopBar: React.FC = () => {
           onClick={() => setSearchOpen(true)}
           className="flex items-center gap-2 px-3 py-1.5 w-80 min-w-0 text-text-muted text-sm transition-all duration-150"
           // @ts-expect-error WebkitAppRegion is a non-standard Electron CSS property
-          style={{ borderRadius: '6px', WebkitAppRegion: 'no-drag', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+          style={{ borderRadius: 'var(--app-radius)', WebkitAppRegion: 'no-drag', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
         >
@@ -211,7 +211,7 @@ const TopBar: React.FC = () => {
           <span className="flex-1 text-left truncate min-w-0">Search...</span>
           <kbd
             className="text-[10px] px-1.5 py-0.5 bg-bg-tertiary border border-border-secondary text-text-muted"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             ⌘K
           </kbd>
@@ -257,7 +257,7 @@ const TopBar: React.FC = () => {
             title="Trash (deleted items, recoverable for 30 days)"
             onClick={() => setTrashOpen(true)}
             className="p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '6px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             <Trash2 size={18} />
           </button>
@@ -266,13 +266,13 @@ const TopBar: React.FC = () => {
               aria-label="Notifications"
               onClick={openNotifs}
               className="relative p-2 text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: 'var(--app-radius)' }}
             >
               <Bell size={18} />
               {notificationCount > 0 && (
                 <span
                   className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold text-white bg-accent-expense"
-                  style={{ borderRadius: '6px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   {notificationCount > 99 ? '99+' : notificationCount}
                 </span>
@@ -286,7 +286,7 @@ const TopBar: React.FC = () => {
                 <div
                   className="absolute right-0 mt-2 w-96 z-50 overflow-hidden"
                   style={{
-                    borderRadius: '10px',
+                    borderRadius: 'var(--app-radius)',
                     // Solid elevated token — popover sits inside the header's own
                     // backdrop-filter, where a nested blur silently no-ops in Chromium,
                     // so opacity must not depend on it (text would bleed through otherwise).
@@ -385,7 +385,7 @@ const TopBar: React.FC = () => {
               <div
                 className="flex items-center justify-center text-white text-[11px] font-bold shrink-0"
                 style={{
-                  width: '26px', height: '26px', borderRadius: '6px',
+                  width: '26px', height: '26px', borderRadius: 'var(--app-radius)',
                   background: authUser.avatar_color || 'var(--accent-primary)',
                 }}
               >
@@ -397,7 +397,7 @@ const TopBar: React.FC = () => {
               <button
                 onClick={logout}
                 className="p-1 text-text-muted hover:text-accent-expense transition-all duration-150"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
                 title="Sign Out"
               >
                 <LogOut size={14} />
@@ -419,7 +419,7 @@ const TopBar: React.FC = () => {
           <div
             className="w-full max-w-xl"
             style={{
-              borderRadius: '10px',
+              borderRadius: 'var(--app-radius)',
               background: 'rgba(20, 22, 30, 0.90)',
               backdropFilter: 'blur(24px) saturate(1.5)',
               WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
@@ -443,7 +443,7 @@ const TopBar: React.FC = () => {
                 aria-label="Close search"
                 onClick={closeSearch}
                 className="p-1 text-text-muted hover:text-text-primary"
-                style={{ borderRadius: '6px' }}
+                style={{ borderRadius: 'var(--app-radius)' }}
               >
                 <X size={14} />
               </button>
@@ -461,7 +461,7 @@ const TopBar: React.FC = () => {
                   <div className="px-4 py-1">
                     <span
                       className="inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-accent-blue/15 text-accent-blue"
-                      style={{ borderRadius: '6px' }}
+                      style={{ borderRadius: 'var(--app-radius)' }}
                     >
                       {type}
                     </span>
@@ -492,7 +492,7 @@ const TopBar: React.FC = () => {
             <div className="flex items-center justify-between px-4 py-2 border-t border-border-primary text-[11px] text-text-muted">
               <span>Type to search</span>
               <span>
-                <kbd className="px-1 py-0.5 bg-bg-tertiary border border-border-secondary" style={{ borderRadius: '6px' }}>
+                <kbd className="px-1 py-0.5 bg-bg-tertiary border border-border-secondary" style={{ borderRadius: 'var(--app-radius)' }}>
                   ESC
                 </kbd>{' '}
                 to close

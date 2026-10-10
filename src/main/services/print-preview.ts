@@ -259,7 +259,7 @@ export function openPrintPreview(
   previewWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   const wrappedHTML = wrapWithToolbar(htmlContent, title);
-  previewWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(wrappedHTML)}`);
+  previewWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(wrappedHTML)}`).catch((err) => console.error('services/print-preview:', err));
 
   previewWin.on('page-title-updated', async (event, newTitle) => {
     if (newTitle !== '__PP_SAVE_PDF__') return;

@@ -119,7 +119,7 @@ const ComplianceDocs: React.FC<Props> = ({ onBack }) => {
           >
             <tab.icon size={12} style={{ color: tab.color }} /> {tab.label}
             {tab.count > 0 && (
-              <span style={{ background: tab.color, color: '#fff', fontSize: 10, padding: '2px 6px', borderRadius: 'var(--app-radius)', fontWeight: 800 }}>
+              <span style={{ background: tab.color, color: 'var(--color-text-on-accent)', fontSize: 10, padding: '2px 6px', borderRadius: 'var(--app-radius)', fontWeight: 800 }}>
                 {tab.count}
               </span>
             )}

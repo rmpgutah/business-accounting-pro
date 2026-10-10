@@ -513,7 +513,7 @@ const LegalTimeline: React.FC<{ debtId: string }> = ({ debtId }) => {
         <div className="text-text-muted text-xs text-center py-8">No legal actions recorded for this debt.</div>
       ) : (
         <div className="space-y-1 max-h-[60vh] overflow-y-auto">
-          {actions.map((a: any, i: number) => (
+          {actions.map((a: any, _i: number) => (
             <div
               key={a.id}
               className="flex items-start gap-3 px-3 py-3 border-l-2 border-accent-blue hover:bg-bg-hover transition-colors"
@@ -788,7 +788,7 @@ const LegalToolkit: React.FC<LegalToolkitProps> = ({ onOpenEvidence }) => {
   // Tabs that require a debt selection vs company-level tabs
   const debtRequiredTabs: SubTab[] = ['demand_letters', 'court_filings', 'bundle', 'audit_trail', 'court_packet', 'legal_timeline'];
   const companyLevelTabs: SubTab[] = ['litigation_costs', 'judgments', 'liens', 'attorneys', 'print_summary', 'garnishment'];
-  const noDebtTabs: SubTab[] = ['evidence', 'statute_tracker', ...companyLevelTabs];
+  const _noDebtTabs: SubTab[] = ['evidence', 'statute_tracker', ...companyLevelTabs];
 
   if (loading) {
     return (

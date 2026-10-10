@@ -19,7 +19,6 @@
 // The user reviews + fixes — much faster than typing everything.
 
 import { promises as fsp } from 'fs';
-import * as path from 'path';
 
 export interface ParsedReceipt {
   raw_text: string;

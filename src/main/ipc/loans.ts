@@ -9,9 +9,8 @@
 // scheduleAutoBackup). scheduleAutoBackup is injected because the auto-backup
 // debounce timer lives in ipc/index.ts.
 
-import { IpcMain, shell } from 'electron';
+import { IpcMain } from 'electron';
 import { v4 as uuid } from 'uuid';
-import path from 'path';
 import * as db from '../database';
 import { saveHTMLAsPDF } from '../services/print-preview';
 

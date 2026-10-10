@@ -69,7 +69,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
   const [recurring, setRecurring] = useState<any[]>([]);
   const [anomalies, setAnomalies] = useState<any[]>([]);
   const [loyalty, setLoyalty] = useState<any[]>([]);
-  const [largest, setLargest] = useState<any[]>([]);
+  const [_largest, setLargest] = useState<any[]>([]);
   const [byEmployee, setByEmployee] = useState<any[]>([]);
   const [byMethod, setByMethod] = useState<any[]>([]);
   const [reimbAging, setReimbAging] = useState<any[]>([]);

@@ -14,7 +14,6 @@
 // Sources:
 //   • https://tax.utah.gov/forms
 
-import { computeScheduleC } from './schedule-c';
 import { computeForm1120 } from './form-1120';
 import { computeForm1120S } from './form-1120s';
 import { computeForm1065 } from './form-1065';
@@ -23,8 +22,8 @@ import * as db from '../../database';
 
 // Utah constants (2025-2026)
 const UTAH_FLAT_RATE = 0.0455;             // Utah uses flat 4.55% income tax
-const UTAH_PERSONAL_EXEMPTION_2025 = 1941;  // 75% of federal exemption (TCJA = 0)
-const UTAH_TAX_CREDIT_PCT = 6.0;            // Taxpayer tax credit phase-out
+const _UTAH_PERSONAL_EXEMPTION_2025 = 1941;  // 75% of federal exemption (TCJA = 0)
+const _UTAH_TAX_CREDIT_PCT = 6.0;            // Taxpayer tax credit phase-out
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;

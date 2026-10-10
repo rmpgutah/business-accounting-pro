@@ -137,7 +137,7 @@ const TrashBin: React.FC<TrashBinProps> = ({ onClose }) => {
       <div
         className="w-full max-w-2xl"
         style={{
-          borderRadius: '10px',
+          borderRadius: 'var(--app-radius)',
           background: 'rgba(20, 22, 30, 0.92)',
           backdropFilter: 'blur(24px) saturate(1.5)',
           WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
@@ -165,7 +165,7 @@ const TrashBin: React.FC<TrashBinProps> = ({ onClose }) => {
                 Empty Trash
               </button>
             )}
-            <button onClick={onClose} className="p-1 text-text-muted hover:text-text-primary" style={{ borderRadius: '6px' }}>
+            <button onClick={onClose} className="p-1 text-text-muted hover:text-text-primary" style={{ borderRadius: 'var(--app-radius)' }}>
               <X size={16} />
             </button>
           </div>
@@ -174,7 +174,7 @@ const TrashBin: React.FC<TrashBinProps> = ({ onClose }) => {
         {/* Body */}
         <div className="max-h-[60vh] overflow-y-auto">
           {error && (
-            <div className="m-3 p-2.5 flex items-start gap-2 text-xs" style={{ borderRadius: '6px', background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)' }}>
+            <div className="m-3 p-2.5 flex items-start gap-2 text-xs" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)' }}>
               <AlertTriangle size={14} className="text-accent-expense shrink-0 mt-0.5" />
               <span className="text-text-secondary">{error}</span>
             </div>
@@ -193,7 +193,7 @@ const TrashBin: React.FC<TrashBinProps> = ({ onClose }) => {
             Object.entries(items).map(([table, rows]) => (
               <div key={table} className="py-2">
                 <div className="px-4 py-1">
-                  <span className="inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-accent-blue/15 text-accent-blue" style={{ borderRadius: '6px' }}>
+                  <span className="inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-accent-blue/15 text-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
                     {labelFor(table)} ({rows.length})
                   </span>
                 </div>
@@ -210,7 +210,7 @@ const TrashBin: React.FC<TrashBinProps> = ({ onClose }) => {
                       <span
                         className="text-[10px] font-medium px-1.5 py-0.5 shrink-0"
                         style={{
-                          borderRadius: '6px',
+                          borderRadius: 'var(--app-radius)',
                           color: left <= 3 ? 'var(--color-accent-expense)' : 'var(--color-text-muted)',
                           background: left <= 3 ? 'rgba(220,38,38,0.12)' : 'rgba(255,255,255,0.04)',
                         }}
@@ -245,7 +245,7 @@ const TrashBin: React.FC<TrashBinProps> = ({ onClose }) => {
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2 border-t border-border-primary text-[11px] text-text-muted">
           <span>Restored records return to their module. Purge is permanent.</span>
-          <span><kbd className="px-1 py-0.5 bg-bg-tertiary border border-border-secondary" style={{ borderRadius: '6px' }}>ESC</kbd> to close</span>
+          <span><kbd className="px-1 py-0.5 bg-bg-tertiary border border-border-secondary" style={{ borderRadius: 'var(--app-radius)' }}>ESC</kbd> to close</span>
         </div>
       </div>
     </div>

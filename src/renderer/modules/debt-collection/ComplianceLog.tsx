@@ -297,7 +297,7 @@ const CommunicationHours: React.FC<{ debtId: string }> = ({ debtId }) => {
 };
 
 // ─── Feature 44: Required Disclosures Checklist ───────
-const DisclosuresChecklist: React.FC<{ debtId: string; events: any[] }> = ({ debtId, events }) => {
+const DisclosuresChecklist: React.FC<{ debtId: string; events: any[] }> = ({ debtId: _debtId, events }) => {
   const disclosures = [
     { key: 'mini_miranda_delivered', label: 'Mini-Miranda Warning', desc: 'Collector identified as debt collector in initial communication', required: true },
     { key: 'validation_notice_sent', label: 'Debt Validation Notice', desc: 'Written notice sent within 5 days of initial communication', required: true },

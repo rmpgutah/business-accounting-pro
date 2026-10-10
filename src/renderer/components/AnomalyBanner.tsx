@@ -14,7 +14,7 @@ export const AnomalyBanner: React.FC<AnomalyBannerProps> = ({ message, severity 
     high: 'bg-accent-expense/10 border-accent-expense/30 text-accent-expense',
   };
   return (
-    <div className={`flex items-start gap-2 p-3 border ${colorMap[severity]}`} style={{ borderRadius: '6px' }}>
+    <div className={`flex items-start gap-2 p-3 border ${colorMap[severity]}`} style={{ borderRadius: 'var(--app-radius)' }}>
       <AlertTriangle size={14} className="shrink-0 mt-0.5" />
       <span className="text-xs flex-1">{message}</span>
       {onDismiss && (

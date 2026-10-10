@@ -14,7 +14,6 @@
 //
 //   await batchDeleteWithUndo(toast, 'invoices', selectedIds, () => reload());
 
-import React from 'react';
 import api from './api';
 import { useUndoStore, type UndoEntry } from '../stores/undoStore';
 import { v4 as uuid } from 'uuid';

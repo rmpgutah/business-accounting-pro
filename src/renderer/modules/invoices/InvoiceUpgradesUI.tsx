@@ -16,8 +16,8 @@
  * in, child renders + emits actions. No store dependencies.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle, Download, FileText, Mail, Trash2, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AlertTriangle, CheckCircle, Download, Mail, Trash2, X } from 'lucide-react';
 import api from '../../lib/api';
 import { formatCurrency } from '../../lib/format';
 

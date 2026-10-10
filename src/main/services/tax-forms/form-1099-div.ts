@@ -11,8 +11,7 @@
 //   • https://www.irs.gov/forms-pubs/about-form-1099-div
 
 import {
-  PayerIdentity, RecipientIdentity, FilingFlags,
-  round2, buildPayerIdentity, buildRecipientIdentity,
+  PayerIdentity, RecipientIdentity, FilingFlags, buildPayerIdentity, buildRecipientIdentity,
   sortReadyFirst, buildIdentityWarnings, loadEligibleClients,
 } from './form-1099-shared';
 import * as db from '../../database';
@@ -44,7 +43,7 @@ export interface Form1099DIVData extends PayerIdentity, RecipientIdentity, Filin
   total_paid: number;
 }
 
-const FILING_THRESHOLD = 10;
+const _FILING_THRESHOLD = 10;
 
 export function compute1099DIVs(companyId: string, year: number): Form1099DIVData[] {
   const company = db.getById('companies', companyId) as any || {};

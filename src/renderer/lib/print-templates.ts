@@ -34,7 +34,7 @@ function esc(s: string | null | undefined): string {
 // For interpolating untrusted text inside a CSS `content: "..."` string.
 // Backslash MUST be escaped first (otherwise escaping `"` is incomplete and a
 // stray `\` could break out), then quotes, then newlines (illegal in CSS strings).
-function escCss(s: string | null | undefined): string {
+function _escCss(s: string | null | undefined): string {
   return String(s ?? '')
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
@@ -144,7 +144,7 @@ const fmtDate = (d: string) => {
 // ─── Shared report header builder ──────────────────────────
 // Modernized: gradient accent bar above the header, larger document title
 // chip with subtle accent, and an optional dateRange prefix.
-function reportHeader(companyName: string, docTitle: string, dateRange?: string): string {
+function _reportHeader(companyName: string, docTitle: string, dateRange?: string): string {
   return `<div class="accent-bar"></div>
   <div class="rpt-hdr" style="border-bottom-color: var(--ink); padding-bottom: 18px; margin-bottom: 24px;">
     <div>
@@ -155,7 +155,7 @@ function reportHeader(companyName: string, docTitle: string, dateRange?: string)
   </div>`;
 }
 
-function reportFooter(companyName: string): string {
+function _reportFooter(companyName: string): string {
   const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   return `<div class="rpt-footer" style="border-top-color: var(--rule-strong); padding-top: 12px; margin-top: 32px; font-size: 9px;">
     <span style="font-weight: 600; color: var(--ink-muted);">${esc(companyName)}</span>
@@ -164,7 +164,7 @@ function reportFooter(companyName: string): string {
 }
 
 // ─── Stacked horizontal allocation bar helper ───
-function stackedBar(
+function _stackedBar(
   segments: Array<{ value: number; color: string; label: string }>,
   height = 12,
 ): string {
@@ -1035,7 +1035,7 @@ export function generatePayStubHTML(
   ]);
 
   // ─ Earnings table ─
-  const earningsRows: string[][] = isSalaried
+  const _earningsRows: string[][] = isSalaried
     ? [[cesc('Salary'), '--', '--', cesc(fmt(stub.gross_pay)), cesc(fmt(ytd.gross_pay))]]
     : [
         [cesc('Regular'), cesc(hoursRegular.toFixed(2)), cesc(fmt(effectiveRate)), cesc(fmt(regularPay)), '--'],
@@ -2108,7 +2108,7 @@ export function generateCollectionLetterHTML(
 // Monthly spending timeline — pure inline SVG (bars + trend line).
 // Buckets expenses by YYYY-MM and renders a print-safe bar chart with a
 // smoothed trend polyline overlaid. Returns '' when there is nothing to show.
-function expenseTimelineSVG(expenses: Array<{ date: string; amount: number }>): string {
+function _expenseTimelineSVG(expenses: Array<{ date: string; amount: number }>): string {
   const byMonth = new Map<string, number>();
   for (const e of expenses) {
     const key = (e.date || '').slice(0, 7); // YYYY-MM
@@ -2184,7 +2184,7 @@ function expenseTimelineSVG(expenses: Array<{ date: string; amount: number }>): 
 // Date → spending heatmap — GitHub-style calendar grid, pure inline SVG.
 // Each cell is one day; colour intensity scales with that day's total spend.
 // Columns are ISO weeks (Sunday-aligned), rows are weekdays.
-function expenseHeatmapSVG(expenses: Array<{ date: string; amount: number }>): string {
+function _expenseHeatmapSVG(expenses: Array<{ date: string; amount: number }>): string {
   const byDay = new Map<string, number>();
   let min: string | null = null, max: string | null = null;
   for (const e of expenses) {
@@ -2565,7 +2565,7 @@ export function generateCourtPacketHTML(data: {
   const companyName = escL(company?.name || 'Company');
   const jurisdiction = escL(debt?.jurisdiction || '________________');
 
-  const sectionCounts = [
+  const _sectionCounts = [
     { title: 'Account Summary', count: 1 },
     { title: 'Communication Log', count: communications.length },
     { title: 'Payment History', count: payments.length },
@@ -2689,7 +2689,7 @@ export function generateCourtPacketHTML(data: {
   ];
 
   const logoHtml = logoImg(company?.logo_data, company?.name);
-  const coDetailHtml = (logoHtml ? logoHtml + '<br>' : '') +
+  const _coDetailHtml = (logoHtml ? logoHtml + '<br>' : '') +
     escL([company?.address_line1, company?.address_line2, [company?.city, company?.state].filter(Boolean).join(', ') + (company?.zip ? ' ' + company.zip : '')].filter(Boolean).join(', '));
 
   const coverBodyHtml =
@@ -2893,7 +2893,7 @@ export function generateVerificationAffidavitHTML(
 // SHARED HELPERS (Bill / PO / Expense templates)
 // ═══════════════════════════════════════════════════════════════
 
-function addrLines(parts: Array<string | null | undefined>): string {
+function _addrLines(parts: Array<string | null | undefined>): string {
   // Split each part on newlines so multiline addresses don't run into one string
   const out: string[] = [];
   for (const p of parts) {

@@ -13,8 +13,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import {
-  AlertTriangle, TrendingUp, TrendingDown, Activity, FileText,
-  DollarSign, Calendar, Search, Save, BarChart3, Wallet, Users, Sparkles,
+  AlertTriangle, Calendar, Search, Save, BarChart3, Wallet, Users, Sparkles,
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -356,7 +355,7 @@ const GLAnalytics: React.FC = () => {
   const comparativeBS = useMemo(() => {
     const days = (new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / 86400000;
     const priorEnd = new Date(new Date(periodStart).getTime() - 86400000).toISOString().slice(0, 10);
-    const priorStart = new Date(new Date(priorEnd).getTime() - days * 86400000).toISOString().slice(0, 10);
+    const _priorStart = new Date(new Date(priorEnd).getTime() - days * 86400000).toISOString().slice(0, 10);
     const sumLinesAsOf = (asOfStart: string, asOfEnd: string) => {
       const map = new Map<string, number>();
       lines.filter((l) => l.date >= asOfStart && l.date <= asOfEnd).forEach((l) => {

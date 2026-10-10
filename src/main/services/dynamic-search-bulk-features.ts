@@ -9,7 +9,7 @@ import { randomUUID as uuid } from 'crypto';
 import * as db from '../database';
 
 const now = (): string => new Date().toISOString();
-const today = (): string => now().slice(0, 10);
+const _today = (): string => now().slice(0, 10);
 
 // ════════════════════════════════════════════════════════════════
 // Batch J: Global Search & Find (F261-F270)
@@ -167,7 +167,7 @@ export function createNotification(opts: { user_id: string; company_id?: string;
   try {
     dbi.prepare(`INSERT INTO notifications (id, user_id, company_id, notification_type, title, body, entity_type, entity_id, priority, action_url, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`)
       .run(id, opts.user_id, opts.company_id || null, opts.type, opts.title, opts.body || null, opts.entity_type || null, opts.entity_id || null, opts.priority || 'normal', opts.action_url || null, now());
-  } catch (e: any) {
+  } catch {
     // Some schemas use different column names; try a minimal insert
     dbi.prepare(`INSERT INTO notifications (id, user_id, notification_type, title, body, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
       .run(id, opts.user_id, opts.type, opts.title, opts.body || null, now());

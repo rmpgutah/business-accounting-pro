@@ -1,5 +1,5 @@
 import type { Database } from 'better-sqlite3';
-import { INDEX_ENTRIES, entryFor, type IndexEntry } from './indexConfig';
+import { INDEX_ENTRIES, entryFor } from './indexConfig';
 
 export interface SearchHit {
   entity_type: string;

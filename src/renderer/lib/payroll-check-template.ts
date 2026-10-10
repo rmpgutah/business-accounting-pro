@@ -5,7 +5,7 @@
  */
 
 import { buildMicrLine, buildMicrUnicode } from './micr';
-import { micrFontFace, hasMicrFont } from './micr-font';
+import { hasMicrFont } from './micr-font';
 
 function esc(s: string | null | undefined): string {
   if (!s) return '';

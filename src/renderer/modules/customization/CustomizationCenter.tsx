@@ -43,7 +43,7 @@ function Control({ opt }: { opt: CustomizationOption }) {
             width: 16,
             height: 16,
             borderRadius: 'var(--app-radius)',
-            background: '#fff',
+            background: 'var(--color-text-on-accent)',
             transition: 'left 0.15s',
           }}
         />

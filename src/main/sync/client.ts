@@ -117,7 +117,7 @@ export function connectWebSocket(
       pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send('ping');
       }, 30_000);
-      drainQueue();
+      drainQueue().catch((err) => console.error('sync/client:', err));
     });
 
     ws.on('message', (data: Buffer) => {

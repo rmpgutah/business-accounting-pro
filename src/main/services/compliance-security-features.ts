@@ -58,7 +58,7 @@ export function applyRetentionPolicy(policyId: string): { records_affected: numb
         affected = 0;
       }
     }
-  } catch (e) {
+  } catch {
     affected = 0;
   }
   dbi.prepare(`UPDATE data_retention_policies SET last_applied_at = ?, records_affected_last_run = ?, updated_at = ? WHERE id = ?`)
@@ -111,7 +111,7 @@ export function anonymizeSubject(companyId: string, opts: { subject_type: string
   const safeTables = new Set(['clients', 'vendors', 'employees']);
   if (!safeTables.has(opts.subject_type)) throw new Error('Unsupported subject type for anonymization');
   const setClauses = opts.fields.map(f => `${f} = ?`).join(', ');
-  const values = opts.fields.map(f => `[REDACTED-${Date.now()}]`);
+  const values = opts.fields.map(_f => `[REDACTED-${Date.now()}]`);
   values.push(opts.subject_id);
   try {
     dbi.prepare(`UPDATE ${opts.subject_type} SET ${setClauses} WHERE id = ?`).run(...values);

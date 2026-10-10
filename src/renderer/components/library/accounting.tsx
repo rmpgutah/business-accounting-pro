@@ -4,7 +4,6 @@ import {
   TrendingDown,
   Minus,
   Receipt,
-  Landmark,
   AlertTriangle,
   CheckCircle2,
 } from 'lucide-react';
@@ -321,7 +320,7 @@ export function CategoryPill({
   };
   const styles: Record<string, React.CSSProperties> = {
     tint: { ...base, background: tintBg, color },
-    solid: { ...base, background: color, color: '#0b1220' },
+    solid: { ...base, background: color, color: 'var(--color-bg-primary)' },
     outline: { ...base, borderColor: color, color },
   };
 
@@ -335,7 +334,7 @@ export function CategoryPill({
           width: 8,
           height: 8,
           borderRadius: 'var(--app-radius)',
-          background: variant === 'solid' ? '#0b1220' : color,
+          background: variant === 'solid' ? 'var(--color-bg-primary)' : color,
           flexShrink: 0,
         }}
       />

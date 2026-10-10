@@ -134,7 +134,7 @@ function run(ctx?: { todayISO?: string; companyId?: string }): AutomationResult 
         } else {
           onFile = (v.tax_id || '').trim().length > 0;
         }
-      } catch (err: any) {
+      } catch {
         // If the W-9 lookup itself fails, fall back to tax_id and warn once-ish.
         onFile = (v.tax_id || '').trim().length > 0;
       }

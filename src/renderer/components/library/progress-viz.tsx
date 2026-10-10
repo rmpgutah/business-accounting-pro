@@ -194,7 +194,7 @@ export function StepProgress({
                   justifyContent: 'center',
                   fontSize: 12,
                   fontWeight: 700,
-                  color: '#fff',
+                  color: 'var(--color-text-on-accent)',
                   border: active ? `2px solid ${color}` : '2px solid transparent',
                   boxShadow: active ? `0 0 0 3px var(--color-bg-tertiary, #2e2e2e)` : 'none',
                   flexShrink: 0,

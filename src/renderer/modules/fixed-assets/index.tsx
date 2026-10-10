@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Boxes, Plus, ChevronLeft, BarChart2, List, Calendar,
-  AlertCircle, RefreshCw, Edit2, Trash2, Eye, TrendingDown,
+  Boxes, Plus, ChevronLeft, BarChart2, List, Calendar, RefreshCw, Edit2, Trash2, Eye, TrendingDown,
   Hash, MapPin, Tag, DollarSign, Clock, CheckCircle, XCircle,
   LayoutDashboard, FileText, Image, Shield, Printer, AlertTriangle, Layers,
 } from 'lucide-react';

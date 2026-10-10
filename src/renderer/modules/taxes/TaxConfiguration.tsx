@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Calculator, ChevronDown, RefreshCw, CheckCircle, Plus,
-  DollarSign, Percent, AlertCircle, TrendingUp, Settings,
-  Clock, Calendar, FileText, Shield,
+  Calculator, CheckCircle, Plus,
+  DollarSign, Percent, AlertCircle, TrendingUp, Settings, Calendar, FileText,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../lib/format';
 

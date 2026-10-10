@@ -281,7 +281,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
 }) => {
   // ── Store ──
   const activeCompany = useCompanyStore((s) => s.activeCompany);
-  const nav = useNavigation();
+  const _nav = useNavigation();
 
   // ── State ──
   const [debt, setDebt] = useState<Debt | null>(null);
@@ -2351,7 +2351,7 @@ const DebtDetail: React.FC<DebtDetailProps> = ({
                   className="absolute left-[7px] top-2 bottom-2 w-px bg-border-primary"
                 />
                 <div className="space-y-4">
-                  {pipelineStages.map((ps, idx) => {
+                  {pipelineStages.map((ps, _idx) => {
                     const isCurrent = !ps.exited_at;
                     const stgBadge = formatStatus(ps.stage);
                     const dotColor = stageColor[ps.stage] || 'bg-bg-secondary';

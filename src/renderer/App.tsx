@@ -33,7 +33,7 @@ const RecurringModule = lazy(() => import('./modules/recurring'));
 const EmailModule = lazy(() => import('./modules/email'));
 const NotificationsModule = lazy(() => import('./modules/notifications'));
 const AuditModule = lazy(() => import('./modules/audit'));
-const MultiCompanyModule = lazy(() => import('./modules/multi-company'));
+const _MultiCompanyModule = lazy(() => import('./modules/multi-company'));
 const CompaniesModule = lazy(() => import('./modules/companies'));
 const HrToolsModule = lazy(() => import('./modules/hr'));
 const ApiModule = lazy(() => import('./modules/api'));

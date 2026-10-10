@@ -121,7 +121,7 @@ const QuoteAnalytics: React.FC = () => {
         if (cancelled) return;
         setQuotes(Array.isArray(qRows) ? (qRows as QuoteRow[]) : []);
         setConvertedInvoices(Array.isArray(invRows) ? (invRows as InvoiceLink[]) : []);
-      } catch (err: any) {
+      } catch {
         if (!cancelled) {
           // Some installs may not have source_quote_id column — try fallback
           try {

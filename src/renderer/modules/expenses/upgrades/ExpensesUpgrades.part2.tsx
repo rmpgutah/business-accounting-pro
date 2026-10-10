@@ -138,7 +138,7 @@ const ExpensesUpgradesPart2: React.FC = () => {
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [vendors, setVendors] = useState<VendorRow[]>([]);
-  const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [_projects, setProjects] = useState<ProjectRow[]>([]);
 
   // rawQuery-backed aggregates
   const [dedSplit, setDedSplit] = useState<DeductibleSplitRow | null>(null);

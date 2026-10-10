@@ -38,7 +38,7 @@ export const MacroRecorder: React.FC<MacroRecorderProps> = ({ isOpen, onClose, o
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={(e) => e.stopPropagation()} className="block-card-elevated" style={{ width: '500px', padding: '24px', borderRadius: '8px' }}>
+      <div onClick={(e) => e.stopPropagation()} className="block-card-elevated" style={{ width: '500px', padding: '24px', borderRadius: 'var(--app-radius)' }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-text-primary">Record Macro</h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary">
@@ -56,11 +56,11 @@ export const MacroRecorder: React.FC<MacroRecorderProps> = ({ isOpen, onClose, o
           </div>
           <div className="flex items-center gap-2 pt-2">
             {!recording ? (
-              <button onClick={startRecording} className="block-btn-primary flex items-center gap-2 text-xs px-4 py-2" style={{ borderRadius: '6px' }}>
+              <button onClick={startRecording} className="block-btn-primary flex items-center gap-2 text-xs px-4 py-2" style={{ borderRadius: 'var(--app-radius)' }}>
                 <Circle size={12} fill="currentColor" /> Start Recording
               </button>
             ) : (
-              <button onClick={stopRecording} className="block-btn flex items-center gap-2 text-xs px-4 py-2 text-accent-expense" style={{ borderRadius: '6px' }}>
+              <button onClick={stopRecording} className="block-btn flex items-center gap-2 text-xs px-4 py-2 text-accent-expense" style={{ borderRadius: 'var(--app-radius)' }}>
                 <StopCircle size={12} /> Stop Recording
               </button>
             )}
@@ -70,8 +70,8 @@ export const MacroRecorder: React.FC<MacroRecorderProps> = ({ isOpen, onClose, o
             Note: Macro recording captures command palette actions. Open the palette (Cmd+K) and execute commands to record them. Stop recording when done.
           </div>
           <div className="flex justify-end gap-2 pt-3 border-t border-border-primary">
-            <button onClick={onClose} className="block-btn text-xs px-4 py-2" style={{ borderRadius: '6px' }}>Cancel</button>
-            <button onClick={handleSave} disabled={!name || actions.length === 0} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1" style={{ borderRadius: '6px' }}>
+            <button onClick={onClose} className="block-btn text-xs px-4 py-2" style={{ borderRadius: 'var(--app-radius)' }}>Cancel</button>
+            <button onClick={handleSave} disabled={!name || actions.length === 0} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1" style={{ borderRadius: 'var(--app-radius)' }}>
               <Save size={12} /> Save Macro
             </button>
           </div>

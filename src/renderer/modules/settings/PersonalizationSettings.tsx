@@ -115,7 +115,7 @@ const PersonalizationSettings: React.FC = () => {
   const [importJson, setImportJson] = useState('');
   const [importErr, setImportErr] = useState('');
 
-  const handleSaveCloud = async () => {
+  const _handleSaveCloud = async () => {
     if (authUser?.id) await state.saveToCloud(authUser.id);
   };
 

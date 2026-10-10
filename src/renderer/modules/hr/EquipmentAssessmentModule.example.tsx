@@ -12,7 +12,7 @@ import type { EquipmentAssessment } from '../../../shared/types/equipment-assess
 
 // Example 1: Creating a new assessment from scratch
 export const NewAssessmentExample = () => {
-  const [assessment, setAssessment] = useState<EquipmentAssessment>({
+  const [assessment, _setAssessment] = useState<EquipmentAssessment>({
     documentId: `EQ-ASSESS-${new Date().getFullYear()}-0001`,
     executedDate: new Date().toISOString(),
     governingLaw: 'Utah',

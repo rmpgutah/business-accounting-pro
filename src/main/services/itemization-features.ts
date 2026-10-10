@@ -183,7 +183,7 @@ export function searchInventoryForLine(query: string, limit = 10) {
       WHERE company_id = ? AND (LOWER(name) LIKE ? OR LOWER(sku) LIKE ?)
       ORDER BY name LIMIT ?`)
       .all(db.getCurrentCompanyId(), q, q, limit);
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F852: Tax breakdown by jurisdiction across the current line items (form helper)
@@ -321,7 +321,7 @@ export function topTemplatesReport(limit = 10) {
       WHERE company_id = ? AND times_used > 0
       ORDER BY times_used DESC LIMIT ?`)
       .all(db.getCurrentCompanyId(), limit);
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F862: Quick-summary of a line set (used in the saving toast / preview)

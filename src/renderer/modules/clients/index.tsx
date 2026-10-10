@@ -1,7 +1,6 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-  LayoutDashboard, UserCircle, PieChart, BarChart3, Plus, TrendingUp, TrendingDown,
-  DollarSign, Clock, AlertTriangle, Star, Users, ArrowRight, Printer, Upload, Sparkles,
+  LayoutDashboard, UserCircle, PieChart, BarChart3, Plus, Clock, AlertTriangle, ArrowRight, Printer, Upload, Sparkles,
 } from 'lucide-react';
 import ClientList from './ClientList';
 import ClientDetail from './ClientDetail';
@@ -10,7 +9,7 @@ const ClientsUpgradesPanel = React.lazy(() => import('./upgrades'));
 import { useAppStore } from '../../stores/appStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import api from '../../lib/api';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency } from '../../lib/format';
 
 // ─── Types ──────────────────────────────────────────────
 type Tab = 'dashboard' | 'clients' | 'segments' | 'analytics' | 'upgrades';
@@ -477,13 +476,13 @@ const ClientsModule: React.FC = () => {
                         return topClients.map((client: any, i: number) => (
                           <div key={i} className="flex items-center gap-3">
                             <div className="text-xs text-text-secondary w-32 truncate">{client.name}</div>
-                            <div className="flex-1 h-4 relative" style={{ background: 'var(--color-bg-tertiary)', borderRadius: '3px' }}>
+                            <div className="flex-1 h-4 relative" style={{ background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)' }}>
                               <div
                                 style={{
                                   width: `${Math.max(((client.revenue || 0) / maxRev) * 100, 2)}%`,
                                   height: '100%',
                                   background: 'var(--color-accent-blue)',
-                                  borderRadius: '3px',
+                                  borderRadius: 'var(--app-radius)',
                                   transition: 'width 0.3s ease',
                                 }}
                               />
@@ -511,7 +510,7 @@ const ClientsModule: React.FC = () => {
                     return (
                       <div className="space-y-4">
                         {/* Stacked bar */}
-                        <div className="h-6 flex overflow-hidden" style={{ borderRadius: '3px' }}>
+                        <div className="h-6 flex overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
                           {activePct > 0 && (
                             <div style={{ width: `${activePct}%`, background: 'var(--color-accent-income)', minWidth: '2px' }} title={`Active: ${active}`} />
                           )}
@@ -760,7 +759,7 @@ const ClientsModule: React.FC = () => {
                             style={{
                               height: `${Math.max(((m.revenue || 0) / maxRevMonth) * 120, 4)}px`,
                               background: 'var(--color-accent-blue)',
-                              borderRadius: '3px 3px 0 0',
+                              borderRadius: 'var(--app-radius) var(--app-radius) 0 0',
                               transition: 'height 0.3s ease',
                             }}
                           />
@@ -791,7 +790,7 @@ const ClientsModule: React.FC = () => {
                               style={{
                                 height: `${Math.max(((m.count || 0) / maxAcq) * 90, 4)}px`,
                                 background: 'var(--color-accent-income)',
-                                borderRadius: '3px 3px 0 0',
+                                borderRadius: 'var(--app-radius) var(--app-radius) 0 0',
                                 transition: 'height 0.3s ease',
                               }}
                             />
@@ -810,13 +809,13 @@ const ClientsModule: React.FC = () => {
                     <div className="text-3xl font-mono font-bold text-accent-blue">{concentrationData.top20Pct.toFixed(1)}%</div>
                     <div className="text-xs text-text-muted mt-2">of revenue from top 20% of clients</div>
                     <div className="text-xs text-text-secondary mt-1">({concentrationData.totalClients} clients with revenue)</div>
-                    <div className="w-full mt-4 h-4 relative" style={{ background: 'var(--color-bg-tertiary)', borderRadius: '3px' }}>
+                    <div className="w-full mt-4 h-4 relative" style={{ background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)' }}>
                       <div
                         style={{
                           width: `${Math.min(concentrationData.top20Pct, 100)}%`,
                           height: '100%',
                           background: concentrationData.top20Pct > 80 ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)',
-                          borderRadius: '3px',
+                          borderRadius: 'var(--app-radius)',
                           transition: 'width 0.3s ease',
                         }}
                       />

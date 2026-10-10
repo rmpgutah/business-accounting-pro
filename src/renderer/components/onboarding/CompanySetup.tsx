@@ -116,7 +116,7 @@ const CompanySetup: React.FC = () => {
           maxWidth: '640px',
           background: 'var(--color-bg-secondary-solid)',
           border: '1px solid var(--color-border-primary)',
-          borderRadius: '8px',
+          borderRadius: 'var(--app-radius)',
         }}
       >
         {/* Logo & Header */}
@@ -127,7 +127,7 @@ const CompanySetup: React.FC = () => {
               width: '56px',
               height: '56px',
               background: 'var(--color-accent-blue)',
-              borderRadius: '8px',
+              borderRadius: 'var(--app-radius)',
             }}
           >
             <Building2 size={28} color="white" />
@@ -143,7 +143,7 @@ const CompanySetup: React.FC = () => {
               padding: '10px 14px',
               background: 'var(--color-accent-expense-bg)',
               border: '1px solid rgba(248,113,113,0.25)',
-              borderRadius: '6px',
+              borderRadius: 'var(--app-radius)',
             }}
           >
             {error}

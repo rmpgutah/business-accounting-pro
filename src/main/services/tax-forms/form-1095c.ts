@@ -91,7 +91,7 @@ export function computeForm1095C(
   companyId: string,
   opts: Form1095COpts,
 ): Form1095CData {
-  const dbi = db.getDb();
+  const _dbi = db.getDb();
   const company = db.getById('companies', companyId) as any || {};
   const employee = (db.getById('employees', opts.employee_id) as any) || {};
 

@@ -16,7 +16,7 @@ const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
 
 // EX1: Auto-split expenses by project allocation percentages
 export function autoSplitByProject(expenseId: string) {
-  const dbi = db.getDb(); const cid = db.getCurrentCompanyId();
+  const dbi = db.getDb(); const _cid = db.getCurrentCompanyId();
   const exp = dbi.prepare('SELECT * FROM expenses WHERE id = ?').get(expenseId) as any;
   if (!exp || !exp.project_id) return { error: 'Expense has no project' };
   // If the project has allocation rules, split proportionally
@@ -375,7 +375,7 @@ export function payrollLinkedExpenses(companyId: string) {
 
 // EX45: Convert expense to bill (for AP tracking)
 export function convertExpenseToBill(expenseId: string) {
-  const dbi = db.getDb(); const cid = db.getCurrentCompanyId();
+  const dbi = db.getDb(); const _cid = db.getCurrentCompanyId();
   const exp = dbi.prepare('SELECT * FROM expenses WHERE id = ?').get(expenseId) as any;
   if (!exp) return { error: 'Expense not found' };
   return { expense_id: expenseId, vendor_id: exp.vendor_id, amount: exp.amount, date: exp.date, description: exp.description, note: 'Use this data to create a bill in Bills (AP)' };

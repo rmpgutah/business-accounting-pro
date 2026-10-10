@@ -167,7 +167,7 @@ export function runOverdueCheck(): OverdueCheckResult {
                 grace_days: graceDays,
                 source: 'auto_overdue_cron',
               },
-            });
+            }).catch((err) => console.error('crons/overdue-checker:', err));
           } catch { /* event-bus best-effort */ }
         }
       }
@@ -230,7 +230,7 @@ export function runOverdueCheck(): OverdueCheckResult {
                 grace_days: graceDays,
                 source: 'auto_overdue_cron',
               },
-            });
+            }).catch((err) => console.error('crons/overdue-checker:', err));
           } catch { /* event-bus best-effort */ }
         }
       }

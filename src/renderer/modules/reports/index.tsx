@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import { ArrowLeft, BarChart3, Star, Clock, DollarSign, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import ReportSelector, { type ReportType } from './ReportSelector';
 import ProfitAndLoss from './ProfitAndLoss';

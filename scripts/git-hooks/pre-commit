@@ -1,0 +1,10 @@
+#!/bin/sh
+# Pre-commit gate: lint-staged (eslint --fix + prettier on staged files),
+# then the Vitest tests related to the staged files.
+# Emergency override:  SKIP_HOOKS=1 git commit ...
+if [ "$SKIP_HOOKS" = "1" ]; then echo "[pre-commit] SKIP_HOOKS=1 — skipping."; exit 0; fi
+npx lint-staged || exit 1
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx)$' | grep -v '\.test\.' | tr '\n' ' ')
+if [ -n "$STAGED" ]; then
+  ELECTRON_RUN_AS_NODE=1 npx electron node_modules/vitest/vitest.mjs related --run $STAGED || exit 1
+fi

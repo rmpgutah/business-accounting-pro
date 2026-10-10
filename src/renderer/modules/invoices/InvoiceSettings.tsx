@@ -423,7 +423,7 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
                   <div style={{ position: 'relative', display: 'inline-block' }}>
                     <img src={settings.logo_data} alt="Company logo" style={{ height: 60, maxWidth: 200, objectFit: 'contain', borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)' }} />
                     <button onClick={() => setSettings((p) => ({ ...p, logo_data: null }))}
-                      style={{ position: 'absolute', top: -6, right: -6, background: 'var(--color-accent-expense)', color: '#fff', borderRadius: '50%', width: 18, height: 18, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove logo">
+                      style={{ position: 'absolute', top: -6, right: -6, background: 'var(--color-accent-expense)', color: 'var(--color-text-on-accent)', borderRadius: '50%', width: 18, height: 18, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove logo">
                       <X size={10} />
                     </button>
                   </div>
@@ -447,9 +447,9 @@ const InvoiceSettingsComponent: React.FC<InvoiceSettingsProps> = ({ onBack }) =>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {settings.letterhead_data ? (
                   <div style={{ position: 'relative' }}>
-                    <img src={settings.letterhead_data as string} alt="Letterhead banner" style={{ width: '100%', maxHeight: 100, objectFit: 'contain', borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)', background: '#fff' }} />
+                    <img src={settings.letterhead_data as string} alt="Letterhead banner" style={{ width: '100%', maxHeight: 100, objectFit: 'contain', borderRadius: 'var(--app-radius)', border: '1px solid var(--color-border-primary)', background: 'var(--color-text-on-accent)' }} />
                     <button onClick={() => setSettings((p) => ({ ...p, letterhead_data: null }))}
-                      style={{ position: 'absolute', top: -6, right: -6, background: 'var(--color-accent-expense)', color: '#fff', borderRadius: '50%', width: 22, height: 22, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove letterhead">
+                      style={{ position: 'absolute', top: -6, right: -6, background: 'var(--color-accent-expense)', color: 'var(--color-text-on-accent)', borderRadius: '50%', width: 22, height: 22, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove letterhead">
                       <X size={12} />
                     </button>
                   </div>

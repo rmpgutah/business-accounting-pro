@@ -3,7 +3,7 @@ import { Printer, Download, ChevronDown, ChevronRight } from 'lucide-react';
 import { format, startOfYear, endOfMonth } from 'date-fns';
 import api from '../../lib/api';
 import { useCompanyStore } from '../../stores/companyStore';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency } from '../../lib/format';
 import { downloadCSVBlob } from '../../lib/csv-export';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CHART_SERIES } from '../../lib/chart-palette';

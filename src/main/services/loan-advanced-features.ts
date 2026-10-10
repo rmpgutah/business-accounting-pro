@@ -46,7 +46,7 @@ export function refinanceScenarioComparison(opts: {
     if (!inv) return { error: 'Loan not found' };
     const currentBalance = inv.current_balance || inv.principal || 0;
     // Current loan: remaining cash flow
-    const monthlyRateCurr = (inv.interest_rate || 0) / 12;  // rate is stored as decimal
+    const _monthlyRateCurr = (inv.interest_rate || 0) / 12;  // rate is stored as decimal
     const remainingPayments = Math.max(1, (inv.term_months || 360) - Math.floor((Date.now() - new Date(inv.origination_date).getTime()) / (30 * 86400000)));
     const currentMonthly = (inv.payment_amount || 0);
     const currentRemainingTotal = round2(currentMonthly * remainingPayments);
@@ -320,7 +320,7 @@ export function loansSecuredByAsset(assetId: string) {
       WHERE c.asset_id = ? AND c.company_id = ? AND l.deleted_at IS NULL
       ORDER BY c.is_primary DESC, l.name`)
       .all(assetId, db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -374,7 +374,7 @@ export function computeCovenantStatus(covenantId: string) {
 }
 
 // Helper: measure a financial metric using current company data
-function measureFinancialMetric(metric: string, loanId?: string): number | null {
+function measureFinancialMetric(metric: string, _loanId?: string): number | null {
   try {
     const cid = db.getCurrentCompanyId();
     const dbi = db.getDb();
@@ -406,7 +406,7 @@ function measureFinancialMetric(metric: string, loanId?: string): number | null 
       return interest > 0 ? Math.abs(ebit) / interest : null;
     }
     return null;
-  } catch (e: any) { return null; }
+  } catch { return null; }
 }
 
 // F975: List covenants currently in breach
@@ -414,7 +414,7 @@ export function listCovenantBreaches() {
   try {
     return db.getDb().prepare(`SELECT c.*, l.name loan_name FROM loan_covenants c LEFT JOIN loans l ON c.loan_id = l.id WHERE c.company_id = ? AND c.breach_status = 'breach' ORDER BY c.last_measured_at DESC`)
       .all(db.getCurrentCompanyId());
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F976: Generate a quarterly compliance certificate for all covenants
@@ -462,7 +462,7 @@ export function upcomingCovenantMeasurements(daysAhead = 30) {
     const cutoff = addDays(today(), daysAhead);
     return db.getDb().prepare(`SELECT c.*, l.name loan_name FROM loan_covenants c LEFT JOIN loans l ON c.loan_id = l.id WHERE c.company_id = ? AND c.next_measurement_date <= ? ORDER BY c.next_measurement_date ASC`)
       .all(db.getCurrentCompanyId(), cutoff);
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -485,7 +485,7 @@ export function upcomingArmResets(daysAhead = 90) {
     const cutoff = addDays(today(), daysAhead);
     return db.getDb().prepare(`SELECT a.*, l.name loan_name FROM loan_arm_schedule a INNER JOIN loans l ON a.loan_id = l.id WHERE a.company_id = ? AND a.applied = 0 AND a.reset_date <= ? ORDER BY a.reset_date ASC`)
       .all(db.getCurrentCompanyId(), cutoff);
-  } catch (e: any) { return []; }
+  } catch { return []; }
 }
 
 // F980: Apply an ARM reset (compute new rate from index + margin, enforce caps)

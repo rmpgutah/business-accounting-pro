@@ -131,7 +131,7 @@ function buildStatementHTML(
   const notes = esc(debt.notes);
   const stmtNum = esc(statementNumber(debt.id));
   const todayStr = today();
-  const stageStr = esc(stageLabel(debt.current_stage));
+  const _stageStr = esc(stageLabel(debt.current_stage));
 
   const daysAccrued = debt.interest_start_date
     ? Math.max(0, Math.floor((Date.now() - new Date(debt.interest_start_date).getTime()) / 86400000))

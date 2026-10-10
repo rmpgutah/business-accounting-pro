@@ -1,7 +1,6 @@
 // ─── System-Wide Wave 3: 50 features (SW101–SW150) ───────
 // Taxes, Purchase Orders, KPI, Stripe, Companies, Advanced Reports
 
-import { randomUUID as uuid } from 'crypto';
 import * as db from '../database';
 const round2 = (n: number) => Math.round((n || 0) * 100) / 100;
 
@@ -40,7 +39,7 @@ export function form1099Summary(cid: string, year?: number) {
 export function payrollTaxSummaryYTD(cid: string) {
   return db.getDb().prepare(`SELECT ROUND(SUM(COALESCE(federal_tax,0)),2) AS federal, ROUND(SUM(COALESCE(social_security_tax,0)),2) AS social_security, ROUND(SUM(COALESCE(medicare_tax,0)),2) AS medicare, ROUND(SUM(COALESCE(state_tax,0)),2) AS state, ROUND(SUM(COALESCE(total_taxes,0)),2) AS total FROM pay_stubs WHERE company_id = ? AND strftime('%Y', pay_date) = strftime('%Y', 'now')`).get(cid);
 }
-export function taxCalendar(cid: string) {
+export function taxCalendar(_cid: string) {
   const y = new Date().getFullYear();
   return [
     { date: `${y}-01-31`, title: 'W-2/1099 filing deadline', type: 'federal' },
@@ -228,7 +227,7 @@ export function companyGrowthMetrics(cid: string) {
   }
   return metrics;
 }
-export function companyComparison(cid: string) {
+export function companyComparison(_cid: string) {
   const dbi = db.getDb();
   const companies = dbi.prepare(`SELECT id, name FROM companies ORDER BY name`).all() as any[];
   return companies.map((c: any) => {

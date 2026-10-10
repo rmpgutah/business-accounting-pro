@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Users, DollarSign, FileText, Calculator, Plus, Trash2, Printer,
-  LayoutDashboard, ChevronDown, ChevronRight, Download, TrendingUp, Clock, ArrowRight, Eye, Edit,
+  LayoutDashboard, ChevronDown, ChevronRight, Download, TrendingUp, Eye, Edit,
   Network, Building2, BarChart3,
 } from 'lucide-react';
 import api from '../../lib/api';
@@ -736,7 +736,7 @@ const PayrollModule: React.FC = () => {
                                   className="w-full bg-accent-blue/80 transition-all"
                                   style={{
                                     height: `${Math.max(pct, 3)}%`,
-                                    borderRadius: '4px 4px 0 0',
+                                    borderRadius: 'var(--app-radius) var(--app-radius) 0 0',
                                     minHeight: '4px',
                                   }}
                                 />
