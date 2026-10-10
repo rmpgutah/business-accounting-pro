@@ -1,0 +1,6 @@
+dist
+release
+cloudflare-app/dist
+landing-page
+*.sql
+*.md

@@ -1,0 +1,18 @@
+{
+  "no-hardcoded-hex": [
+    "src/renderer/modules/accounts/AccountAdvancedDialogs.tsx",
+    "src/renderer/modules/invoices/InvoiceForm.tsx",
+    "src/renderer/modules/invoices/InvoiceDetail.tsx",
+    "src/renderer/components/SignaturePad.tsx",
+    "src/renderer/components/TagPicker.tsx",
+    "src/renderer/components/Donut.tsx",
+    "src/renderer/components/OnboardingWizard.tsx",
+    "src/renderer/components/TagManager.tsx",
+    "src/renderer/lib/classifications.tsx",
+    "src/renderer/modules/settings/IndustryPresetSettings.tsx",
+    "src/renderer/modules/settings/PersonalizationSettings.tsx",
+    "src/renderer/modules/settings/StatusBuilderSettings.tsx",
+    "src/renderer/modules/invoices/InvoiceSettings.tsx"
+  ],
+  "no-blocky-radius": []
+}
