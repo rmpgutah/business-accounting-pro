@@ -37,7 +37,7 @@ bash scripts/codesign-mac.sh "release/mac-arm64/Business Accounting Pro.app"  # 
 
 ## Gotchas
 
-- **tablesWithoutCompanyId** in `ipc/domains/db-crud.ts`: child/junction tables MUST be listed here or db:create injects a nonexistent company_id column → crash
+- **TABLES_WITHOUT_COMPANY_ID** in `src/main/database/tableConfig.ts` (aliased in `ipc/domains/db-crud.ts`): child/junction tables MUST be listed here or db:create injects a nonexistent company_id column → crash
 - **tablesWithoutUpdatedAt** in `database/index.ts`: tables without updated_at MUST be listed or update() appends invalid SQL → crash
 - **better-sqlite3 ABI**: tests run under `ELECTRON_RUN_AS_NODE=1 electron`, so one native build serves app and tests. After `dist:*`, run `npx @electron/rebuild -f -w better-sqlite3` if better-sqlite3 reports an ABI mismatch
 - **Auth store persistence**: Only `user` is persisted (for Remember Me), NOT `isAuthenticated` — forces login on every app launch
