@@ -22,6 +22,7 @@ import { registerInvoiceExpenseFeaturesFeat } from './feat/invoice-expense-featu
 import { registerBankingPayrollFeaturesFeat } from './feat/banking-payroll-features';
 import { registerReportsAnalyticsFeaturesFeat } from './feat/reports-analytics-features';
 import { registerClientVendorDocFeaturesFeat } from './feat/client-vendor-doc-features';
+import { registerAutomationFeaturesFeat } from './feat/automation-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -147,48 +148,19 @@ export function registerIpcHandlers(): void {
   registerClientVendorDocFeaturesFeat(ipcMain, deps);
 
   // ─── Batch 6: Automation & Workflow Engine (20) ───────────
-  const am = () => require('../services/automation-features');
+  registerAutomationFeaturesFeat(ipcMain, deps);
   // Workflows
-  ipcMain.handle('feat:workflow:upsert', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); const r = am().upsertWorkflow({ ...w, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:workflow:list', (_e, { active_only }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listWorkflows(cid, !!active_only); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:workflow:trigger', (_e, { trigger_type, payload }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; const r = am().triggerWorkflows(cid, trigger_type, payload || {}); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
   // Scheduled tasks
-  ipcMain.handle('feat:scheduled-task:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); const r = am().upsertScheduledTask({ ...t, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:scheduled-task:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listScheduledTasks(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:scheduled-task:due', () => { try { return am().dueScheduledTasks(); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:scheduled-task:mark-run', (_e, { id, status, next_run_at }: any) => { try {  const _r = { ok: am().markScheduledTaskRun(id, status, next_run_at) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
   // Approval chains
-  ipcMain.handle('feat:approval-chain:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = am().upsertApprovalChain({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:approval:start', (_e, { chain_id, entity_type, entity_id, submitted_by }: any) => { try {  const _r = am().startApprovalInstance(chain_id, entity_type, entity_id, submitted_by); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:approval:act', (_e, { instance_id, action, actor_id, comment }: any) => { try { return am().actOnApproval(instance_id, action, actor_id, comment); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:approval:pending', (_e, { approver_user_id }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().pendingApprovals(cid, approver_user_id); } catch (e: any) { return { error: e?.message }; } });
   // Email templates
-  ipcMain.handle('feat:email-template:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); const _r = am().upsertEmailTemplate({ ...t, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:email-template:list', (_e, { category }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listEmailTemplates(cid, category); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:email-template:render', (_e, { template_id, data }: any) => { try { return am().renderEmailTemplate(template_id, data || {}); } catch (e: any) { return { error: e?.message }; } });
   // Webhooks
-  ipcMain.handle('feat:webhook:upsert', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); const _r = am().upsertWebhookSubscription({ ...w, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:webhook:record-delivery', (_e, { subscription_id, event_type, payload, response_status, response_body, duration_ms }: any) => { try { am().recordWebhookDelivery(subscription_id, event_type, payload, response_status, response_body, duration_ms); const _r = { ok: true }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
   // Auto-categorize
-  ipcMain.handle('feat:auto-categorize:learn', (_e, { description_pattern, vendor_id, category_id }: any) => { try { const cid = db.getCurrentCompanyId(); am().recordAutoCategorizeAccept(cid, description_pattern, vendor_id || null, category_id); return { ok: true }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:auto-categorize:suggest', (_e, { description, vendor_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return am().getAutoCategorizeSuggestion(cid, description, vendor_id); } catch (e: any) { return { error: e?.message }; } });
   // Auto-archive
-  ipcMain.handle('feat:auto-archive:run', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return { invoices_archived: 0, bills_archived: 0 }; const _r = am().runAutoArchive(cid); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
   // Triggered actions log
-  ipcMain.handle('feat:triggered-action:log', (_e, { trigger_source, entity_type, entity_id, action_type, action_result }: any) => { try { const cid = db.getCurrentCompanyId(); am().logTriggeredAction(cid, trigger_source, entity_type, entity_id, action_type, action_result); const _r = { ok: true }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:triggered-action:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listTriggeredActions(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   // SLAs
-  ipcMain.handle('feat:sla:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = am().upsertSLA({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:sla:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listSLAs(cid); } catch (e: any) { return { error: e?.message }; } });
   // Saved searches
-  ipcMain.handle('feat:saved-search:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = am().upsertSavedSearch({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:saved-search:list', (_e, { user_id, module }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listSavedSearches(user_id, cid, module); } catch (e: any) { return { error: e?.message }; } });
   // Bulk ops audit
-  ipcMain.handle('feat:bulk-op:log', (_e, op: any) => { try { const cid = db.getCurrentCompanyId(); const _r = am().logBulkOperation(cid, op); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:bulk-op:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listBulkOperations(cid, opts); } catch (e: any) { return { error: e?.message }; } });
   // Quick actions (dashboard shortcuts)
-  ipcMain.handle('feat:quick-action:upsert', (_e, a: any) => { try { const cid = db.getCurrentCompanyId(); const _r = am().upsertQuickAction({ ...a, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:quick-action:list', (_e, { user_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return am().listQuickActions(user_id, cid); } catch (e: any) { return { error: e?.message }; } });
 
   // ─── Batch 7: Banking, Treasury, Multi-Currency (20) ───────────
   const tr = () => require('../services/treasury-features');
