@@ -10,3 +10,6 @@ deploy/vps.env
 
 # Superpowers brainstorm scratch
 .superpowers/
+
+# Superpowers SDD scratch workspace
+.superpowers/
