@@ -10,19 +10,37 @@ const aliases = {
 
 export default defineConfig({
   test: {
-    coverage: { provider: 'v8', reporter: ['text', 'html'], include: ['src/**/*.ts', 'src/**/*.tsx'] },
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      include: ['src/**/*.ts', 'src/**/*.tsx'],
+    },
     projects: [
       {
         test: {
           name: 'main',
           environment: 'node',
-          include: ['src/main/**/*.test.ts', 'src/shared/**/*.test.ts', 'eslint-rules/**/*.test.mjs'],
+          include: [
+            'src/main/**/*.test.ts',
+            'src/shared/**/*.test.ts',
+            'scripts/**/*.test.ts',
+            'eslint-rules/**/*.test.mjs',
+          ],
           setupFiles: ['src/main/test/setup.ts'],
         },
-        resolve: { alias: { ...aliases, electron: path.resolve(__dirname, 'src/main/test/electron-mock.ts') } },
+        resolve: {
+          alias: {
+            ...aliases,
+            electron: path.resolve(__dirname, 'src/main/test/electron-mock.ts'),
+          },
+        },
       },
       {
-        test: { name: 'renderer', environment: 'jsdom', include: ['src/renderer/**/*.test.{ts,tsx}'] },
+        test: {
+          name: 'renderer',
+          environment: 'jsdom',
+          include: ['src/renderer/**/*.test.{ts,tsx}'],
+        },
         resolve: { alias: aliases },
       },
     ],
