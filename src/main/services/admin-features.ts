@@ -23,57 +23,76 @@ import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
 
 // ── F1-F3: Custom Fields ──────────────────────────────────────
+// SCHEMA NOTE: custom_field_definitions is created by the first migration in
+// database/index.ts with columns key / label / sort_order / deleted_at (soft
+// delete = non-NULL deleted_at). A later duplicate CREATE TABLE using
+// field_key / field_label / display_order / is_active never ran (IF NOT EXISTS
+// is a no-op once the table exists) and has been removed. This service must
+// stay aligned with the real columns, matching the `customFields:*` handlers
+// in ipc/index.ts.
 
 export type CustomFieldEntityType = 'client' | 'vendor' | 'invoice' | 'expense' | 'employee' | 'project';
 export type CustomFieldType = 'text' | 'number' | 'date' | 'boolean' | 'select' | 'multiselect';
+
+const CUSTOM_FIELD_ENTITY_TYPES: ReadonlySet<string> = new Set(['client', 'vendor', 'invoice', 'expense', 'employee', 'project']);
+const CUSTOM_FIELD_TYPES: ReadonlySet<string> = new Set(['text', 'number', 'date', 'boolean', 'select', 'multiselect']);
 
 export interface CustomFieldDefinition {
   id: string;
   company_id: string;
   entity_type: CustomFieldEntityType;
-  field_key: string;
-  field_label: string;
+  key: string;
+  label: string;
   field_type: CustomFieldType;
   options_json: string;          // JSON array of strings for select/multiselect
   required: number;
-  display_order: number;
-  is_active: number;
+  sort_order: number;
+  group_label: string;
+  validation_json: string;
+  show_on_print: number;
+  deleted_at: string | null;     // NULL = live; timestamp = soft-deleted
   created_at: string;
-  updated_at: string;
 }
 
 export function listCustomFields(companyId: string, entityType?: CustomFieldEntityType): CustomFieldDefinition[] {
   const dbi = db.getDb();
   const sql = entityType
-    ? `SELECT * FROM custom_field_definitions WHERE company_id = ? AND entity_type = ? AND is_active = 1 ORDER BY display_order, field_label`
-    : `SELECT * FROM custom_field_definitions WHERE company_id = ? AND is_active = 1 ORDER BY entity_type, display_order`;
+    ? `SELECT * FROM custom_field_definitions WHERE company_id = ? AND entity_type = ? AND deleted_at IS NULL ORDER BY sort_order, label`
+    : `SELECT * FROM custom_field_definitions WHERE company_id = ? AND deleted_at IS NULL ORDER BY entity_type, sort_order, label`;
   const params = entityType ? [companyId, entityType] : [companyId];
   return dbi.prepare(sql).all(...params) as CustomFieldDefinition[];
 }
 
-export function upsertCustomField(record: Partial<CustomFieldDefinition> & { company_id: string; entity_type: CustomFieldEntityType; field_key: string; field_label: string; field_type: CustomFieldType }): CustomFieldDefinition {
+export function upsertCustomField(record: Partial<CustomFieldDefinition> & { company_id: string; entity_type: CustomFieldEntityType; key: string; label: string; field_type: CustomFieldType }): CustomFieldDefinition {
   const dbi = db.getDb();
+  // The original (never-applied) schema enforced these via CHECK constraints;
+  // the live table has none, so validate here instead.
+  if (!CUSTOM_FIELD_ENTITY_TYPES.has(record.entity_type)) throw new Error(`Invalid custom field entity_type: ${record.entity_type}`);
+  if (!CUSTOM_FIELD_TYPES.has(record.field_type)) throw new Error(`Invalid custom field field_type: ${record.field_type}`);
+  if (!record.key || !record.key.trim()) throw new Error('Custom field key is required');
+  if (!record.label || !record.label.trim()) throw new Error('Custom field label is required');
+
   const id = record.id || uuid();
   const optionsJson = record.options_json || '[]';
   if (record.id) {
     dbi.prepare(`
       UPDATE custom_field_definitions
-      SET field_label = ?, field_type = ?, options_json = ?, required = ?, display_order = ?, is_active = ?, updated_at = datetime('now')
+      SET label = ?, field_type = ?, options_json = ?, required = ?, sort_order = ?, group_label = ?, show_on_print = ?
       WHERE id = ?
-    `).run(record.field_label, record.field_type, optionsJson, record.required ?? 0, record.display_order ?? 0, record.is_active ?? 1, id);
+    `).run(record.label, record.field_type, optionsJson, record.required ?? 0, record.sort_order ?? 0, record.group_label ?? '', record.show_on_print ?? 0, id);
   } else {
     dbi.prepare(`
-      INSERT INTO custom_field_definitions (id, company_id, entity_type, field_key, field_label, field_type, options_json, required, display_order, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, record.company_id, record.entity_type, record.field_key, record.field_label, record.field_type, optionsJson, record.required ?? 0, record.display_order ?? 0, record.is_active ?? 1);
+      INSERT INTO custom_field_definitions (id, company_id, entity_type, key, label, field_type, options_json, required, sort_order, group_label, show_on_print)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, record.company_id, record.entity_type, record.key.trim(), record.label, record.field_type, optionsJson, record.required ?? 0, record.sort_order ?? 0, record.group_label ?? '', record.show_on_print ?? 0);
   }
   return dbi.prepare('SELECT * FROM custom_field_definitions WHERE id = ?').get(id) as CustomFieldDefinition;
 }
 
 export function deleteCustomField(id: string): boolean {
   const dbi = db.getDb();
-  // Soft-delete by toggling is_active = 0 (preserves any custom_fields JSON in entity records)
-  const r = dbi.prepare(`UPDATE custom_field_definitions SET is_active = 0, updated_at = datetime('now') WHERE id = ?`).run(id);
+  // Soft-delete via deleted_at (preserves any custom_field_values rows that reference the key)
+  const r = dbi.prepare(`UPDATE custom_field_definitions SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`).run(id);
   return r.changes > 0;
 }
 
