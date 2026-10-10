@@ -2,20 +2,21 @@ import { ipcMain, dialog, shell, app } from 'electron';
 import { v4 as uuid } from 'uuid';
 import Anthropic from '@anthropic-ai/sdk';
 import * as db from '../database';
-import { TABLES_WITHOUT_COMPANY_ID } from '../database/tableConfig';
 import crypto from 'crypto';
 import { syncPush } from '../sync';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { generateInvoicePDF, buildInvoiceHTML } from '../services/pdf-generator';
 import { copyIntoDocumentsStore } from '../services/document-storage';
 import { SCHEDULE_C_BY_CATEGORY } from '../services/schedule-c-map';
 import { monthlyDepreciation } from '../services/depreciation';
-import { sendInvoiceEmail } from '../services/email-sender';
 import { registerStripeIpc } from '../integrations/stripe';
 import { registerEntityGraphIpc, recordRelationBidirectional } from '../integrations/entity-graph';
 import { createIpcDeps, SYNC_SERVER } from './core/deps';
+import { registerDbCrudIpc } from './domains/db-crud';
+import { registerAuthCompanyIpc } from './domains/auth-company';
+import { registerAccountsGlIpc } from './domains/accounts-gl';
+import { registerPrintPdfIpc } from './domains/print-pdf';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -26,122 +27,17 @@ import { registerComplianceIpc } from './compliance';
 import { registerPayrollWaveIpc } from './payroll-wave';
 import { processRecurringTemplates, getLastProcessedAt, getRecurringHistory } from '../services/recurring-processor';
 import { runNotificationChecks, getNotificationPreferences, updateNotificationPreferences } from '../services/notification-engine';
-import {
-  openPrintPreview,
-  saveHTMLAsPDF,
-  printHTML,
-  htmlToPDFBuffer,
-  buildPdfFilename,
-  openPathInOS,
-  revealInFolder,
-  type PDFOptions,
-} from '../services/print-preview';
-import { promises as fsp } from 'fs';
+import { openPathInOS } from '../services/print-preview';
 import { evaluateRules, mergePatches, rulesAppliedSummary } from '../rules';
 import { calculateFullPayroll } from '../services/TaxCalculationEngine';
 import { bootstrapBuiltinCommands } from '../services/CommandRegistry';
 import { eventBus } from '../services/EventBus';
 import { workflowEngine } from '../services/WorkflowEngine';
-import { reindexEntity, removeFromIndex } from '../services/intelligence/searchIndex';
-import { INDEXED_TABLES } from '../services/intelligence/indexConfig';
-import http from 'http';
-import https from 'https';
 
 
 // ─── B3 AI Copilot — active stream registry ──────────────
 const copilotStreams = new Map<string, AbortController>();
 
-
-// Coalesce rapid re-index calls per (table,id) onto a microtask-ish timer so
-// bulk writes don't thrash FTS. Best-effort; never throws into the write path.
-const reindexTimers = new Map<string, NodeJS.Timeout>();
-function scheduleReindex(table: string, id: string, op: 'upsert' | 'delete'): void {
-  if (!INDEXED_TABLES.has(table)) return;
-  const key = `${table}:${id}`;
-  const existing = reindexTimers.get(key);
-  if (existing) clearTimeout(existing);
-  reindexTimers.set(key, setTimeout(() => {
-    reindexTimers.delete(key);
-    try {
-      const d = db.getDb();
-      if (op === 'delete') removeFromIndex(d, table, id);
-      else reindexEntity(d, table, id);
-    } catch (e) { console.warn('[search-index] reindex failed', table, id, e); }
-  }, 150));
-}
-
-
-// Mirror of the server's sanitizeEmail (server/src/routes/backup.ts). Both
-// sides must HMAC over the identical string, so this logic must stay in lockstep
-// with the server: same whitelist, same 100-char cap.
-function sanitizeBackupEmail(email: string): string {
-  return (email || '').replace(/[^a-zA-Z0-9@._-]/g, '_').slice(0, 100);
-}
-
-// Helper: download backup from server
-function downloadBackup(email: string): Promise<Buffer | null> {
-  return new Promise((resolve) => {
-    const url = new URL(`${SYNC_SERVER}/api/backup/download/${encodeURIComponent(email)}`);
-    const isHttps = url.protocol === 'https:';
-    const transport = isHttps ? https : http;
-
-    // The server authenticates download/status by HMAC over the sanitized
-    // email. We sign the raw email; the server applies the same sanitize +
-    // HMAC and compares. Mirror the upload secret-resolution exactly.
-    const secret = process.env.SYNC_SECRET || 'bap-sync-default';
-    const signature = crypto.createHmac('sha256', secret).update(sanitizeBackupEmail(email)).digest('hex');
-
-    const req = transport.request({
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname,
-      method: 'GET',
-      headers: { 'x-bap-signature': signature },
-    }, (res) => {
-      if (res.statusCode !== 200) { resolve(null); return; }
-      const ct = res.headers['content-type'] || '';
-      if (ct.includes('text/html') || ct.includes('text/plain')) { res.resume(); resolve(null); return; }
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => {
-        const buf = Buffer.concat(chunks);
-        // Validate SQLite magic header before accepting
-        const SQLITE_MAGIC = Buffer.from('SQLite format 3\0');
-        if (buf.length < 16 || !buf.slice(0, 16).equals(SQLITE_MAGIC)) { resolve(null); return; }
-        resolve(buf);
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.end();
-  });
-}
-
-// Helper: register user on server (fire-and-forget)
-function serverRegister(email: string, password: string, displayName: string, userId: string) {
-  try {
-    const payload = JSON.stringify({ email, password, displayName, userId });
-    const url = new URL(`${SYNC_SERVER}/api/auth/register`);
-    const isHttps = url.protocol === 'https:';
-    const transport = isHttps ? https : http;
-
-    const req = transport.request({
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-    }, (res) => {
-      let body = '';
-      res.on('data', (c: string) => body += c);
-      res.on('end', () => console.log('Server register:', res.statusCode, body));
-    });
-    req.on('error', (err) => console.warn('Server register failed:', err.message));
-    req.write(payload);
-    req.end();
-  } catch (err) {
-    console.warn('Server register error:', err);
-  }
-}
 
 // ─── CSV Helpers (shared by import/export handlers) ──────
 function escapeCSVField(val: any): string {
@@ -210,148 +106,6 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
   return { headers, rows };
 }
 
-// ─── Password Hashing (pbkdf2 — no external deps) ──────
-function hashPassword(password: string, salt?: string): { hash: string; salt: string } {
-  const s = salt || crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(password, s, 100000, 64, 'sha512').toString('hex');
-  return { hash: `${s}:${hash}`, salt: s };
-}
-
-function verifyPassword(password: string, stored: string): boolean {
-  const [salt, hash] = stored.split(':');
-  if (!salt || !hash) return false;
-  const check = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
-  return hash === check;
-}
-
-// ─── Category Seed Definitions ──────────────────────────
-const DEFAULT_CATEGORIES: Array<{ name: string; type: 'expense' | 'income'; color: string; icon: string; description: string }> = [
-  // Office & Administration
-  { name: 'Office Supplies',                type: 'expense', color: '#6366f1', icon: '📎', description: 'Pens, paper, binders, and general office supplies' },
-  { name: 'Postage & Shipping',             type: 'expense', color: '#6366f1', icon: '📦', description: 'Stamps, courier services, and shipping costs' },
-  { name: 'Printing & Copying',             type: 'expense', color: '#6366f1', icon: '🖨️', description: 'Print and photocopy expenses' },
-  { name: 'Software Subscriptions',         type: 'expense', color: '#6366f1', icon: '💻', description: 'SaaS tools, apps, and software licenses' },
-  { name: 'Computer Equipment',             type: 'expense', color: '#6366f1', icon: '🖥️', description: 'Laptops, desktops, peripherals, and accessories' },
-  { name: 'Office Furniture',               type: 'expense', color: '#6366f1', icon: '🪑', description: 'Desks, chairs, shelving, and office fixtures' },
-  { name: 'Phone & Internet',               type: 'expense', color: '#6366f1', icon: '📱', description: 'Business phone lines and internet service' },
-  { name: 'Web Hosting',                    type: 'expense', color: '#6366f1', icon: '🌐', description: 'Domain registration and web hosting fees' },
-  { name: 'Cloud Services',                 type: 'expense', color: '#6366f1', icon: '☁️', description: 'Cloud storage, AWS, Azure, GCP, and similar services' },
-  { name: 'IT Support',                     type: 'expense', color: '#6366f1', icon: '🔧', description: 'Technical support and managed IT services' },
-  // Travel & Transport
-  { name: 'Airfare',                        type: 'expense', color: '#f59e0b', icon: '✈️', description: 'Business flights and airline tickets' },
-  { name: 'Hotel & Lodging',                type: 'expense', color: '#f59e0b', icon: '🏨', description: 'Hotel stays and temporary accommodations' },
-  { name: 'Car Rental',                     type: 'expense', color: '#f59e0b', icon: '🚗', description: 'Rental vehicles for business travel' },
-  { name: 'Mileage & Fuel',                 type: 'expense', color: '#f59e0b', icon: '⛽', description: 'Personal vehicle mileage reimbursement and fuel costs' },
-  { name: 'Parking & Tolls',                type: 'expense', color: '#f59e0b', icon: '🅿️', description: 'Parking fees and toll charges' },
-  { name: 'Meals & Entertainment (Travel)', type: 'expense', color: '#f59e0b', icon: '🍽️', description: 'Meals during business travel' },
-  { name: 'Public Transit',                 type: 'expense', color: '#f59e0b', icon: '🚇', description: 'Subway, bus, and public transportation' },
-  { name: 'Rideshare & Taxi',               type: 'expense', color: '#f59e0b', icon: '🚕', description: 'Uber, Lyft, and taxi fares' },
-  // Marketing & Sales
-  { name: 'Advertising',                    type: 'expense', color: '#ec4899', icon: '📣', description: 'General advertising and promotional campaigns' },
-  { name: 'Social Media Ads',               type: 'expense', color: '#ec4899', icon: '📱', description: 'Facebook, Instagram, LinkedIn, and other paid social ads' },
-  { name: 'Print Materials',                type: 'expense', color: '#ec4899', icon: '🗞️', description: 'Brochures, flyers, business cards, and print ads' },
-  { name: 'Trade Shows & Events',           type: 'expense', color: '#ec4899', icon: '🎪', description: 'Conference fees, booth costs, and event sponsorships' },
-  { name: 'Sponsorships',                   type: 'expense', color: '#ec4899', icon: '🤝', description: 'Brand sponsorships and partnerships' },
-  { name: 'PR & Communications',            type: 'expense', color: '#ec4899', icon: '📰', description: 'Public relations, press releases, and media outreach' },
-  { name: 'Market Research',                type: 'expense', color: '#ec4899', icon: '🔍', description: 'Surveys, research services, and competitive analysis' },
-  { name: 'Photography & Video',            type: 'expense', color: '#ec4899', icon: '📷', description: 'Professional photography and video production' },
-  // Professional Services
-  { name: 'Accounting & Bookkeeping',       type: 'expense', color: '#14b8a6', icon: '📊', description: 'CPA, bookkeeper, and accounting services' },
-  { name: 'Legal Fees',                     type: 'expense', color: '#14b8a6', icon: '⚖️', description: 'Attorney fees, contracts, and legal advice' },
-  { name: 'Consulting',                     type: 'expense', color: '#14b8a6', icon: '💼', description: 'Business consultants and advisory services' },
-  { name: 'Recruiting & HR',                type: 'expense', color: '#14b8a6', icon: '👥', description: 'Staffing agencies and HR consulting' },
-  { name: 'Training & Education',           type: 'expense', color: '#14b8a6', icon: '📚', description: 'Employee training, courses, and workshops' },
-  { name: 'Certification & Licensing',      type: 'expense', color: '#14b8a6', icon: '📜', description: 'Professional certifications and license fees' },
-  // Facilities
-  { name: 'Rent & Lease',                   type: 'expense', color: '#8b5cf6', icon: '🏢', description: 'Office, retail, or warehouse rent and lease payments' },
-  { name: 'Utilities (Electric)',           type: 'expense', color: '#8b5cf6', icon: '⚡', description: 'Electricity bills' },
-  { name: 'Utilities (Gas)',                type: 'expense', color: '#8b5cf6', icon: '🔥', description: 'Natural gas bills' },
-  { name: 'Utilities (Water)',              type: 'expense', color: '#8b5cf6', icon: '💧', description: 'Water and sewer bills' },
-  { name: 'Janitorial & Cleaning',          type: 'expense', color: '#8b5cf6', icon: '🧹', description: 'Cleaning services and janitorial supplies' },
-  { name: 'Repairs & Maintenance',          type: 'expense', color: '#8b5cf6', icon: '🔨', description: 'Building and equipment repairs' },
-  { name: 'Security',                       type: 'expense', color: '#8b5cf6', icon: '🔒', description: 'Security systems, guards, and monitoring services' },
-  { name: 'Property Insurance',             type: 'expense', color: '#8b5cf6', icon: '🏠', description: 'Building and property insurance premiums' },
-  // Payroll & HR
-  { name: 'Salaries & Wages',               type: 'expense', color: '#0ea5e9', icon: '💰', description: 'Regular employee salaries and hourly wages' },
-  { name: 'Contract Labor',                 type: 'expense', color: '#0ea5e9', icon: '📋', description: 'Payments to independent contractors and freelancers' },
-  { name: 'Employee Benefits',              type: 'expense', color: '#0ea5e9', icon: '🎁', description: 'Non-insurance employee benefits and perks' },
-  { name: 'Health Insurance',               type: 'expense', color: '#0ea5e9', icon: '🏥', description: 'Employer-paid health, dental, and vision premiums' },
-  { name: 'Retirement Contributions',       type: 'expense', color: '#0ea5e9', icon: '🏦', description: '401(k) and pension employer contributions' },
-  { name: 'Payroll Taxes',                  type: 'expense', color: '#0ea5e9', icon: '🧾', description: 'Employer-side FICA, FUTA, and SUTA taxes' },
-  { name: 'Workers Compensation',           type: 'expense', color: '#0ea5e9', icon: '🦺', description: 'Workers compensation insurance premiums' },
-  // Finance & Banking
-  { name: 'Bank Fees',                      type: 'expense', color: '#ef4444', icon: '🏦', description: 'Monthly maintenance fees and bank service charges' },
-  { name: 'Credit Card Fees',               type: 'expense', color: '#ef4444', icon: '💳', description: 'Merchant processing and credit card transaction fees' },
-  { name: 'Loan Interest',                  type: 'expense', color: '#ef4444', icon: '📈', description: 'Interest paid on business loans and lines of credit' },
-  { name: 'Late Fees',                      type: 'expense', color: '#ef4444', icon: '⏰', description: 'Late payment penalties and fees' },
-  { name: 'Wire Transfer Fees',             type: 'expense', color: '#ef4444', icon: '🔄', description: 'Domestic and international wire transfer charges' },
-  { name: 'Currency Exchange',              type: 'expense', color: '#ef4444', icon: '💱', description: 'Foreign currency exchange fees and losses' },
-  // Cost of Goods
-  { name: 'Inventory Purchases',            type: 'expense', color: '#f97316', icon: '📦', description: 'Finished goods purchased for resale' },
-  { name: 'Raw Materials',                  type: 'expense', color: '#f97316', icon: '🪨', description: 'Raw materials used in production' },
-  { name: 'Packaging Materials',            type: 'expense', color: '#f97316', icon: '📫', description: 'Boxes, bags, and packaging supplies' },
-  { name: 'Freight & Delivery',             type: 'expense', color: '#f97316', icon: '🚚', description: 'Shipping and freight costs for inbound goods' },
-  { name: 'Customs & Duties',               type: 'expense', color: '#f97316', icon: '🛃', description: 'Import duties, tariffs, and customs fees' },
-  // Insurance
-  { name: 'General Liability',              type: 'expense', color: '#64748b', icon: '🛡️', description: 'General liability insurance premiums' },
-  { name: 'Professional Liability (E&O)',   type: 'expense', color: '#64748b', icon: '📑', description: 'Errors and omissions insurance' },
-  { name: 'Commercial Auto',                type: 'expense', color: '#64748b', icon: '🚗', description: 'Business vehicle insurance premiums' },
-  { name: 'Directors & Officers',           type: 'expense', color: '#64748b', icon: '👔', description: 'D&O liability insurance' },
-  // Taxes & Licenses
-  { name: 'Business Licenses',              type: 'expense', color: '#78716c', icon: '📋', description: 'Business operating licenses and permits' },
-  { name: 'State Taxes',                    type: 'expense', color: '#78716c', icon: '🏛️', description: 'State income and franchise taxes' },
-  { name: 'Local Taxes',                    type: 'expense', color: '#78716c', icon: '🏙️', description: 'City, county, and local business taxes' },
-  { name: 'Sales Tax Paid',                 type: 'expense', color: '#78716c', icon: '🧾', description: 'Sales taxes remitted to tax authorities' },
-  { name: 'Import Duties',                  type: 'expense', color: '#78716c', icon: '🛂', description: 'Duties on imported goods' },
-  // Miscellaneous Expense
-  { name: 'Meals & Entertainment',          type: 'expense', color: '#a3a3a3', icon: '🍽️', description: 'Business meals and client entertainment' },
-  { name: 'Subscriptions & Dues',           type: 'expense', color: '#a3a3a3', icon: '📰', description: 'Industry memberships, publications, and dues' },
-  { name: 'Charitable Donations',           type: 'expense', color: '#a3a3a3', icon: '❤️', description: 'Charitable contributions from the business' },
-  { name: 'Depreciation Expense',           type: 'expense', color: '#a3a3a3', icon: '📉', description: 'Scheduled depreciation on fixed assets' },
-  { name: 'Amortization',                   type: 'expense', color: '#a3a3a3', icon: '📊', description: 'Amortization of intangible assets' },
-  { name: 'Bad Debt Expense',               type: 'expense', color: '#a3a3a3', icon: '💸', description: 'Uncollectable accounts written off' },
-  { name: 'Miscellaneous Expense',          type: 'expense', color: '#a3a3a3', icon: '📁', description: 'Other business expenses not classified elsewhere' },
-  // Revenue
-  { name: 'Product Sales',                  type: 'income',  color: '#22c55e', icon: '🛒', description: 'Revenue from selling physical or digital products' },
-  { name: 'Service Revenue',                type: 'income',  color: '#22c55e', icon: '🔧', description: 'Revenue from rendering services' },
-  { name: 'Consulting Revenue',             type: 'income',  color: '#22c55e', icon: '💼', description: 'Consulting and advisory fees earned' },
-  { name: 'Subscription Revenue',           type: 'income',  color: '#22c55e', icon: '🔄', description: 'Recurring subscription or membership income' },
-  { name: 'Licensing Revenue',              type: 'income',  color: '#22c55e', icon: '📜', description: 'Income from licensing intellectual property' },
-  { name: 'Commission Income',              type: 'income',  color: '#22c55e', icon: '💰', description: 'Commissions earned on sales or referrals' },
-  { name: 'Royalty Income',                 type: 'income',  color: '#22c55e', icon: '👑', description: 'Royalties received from IP or content licensing' },
-  // Other Income
-  { name: 'Interest Income',                type: 'income',  color: '#4ade80', icon: '📈', description: 'Interest earned on deposits and investments' },
-  { name: 'Dividend Income',                type: 'income',  color: '#4ade80', icon: '💵', description: 'Dividends received from investments' },
-  { name: 'Rental Income',                  type: 'income',  color: '#4ade80', icon: '🏠', description: 'Income from renting property or equipment' },
-  { name: 'Gain on Asset Sale',             type: 'income',  color: '#4ade80', icon: '📊', description: 'Profit from selling business assets' },
-  { name: 'Grant Income',                   type: 'income',  color: '#4ade80', icon: '🏆', description: 'Government or foundation grant awards' },
-  { name: 'Refunds Received',               type: 'income',  color: '#4ade80', icon: '↩️', description: 'Vendor refunds and rebates received' },
-  { name: 'Other Income',                   type: 'income',  color: '#4ade80', icon: '➕', description: 'Miscellaneous income not classified elsewhere' },
-];
-
-function seedDefaultCategories(companyId: string): { seeded: boolean; count: number } {
-  const dbInstance = db.getDb();
-  const existing = dbInstance.prepare('SELECT COUNT(*) as cnt FROM categories WHERE company_id = ?').get(companyId) as { cnt: number };
-  if (existing && existing.cnt > 0) {
-    return { seeded: false, count: existing.cnt };
-  }
-  const insertStmt = dbInstance.prepare(`
-    INSERT OR IGNORE INTO categories (id, company_id, name, type, color, icon, description, schedule_c_line, is_deductible, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-  `);
-  const insertMany = dbInstance.transaction((rows: typeof DEFAULT_CATEGORIES) => {
-    for (const row of rows) {
-      const sc = SCHEDULE_C_BY_CATEGORY[row.name];
-      insertStmt.run(
-        uuid(), companyId, row.name, row.type, row.color, row.icon, row.description,
-        sc ? sc.line : '', sc ? (sc.deductible ? 1 : 0) : 1,
-      );
-    }
-  });
-  insertMany(DEFAULT_CATEGORIES);
-  return { seeded: true, count: DEFAULT_CATEGORIES.length };
-}
-
 // Backfill Schedule C line + deductibility onto EXISTING categories (companies
 // seeded before the canonical mapping existed). Matches by exact category name
 // and only fills rows whose schedule_c_line is still blank, so it never
@@ -374,16 +128,6 @@ function backfillCategoryScheduleC(companyId: string): { updated: number } {
 }
 
 
-// DATE: today's date as YYYY-MM-DD in the user's local timezone. Use this
-// instead of new Date().toISOString().slice(0,10), which UTC-shifts the day
-// for any local time outside the [00:00, 24:00 - tzoffset] window. Affects
-// JE posting dates, settlement accept dates, and any "now" we persist.
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-
 // CONCURRENCY: ipcMain.handle throws if the same channel is registered twice.
 // Without this guard, calling registerIpcHandlers a second time (e.g. after a
 // restore-from-backup reinit, or if main.ts startup runs twice) would crash
@@ -397,9 +141,10 @@ export function registerIpcHandlers(): void {
 
   const deps = createIpcDeps();
   const {
-    scheduleAutoBackup, cancelAutoBackup, getLastLoginEmail, setLastLoginEmail, findClosedPeriod, postJournalEntry,
-    validateTable, cleanupReferencesBeforeDelete, isRawQueryAllowed, buildInvoiceMetadata,
-    PROTECTED_TABLES,
+    scheduleAutoBackup, getLastLoginEmail, findClosedPeriod, postJournalEntry,
+    validateTable, cleanupReferencesBeforeDelete,
+    scheduleReindex, logDebtAudit, seedDefaultCategories, localToday,
+    ensureDefaultEmailTemplates, resolveTemplateTokens, buildTemplateContext,
   } = deps;
 
   // Advanced System (2026-04-28) — register built-in commands for Cmd+K palette
@@ -419,194 +164,7 @@ export function registerIpcHandlers(): void {
 
   // ─── Input Validation Helpers ──────────────────────────
 
-  // ─── Generic CRUD ────────────────────────────────────
-  ipcMain.handle('db:query', (_event, { table, filters, sort, limit, offset }) => {
-    if (!validateTable(table)) return [];
-    return db.queryAll(table, filters, sort, limit, offset);
-  });
-
-  ipcMain.handle('db:get', (_event, { table, id }) => {
-    if (!validateTable(table)) return null;
-    return db.getById(table, id);
-  });
-
-  // Tables that do NOT have a company_id column (child/junction tables)
-  // WARNING: only list tables whose schema truly has no company_id column.
-  // payments and categories both have company_id NOT NULL — never put them here.
-  // SCHEMA: imported from tableConfig.ts for single source of truth.
-  const tablesWithoutCompanyId = TABLES_WITHOUT_COMPANY_ID;
-
-  ipcMain.handle('db:create', (_event, { table, data }) => {
-    if (!validateTable(table)) return { error: 'Invalid table' };
-    if (PROTECTED_TABLES.has(table)) return { error: `Direct writes to ${table} are not allowed — use dedicated handler` };
-    try {
-      const companyId = db.getCurrentCompanyId();
-      // INTEGRITY: ignore any caller-supplied `id`. The renderer should never
-      // pick primary keys — at best it hands us a stale uuid, at worst a
-      // collision with an existing row. db.create() generates a uuid when id
-      // is absent.
-      if (data && typeof data === 'object' && 'id' in data) {
-        delete (data as any).id;
-      }
-      const payload = tablesWithoutCompanyId.has(table)
-        ? { ...data }
-        : { ...data, company_id: companyId };
-      // Apply rules for invoices
-      if (table === 'invoices' && payload.company_id) {
-        const pricingResults = evaluateRules({ category: 'pricing', record: payload, company_id: String(payload.company_id), db: db.getDb() });
-        const taxResults     = evaluateRules({ category: 'tax',     record: payload, company_id: String(payload.company_id), db: db.getDb() });
-        Object.assign(payload, mergePatches([...pricingResults, ...taxResults]));
-        payload.rules_applied = rulesAppliedSummary([...pricingResults, ...taxResults]);
-      }
-      // Apply tax rules for expenses
-      if (table === 'expenses' && payload.company_id) {
-        const taxResults = evaluateRules({ category: 'tax', record: payload, company_id: String(payload.company_id), db: db.getDb() });
-        Object.assign(payload, mergePatches(taxResults));
-        payload.rules_applied = rulesAppliedSummary(taxResults);
-      }
-      // Apply approval rules for invoices, expenses, bills
-      if ((table === 'invoices' || table === 'expenses' || table === 'bills') && payload.company_id) {
-        const approvalResults = evaluateRules({ category: 'approval', record: { ...payload, _type: table }, company_id: String(payload.company_id), db: db.getDb() });
-        if (approvalResults.some(r => r.matched)) payload.status = 'pending_approval';
-      }
-      const record = db.create(table, payload);
-      if (companyId) db.logAudit(companyId, table, record.id, 'create');
-      scheduleReindex(table, record.id as string, 'upsert');
-      // Debt child table audit
-      const DEBT_CHILD_AUDIT: Record<string, string> = {
-        debt_payments: 'payment_recorded',
-        debt_communications: 'communication_logged',
-        debt_disputes: 'dispute_filed',
-      };
-      if (DEBT_CHILD_AUDIT[table] && (data.debt_id || payload.debt_id)) {
-        logDebtAudit(data.debt_id || payload.debt_id, DEBT_CHILD_AUDIT[table], table, '', record?.id || '');
-      }
-      syncPush({ table, operation: 'create', id: record.id as string, data: payload as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
-      scheduleAutoBackup();
-      // Reactive engine: emit semantic events for known table types so workflows can react.
-      try {
-        if (companyId && record?.id) {
-          const eventTypeMap: Record<string, string> = {
-            clients: 'client.created',
-            vendors: 'vendor.created',
-            time_entries: 'time.entry_created',
-            quotes: 'quote.created',
-            debts: 'debt.created',
-            projects: 'project.created',
-            budgets: 'budget.created',
-            bills: 'bill.created',
-            fixed_assets: 'asset.acquired',
-          };
-          const evtType = eventTypeMap[table];
-          if (evtType) {
-            eventBus.emit({
-              type: evtType as any,
-              companyId,
-              entityType: table,
-              entityId: record.id as string,
-              data: payload as Record<string, any>,
-            }).catch(() => {});
-          }
-        }
-      } catch { /* fire-and-forget */ }
-      return record;
-    } catch (err) {
-      console.error(`db:create [${table}] failed:`, err);
-      return { error: err instanceof Error ? err.message : String(err) };
-    }
-  });
-
-  ipcMain.handle('db:update', (_event, { table, id, data }) => {
-    if (!validateTable(table)) return { error: 'Invalid table' };
-    if (PROTECTED_TABLES.has(table)) return { error: `Direct writes to ${table} are not allowed — use dedicated handler` };
-    // INTEGRITY: audit_log / debt_audit_log / debt_compliance_log are append-only.
-    // Mutating audit rows defeats the purpose of having an audit trail.
-    if (table === 'audit_log' || table === 'debt_audit_log' || table === 'debt_compliance_log') {
-      return { error: `${table} is append-only` };
-    }
-    try {
-      // INTEGRITY: never let the renderer rewrite `id` or `created_at` on update.
-      // Both are sometimes hydrated into form state and would silently mutate
-      // primary keys / row provenance if echoed back through the patch payload.
-      if (data && typeof data === 'object') {
-        delete (data as any).id;
-        delete (data as any).created_at;
-      }
-      const old = db.getById(table, id);
-      const record = db.update(table, id, data);
-      const companyId = db.getCurrentCompanyId();
-      if (companyId && old) {
-        const changes: Record<string, any> = {};
-        for (const key of Object.keys(data)) {
-          if (old[key] !== record[key]) {
-            changes[key] = { old: old[key], new: record[key] };
-          }
-        }
-        db.logAudit(companyId, table, id, 'update', changes);
-      }
-      scheduleReindex(table, id, 'upsert');
-      // Debt audit: log each changed field
-      if (table === 'debts' && id && old) {
-        try {
-          const newRow = db.getById('debts', id) as any;
-          if (newRow) {
-            for (const key of Object.keys(data)) {
-              const oldVal = String((old as any)[key] ?? '');
-              const newVal = String(newRow[key] ?? '');
-              if (oldVal !== newVal) {
-                logDebtAudit(id, 'field_edit', key, oldVal, newVal);
-              }
-            }
-          }
-        } catch (_) {}
-      }
-      syncPush({ table, operation: 'update', id, data: { id, ...data } as Record<string, unknown>, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
-      scheduleAutoBackup();
-      return record;
-    } catch (err) {
-      console.error(`db:update [${table}:${id}] failed:`, err);
-      return { error: err instanceof Error ? err.message : String(err) };
-    }
-  });
-
-
-  ipcMain.handle('db:delete', (_event, { table, id }) => {
-    if (!validateTable(table)) return { error: 'Invalid table' };
-    if (PROTECTED_TABLES.has(table)) return { error: `Direct deletes from ${table} are not allowed — use dedicated handler` };
-    // SECURITY: audit_log must be append-only. Without this guard the renderer
-    // can wipe its own breadcrumb trail (delete-me-then-delete-evidence).
-    if (table === 'audit_log' || table === 'debt_audit_log' || table === 'debt_compliance_log') {
-      return { error: `${table} is append-only` };
-    }
-    try {
-      // Debt child table audit — read debt_id before deletion
-      const DEBT_AUDIT_TABLES = ['debt_payments', 'debt_communications', 'debt_evidence', 'debt_legal_actions',
-        'debt_settlements', 'debt_disputes', 'debt_contacts', 'debt_promises', 'debt_notes'];
-      if (DEBT_AUDIT_TABLES.includes(table)) {
-        try {
-          const row = db.getById(table, id) as any;
-          if (row?.debt_id) logDebtAudit(row.debt_id, 'record_deleted', table, id, '');
-        } catch (_) {}
-      }
-      const companyId = db.getCurrentCompanyId();
-      if (companyId) db.logAudit(companyId, table, id, 'delete');
-      // P1.13: skip FK cleanup for soft-deletable tables — the row
-      // stays physically present so FK references remain valid.
-      // Cleanup only happens when the auto-purge cron physically
-      // removes the row 30 days later (via removeHard), at which
-      // point the same logic runs.
-      if (!db.SOFT_DELETE_TABLES.has(table)) {
-        cleanupReferencesBeforeDelete(table, id);
-      }
-      db.remove(table, id);
-      scheduleReindex(table, id, 'delete');
-      syncPush({ table, operation: 'delete', id, data: { id }, companyId: companyId ?? '', timestamp: Date.now() }).catch(() => {});
-      scheduleAutoBackup();
-    } catch (err) {
-      console.error(`db:delete [${table}:${id}] failed:`, err);
-      return { error: err instanceof Error ? err.message : String(err) };
-    }
-  });
+  registerDbCrudIpc(ipcMain, deps);
 
   // ─── Vendor delete (dedicated, reference-safe) ───────────────
   // The generic db:delete soft-deletes vendors but SKIPS reference
@@ -625,7 +183,7 @@ export function registerIpcHandlers(): void {
       if (!id) return { error: 'No vendor id' };
       const dbi = db.getDb();
       const companyId = db.getCurrentCompanyId();
-      const vendor = db.getById('vendors', id) as any;
+      const vendor = db.getById('vendors', id);
       if (!vendor) return { error: 'Vendor not found' };
 
       // Count references for the response (best-effort per table).
@@ -732,7 +290,7 @@ export function registerIpcHandlers(): void {
     try {
       if (!id) return { error: 'No asset id' };
       const companyId = db.getCurrentCompanyId();
-      const asset = db.getById('fixed_assets', id) as any;
+      const asset = db.getById('fixed_assets', id);
       if (!asset) return { error: 'Asset not found' };
 
       // Count depreciation rows that will be removed (for an honest UI message).
@@ -765,71 +323,6 @@ export function registerIpcHandlers(): void {
   // Read-side counterpart to db.remove() now that supported tables
   // soft-delete. The Trash UI calls these to list / restore / purge
   // records the user has deleted within the 30-day retention window.
-
-  ipcMain.handle('trash:list', () => {
-    try {
-      const companyId = db.getCurrentCompanyId();
-      if (!companyId) return { items: {} };
-      const items = db.listTrash(companyId, 100);
-      return { items };
-    } catch (err: any) {
-      return { error: err?.message || 'Failed to list trash' };
-    }
-  });
-
-  ipcMain.handle('trash:restore', (_event, { table, id }: { table: string; id: string }) => {
-    try {
-      if (!db.SOFT_DELETE_TABLES.has(table)) return { error: `Table ${table} does not support restore` };
-      const ok = db.restoreFromTrash(table, id);
-      if (!ok) return { error: 'Record not in trash or already restored' };
-      const companyId = db.getCurrentCompanyId();
-      if (companyId) db.logAudit(companyId, table, id, 'trash_restore');
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err: any) {
-      return { error: err?.message || 'Restore failed' };
-    }
-  });
-
-  ipcMain.handle('trash:purge', (_event, { table, id }: { table: string; id: string }) => {
-    try {
-      if (!db.SOFT_DELETE_TABLES.has(table)) return { error: `Table ${table} does not support purge` };
-      // Run FK cleanup now since this is a true physical delete.
-      try { cleanupReferencesBeforeDelete(table, id); } catch (_) { /* best-effort */ }
-      db.removeHard(table, id);
-      const companyId = db.getCurrentCompanyId();
-      if (companyId) db.logAudit(companyId, table, id, 'trash_purge');
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err: any) {
-      return { error: err?.message || 'Purge failed' };
-    }
-  });
-
-  ipcMain.handle('trash:empty', () => {
-    try {
-      const companyId = db.getCurrentCompanyId();
-      if (!companyId) return { ok: false, error: 'No active company' };
-      // Empty Trash purges ALL soft-deleted records for the company,
-      // regardless of age. (Auto-purge cron handles age-based culling.)
-      let purged = 0;
-      for (const table of db.SOFT_DELETE_TABLES) {
-        const rows = db.getDb().prepare(
-          `SELECT id FROM ${table} WHERE company_id = ? AND deleted_at IS NOT NULL`
-        ).all(companyId) as Array<{ id: string }>;
-        for (const r of rows) {
-          try { cleanupReferencesBeforeDelete(table, r.id); } catch (_) {}
-          db.removeHard(table, r.id);
-          purged++;
-        }
-      }
-      if (companyId) db.logAudit(companyId, 'trash', 'empty', 'trash_empty', { purged });
-      scheduleAutoBackup();
-      return { ok: true, purged };
-    } catch (err: any) {
-      return { ok: false, error: err?.message || 'Empty trash failed' };
-    }
-  });
 
   // ─── Orphan Detection ─────────────────────────────
   // INTEGRITY: scans for rows whose parent has been deleted out from under
@@ -954,25 +447,7 @@ export function registerIpcHandlers(): void {
       return { error: err?.message };
     }
   });
-  // One-click month-end close (dry-run preview + real run).
-  ipcMain.handle('close:preview-month', (_e, { year, month }: { year: number; month: number }) => {
-    try {
-      const { getMonthEndPreview } = require('../services/month-end-close');
-      return getMonthEndPreview(db.getCurrentCompanyId(), year, month);
-    } catch (err: any) {
-      return { error: err?.message };
-    }
-  });
-  ipcMain.handle('close:run-month', (_e, { year, month }: { year: number; month: number }) => {
-    try {
-      const { runMonthEndClose } = require('../services/month-end-close');
-      const r = runMonthEndClose({ companyId: db.getCurrentCompanyId(), year, month, dryRun: false });
-      try { scheduleAutoBackup(); } catch { /* non-fatal */ }
-      return r;
-    } catch (err: any) {
-      return { error: err?.message };
-    }
-  });
+  registerAccountsGlIpc(ipcMain, deps);
   // Payroll integrity guard: scan all runs / validate one before posting.
   ipcMain.handle('payroll:scan-integrity', () => {
     try {
@@ -1094,79 +569,6 @@ export function registerIpcHandlers(): void {
   // of truth.
 
 
-  ipcMain.handle('period:list', () => {
-    try {
-      const cid = db.getCurrentCompanyId();
-      if (!cid) return [];
-      return db.getDb().prepare(
-        "SELECT * FROM closed_periods WHERE company_id = ? ORDER BY period_end DESC"
-      ).all(cid);
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('period:is-closed', (_event, { date }: { date: string }) => {
-    const cid = db.getCurrentCompanyId();
-    if (!cid || !date) return { is_closed: false };
-    const period = findClosedPeriod(cid, date);
-    return { is_closed: !!period, period };
-  });
-
-  ipcMain.handle('period:close', (_event, payload: { period_start: string; period_end: string; reason?: string; closed_by?: string }) => {
-    try {
-      const cid = db.getCurrentCompanyId();
-      if (!cid) return { error: 'No active company' };
-      if (!payload.period_start || !payload.period_end) return { error: 'period_start and period_end are required' };
-      if (payload.period_start > payload.period_end) return { error: 'period_start must be on or before period_end' };
-
-      // Detect overlap with existing active periods.
-      const overlap = db.getDb().prepare(
-        "SELECT id FROM closed_periods WHERE company_id = ? AND is_active = 1 " +
-        "AND NOT (period_end < ? OR period_start > ?) LIMIT 1"
-      ).get(cid, payload.period_start, payload.period_end) as any;
-      if (overlap) return { error: 'Overlaps with an existing closed period' };
-
-      const r = db.create('closed_periods', {
-        company_id: cid,
-        period_start: payload.period_start,
-        period_end: payload.period_end,
-        closed_by: payload.closed_by || '',
-        close_reason: payload.reason || '',
-      });
-      db.logAudit(cid, 'closed_periods', r.id, 'period_close', {
-        period_start: payload.period_start,
-        period_end: payload.period_end,
-        reason: payload.reason || '',
-      });
-      scheduleAutoBackup();
-      return { ok: true, id: r.id };
-    } catch (err: any) {
-      return { error: err?.message };
-    }
-  });
-
-  ipcMain.handle('period:reopen', (_event, payload: { id: string; reason?: string; reopened_by?: string }) => {
-    try {
-      const cid = db.getCurrentCompanyId();
-      if (!cid) return { error: 'No active company' };
-      const period = db.getById('closed_periods', payload.id) as any;
-      if (!period || period.company_id !== cid) return { error: 'Period not found' };
-      if (!period.is_active) return { error: 'Period is already reopened' };
-      db.update('closed_periods', payload.id, {
-        is_active: 0,
-        reopened_at: new Date().toISOString(),
-        reopened_by: payload.reopened_by || '',
-        reopen_reason: payload.reason || '',
-      });
-      db.logAudit(cid, 'closed_periods', payload.id, 'period_reopen', {
-        reason: payload.reason || '',
-      });
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err: any) {
-      return { error: err?.message };
-    }
-  });
-
   // Internal helper exposed on the registry so other handlers can
   // route through it. Throws an Error if the date is in a closed
   // period — caller catches and returns as IPC error.
@@ -1256,24 +658,8 @@ export function registerIpcHandlers(): void {
       scheduleAutoBackup(); return r;
     } catch (e: any) { return { error: e?.message }; }
   });
-  // User invitations
-  ipcMain.handle('admin:invitations:create', (_event, { email, role, invited_by, expires_in_days }: any) => {
-    try { const cid = db.getCurrentCompanyId(); if (!cid) return { error: 'No active company' };
-      const { createInvitation } = require('../services/admin-features');
-      const r = createInvitation(cid, email, role, invited_by, expires_in_days);
-      scheduleAutoBackup(); return r;
-    } catch (e: any) { return { error: e?.message }; }
-  });
-  ipcMain.handle('admin:invitations:list', (_event, { include_expired_revoked }: any = {}) => {
-    try { const cid = db.getCurrentCompanyId(); if (!cid) return [];
-      const { listInvitations } = require('../services/admin-features');
-      return listInvitations(cid, !!include_expired_revoked);
-    } catch (e: any) { return { error: e?.message }; }
-  });
-  ipcMain.handle('admin:invitations:revoke', (_event, { id }: any) => {
-    try { const { revokeInvitation } = require('../services/admin-features'); const r = { ok: revokeInvitation(id) }; scheduleAutoBackup(); return r; }
-    catch (e: any) { return { error: e?.message }; }
-  });
+  registerAuthCompanyIpc(ipcMain, deps);
+
   // Password policy
   ipcMain.handle('admin:password-policy:get', () => {
     try { const cid = db.getCurrentCompanyId(); if (!cid) return null;
@@ -3088,294 +2474,7 @@ export function registerIpcHandlers(): void {
     } catch (e: any) { return { error: e?.message }; }
   });
 
-  ipcMain.handle('tax:export-form-pdf', async (_event, payload: { form: '941' | 'schedule-c' | '1099-nec' | 'w2' | 'schedule-se' | 'sales-tax' | 'w3' | '940' | '1099-misc' | '944' | '945' | 'schedule-941b' | '945-a' | '1099-int' | '1099-div' | '1099-r' | '1099-k' | '1099-b' | '1099-g' | '1099-c' | '1099-sa' | 'w2c' | '1096' | 'schedule-1' | 'schedule-2' | 'schedule-3' | 'schedule-a' | 'schedule-b' | 'schedule-d' | '1040-es' | '8995' | '4562' | '8829' | '4797' | '7004' | '4868' | '1065' | '1120' | '1120-s' | 'k-1' | '1041' | '1094-c' | '1095-c' | 'ss-4' | '2553' | '8832' | '8822-b' | 'tc-40' | 'tc-20' | 'tc-20s' | 'tc-65' | 'tc-62m' | 'tc-941'; year: number; quarter?: 1 | 2 | 3 | 4; period_start?: string; period_end?: string; w2_ss_wages?: number; multi_state?: boolean; credit_reduction_state?: boolean; total_deposits?: number; form_945_opts?: any; parent_form?: 'form-944' | 'form-945' | 'form-941'; w2c_corrections?: any[]; w2c_form_index?: number; schedule_opts?: any; es_opts?: any; form_8995_opts?: any; form_4562_opts?: any; form_8829_opts?: any; form_4797_opts?: any; form_7004_opts?: any; form_4868_opts?: any; form_1065_opts?: any; form_1120_opts?: any; form_1120s_opts?: any; form_1041_opts?: any; k1_opts?: any }) => {
-    try {
-      const cid = db.getCurrentCompanyId();
-      if (!cid) return { error: 'No active company' };
-      const company = db.getById('companies', cid) as any || {};
-      const { form941HTML, scheduleCHTML, nec1099HTML, w2HTML, scheduleSEHTML, salesTaxHTML, w3HTML, form940HTML, misc1099HTML, form944HTML, form945HTML, schedule941BHTML, form945AHTML, int1099HTML, div1099HTML, r1099HTML, k1099HTML, b1099HTML, g1099HTML, c1099HTML, sa1099HTML, w2cHTML, form1096HTML, schedule1HTML, schedule2HTML, schedule3HTML, scheduleAHTML, scheduleBHTML, scheduleDHTML, form1040ESHTML, form8995HTML, form4562HTML, form8829HTML, form4797HTML, form7004HTML, form4868HTML, form1065HTML, form1120HTML, form1120SHTML, scheduleK1HTML, form1041HTML, form1094CHTML, form1095CHTML, formSS4HTML, form2553HTML, form8832HTML, form8822BHTML, tc40HTML, tc20HTML, tc20SHTML, tc65HTML, tc62MHTML, tc941HTML } = require('../services/tax-forms/pdf-templates');
-      let html = '';
-      let filename = 'tax-form.pdf';
-
-      if (payload.form === '941') {
-        const { computeForm941 } = require('../services/tax-forms/form-941');
-        const data = computeForm941(cid, payload.year, payload.quarter || 1);
-        html = form941HTML(data);
-        filename = 'form-941-Q' + (payload.quarter || 1) + '-' + payload.year + '.pdf';
-      } else if (payload.form === 'schedule-c') {
-        const { computeScheduleC } = require('../services/tax-forms/schedule-c');
-        const data = computeScheduleC(cid, payload.year);
-        html = scheduleCHTML(data);
-        filename = 'schedule-c-' + payload.year + '.pdf';
-      } else if (payload.form === '1099-nec') {
-        const { compute1099NECs } = require('../services/tax-forms/form-1099-nec');
-        const data = compute1099NECs(cid, payload.year);
-        html = nec1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = '1099-NEC-' + payload.year + '.pdf';
-      } else if (payload.form === 'w2') {
-        const { computeW2sForYear } = require('../services/tax-forms/form-w2');
-        const data = computeW2sForYear(cid, payload.year);
-        html = w2HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = 'W-2-' + payload.year + '.pdf';
-      } else if (payload.form === 'schedule-se') {
-        const { computeScheduleSE } = require('../services/tax-forms/schedule-se');
-        const data = computeScheduleSE(cid, payload.year, { w2_ss_wages: payload.w2_ss_wages });
-        html = scheduleSEHTML(data);
-        filename = 'schedule-se-' + payload.year + '.pdf';
-      } else if (payload.form === 'sales-tax') {
-        const { computeSalesTax } = require('../services/tax-forms/sales-tax');
-        const data = computeSalesTax(cid, payload.period_start || '', payload.period_end || '');
-        html = salesTaxHTML(data);
-        filename = 'sales-tax-' + (payload.period_start || '') + '-' + (payload.period_end || '') + '.pdf';
-      } else if (payload.form === 'w3') {
-        const { computeW3 } = require('../services/tax-forms/form-w3');
-        const data = computeW3(cid, payload.year);
-        html = w3HTML(data);
-        filename = 'W-3-' + payload.year + '.pdf';
-      } else if (payload.form === '940') {
-        const { computeForm940 } = require('../services/tax-forms/form-940');
-        const data = computeForm940(cid, payload.year, {
-          multi_state: payload.multi_state,
-          credit_reduction_state: payload.credit_reduction_state,
-          total_deposits: payload.total_deposits,
-        });
-        html = form940HTML(data);
-        filename = 'form-940-' + payload.year + '.pdf';
-      } else if (payload.form === '1099-misc') {
-        const { compute1099MISCs } = require('../services/tax-forms/form-1099-misc');
-        const data = compute1099MISCs(cid, payload.year);
-        html = misc1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = '1099-MISC-' + payload.year + '.pdf';
-      } else if (payload.form === '944') {
-        const { computeForm944 } = require('../services/tax-forms/form-944');
-        const data = computeForm944(cid, payload.year);
-        html = form944HTML(data);
-        filename = 'form-944-' + payload.year + '.pdf';
-      } else if (payload.form === '945') {
-        const { computeForm945 } = require('../services/tax-forms/form-945');
-        const data = computeForm945(cid, payload.year, payload.form_945_opts || {});
-        html = form945HTML(data);
-        filename = 'form-945-' + payload.year + '.pdf';
-      } else if (payload.form === 'schedule-941b') {
-        const { computeSchedule941B } = require('../services/tax-forms/form-941-schedule-b');
-        const data = computeSchedule941B(cid, payload.year, payload.quarter || 1);
-        html = schedule941BHTML(data);
-        filename = 'form-941-schedule-b-Q' + (payload.quarter || 1) + '-' + payload.year + '.pdf';
-      } else if (payload.form === '945-a') {
-        const { computeForm945A } = require('../services/tax-forms/form-945-a');
-        const data = computeForm945A(cid, payload.year, payload.parent_form || 'form-945');
-        html = form945AHTML(data);
-        filename = 'form-945-a-' + payload.year + '.pdf';
-      } else if (payload.form === '1099-int') {
-        const { compute1099INTs } = require('../services/tax-forms/form-1099-int');
-        const data = compute1099INTs(cid, payload.year);
-        html = int1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = '1099-INT-' + payload.year + '.pdf';
-      } else if (payload.form === '1099-div') {
-        const { compute1099DIVs } = require('../services/tax-forms/form-1099-div');
-        const data = compute1099DIVs(cid, payload.year);
-        html = div1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = '1099-DIV-' + payload.year + '.pdf';
-      } else if (payload.form === '1099-r') {
-        const { compute1099Rs } = require('../services/tax-forms/form-1099-r');
-        const data = compute1099Rs(cid, payload.year);
-        html = r1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = '1099-R-' + payload.year + '.pdf';
-      } else if (payload.form === '1099-k') {
-        const { compute1099Ks } = require('../services/tax-forms/form-1099-k');
-        const data = compute1099Ks(cid, payload.year);
-        html = k1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = '1099-K-' + payload.year + '.pdf';
-      } else if (payload.form === '1099-b') {
-        const { compute1099Bs } = require('../services/tax-forms/form-1099-other');
-        const data = compute1099Bs(cid, payload.year);
-        html = b1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = '1099-B-' + payload.year + '.pdf';
-      } else if (payload.form === '1099-g') {
-        const { compute1099Gs } = require('../services/tax-forms/form-1099-other');
-        const data = compute1099Gs(cid, payload.year);
-        html = g1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = '1099-G-' + payload.year + '.pdf';
-      } else if (payload.form === '1099-c') {
-        const { compute1099Cs } = require('../services/tax-forms/form-1099-other');
-        const data = compute1099Cs(cid, payload.year);
-        html = c1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = '1099-C-' + payload.year + '.pdf';
-      } else if (payload.form === '1099-sa') {
-        const { compute1099SAs } = require('../services/tax-forms/form-1099-other');
-        const data = compute1099SAs(cid, payload.year);
-        html = sa1099HTML(data, payload.year, { name: company.name || '', ein: company.ein || '' });
-        filename = '1099-SA-' + payload.year + '.pdf';
-      } else if (payload.form === 'w2c') {
-        const { computeW2Cs } = require('../services/tax-forms/form-w2c');
-        const data = computeW2Cs(cid, payload.year, payload.w2c_corrections || []);
-        if (data.length === 0) return { error: 'No W-2c corrections specified.' };
-        const idx = Math.max(0, Math.min(data.length - 1, payload.w2c_form_index || 0));
-        html = w2cHTML(data[idx]);
-        filename = 'W-2c-' + (data[idx].prev.employee_last_name || 'unknown') + '-' + payload.year + '.pdf';
-      } else if (payload.form === '1096') {
-        const { computeForm1096 } = require('../services/tax-forms/form-1096');
-        const data = computeForm1096(cid, payload.year);
-        html = form1096HTML(data);
-        filename = 'form-1096-' + payload.year + '.pdf';
-      } else if (payload.form === 'schedule-1') {
-        const { computeSchedule1 } = require('../services/tax-forms/schedule-1');
-        const data = computeSchedule1(cid, payload.year, payload.schedule_opts || {});
-        html = schedule1HTML(data);
-        filename = 'schedule-1-' + payload.year + '.pdf';
-      } else if (payload.form === 'schedule-2') {
-        const { computeSchedule2 } = require('../services/tax-forms/schedule-2');
-        const data = computeSchedule2(cid, payload.year, payload.schedule_opts || {});
-        html = schedule2HTML(data);
-        filename = 'schedule-2-' + payload.year + '.pdf';
-      } else if (payload.form === 'schedule-3') {
-        const { computeSchedule3 } = require('../services/tax-forms/schedule-3');
-        const data = computeSchedule3(cid, payload.year);
-        html = schedule3HTML(data);
-        filename = 'schedule-3-' + payload.year + '.pdf';
-      } else if (payload.form === 'schedule-a') {
-        const { computeScheduleA } = require('../services/tax-forms/schedule-a');
-        const data = computeScheduleA(cid, payload.year, payload.schedule_opts || {});
-        html = scheduleAHTML(data);
-        filename = 'schedule-a-' + payload.year + '.pdf';
-      } else if (payload.form === 'schedule-b') {
-        const { computeScheduleB } = require('../services/tax-forms/schedule-b');
-        const data = computeScheduleB(cid, payload.year, payload.schedule_opts || {});
-        html = scheduleBHTML(data);
-        filename = 'schedule-b-' + payload.year + '.pdf';
-      } else if (payload.form === 'schedule-d') {
-        const { computeScheduleD } = require('../services/tax-forms/schedule-d');
-        const data = computeScheduleD(cid, payload.year, payload.schedule_opts || {});
-        html = scheduleDHTML(data);
-        filename = 'schedule-d-' + payload.year + '.pdf';
-      } else if (payload.form === '1040-es') {
-        const { computeForm1040ES } = require('../services/tax-forms/form-1040-es');
-        const data = computeForm1040ES(cid, payload.year, payload.es_opts || {});
-        html = form1040ESHTML(data);
-        filename = 'form-1040-es-' + payload.year + '.pdf';
-      } else if (payload.form === '8995') {
-        const { computeForm8995 } = require('../services/tax-forms/form-8995');
-        const data = computeForm8995(cid, payload.year, payload.form_8995_opts || {});
-        html = form8995HTML(data);
-        filename = 'form-8995-' + payload.year + '.pdf';
-      } else if (payload.form === '4562') {
-        const { computeForm4562 } = require('../services/tax-forms/form-4562');
-        const data = computeForm4562(cid, payload.year, payload.form_4562_opts || {});
-        html = form4562HTML(data);
-        filename = 'form-4562-' + payload.year + '.pdf';
-      } else if (payload.form === '8829') {
-        const { computeForm8829 } = require('../services/tax-forms/form-8829');
-        const data = computeForm8829(cid, payload.year, payload.form_8829_opts || {});
-        html = form8829HTML(data);
-        filename = 'form-8829-' + payload.year + '.pdf';
-      } else if (payload.form === '4797') {
-        const { computeForm4797 } = require('../services/tax-forms/form-4797');
-        const data = computeForm4797(cid, payload.year, payload.form_4797_opts || {});
-        html = form4797HTML(data);
-        filename = 'form-4797-' + payload.year + '.pdf';
-      } else if (payload.form === '7004') {
-        const { computeForm7004 } = require('../services/tax-forms/form-7004');
-        const data = computeForm7004(cid, payload.form_7004_opts);
-        html = form7004HTML(data);
-        filename = 'form-7004-' + payload.year + '.pdf';
-      } else if (payload.form === '4868') {
-        const { computeForm4868 } = require('../services/tax-forms/form-4868');
-        const data = computeForm4868(cid, payload.year, payload.form_4868_opts || {});
-        html = form4868HTML(data);
-        filename = 'form-4868-' + payload.year + '.pdf';
-      } else if (payload.form === '1065') {
-        const { computeForm1065 } = require('../services/tax-forms/form-1065');
-        const data = computeForm1065(cid, payload.year, payload.form_1065_opts || {});
-        html = form1065HTML(data);
-        filename = 'form-1065-' + payload.year + '.pdf';
-      } else if (payload.form === '1120') {
-        const { computeForm1120 } = require('../services/tax-forms/form-1120');
-        const data = computeForm1120(cid, payload.year, payload.form_1120_opts || {});
-        html = form1120HTML(data);
-        filename = 'form-1120-' + payload.year + '.pdf';
-      } else if (payload.form === '1120-s') {
-        const { computeForm1120S } = require('../services/tax-forms/form-1120s');
-        const data = computeForm1120S(cid, payload.year, payload.form_1120s_opts || {});
-        html = form1120SHTML(data);
-        filename = 'form-1120s-' + payload.year + '.pdf';
-      } else if (payload.form === 'k-1') {
-        const { computeScheduleK1 } = require('../services/tax-forms/schedule-k1');
-        const data = computeScheduleK1(payload.k1_opts);
-        html = scheduleK1HTML(data);
-        filename = 'k-1-' + (payload.k1_opts?.recipient?.name || 'recipient').replace(/\s+/g, '_') + '.pdf';
-      } else if (payload.form === '1041') {
-        const { computeForm1041 } = require('../services/tax-forms/form-1041');
-        const data = computeForm1041(cid, payload.year, payload.form_1041_opts || {});
-        html = form1041HTML(data);
-        filename = 'form-1041-' + payload.year + '.pdf';
-      } else if (payload.form === '1094-c') {
-        const { computeForm1094C } = require('../services/tax-forms/form-1094c');
-        const data = computeForm1094C(cid, payload.year, (payload as any).form_1094c_opts || {});
-        html = form1094CHTML(data);
-        filename = 'form-1094-c-' + payload.year + '.pdf';
-      } else if (payload.form === '1095-c') {
-        const { computeForm1095C } = require('../services/tax-forms/form-1095c');
-        const data = computeForm1095C(cid, (payload as any).form_1095c_opts || { employee_id: '' });
-        html = form1095CHTML(data);
-        filename = '1095-C-' + payload.year + '.pdf';
-      } else if (payload.form === 'ss-4') {
-        const { computeFormSS4 } = require('../services/tax-forms/entity-lifecycle');
-        const data = computeFormSS4(cid, (payload as any).form_ss4_opts || {});
-        html = formSS4HTML(data);
-        filename = 'form-ss-4.pdf';
-      } else if (payload.form === '2553') {
-        const { computeForm2553 } = require('../services/tax-forms/entity-lifecycle');
-        const data = computeForm2553(cid, (payload as any).form_2553_opts || {});
-        html = form2553HTML(data);
-        filename = 'form-2553.pdf';
-      } else if (payload.form === '8832') {
-        const { computeForm8832 } = require('../services/tax-forms/entity-lifecycle');
-        const data = computeForm8832(cid, (payload as any).form_8832_opts || {});
-        html = form8832HTML(data);
-        filename = 'form-8832.pdf';
-      } else if (payload.form === '8822-b') {
-        const { computeForm8822B } = require('../services/tax-forms/entity-lifecycle');
-        const data = computeForm8822B(cid, (payload as any).form_8822b_opts || {});
-        html = form8822BHTML(data);
-        filename = 'form-8822-b.pdf';
-      } else if (payload.form === 'tc-40') {
-        const { computeTC40 } = require('../services/tax-forms/utah-forms');
-        const data = computeTC40(cid, payload.year, (payload as any).tc40_opts || {});
-        html = tc40HTML(data);
-        filename = 'utah-tc-40-' + payload.year + '.pdf';
-      } else if (payload.form === 'tc-20') {
-        const { computeTC20 } = require('../services/tax-forms/utah-forms');
-        const data = computeTC20(cid, payload.year, (payload as any).tc20_opts || {});
-        html = tc20HTML(data);
-        filename = 'utah-tc-20-' + payload.year + '.pdf';
-      } else if (payload.form === 'tc-20s') {
-        const { computeTC20S } = require('../services/tax-forms/utah-forms');
-        const data = computeTC20S(cid, payload.year, (payload as any).tc20s_opts || {});
-        html = tc20SHTML(data);
-        filename = 'utah-tc-20s-' + payload.year + '.pdf';
-      } else if (payload.form === 'tc-65') {
-        const { computeTC65 } = require('../services/tax-forms/utah-forms');
-        const data = computeTC65(cid, payload.year, (payload as any).tc65_opts || {});
-        html = tc65HTML(data);
-        filename = 'utah-tc-65-' + payload.year + '.pdf';
-      } else if (payload.form === 'tc-62m') {
-        const { computeTC62M } = require('../services/tax-forms/utah-forms');
-        const data = computeTC62M(cid, payload.year, (payload as any).tc62m_period_start || (payload.year + '-01-01'), (payload as any).tc62m_period_end || (payload.year + '-12-31'), (payload as any).tc62m_opts || {});
-        html = tc62MHTML(data);
-        filename = 'utah-tc-62m-' + payload.year + '.pdf';
-      } else if (payload.form === 'tc-941') {
-        const { computeTC941 } = require('../services/tax-forms/utah-forms');
-        const data = computeTC941(cid, payload.year, (payload as any).tc941_opts || {});
-        html = tc941HTML(data);
-        filename = 'utah-tc-941-' + payload.year + '.pdf';
-      } else {
-        return { error: 'Unknown form: ' + payload.form };
-      }
-      return await saveHTMLAsPDF(html, payload.form.toUpperCase(), { defaultFilename: filename });
-    } catch (err: any) {
-      return { error: err?.message || 'PDF export failed' };
-    }
-  });
+  registerPrintPdfIpc(ipcMain, deps);
 
   // ─── B7: Client risk scoring ─────────────────────────
   ipcMain.handle('clients:risk-score', (_event, opts?: { client_id?: string }) => {
@@ -3752,25 +2851,6 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  // ─── Raw Query (for reports/aggregations) ────────────
-  // SECURITY: The renderer can supply arbitrary SQL via this handler — historically a
-  // privilege-escalation vector (renderer could DROP TABLE, ATTACH another DB, exfiltrate
-  // password_hash via SELECT *, etc.). We don't have a small enough set of named queries to
-  // switch to a strict allowlist without rewriting most reports/dashboards, so we apply a
-  // SQL-shape filter:
-  //   • Reject multi-statement SQL (any `;` outside string literals) — blocks stacked queries.
-  //   • Reject DDL & sensitive verbs (DROP, ALTER, CREATE, ATTACH, DETACH, PRAGMA, VACUUM, REINDEX).
-  //   • Allow only SELECT/WITH/INSERT/UPDATE/DELETE/REPLACE as the leading verb.
-  // Any further tightening (e.g. table allowlist for writes) lives in the per-table CRUD handlers.
-  ipcMain.handle('db:raw-query', (_event, { sql, params }) => {
-    const check = isRawQueryAllowed(sql);
-    if (!check.ok) {
-      console.warn('db:raw-query rejected:', check.reason, sql?.slice(0, 200));
-      return { error: `SQL rejected: ${check.reason}` };
-    }
-    return db.runQuery(sql, params);
-  });
-
   // ─── P1.12: Duplicate-Invoice Detector ────────────────────
   // Returns suspiciously similar invoices for the same client created
   // in the recent past. Caller (InvoiceForm) decides whether to
@@ -3935,7 +3015,7 @@ export function registerIpcHandlers(): void {
       try {
         if (companyId) {
           if (isEdit && oldInvoice) {
-            const newInvoice = db.getById('invoices', savedId) as any;
+            const newInvoice = db.getById('invoices', savedId);
             const changes: Record<string, { old: any; new: any }> = {};
             for (const key of Object.keys(invoiceData)) {
               if (oldInvoice[key] !== newInvoice?.[key]) {
@@ -4214,7 +3294,7 @@ export function registerIpcHandlers(): void {
       try {
         if (companyId) {
           if (isEdit && oldExpense) {
-            const newExpense = db.getById('expenses', savedId) as any;
+            const newExpense = db.getById('expenses', savedId);
             const changes: Record<string, { old: any; new: any }> = {};
             for (const key of Object.keys(expenseData)) {
               if (oldExpense[key] !== newExpense?.[key]) {
@@ -4255,41 +3335,6 @@ export function registerIpcHandlers(): void {
       console.error('expense:save failed:', err);
       return { error: err instanceof Error ? err.message : String(err) };
     }
-  });
-
-  // ─── Company Management ──────────────────────────────
-  ipcMain.handle('company:list', () => {
-    const companies = db.queryAll('companies');
-    // Auto-switch to the first company if currentCompanyId is not yet set
-    // (happens on cold start before renderer calls company:switch)
-    if (!db.getCurrentCompanyId() && companies.length > 0) {
-      db.switchCompany(companies[0].id);
-    }
-    return companies;
-  });
-
-  ipcMain.handle('company:get', (_event, id) => {
-    return db.getById('companies', id);
-  });
-
-  ipcMain.handle('company:create', (_event, data) => {
-    const company = db.create('companies', data);
-    db.seedDefaultAccounts(company.id);
-    // Seed default categories for new company
-    seedDefaultCategories(company.id);
-    db.switchCompany(company.id);
-    scheduleAutoBackup();
-    return company;
-  });
-
-  ipcMain.handle('company:update', (_event, { id, data }) => {
-    const result = db.update('companies', id, data);
-    scheduleAutoBackup();
-    return result;
-  });
-
-  ipcMain.handle('company:switch', (_event, companyId) => {
-    db.switchCompany(companyId);
   });
 
   // ─── Global Search ───────────────────────────────────
@@ -4603,397 +3648,10 @@ export function registerIpcHandlers(): void {
     };
   }
 
-  // ─── PDF Generate (Invoice) — Download via Save Dialog ──
-  // Accepts optional pre-built HTML from the renderer so the saved PDF
-  // matches the preview exactly (including settings, payment schedule, etc.)
-  ipcMain.handle('invoice:generate-pdf', async (
-    _event,
-    payload: string | {
-      invoiceId: string;
-      html?: string;
-      pdfOptions?: PDFOptions;
-      openAfterSave?: boolean;
-      revealAfterSave?: boolean;
-    }
-  ) => {
-    const invoiceId = typeof payload === 'string' ? payload : payload.invoiceId;
-    const providedHTML = typeof payload === 'string' ? undefined : payload.html;
-    const pdfOptions = typeof payload === 'string' ? undefined : payload.pdfOptions;
-    const openAfterSave = typeof payload === 'string' ? false : !!payload.openAfterSave;
-    const revealAfterSave = typeof payload === 'string' ? false : !!payload.revealAfterSave;
-
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { error: 'No company selected' };
-
-    const invoice = db.getById('invoices', invoiceId);
-    if (!invoice) return { error: 'Invoice not found' };
-
-    // Default filename: invoice-{number}-{yyyy-MM-dd}.pdf
-    const defaultName = buildPdfFilename('invoice', String(invoice.invoice_number || invoiceId));
-    const { filePath, canceled } = await dialog.showSaveDialog({
-      defaultPath: defaultName,
-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
-      // showOverwriteConfirmation defaults to true, but be explicit for clarity.
-      properties: ['showOverwriteConfirmation', 'createDirectory'],
-    });
-
-    if (canceled || !filePath) return { cancelled: true };
-
-    try {
-      // Build PDF metadata once — reused whether HTML is renderer-provided
-      // or generated server-side. Sets Title/Author/Subject/Keywords on
-      // the saved PDF for Spotlight + Adobe File → Properties visibility.
-      const _client = db.getById('clients', invoice.client_id);
-      const _company = db.getById('companies', companyId);
-      const meta = buildInvoiceMetadata(invoice, _company, _client);
-      const optsWithMeta = { ...(pdfOptions || {}), metadata: meta };
-
-      let pdfBuffer: Buffer;
-      if (providedHTML) {
-        pdfBuffer = await htmlToPDFBuffer(providedHTML, optsWithMeta);
-      } else {
-        const dbInstance = db.getDb();
-        const lineItems = dbInstance.prepare(
-          'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
-        ).all(invoiceId) as any[];
-        pdfBuffer = await generateInvoicePDF(invoice, _company, _client, lineItems, optsWithMeta);
-      }
-      // Async write — caller must not see "saved" before bytes are on disk.
-      await fsp.writeFile(filePath, pdfBuffer);
-
-      // Compliance: log PDF export of a financial document.
-      try {
-        db.logAudit(companyId, 'invoices', invoiceId, 'export_pdf', { path: filePath });
-      } catch { /* audit is best-effort */ }
-
-      if (openAfterSave) {
-        const openErr = await openPathInOS(filePath);
-        if (openErr) console.warn('openPath failed:', openErr);
-      } else if (revealAfterSave) {
-        revealInFolder(filePath);
-      }
-
-      return { path: filePath };
-    } catch (err: any) {
-      // Surface disk-full / permission-denied / EACCES to the renderer.
-      return { error: err?.message || 'PDF generation failed' };
-    }
-  });
-
-  // ─── Batch PDF Export ──────────────────────────────────
-  ipcMain.handle('invoice:batch-pdf', async (
-    event,
-    {
-      invoiceIds,
-      pdfOptions,
-      mode,
-    }: {
-      invoiceIds: string[];
-      pdfOptions?: PDFOptions;
-      // 'combined' = single PDF with page breaks
-      // 'separate' = one PDF per invoice into a folder
-      // 'zip'      = one PDF per invoice, packaged into a single ZIP archive
-      mode?: 'combined' | 'separate' | 'zip';
-    }
-  ) => {
-    try {
-      const companyId = db.getCurrentCompanyId();
-      if (!companyId) return { error: 'No company selected' };
-      if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
-        return { error: 'No invoices selected' };
-      }
-
-      const dbInstance = db.getDb();
-      const company = db.getById('companies', companyId);
-
-      // Progress helper — stream to the caller so a long batch shows a bar.
-      const sendProgress = (current: number, total: number, label: string) => {
-        try { event.sender.send('invoice:batch-pdf:progress', { current, total, label }); }
-        catch { /* receiver may be gone */ }
-      };
-
-      if (mode === 'separate') {
-        // Ask for a directory; write one PDF per invoice, serially.
-        const { filePaths, canceled } = await dialog.showOpenDialog({
-          properties: ['openDirectory', 'createDirectory'],
-        });
-        if (canceled || !filePaths?.[0]) return { cancelled: true };
-        const outDir = filePaths[0];
-        const written: string[] = [];
-        for (let i = 0; i < invoiceIds.length; i++) {
-          const invId = invoiceIds[i];
-          const invoice = db.getById('invoices', invId);
-          if (!invoice) continue;
-          const client = db.getById('clients', invoice.client_id);
-          const lineItems = dbInstance.prepare(
-            'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
-          ).all(invId) as any[];
-          const html = buildInvoiceHTML(company, client, invoice, lineItems);
-          sendProgress(i + 1, invoiceIds.length, `Invoice ${invoice.invoice_number}`);
-          // Serialize — printToPDF is heavy, racing many in parallel OOMs Electron.
-          const buf = await htmlToPDFBuffer(html, pdfOptions);
-          const name = buildPdfFilename('invoice', String(invoice.invoice_number || invId));
-          const full = path.join(outDir, name);
-          await fsp.writeFile(full, buf);
-          written.push(full);
-          try { db.logAudit(companyId, 'invoices', invId, 'export_pdf', { path: full, batch: true }); }
-          catch { /* audit best-effort */ }
-        }
-        return { dir: outDir, files: written, count: written.length };
-      }
-
-      // ── ZIP mode (P1.8) ──────────────────────────────────
-      // One PDF per invoice, streamed into a single .zip archive
-      // via the `archiver` library. Streaming avoids holding all PDF
-      // buffers in memory at once — critical for batches of 100+
-      // invoices where each PDF could be 100-300KB.
-      if (mode === 'zip') {
-        const archiver = (await import('archiver')).default;
-        const fs = require('fs');
-        const defaultZipName = buildPdfFilename('invoices', String(invoiceIds.length)).replace(/\.pdf$/, '.zip');
-        const { filePath: zipPath, canceled } = await dialog.showSaveDialog({
-          defaultPath: defaultZipName,
-          filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
-          properties: ['showOverwriteConfirmation', 'createDirectory'],
-        });
-        if (canceled || !zipPath) return { cancelled: true };
-
-        const output = fs.createWriteStream(zipPath);
-        const archive = archiver('zip', { zlib: { level: 6 } }); // PDFs compress poorly; level 6 is the speed/ratio sweet spot
-        archive.pipe(output);
-
-        // We need to await the stream finish AFTER all entries are appended.
-        // Track this so the IPC handler resolves only when the file is closed.
-        const closePromise = new Promise<void>((resolve, reject) => {
-          output.on('close', () => resolve());
-          output.on('error', reject);
-          archive.on('error', reject);
-        });
-
-        const written: string[] = [];
-        const skipped: string[] = [];
-
-        for (let i = 0; i < invoiceIds.length; i++) {
-          const invId = invoiceIds[i];
-          const invoice = db.getById('invoices', invId);
-          if (!invoice) {
-            skipped.push(invId);
-            continue;
-          }
-          const client = db.getById('clients', invoice.client_id);
-          const lineItems = dbInstance.prepare(
-            'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
-          ).all(invId) as any[];
-          sendProgress(i + 1, invoiceIds.length, `Invoice ${invoice.invoice_number}`);
-          try {
-            const html = buildInvoiceHTML(company, client, invoice, lineItems);
-            const meta = buildInvoiceMetadata(invoice, company, client);
-            const buf = await htmlToPDFBuffer(html, { ...(pdfOptions || {}), metadata: meta });
-            const entryName = buildPdfFilename('invoice', String(invoice.invoice_number || invId));
-            archive.append(buf, { name: entryName });
-            written.push(entryName);
-            try { db.logAudit(companyId, 'invoices', invId, 'export_pdf', { archive: zipPath, entry: entryName, batch: true }); }
-            catch { /* audit best-effort */ }
-          } catch (renderErr: any) {
-            // Don't abort the whole archive on a single render failure —
-            // log the skip and continue. Caller sees `skipped[]` count.
-            console.warn(`[batch-pdf:zip] render failed for ${invId}:`, renderErr?.message);
-            skipped.push(invId);
-          }
-        }
-
-        await archive.finalize();
-        await closePromise;
-        return { path: zipPath, count: written.length, skipped: skipped.length };
-      }
-
-      // Combined mode
-      const defaultName = buildPdfFilename('invoices-batch', String(invoiceIds.length));
-      const { filePath, canceled } = await dialog.showSaveDialog({
-        defaultPath: defaultName,
-        filters: [{ name: 'PDF', extensions: ['pdf'] }],
-        properties: ['showOverwriteConfirmation', 'createDirectory'],
-      });
-      if (canceled || !filePath) return { cancelled: true };
-
-      const allHtml: string[] = [];
-      const processedIds: string[] = [];
-      for (let i = 0; i < invoiceIds.length; i++) {
-        const invId = invoiceIds[i];
-        const invoice = db.getById('invoices', invId);
-        if (!invoice) continue;
-        const client = db.getById('clients', invoice.client_id);
-        const lineItems = dbInstance.prepare(
-          'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
-        ).all(invId) as any[];
-        sendProgress(i + 1, invoiceIds.length, `Invoice ${invoice.invoice_number}`);
-        allHtml.push(buildInvoiceHTML(company, client, invoice, lineItems));
-        processedIds.push(invId);
-      }
-
-      const combinedHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-        @media print { .page-break { page-break-before: always; } }
-        .page-break { page-break-before: always; }
-      </style></head><body>
-        ${allHtml.map((h, i) => {
-          const body = h.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] || h;
-          return i === 0 ? body : `<div class="page-break"></div>${body}`;
-        }).join('')}
-      </body></html>`;
-
-      const pdfBuffer = await htmlToPDFBuffer(combinedHTML, pdfOptions);
-      await fsp.writeFile(filePath, pdfBuffer);
-      for (const id of processedIds) {
-        try { db.logAudit(companyId, 'invoices', id, 'export_pdf', { path: filePath, batch: true }); }
-        catch { /* audit best-effort */ }
-      }
-      return { path: filePath, count: allHtml.length };
-    } catch (err: any) {
-      return { error: err?.message || 'Batch PDF failed' };
-    }
-  });
-
   // NOTE: invoice:preview-pdf removed — the renderer now uses print:preview
   // with client-generated HTML (see InvoiceDetail.handlePreview). That path
   // respects invoice_settings and payment_schedule; the old server template
   // did not.
-
-  // ─── Email Invoice ─────────────────────────────────────
-  // Accepts optional pre-built HTML from the renderer so the PDF attachment
-  // matches what the user sees in the preview (including logo, accent color,
-  // template style, column config, payment schedule, watermark, footer).
-  // Falls back to the server-side template only if no HTML is provided.
-  ipcMain.handle('invoice:send-email', async (_event, payload: string | { invoiceId: string; html?: string; templateKey?: string }) => {
-    // Back-compat: old callers passed the invoiceId as a bare string.
-    const invoiceId = typeof payload === 'string' ? payload : payload.invoiceId;
-    const providedHTML = typeof payload === 'string' ? undefined : payload.html;
-    // Template selection: caller can pick invoice_send / payment_reminder_1 /
-    // payment_reminder_2 / overdue_notice. Defaults to invoice_send for the
-    // common "Send invoice" button. Falls back to hardcoded copy if the
-    // template lookup fails (e.g. brand-new company before seeding).
-    const templateKey = (typeof payload === 'string' ? undefined : payload.templateKey) || 'invoice_send';
-
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { error: 'No company selected' };
-
-    const dbInstance = db.getDb();
-    const invoice = db.getById('invoices', invoiceId);
-    if (!invoice) return { error: 'Invoice not found' };
-
-    const client = db.getById('clients', invoice.client_id);
-    const company = db.getById('companies', companyId);
-
-    try {
-      // Generate PDF to temp location — prefer renderer-built HTML (uses settings),
-      // fall back to the basic server template if none was supplied.
-      // Always populate PDF metadata so the recipient's PDF reader and
-      // their OS Spotlight see meaningful Title/Author/Subject/Keywords.
-      const meta = buildInvoiceMetadata(invoice, company, client);
-      const optsWithMeta = { metadata: meta };
-      let pdfBuffer: Buffer;
-      if (providedHTML) {
-        pdfBuffer = await htmlToPDFBuffer(providedHTML, optsWithMeta);
-      } else {
-        const lineItems = dbInstance.prepare(
-          'SELECT * FROM invoice_line_items WHERE invoice_id = ? ORDER BY sort_order'
-        ).all(invoiceId) as any[];
-        pdfBuffer = await generateInvoicePDF(invoice, company, client, lineItems, optsWithMeta);
-      }
-
-      // Write temp PDF into an isolated subdir so we can clean it up later
-      // without racing against other exports. Filename matches the new
-      // {doctype}-{id}-{date}.pdf convention.
-      const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'bap-invoice-'));
-      const pdfPath = path.join(
-        tmpDir,
-        buildPdfFilename('invoice', String(invoice.invoice_number || invoiceId))
-      );
-      await fsp.writeFile(pdfPath, pdfBuffer);
-
-      // Schedule cleanup — mail client has the handle open by now; give it
-      // 10 minutes and then reap. Best-effort, silent on failure.
-      setTimeout(() => {
-        fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-      }, 10 * 60 * 1000);
-
-      // Open email client with pre-filled content. Prefer the customized
-      // email template (Settings → Email Templates) so the user's brand
-      // voice and layout are preserved. If the template lookup fails for
-      // any reason, fall back to the hardcoded copy in email-sender.ts.
-      let emailResult: { success: boolean; error?: string };
-      try {
-        ensureDefaultEmailTemplates(companyId);
-        const tmpl = dbInstance.prepare(
-          `SELECT * FROM email_templates WHERE company_id = ? AND key = ?`
-        ).get(companyId, templateKey) as any;
-        if (tmpl) {
-          const ctx = buildTemplateContext(companyId, 'invoice', invoiceId);
-          const subject = resolveTemplateTokens(tmpl.subject || '', ctx);
-          const body = resolveTemplateTokens(tmpl.body || '', ctx);
-          const to = (tmpl.default_to || '').includes('client.email')
-            ? (client?.email || '')
-            : (tmpl.default_to || client?.email || '');
-          const params = new URLSearchParams();
-          params.set('subject', subject);
-          params.set('body', body);
-          if (tmpl.default_cc) params.set('cc', tmpl.default_cc);
-          if (tmpl.default_bcc) params.set('bcc', tmpl.default_bcc);
-          const mailto = `mailto:${encodeURIComponent(to)}?${params.toString()}`;
-          await shell.openExternal(mailto);
-          emailResult = { success: true };
-        } else {
-          emailResult = await sendInvoiceEmail(invoice, company, client);
-        }
-      } catch (templateErr) {
-        // Template path failed — surface to console but still attempt
-        // hardcoded fallback so the user can send the invoice.
-        console.warn('[email] template path failed, using fallback:', templateErr);
-        emailResult = await sendInvoiceEmail(invoice, company, client);
-      }
-
-      if (emailResult.success) {
-        const previousStatus = invoice.status;
-        // Update invoice status to sent if still draft
-        if (previousStatus === 'draft') {
-          db.update('invoices', invoiceId, { status: 'sent' });
-        }
-
-        // Log the email
-        const emailId = crypto.randomUUID();
-        const now = new Date().toISOString();
-        dbInstance.prepare(
-          'INSERT INTO email_log (id, company_id, recipient, subject, body_preview, entity_type, entity_id, status, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        ).run(
-          emailId,
-          companyId,
-          client?.email || '',
-          `Invoice ${invoice.invoice_number} from ${company?.name || ''}`,
-          'Mail client opened with PDF attached from temp folder',
-          'invoice',
-          invoiceId,
-          'sent',
-          now
-        );
-
-        // Reveal the PDF in filesystem so user can attach it
-        revealInFolder(pdfPath);
-        try {
-          db.logAudit(companyId, 'invoices', invoiceId, 'email_pdf', { pdfPath });
-        } catch { /* audit best-effort */ }
-        scheduleAutoBackup();
-
-        return {
-          success: true,
-          pdfPath,
-          newStatus: previousStatus === 'draft' ? 'sent' : previousStatus,
-        };
-      }
-
-      return { ...emailResult, pdfPath };
-    } catch (err: any) {
-      return { error: err?.message || 'Failed to send email' };
-    }
-  });
 
   // ─── Invoice Portal Token ──────────────────────────────
   // PORTAL: token-expiry default is configurable via the
@@ -5513,9 +4171,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('invoice:convert-to-debt', (_event, { invoiceId, companyId }: { invoiceId: string; companyId: string }) => {
     try {
-      const inv = db.getById('invoices', invoiceId) as any;
+      const inv = db.getById('invoices', invoiceId);
       if (!inv) return { error: 'Invoice not found' };
-      const client = inv.client_id ? db.getById('clients', inv.client_id) as any : null;
+      const client = inv.client_id ? db.getById('clients', inv.client_id) : null;
       const balance = (inv.total || 0) - (inv.amount_paid || 0);
 
       const debt = db.create('debts', {
@@ -5535,7 +4193,7 @@ export function registerIpcHandlers(): void {
         status: 'active',
         current_stage: 'reminder',
         priority: 'medium',
-      }) as any;
+      });
 
       db.create('debt_pipeline_stages', { debt_id: debt.id, stage: 'reminder' });
       db.create('invoice_debt_links', { invoice_id: invoiceId, debt_id: debt.id });
@@ -5754,199 +4412,6 @@ export function registerIpcHandlers(): void {
 
   // ─── CSV Export ────────────────────────────────────────
   // ─── Auth ──────────────────────────────────────────────
-
-  ipcMain.handle('auth:register', (_event, { email, password, displayName }: { email: string; password: string; displayName: string }) => {
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Invalid email format' };
-    if (!password || password.length < 6) return { error: 'Password must be at least 6 characters' };
-    // Check if any users exist (first user becomes owner)
-    const existing = db.runQuery('SELECT COUNT(*) as count FROM users');
-    const isFirst = existing[0]?.count === 0;
-
-    // Check email uniqueness
-    const dup = db.runQuery('SELECT id FROM users WHERE email = ?', [email]);
-    if (dup.length > 0) throw new Error('An account with this email already exists');
-
-    const { hash } = hashPassword(password);
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
-    db.execQuery(
-      'INSERT INTO users (id, email, display_name, password_hash, role, last_login, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, email, displayName, hash, isFirst ? 'owner' : 'accountant', now, now, now]
-    );
-
-    // Also register on server (non-blocking)
-    setLastLoginEmail(email);
-    serverRegister(email, password, displayName, id);
-    scheduleAutoBackup();
-
-    return { id, email, display_name: displayName, role: isFirst ? 'owner' : 'accountant', avatar_color: '#3b82f6' };
-  });
-
-  ipcMain.handle('auth:login', async (_event, { email, password }: { email: string; password: string }) => {
-    let rows = db.runQuery('SELECT * FROM users WHERE email = ?', [email]);
-
-    // If user not found locally, try restoring from server backup
-    if (rows.length === 0) {
-      console.log('User not found locally, checking server for backup...');
-      const backup = await downloadBackup(email);
-      if (backup && backup.length > 1000) {
-        // CONCURRENCY: cancel any pending auto-backup so it doesn't race
-        // against the restore (would re-upload the soon-to-be-overwritten
-        // empty DB right as we restore the real one), then close the DB
-        // *before* overwriting the file so we don't tear out from under any
-        // open prepared statements / WAL state.
-        cancelAutoBackup();
-        const dbPath = db.getDbPath();
-        try {
-          db.getDb().pragma('wal_checkpoint(TRUNCATE)');
-          db.getDb().close();
-        } catch (_) {}
-        // Also remove -wal and -shm so the restored DB isn't paired with a
-        // stale WAL from the old empty database.
-        try { fs.unlinkSync(dbPath + '-wal'); } catch (_) {}
-        try { fs.unlinkSync(dbPath + '-shm'); } catch (_) {}
-        fs.writeFileSync(dbPath, backup);
-        console.log(`Restored ${backup.length} byte backup from server for ${email}`);
-        // Reinitialize database
-        db.reinitDatabase();
-        rows = db.runQuery('SELECT * FROM users WHERE email = ?', [email]);
-      }
-    }
-
-    if (rows.length === 0) throw new Error('Invalid email or password');
-
-    const user = rows[0];
-    if (!verifyPassword(password, user.password_hash)) throw new Error('Invalid email or password');
-
-    // Update last_login
-    db.execQuery('UPDATE users SET last_login = ? WHERE id = ?', [new Date().toISOString(), user.id]);
-    setLastLoginEmail(email);
-
-    // WHO SYSTEM: set the authenticated user in main-process state so
-    // logAudit() and other who-tracking code can attribute writes to a
-    // real user instead of the placeholder 'user' string.
-    db.setCurrentUser(user.id, user.email);
-
-    // Get user's companies
-    const companies = db.runQuery(
-      'SELECT c.*, uc.role as user_role FROM companies c JOIN user_companies uc ON c.id = uc.company_id WHERE uc.user_id = ?',
-      [user.id]
-    );
-
-    // Upload current DB to server (non-blocking)
-    scheduleAutoBackup();
-
-    return {
-      user: { id: user.id, email: user.email, display_name: user.display_name, role: user.role, avatar_color: user.avatar_color },
-      companies,
-    };
-  });
-
-  // WHO SYSTEM: explicit logout handler so the renderer can signal main
-  // to clear the current-user state. Until this is called the user
-  // remains authenticated for audit purposes (e.g. logout-on-Cmd-Q is
-  // a soft logout — main still attributes writes to them).
-  ipcMain.handle('auth:logout', () => {
-    try {
-      db.clearCurrentUser();
-      setLastLoginEmail('');
-      return { ok: true };
-    } catch (err: any) {
-      console.error('auth:logout failed:', err);
-      return { error: err?.message };
-    }
-  });
-
-  // WHO SYSTEM: lets the renderer ask "who does main think is logged in?"
-  // Useful for the Activity panel showing "current user" header, plus
-  // for debugging when the renderer's authStore drifts from main state.
-  ipcMain.handle('auth:current-user', () => {
-    return {
-      user_id: db.getCurrentUserId(),
-      user_email: db.getCurrentUserEmail(),
-    };
-  });
-
-  // WHO SYSTEM: renderer restored a persisted authStore on Cmd+R / app
-  // launch and needs to re-establish the main-process user state.
-  // Verifies the user_id actually exists in the DB (defense against a
-  // tampered localStorage) before setting state.
-  ipcMain.handle('auth:resume-session', (_event, { userId }: { userId: string }) => {
-    try {
-      if (!userId) return { error: 'userId required' };
-      const rows = db.runQuery('SELECT id, email FROM users WHERE id = ?', [userId]);
-      if (rows.length === 0) {
-        db.clearCurrentUser();
-        return { error: 'User not found — session cleared' };
-      }
-      const u = rows[0];
-      db.setCurrentUser(u.id, u.email);
-      setLastLoginEmail(u.email);
-      return { ok: true, user_id: u.id, user_email: u.email };
-    } catch (err: any) {
-      console.error('auth:resume-session failed:', err);
-      return { error: err?.message };
-    }
-  });
-
-  ipcMain.handle('auth:has-users', () => {
-    try {
-      const rows = db.runQuery('SELECT COUNT(*) as count FROM users');
-      return rows[0]?.count > 0;
-    } catch (err) {
-      console.error('auth:has-users failed:', err);
-      return false;
-    }
-  });
-
-  ipcMain.handle('auth:list-users', () => {
-    try {
-      return db.runQuery('SELECT id, email, display_name, role, avatar_color, last_login FROM users ORDER BY created_at');
-    } catch (err) {
-      console.error('auth:list-users failed:', err);
-      return [];
-    }
-  });
-
-  ipcMain.handle('auth:link-user-company', (_event, { userId, companyId, role }: { userId: string; companyId: string; role?: string }) => {
-    // SQLite's INSERT OR IGNORE does NOT suppress FOREIGN KEY violations — catch explicitly.
-    // If the user doesn't exist in the DB (stale localStorage), skip the link gracefully.
-    try {
-      db.execQuery(
-        'INSERT OR IGNORE INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)',
-        [userId, companyId, role || 'owner']
-      );
-      scheduleAutoBackup();
-    } catch (_) {
-      // FOREIGN KEY failure: user not in DB (stale session). Company still usable.
-    }
-    return true;
-  });
-
-  // SECURITY: Replaces a renderer-driven `DELETE FROM users` via rawQuery.
-  // Routing account deletion through a named handler keeps the protected-table
-  // guard intact and lets us scope the delete to the caller's own user id.
-  ipcMain.handle('auth:delete-account', (_event, { userId }: { userId: string }) => {
-    if (!userId || typeof userId !== 'string') return { error: 'Invalid userId' };
-    try {
-      db.execQuery('DELETE FROM user_companies WHERE user_id = ?', [userId]);
-      db.execQuery('DELETE FROM users WHERE id = ?', [userId]);
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err) {
-      console.error('auth:delete-account failed:', err);
-      return { error: err instanceof Error ? err.message : String(err) };
-    }
-  });
-
-  ipcMain.handle('auth:validate-session', (_event, { userId }: { userId: string }) => {
-    try {
-      const rows = db.runQuery('SELECT id, email, display_name, role, avatar_color FROM users WHERE id = ?', [userId]);
-      return rows.length > 0 ? rows[0] : null;
-    } catch {
-      return null;
-    }
-  });
 
   ipcMain.handle('export:csv', async (_event, { table, filters }: { table: string; filters?: Record<string, any> }) => {
     if (!validateTable(table)) return { error: 'Invalid table' };
@@ -6436,7 +4901,7 @@ export function registerIpcHandlers(): void {
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(paymentId, companyId, invoiceId, amount, date, method || 'transfer', reference || '');
 
-      const invoice = (dbInstance as any).prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;
+      const invoice = (dbInstance as any).prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
       if (!invoice) throw new Error('Invoice not found');
 
       // INTEGRITY: roundCents prevents float-drift in amount_paid across
@@ -6537,7 +5002,7 @@ export function registerIpcHandlers(): void {
     // BUG 1: Check for duplicate payroll run
     const existingRun = (dbInstance as any).prepare(
       `SELECT id FROM payroll_runs WHERE company_id = ? AND pay_period_start = ? AND pay_period_end = ?`
-    ).get(companyId, periodStart, periodEnd) as any;
+    ).get(companyId, periodStart, periodEnd);
     if (existingRun) {
       return { error: 'A payroll run already exists for this period. Delete the existing run first to reprocess.' };
     }
@@ -6557,7 +5022,7 @@ export function registerIpcHandlers(): void {
       try {
         const lastCheck = (dbInstance as any).prepare(
           `SELECT check_number FROM pay_stubs WHERE check_number != '' ORDER BY CAST(check_number AS INTEGER) DESC LIMIT 1`
-        ).get() as any;
+        ).get();
         if (lastCheck?.check_number) {
           lastCheckNum = parseInt(lastCheck.check_number, 10) || 1000;
         }
@@ -6577,7 +5042,7 @@ export function registerIpcHandlers(): void {
                      COALESCE(SUM(ps.social_security), 0) AS ss, COALESCE(SUM(ps.medicare), 0) AS m
               FROM pay_stubs ps JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
               WHERE ps.employee_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ? AND pr.status != 'draft'
-            `).get(s.employeeId, `${payYear}-01-01`, `${payYear}-12-31`) as any;
+            `).get(s.employeeId, `${payYear}-01-01`, `${payYear}-12-31`);
             if (prior) { ytdFederal += prior.f || 0; ytdState += prior.st || 0; ytdSS += prior.ss || 0; ytdMedicare += prior.m || 0; }
           } catch { /* ignore */ }
         }
@@ -6721,7 +5186,7 @@ export function registerIpcHandlers(): void {
     // Verify run exists and belongs to this company
     const existing = (dbInstance as any).prepare(
       `SELECT id, pay_date, pay_period_start FROM payroll_runs WHERE id = ? AND company_id = ?`
-    ).get(runId, companyId) as any;
+    ).get(runId, companyId);
     if (!existing) return { error: 'Payroll run not found' };
 
     const tx = (dbInstance as any).transaction(() => {
@@ -6731,7 +5196,7 @@ export function registerIpcHandlers(): void {
       // 2. Delete the previously auto-posted journal entry for this run
       const oldJE = (dbInstance as any).prepare(
         `SELECT id FROM journal_entries WHERE company_id = ? AND description LIKE ?`
-      ).get(companyId, `Payroll - ${existing.pay_period_start}%`) as any;
+      ).get(companyId, `Payroll - ${existing.pay_period_start}%`);
       if (oldJE) {
         (dbInstance as any).prepare(`DELETE FROM journal_entry_lines WHERE journal_entry_id = ?`).run(oldJE.id);
         (dbInstance as any).prepare(`DELETE FROM journal_entries WHERE id = ?`).run(oldJE.id);
@@ -6748,7 +5213,7 @@ export function registerIpcHandlers(): void {
       try {
         const lastCheck = (dbInstance as any).prepare(
           `SELECT check_number FROM pay_stubs WHERE check_number != '' ORDER BY CAST(check_number AS INTEGER) DESC LIMIT 1`
-        ).get() as any;
+        ).get();
         if (lastCheck?.check_number) {
           lastCheckNum = parseInt(lastCheck.check_number, 10) || 1000;
         }
@@ -6768,7 +5233,7 @@ export function registerIpcHandlers(): void {
                      COALESCE(SUM(ps.social_security), 0) AS ss, COALESCE(SUM(ps.medicare), 0) AS m
               FROM pay_stubs ps JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
               WHERE ps.employee_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ? AND pr.status != 'draft' AND pr.id != ?
-            `).get(s.employeeId, `${payYear}-01-01`, `${payYear}-12-31`, runId) as any;
+            `).get(s.employeeId, `${payYear}-01-01`, `${payYear}-12-31`, runId);
             if (prior) { ytdFederal += prior.f || 0; ytdState += prior.st || 0; ytdSS += prior.ss || 0; ytdMedicare += prior.m || 0; }
           } catch { /* ignore */ }
         }
@@ -6883,66 +5348,6 @@ export function registerIpcHandlers(): void {
     const companyId = db.getCurrentCompanyId();
     if (!companyId) return [];
     return db.queryAll('settings', { company_id: companyId });
-  });
-
-  // ─── Print / Preview System ─────────────────────────────
-  ipcMain.handle('print:preview', (_event, { html, title, pdfOptions }: { html: string; title: string; pdfOptions?: PDFOptions & { defaultFilename?: string } }) => {
-    openPrintPreview(html, title, pdfOptions);
-    return { success: true };
-  });
-
-  ipcMain.handle('print:save-pdf', async (
-    _event,
-    {
-      html,
-      title,
-      doctype,
-      identifier,
-      pdfOptions,
-      openAfterSave,
-      revealAfterSave,
-    }: {
-      html: string;
-      title: string;
-      doctype?: string;
-      identifier?: string;
-      pdfOptions?: PDFOptions;
-      openAfterSave?: boolean;
-      revealAfterSave?: boolean;
-    }
-  ) => {
-    const defaultFilename = buildPdfFilename(doctype || 'document', identifier || title);
-    const result = await saveHTMLAsPDF(html, title, { ...pdfOptions, defaultFilename });
-    if (result.path) {
-      if (openAfterSave) {
-        const err = await openPathInOS(result.path);
-        if (err) console.warn('openPath failed:', err);
-      } else if (revealAfterSave) {
-        revealInFolder(result.path);
-      }
-    }
-    return result;
-  });
-
-  ipcMain.handle('print:print', async (_event, { html }: { html: string }) => {
-    try {
-      await printHTML(html);
-      return { success: true };
-    } catch (err: any) {
-      return { error: err?.message || 'Print failed' };
-    }
-  });
-
-  ipcMain.handle('print:render', async (
-    _event,
-    { html, pdfOptions }: { html: string; pdfOptions?: import('../services/print-preview').PDFOptions }
-  ): Promise<{ base64?: string; error?: string }> => {
-    try {
-      const buf = await htmlToPDFBuffer(html, pdfOptions);
-      return { base64: buf.toString('base64') };
-    } catch (err: any) {
-      return { error: err?.message || 'PDF render failed' };
-    }
   });
 
   // ═══════════════════════════════════════════════════════════
@@ -9440,26 +7845,6 @@ export function registerIpcHandlers(): void {
     return principal * rate * (days / 365);
   }
 
-  // ─── Audit Log Helper ──────────────────────────────────
-  // Immutable chain-of-custody logging. Called by every debt-mutating handler.
-  // MUST NEVER throw — audit is a side-effect, not a gate.
-  function logDebtAudit(
-    debtId: string,
-    action: string,
-    fieldName: string = '',
-    oldValue: string = '',
-    newValue: string = '',
-    performedBy: string = 'user'
-  ): void {
-    try {
-      const dbInstance = db.getDb();
-      dbInstance.prepare(`
-        INSERT INTO debt_audit_log (id, debt_id, action, field_name, old_value, new_value, performed_by, performed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      `).run(uuid(), debtId, action, fieldName, oldValue, newValue, performedBy);
-    } catch (_) { /* audit logging must never crash the primary operation */ }
-  }
-
   // ─── Debt: Audit Log Query ────────────────────────────
   ipcMain.handle('debt:audit-log', (_event, { debtId, limit }: { debtId: string; limit?: number }) => {
     try {
@@ -9733,7 +8118,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('debt:assign-collector', (_event, { debtId, collectorId }: { debtId: string; collectorId: string | null }) => {
     try {
-      const oldDebt = db.getById('debts', debtId) as any;
+      const oldDebt = db.getById('debts', debtId);
       db.update('debts', debtId, { assigned_collector_id: collectorId || null });
       logDebtAudit(debtId, 'assignment_change', 'assigned_collector_id', oldDebt?.assigned_collector_id || '', collectorId || '');
       scheduleAutoBackup();
@@ -9857,204 +8242,6 @@ export function registerIpcHandlers(): void {
     </body></html>`;
 
     return { html };
-  });
-
-  ipcMain.handle('debt:export-bundle', async (_event, { debtId }: { debtId: string }) => {
-    const debt = db.getDb().prepare('SELECT * FROM debts WHERE id = ?').get(debtId) as any;
-    if (!debt) return { error: 'Debt not found' };
-    const company = db.getDb().prepare('SELECT * FROM companies WHERE id = ?').get(debt.company_id) as any;
-    const payments = db.getDb().prepare('SELECT * FROM debt_payments WHERE debt_id = ? ORDER BY received_date').all(debtId) as any[];
-    const comms = db.getDb().prepare('SELECT * FROM debt_communications WHERE debt_id = ? ORDER BY logged_at').all(debtId) as any[];
-    const evidence = db.getDb().prepare('SELECT * FROM debt_evidence WHERE debt_id = ? ORDER BY date_of_evidence').all(debtId) as any[];
-    const legalActions = db.getDb().prepare('SELECT * FROM debt_legal_actions WHERE debt_id = ? ORDER BY created_at').all(debtId) as any[];
-    const stages = db.getDb().prepare('SELECT * FROM debt_pipeline_stages WHERE debt_id = ? ORDER BY entered_at').all(debtId) as any[];
-
-    // ── Formatting helpers ────────────────────────────────
-    const esc = (s: unknown): string => {
-      if (s === null || s === undefined || s === '') return '';
-      return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    };
-    const fmtMoney = (n: unknown): string =>
-      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n) || 0);
-    const fmtDate = (d: unknown): string => {
-      if (!d) return '\u2014';
-      try {
-        const s = String(d);
-        // Date-only (YYYY-MM-DD) → parse as local noon to avoid TZ shifting the day
-        const dt = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T12:00:00') : new Date(s);
-        if (isNaN(dt.getTime())) return esc(s);
-        return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-      } catch { return esc(d); }
-    };
-    const fmtDateTime = (d: unknown): string => {
-      if (!d) return '\u2014';
-      try {
-        const dt = new Date(String(d));
-        if (isNaN(dt.getTime())) return esc(d);
-        return dt.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-      } catch { return esc(d); }
-    };
-    // "collections_agency" → "Collections Agency"
-    const titleCase = (s: unknown): string => {
-      if (!s) return '\u2014';
-      return String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    };
-    const sanitizeFilename = (s: string): string =>
-      s.replace(/[\/\\?%*:|"<>]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Case File';
-
-    const total = (debt.original_amount || 0) + (debt.interest_accrued || 0) + (debt.fees_accrued || 0) - (debt.payments_made || 0);
-
-    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Debt Case File</title><style>
-      * { box-sizing: border-box; }
-      body { font-family: -apple-system, 'Segoe UI', Arial, sans-serif; color: #0f172a; padding: 40px; font-size: 13px; line-height: 1.5; }
-      h1 { font-size: 22px; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin: 0 0 16px; }
-      h2 { font-size: 15px; margin: 28px 0 10px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; color: #0f172a; }
-      p { margin: 4px 0; }
-      table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
-      th, td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; vertical-align: top; }
-      th { background: #f1f5f9; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
-      .label { font-weight: 600; width: 180px; color: #475569; }
-      .meta { color: #64748b; font-size: 11px; margin-bottom: 4px; }
-      .empty { color: #64748b; font-style: italic; padding: 8px 0; }
-      .cover-line { padding: 3px 0; }
-      .num { text-align: right; font-variant-numeric: tabular-nums; }
-      .comm-card { margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 3px; padding: 10px 12px; }
-      .comm-subject { font-weight: 700; color: #0f172a; }
-      .comm-body { white-space: pre-wrap; color: #334155; margin-top: 4px; }
-    </style></head><body>`;
-
-    // Cover
-    html += `<h1>Debt Collection Case File</h1>`;
-    html += `<p class="cover-line"><strong>Debtor:</strong> ${esc(debt.debtor_name)}</p>`;
-    html += `<p class="cover-line"><strong>Company:</strong> ${esc(company?.name || '')}</p>`;
-    html += `<p class="cover-line"><strong>Generated:</strong> ${fmtDateTime(new Date())}</p>`;
-    html += `<p class="cover-line"><strong>Total Due:</strong> ${fmtMoney(total)}</p>`;
-
-    // Debt Summary
-    html += `<h2>1. Debt Summary</h2><table>`;
-    const summaryRows: [string, string][] = [
-      ['Type', titleCase(debt.type)],
-      ['Status', titleCase(debt.status)],
-      ['Original Amount', fmtMoney(debt.original_amount)],
-      ['Interest Accrued', fmtMoney(debt.interest_accrued)],
-      ['Fees', fmtMoney(debt.fees_accrued)],
-      ['Payments Made', fmtMoney(debt.payments_made)],
-      ['Balance Due', fmtMoney(total)],
-      ['Due Date', fmtDate(debt.due_date)],
-      ['Delinquent Date', fmtDate(debt.delinquent_date)],
-      ['Interest Rate', `${((debt.interest_rate || 0) * 100).toFixed(2)}% (${esc(debt.interest_type || 'simple')})`],
-      ['Jurisdiction', esc(debt.jurisdiction) || '\u2014'],
-      ['Current Stage', titleCase(debt.current_stage)],
-    ];
-    for (const [label, value] of summaryRows) {
-      html += `<tr><td class="label">${esc(label)}</td><td>${value}</td></tr>`;
-    }
-    html += `</table>`;
-
-    // Payment History
-    html += `<h2>2. Payment History</h2>`;
-    if (payments.length === 0) {
-      html += `<div class="empty">No payments recorded.</div>`;
-    } else {
-      html += `<table><thead><tr><th>Date</th><th class="num">Amount</th><th>Method</th><th>Reference</th><th>Notes</th></tr></thead><tbody>`;
-      for (const p of payments) {
-        html += `<tr>
-          <td>${fmtDate(p.received_date)}</td>
-          <td class="num">${fmtMoney(p.amount)}</td>
-          <td>${titleCase(p.method)}</td>
-          <td>${esc(p.reference_number) || '\u2014'}</td>
-          <td>${esc(p.notes)}</td>
-        </tr>`;
-      }
-      html += `</tbody></table>`;
-    }
-
-    // Communication Log
-    html += `<h2>3. Communication Log</h2>`;
-    if (comms.length === 0) {
-      html += `<div class="empty">No communications recorded.</div>`;
-    } else {
-      for (const c of comms) {
-        html += `<div class="comm-card">
-          <div class="meta">${fmtDateTime(c.logged_at)} \u2022 ${titleCase(c.type)} \u2022 ${titleCase(c.direction)}</div>
-          <div class="comm-subject">${esc(c.subject) || '(No subject)'}</div>
-          <div class="comm-body">${esc(c.body)}</div>
-          ${c.outcome ? `<div style="margin-top:6px;color:#64748b;"><em>Outcome:</em> ${esc(c.outcome)}</div>` : ''}
-        </div>`;
-      }
-    }
-
-    // Evidence Timeline
-    html += `<h2>4. Evidence Timeline</h2>`;
-    if (evidence.length === 0) {
-      html += `<div class="empty">No evidence items.</div>`;
-    } else {
-      html += `<table><thead><tr><th>Date</th><th>Type</th><th>Title</th><th>Description</th><th>Relevance</th></tr></thead><tbody>`;
-      for (const e of evidence) {
-        html += `<tr>
-          <td>${fmtDate(e.date_of_evidence)}</td>
-          <td>${titleCase(e.type)}</td>
-          <td>${esc(e.title)}</td>
-          <td>${esc(e.description)}</td>
-          <td>${titleCase(e.court_relevance)}</td>
-        </tr>`;
-      }
-      html += `</tbody></table>`;
-    }
-
-    // Interest Breakdown
-    html += `<h2>5. Interest Calculation</h2>`;
-    html += `<p><strong>Type:</strong> ${titleCase(debt.interest_type || 'simple')} &nbsp;|&nbsp; <strong>Rate:</strong> ${((debt.interest_rate || 0) * 100).toFixed(2)}% &nbsp;|&nbsp; <strong>Start:</strong> ${fmtDate(debt.interest_start_date)}</p>`;
-    html += `<p><strong>Accrued:</strong> ${fmtMoney(debt.interest_accrued)}</p>`;
-
-    // Legal Actions
-    html += `<h2>6. Legal Actions</h2>`;
-    if (legalActions.length === 0) {
-      html += `<div class="empty">No legal actions.</div>`;
-    } else {
-      for (const la of legalActions) {
-        html += `<div style="margin-bottom:12px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:3px;">`;
-        html += `<p><strong>${titleCase(la.action_type)}</strong> \u2014 Status: ${titleCase(la.status)} | Case: ${esc(la.case_number) || '\u2014'}</p>`;
-        if (la.hearing_date) html += `<p class="meta">Hearing: ${fmtDate(la.hearing_date)} ${esc(la.hearing_time) || ''}</p>`;
-        if (la.judgment_amount) html += `<p class="meta">Judgment: ${fmtMoney(la.judgment_amount)}</p>`;
-        html += `</div>`;
-      }
-    }
-
-    // Pipeline History
-    html += `<h2>7. Pipeline History</h2>`;
-    html += `<table><thead><tr><th>Stage</th><th>Entered</th><th>Exited</th><th>Auto</th><th>Notes</th></tr></thead><tbody>`;
-    for (const s of stages) {
-      html += `<tr>
-        <td>${titleCase(s.stage)}</td>
-        <td>${fmtDateTime(s.entered_at)}</td>
-        <td>${s.exited_at ? fmtDateTime(s.exited_at) : '\u2014'}</td>
-        <td>${s.auto_advanced ? 'Yes' : 'No'}</td>
-        <td>${esc(s.notes)}</td>
-      </tr>`;
-    }
-    html += `</tbody></table>`;
-
-    html += `</body></html>`;
-
-    const safeName = sanitizeFilename(debt.debtor_name || 'Unknown');
-    const result = await saveHTMLAsPDF(html, `Debt Case File \u2014 ${safeName}`, {
-      defaultFilename: buildPdfFilename('debt-case', safeName),
-    });
-    if (result.path) {
-      const companyId = db.getCurrentCompanyId();
-      if (companyId) {
-        try { db.logAudit(companyId, 'debts', debt.id, 'export_pdf', { path: result.path }); }
-        catch { /* audit best-effort */ }
-      }
-    }
-    // Preserve old contract: return the path string (empty if cancelled).
-    return result.path || '';
   });
 
   ipcMain.handle('debt:seed-automation', (_event, { companyId }: { companyId: string }) => {
@@ -10220,7 +8407,7 @@ export function registerIpcHandlers(): void {
         planId = plan.id;
         const freqDays: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30 };
         const days = freqDays[frequency] || 30;
-        let d = new Date(start_date + 'T12:00:00');
+        const d = new Date(start_date + 'T12:00:00');
         // CALC: Standard amortization. Each installment payment is constant
         // (= installment_amount). Per-installment interest = balance * rate
         // per period; principal = payment - interest; new balance = balance
@@ -10386,22 +8573,22 @@ export function registerIpcHandlers(): void {
       const now = new Date();
 
       for (const debt of debts) {
-        const stageIdx = STAGE_ORDER.indexOf((debt as any).current_stage);
+        const stageIdx = STAGE_ORDER.indexOf((debt).current_stage);
         if (stageIdx < 0 || stageIdx >= STAGE_ORDER.length - 1) continue;
 
-        const lastActivity = new Date((debt as any).updated_at || (debt as any).created_at);
+        const lastActivity = new Date((debt).updated_at || (debt).created_at);
         const daysSince = Math.floor((now.getTime() - lastActivity.getTime()) / 86400000);
 
         if (daysSince >= thresholdDays) {
           const nextStage = STAGE_ORDER[stageIdx + 1];
-          db.update('debts', (debt as any).id, { current_stage: nextStage });
-          db.create('debt_pipeline_stages', { debt_id: (debt as any).id, stage: nextStage, auto_advanced: 1, advanced_by: 'system' });
+          db.update('debts', (debt).id, { current_stage: nextStage });
+          db.create('debt_pipeline_stages', { debt_id: (debt).id, stage: nextStage, auto_advanced: 1, advanced_by: 'system' });
           db.create('debt_communications', {
-            debt_id: (debt as any).id,
+            debt_id: (debt).id,
             type: 'letter',
             direction: 'outbound',
             subject: 'Auto-advance notification',
-            body: `Auto-advanced from ${(debt as any).current_stage} to ${nextStage} after ${daysSince} days of inactivity.`,
+            body: `Auto-advanced from ${(debt).current_stage} to ${nextStage} after ${daysSince} days of inactivity.`,
             outcome: 'auto_advanced',
             logged_by: 'system',
           });
@@ -11488,7 +9675,7 @@ export function registerIpcHandlers(): void {
   // ─── State Tax Rate ───────────────────────────────────
   ipcMain.handle('payroll:state-tax-rate', (_event, { state, grossPay, allowances, periodsPerYear }: { state: string; grossPay: number; allowances: number; periodsPerYear: number }) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+       
       const { stateTaxEngine } = require('../services/StateTaxEngine');
       const withholding = stateTaxEngine.getStateWithholding(state, grossPay, allowances, periodsPerYear);
       const sdi = stateTaxEngine.getSdiWithholding(state, grossPay);
@@ -11916,206 +10103,6 @@ export function registerIpcHandlers(): void {
     } catch (err: any) { return { error: err?.message }; }
   });
 
-  // ─── Chart of Accounts (CoA) Enhancements ──────────────────────
-  ipcMain.handle('accounts:suggest-code', (_event, { companyId, type }: { companyId: string; type: string }) => {
-    try {
-      const ranges: Record<string, [number, number]> = {
-        asset: [1000, 1999], liability: [2000, 2999], equity: [3000, 3999],
-        revenue: [4000, 4999], expense: [5000, 9999],
-      };
-      const range = ranges[type] || [1000, 9999];
-      const rows = db.runQuery(
-        `SELECT code FROM accounts WHERE company_id = ? AND CAST(code AS INTEGER) BETWEEN ? AND ? ORDER BY CAST(code AS INTEGER)`,
-        [companyId, range[0], range[1]]
-      );
-      const used = new Set<number>(rows.map((r: any) => parseInt(r.code, 10)).filter((n: number) => !isNaN(n)));
-      let candidate = range[0];
-      if (used.size > 0) {
-        const max = Math.max(...Array.from(used));
-        candidate = Math.floor(max / 10) * 10 + 10;
-      }
-      while (used.has(candidate) && candidate <= range[1]) candidate += 10;
-      return { code: String(candidate), range };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('accounts:merge', (_event, { sourceId, targetId }: { sourceId: string; targetId: string }) => {
-    try {
-      const dbi = db.getDb();
-      const tx = dbi.transaction(() => {
-        dbi.prepare('UPDATE journal_entry_lines SET account_id = ? WHERE account_id = ?').run(targetId, sourceId);
-        try { dbi.prepare('UPDATE invoice_line_items SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
-        try { dbi.prepare('UPDATE expenses SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
-        try { dbi.prepare('UPDATE bills SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
-        try { dbi.prepare('UPDATE bill_line_items SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
-        try { dbi.prepare('UPDATE bill_payments SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
-        try { dbi.prepare('UPDATE expense_line_items SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
-        try { dbi.prepare('UPDATE bank_accounts SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
-        try { dbi.prepare('UPDATE budget_lines SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
-        try { dbi.prepare('UPDATE po_line_items SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
-        try { dbi.prepare('UPDATE credit_note_items SET account_id = ? WHERE account_id = ?').run(targetId, sourceId); } catch {}
-        try { dbi.prepare('UPDATE accounts SET parent_id = ? WHERE parent_id = ?').run(targetId, sourceId); } catch {}
-        dbi.prepare('DELETE FROM accounts WHERE id = ?').run(sourceId);
-      });
-      tx();
-      scheduleAutoBackup();
-      return { success: true };
-    } catch (err: any) { return { error: err?.message || String(err) }; }
-  });
-
-  ipcMain.handle('accounts:bulk-toggle-active', (_event, { ids, isActive }: { ids: string[]; isActive: boolean }) => {
-    try {
-      const dbi = db.getDb();
-      const stmt = dbi.prepare("UPDATE accounts SET is_active = ?, updated_at = datetime('now') WHERE id = ?");
-      const tx = dbi.transaction((rows: string[]) => { for (const id of rows) stmt.run(isActive ? 1 : 0, id); });
-      tx(ids);
-      scheduleAutoBackup();
-      return { success: true, count: ids.length };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('accounts:set-opening-balance', (_event, { companyId, accountId, amount, date }: { companyId: string; accountId: string; amount: number; date: string }) => {
-    try {
-      const dbi = db.getDb();
-      const acct = dbi.prepare('SELECT * FROM accounts WHERE id = ?').get(accountId) as any;
-      if (!acct) return { error: 'Account not found' };
-      let obe = dbi.prepare("SELECT * FROM accounts WHERE company_id = ? AND name = 'Opening Balance Equity' LIMIT 1").get(companyId) as any;
-      if (!obe) {
-        obe = db.create('accounts', {
-          company_id: companyId, code: '3900', name: 'Opening Balance Equity',
-          type: 'equity', subtype: "Owner's Equity",
-        });
-      }
-      const isDebitNormal = ['asset', 'expense'].includes(acct.type);
-      const acctDebit = isDebitNormal ? amount : 0;
-      const acctCredit = isDebitNormal ? 0 : amount;
-      const obeDebit = isDebitNormal ? 0 : amount;
-      const obeCredit = isDebitNormal ? amount : 0;
-      const entryNumber = `OB-${Date.now()}`;
-      const jeId = uuid();
-      db.getDb().prepare(`
-        INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_adjusting)
-        VALUES (?, ?, ?, ?, ?, 0, 1)
-      `).run(jeId, companyId, entryNumber, date, `Opening balance: ${acct.name}`);
-      db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: accountId, debit: acctDebit, credit: acctCredit, description: 'Opening balance' });
-      db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: obe.id, debit: obeDebit, credit: obeCredit, description: 'Opening balance offset' });
-      db.getDb().prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
-      scheduleAutoBackup();
-      return { success: true, entry_id: jeId };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('accounts:close-to-retained-earnings', (_event, { companyId, periodEndDate }: { companyId: string; periodEndDate: string }) => {
-    try {
-      const dbi = db.getDb();
-      let re = dbi.prepare("SELECT * FROM accounts WHERE company_id = ? AND name = 'Retained Earnings' LIMIT 1").get(companyId) as any;
-      if (!re) {
-        re = db.create('accounts', { company_id: companyId, code: '3200', name: 'Retained Earnings', type: 'equity', subtype: 'Retained Earnings' });
-      }
-      const accts = dbi.prepare(
-        `SELECT a.id, a.type, a.name, COALESCE((SELECT SUM(jel.debit - jel.credit) FROM journal_entry_lines jel
-            JOIN journal_entries je ON jel.journal_entry_id = je.id
-            WHERE jel.account_id = a.id AND je.company_id = ? AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */), 0) as net_dr
-          FROM accounts a WHERE a.company_id = ? AND a.type IN ('revenue','expense')`
-      ).all(companyId, periodEndDate, companyId) as any[];
-      const entryNumber = `CLOSE-${periodEndDate}`;
-      const jeId = uuid();
-      db.getDb().prepare(`
-        INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_adjusting)
-        VALUES (?, ?, ?, ?, ?, 0, 1)
-      `).run(jeId, companyId, entryNumber, periodEndDate, `Year-end closing entries — ${periodEndDate}`);
-      let reDr = 0, reCr = 0;
-      for (const a of accts) {
-        const net = Number(a.net_dr) || 0;
-        if (Math.abs(net) < 0.005) continue;
-        if (net > 0) {
-          db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: a.id, debit: 0, credit: net, description: `Close ${a.name}` });
-          reDr += net;
-        } else {
-          db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: a.id, debit: -net, credit: 0, description: `Close ${a.name}` });
-          reCr += -net;
-        }
-      }
-      const reNet = reCr - reDr;
-      if (reNet > 0) db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: re.id, debit: 0, credit: reNet, description: 'Net income to RE' });
-      else if (reNet < 0) db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: re.id, debit: -reNet, credit: 0, description: 'Net loss to RE' });
-      db.getDb().prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
-      scheduleAutoBackup();
-      return { success: true, entry_id: jeId, accounts_closed: accts.length };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('accounts:stats', (_event, { companyId }: { companyId: string }) => {
-    try {
-      return db.runQuery(
-        `SELECT a.id, a.type,
-          COALESCE((SELECT SUM(jel.debit - jel.credit) FROM journal_entry_lines jel
-            JOIN journal_entries je ON jel.journal_entry_id = je.id
-            WHERE jel.account_id = a.id AND je.company_id = ?), 0) as net_dr,
-          (SELECT MAX(je.date) FROM journal_entry_lines jel
-            JOIN journal_entries je ON jel.journal_entry_id = je.id
-            WHERE jel.account_id = a.id AND je.company_id = ?) as last_txn_date,
-          (SELECT COUNT(*) FROM journal_entry_lines jel
-            JOIN journal_entries je ON jel.journal_entry_id = je.id
-            WHERE jel.account_id = a.id AND je.company_id = ? AND je.date >= date('now','-90 days')) as activity_90d
-        FROM accounts a WHERE a.company_id = ?`,
-        [companyId, companyId, companyId, companyId]
-      );
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('accounts:history-pdf', async (_event, { accountId, companyId }: { accountId: string; companyId: string }) => {
-    try {
-      const acct = db.getById('accounts', accountId);
-      if (!acct) return { error: 'Account not found' };
-      const lines = db.runQuery(
-        `SELECT je.date, je.entry_number, je.description as je_desc, jel.debit, jel.credit, jel.description as line_desc
-         FROM journal_entry_lines jel JOIN journal_entries je ON jel.journal_entry_id = je.id
-         WHERE jel.account_id = ? AND je.company_id = ? ORDER BY je.date, je.entry_number`,
-        [accountId, companyId]
-      );
-      const company = db.getById('companies', companyId) || {};
-      let runningBal = 0;
-      const rowHtml = lines.map((l: any) => {
-        runningBal += (Number(l.debit) || 0) - (Number(l.credit) || 0);
-        return `<tr><td style="padding:4px 8px;border-bottom:1px solid #eee">${l.date}</td>
-          <td style="padding:4px 8px;border-bottom:1px solid #eee">${l.entry_number || ''}</td>
-          <td style="padding:4px 8px;border-bottom:1px solid #eee">${String(l.line_desc || l.je_desc || '').replace(/</g, '&lt;')}</td>
-          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${Number(l.debit || 0).toFixed(2)}</td>
-          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${Number(l.credit || 0).toFixed(2)}</td>
-          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${runningBal.toFixed(2)}</td></tr>`;
-      }).join('');
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Account History — ${acct.code}</title>
-        <style>body{font-family:system-ui,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin:0 0 4px}h2{font-size:13px;color:#666;font-weight:normal;margin:0 0 16px}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#f5f5f5;text-align:left;padding:6px 8px;border-bottom:2px solid #333}</style></head>
-        <body><h1>${(company as any).name || ''}</h1><h2>Account History — ${acct.code} ${acct.name}</h2>
-        <p style="font-size:11px;color:#555">Type: ${acct.type} • Subtype: ${acct.subtype || '—'} • Generated: ${localToday()}</p>
-        <table><thead><tr><th>Date</th><th>Entry #</th><th>Description</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr></thead>
-        <tbody>${rowHtml || '<tr><td colspan="6" style="padding:16px;text-align:center;color:#888">No transactions</td></tr>'}</tbody></table>
-        </body></html>`;
-      return await openPrintPreview(html, `Account ${acct.code} History`);
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('accounts:apply-template', (_event, { companyId, accounts }: { companyId: string; accounts: Array<{ code: string; name: string; type: string; subtype?: string }> }) => {
-    try {
-      const dbi = db.getDb();
-      const existing = new Set<string>(
-        (dbi.prepare('SELECT code FROM accounts WHERE company_id = ?').all(companyId) as any[]).map(r => r.code)
-      );
-      let created = 0;
-      const tx = dbi.transaction(() => {
-        for (const a of accounts) {
-          if (existing.has(a.code)) continue;
-          db.create('accounts', { company_id: companyId, ...a });
-          created++;
-        }
-      });
-      tx();
-      if (created > 0) scheduleAutoBackup();
-      return { success: true, created };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
   ipcMain.handle('backup:restore-from-vps', async () => {
     try {
       const dbPath = db.getDbPath();
@@ -12141,327 +10128,6 @@ export function registerIpcHandlers(): void {
   });
 
   // ═══ Period close + Reconciliation + Compliance (2026-04-23) ═══
-
-  ipcMain.handle('close:check-date-lock', (_e, { companyId, date }: { companyId: string; date: string }) => {
-    try {
-      const row = db.getDb().prepare(
-        `SELECT id, period_start, period_end, reason, locked_through_date
-         FROM period_locks
-         WHERE company_id = ? AND (unlocked_at IS NULL OR unlocked_at = '')
-           AND (
-             (period_start != '' AND period_end != '' AND ? >= period_start AND ? <= period_end)
-             OR (locked_through_date != '' AND ? <= locked_through_date)
-           )
-         ORDER BY created_at DESC LIMIT 1`
-      ).get(companyId, date, date, date) as any;
-      return { locked: !!row, lock: row || null };
-    } catch (err: any) { return { locked: false, error: err?.message }; }
-  });
-
-  ipcMain.handle('close:list-locks', (_e, { companyId }: { companyId: string }) => {
-    try {
-      return db.getDb().prepare(
-        `SELECT * FROM period_locks WHERE company_id = ? ORDER BY created_at DESC`
-      ).all(companyId);
-    } catch { return []; }
-  });
-
-  ipcMain.handle('close:lock-period', (_e, { companyId, periodStart, periodEnd, lockedBy, reason }: any) => {
-    try {
-      const id = uuid();
-      db.getDb().prepare(
-        `INSERT INTO period_locks (id, company_id, period_start, period_end, locked_through_date, locked_by, reason, note)
-         VALUES (?,?,?,?,?,?,?,?)`
-      ).run(id, companyId, periodStart || '', periodEnd || '', periodEnd || '', lockedBy || '', reason || '', reason || '');
-      db.logAudit(companyId, 'period_lock', id, 'create', { periodStart, periodEnd, reason });
-      scheduleAutoBackup();
-      return { id };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('close:unlock-period', (_e, { lockId, unlockedBy, reason, override }: any) => {
-    try {
-      const lock = db.getDb().prepare(`SELECT * FROM period_locks WHERE id = ?`).get(lockId) as any;
-      if (!lock) return { error: 'Lock not found' };
-      db.getDb().prepare(
-        `UPDATE period_locks SET unlocked_at = datetime('now'), unlocked_by = ?, unlock_reason = ? WHERE id = ?`
-      ).run(unlockedBy || '', reason || '', lockId);
-      db.logAudit(lock.company_id, 'period_lock', lockId, override ? 'override' : 'unlock', { reason, by: unlockedBy });
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('close:checklist-list', (_e, { companyId, periodLabel }: { companyId: string; periodLabel: string }) => {
-    try {
-      return db.getDb().prepare(
-        `SELECT * FROM period_close_checklist WHERE company_id = ? AND period_label = ? ORDER BY created_at`
-      ).all(companyId, periodLabel);
-    } catch { return []; }
-  });
-
-  ipcMain.handle('close:checklist-toggle', (_e, { companyId, periodLabel, itemKey, itemLabel, completed, skipped, by, note }: any) => {
-    try {
-      const existing = db.getDb().prepare(
-        `SELECT id FROM period_close_checklist WHERE company_id = ? AND period_label = ? AND item_key = ?`
-      ).get(companyId, periodLabel, itemKey) as any;
-      const now = new Date().toISOString();
-      if (existing) {
-        db.getDb().prepare(
-          `UPDATE period_close_checklist SET completed_at = ?, completed_by = ?, skipped = ?, note = ? WHERE id = ?`
-        ).run(completed ? now : '', by || '', skipped ? 1 : 0, note || '', existing.id);
-        scheduleAutoBackup();
-        return { id: existing.id };
-      }
-      const id = uuid();
-      db.getDb().prepare(
-        `INSERT INTO period_close_checklist (id, company_id, period_label, item_key, item_label, completed_at, completed_by, skipped, note)
-         VALUES (?,?,?,?,?,?,?,?,?)`
-      ).run(id, companyId, periodLabel, itemKey, itemLabel, completed ? now : '', by || '', skipped ? 1 : 0, note || '');
-      scheduleAutoBackup();
-      return { id };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  function buildClosingPreview(companyId: string, periodStart: string, periodEnd: string) {
-    const lines = db.getDb().prepare(
-      `SELECT a.id AS account_id, a.code, a.name, a.type,
-              SUM(COALESCE(jel.debit,0)) AS debit_sum,
-              SUM(COALESCE(jel.credit,0)) AS credit_sum
-       FROM accounts a
-       LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
-       LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
-         AND je.company_id = ? AND je.is_posted = 1
-         AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
-       WHERE a.company_id = ? AND a.type IN ('revenue','expense')
-       GROUP BY a.id`
-    ).all(companyId, periodStart, periodEnd, companyId) as any[];
-
-    const closing: Array<{ account_id: string; code: string; name: string; type: string; debit: number; credit: number }> = [];
-    let netIncome = 0;
-    for (const r of lines) {
-      const revBal = (r.credit_sum || 0) - (r.debit_sum || 0);
-      const expBal = (r.debit_sum || 0) - (r.credit_sum || 0);
-      if (r.type === 'revenue') {
-        if (Math.abs(revBal) < 0.005) continue;
-        closing.push({ account_id: r.account_id, code: r.code, name: r.name, type: r.type, debit: revBal, credit: 0 });
-        netIncome += revBal;
-      } else {
-        if (Math.abs(expBal) < 0.005) continue;
-        closing.push({ account_id: r.account_id, code: r.code, name: r.name, type: r.type, debit: 0, credit: expBal });
-        netIncome -= expBal;
-      }
-    }
-    const re = db.getDb().prepare(
-      `SELECT id, code, name FROM accounts WHERE company_id = ? AND subtype='retained' LIMIT 1`
-    ).get(companyId) as any;
-    return { lines: closing, netIncome, retainedEarnings: re || null };
-  }
-
-  ipcMain.handle('close:closing-preview', (_e, { companyId, periodStart, periodEnd }: any) => {
-    try { return buildClosingPreview(companyId, periodStart, periodEnd); }
-    catch (err: any) { return { error: err?.message, lines: [], netIncome: 0, retainedEarnings: null }; }
-  });
-
-  ipcMain.handle('close:closing-commit', (_e, { companyId, periodStart, periodEnd, closedBy }: any) => {
-    try {
-      const preview = buildClosingPreview(companyId, periodStart, periodEnd);
-      if (!preview.retainedEarnings) return { error: 'No Retained Earnings account found.' };
-      if (!preview.lines.length) return { error: 'No revenue/expense balances to close.' };
-
-      const dbInstance = db.getDb();
-      const jeId = uuid();
-      const logId = uuid();
-      const lockId = uuid();
-      const entryNumber = `CLOSE-${periodEnd}`;
-
-      // INTEGRITY: period close writes JE header + JE lines + close_log + period_lock.
-      // If any one fails the period would otherwise be left half-closed (orphan
-      // JE, missing lock, etc.). Wrap the whole sequence atomically.
-      const closeTx = dbInstance.transaction(() => {
-        dbInstance.prepare(
-          `INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_closing, posted_by)
-           VALUES (?,?,?,?,?,0,1,?)`
-        ).run(jeId, companyId, entryNumber, periodEnd, `Year-end closing entries (${periodStart} to ${periodEnd})`, closedBy || '');
-
-        let lineNo = 0;
-        for (const l of preview.lines) {
-          dbInstance.prepare(
-            `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order)
-             VALUES (?,?,?,?,?,?,?)`
-          ).run(uuid(), jeId, l.account_id, l.debit, l.credit, `Close ${l.code} ${l.name}`, lineNo++);
-        }
-        const reDebit = preview.netIncome < 0 ? Math.abs(preview.netIncome) : 0;
-        const reCredit = preview.netIncome > 0 ? preview.netIncome : 0;
-        dbInstance.prepare(
-          `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order)
-           VALUES (?,?,?,?,?,?,?)`
-        ).run(uuid(), jeId, preview.retainedEarnings.id, reDebit, reCredit, 'To Retained Earnings', lineNo++);
-        dbInstance.prepare("UPDATE journal_entries SET is_posted = 1 WHERE id = ?").run(jeId);
-
-        dbInstance.prepare(
-          `INSERT INTO period_close_log (id, company_id, period_start, period_end, closed_at, closed_by, closing_je_id, net_income)
-           VALUES (?,?,?,?,datetime('now'),?,?,?)`
-        ).run(logId, companyId, periodStart, periodEnd, closedBy || '', jeId, preview.netIncome);
-
-        dbInstance.prepare(
-          `INSERT INTO period_locks (id, company_id, period_start, period_end, locked_through_date, locked_by, reason)
-           VALUES (?,?,?,?,?,?,?)`
-        ).run(lockId, companyId, periodStart, periodEnd, periodEnd, closedBy || '', 'Year-end close');
-      });
-      closeTx();
-
-      db.logAudit(companyId, 'period_close', logId, 'create', { periodStart, periodEnd, netIncome: preview.netIncome, jeId });
-      scheduleAutoBackup();
-      return { ok: true, journalEntryId: jeId, netIncome: preview.netIncome, logId };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('close:log-list', (_e, { companyId }: { companyId: string }) => {
-    try {
-      return db.getDb().prepare(
-        `SELECT pcl.*, je.entry_number AS je_number
-         FROM period_close_log pcl
-         LEFT JOIN journal_entries je ON je.id = pcl.closing_je_id
-         WHERE pcl.company_id = ? ORDER BY pcl.closed_at DESC`
-      ).all(companyId);
-    } catch { return []; }
-  });
-
-  function _glBalanceFor(companyId: string, accountId: string, asOfDate: string): number {
-    const r = db.getDb().prepare(
-      `SELECT SUM(COALESCE(jel.debit,0) - COALESCE(jel.credit,0)) AS bal
-       FROM journal_entry_lines jel
-       JOIN journal_entries je ON je.id = jel.journal_entry_id
-       WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */`
-    ).get(accountId, companyId, asOfDate) as any;
-    return r?.bal || 0;
-  }
-
-  function _subLedgerForAccount(companyId: string, account: any, asOfDate: string): { total: number; items: any[] } {
-    const sub = (account.subtype || '').toLowerCase();
-    const name = (account.name || '').toLowerCase();
-    if (name.includes('receivable') || sub === 'ar') {
-      const items = db.getDb().prepare(
-        `SELECT id, invoice_number AS reference, date, total - COALESCE(amount_paid,0) AS amount, client_id, status
-         FROM invoices WHERE company_id = ? AND date <= ? AND COALESCE(amount_paid,0) < total`
-      ).all(companyId, asOfDate) as any[];
-      return { total: items.reduce((s, i) => s + (i.amount || 0), 0), items };
-    }
-    if (name.includes('payable') && !name.includes('payroll') && !name.includes('tax')) {
-      try {
-        const items = db.getDb().prepare(
-          `SELECT id, bill_number AS reference, issue_date AS date, total - COALESCE(amount_paid,0) AS amount, vendor_id, status
-           FROM bills WHERE company_id = ? AND issue_date <= ? AND COALESCE(amount_paid,0) < total`
-        ).all(companyId, asOfDate) as any[];
-        return { total: items.reduce((s, i) => s + (i.amount || 0), 0), items };
-      } catch { return { total: 0, items: [] }; }
-    }
-    if (name.includes('inventory') || sub === 'inventory') {
-      try {
-        const items = db.getDb().prepare(
-          `SELECT id, sku AS reference, name, quantity AS qty, unit_cost,
-                  quantity * unit_cost AS amount FROM inventory_items WHERE company_id = ?`
-        ).all(companyId) as any[];
-        return { total: items.reduce((s, i) => s + (i.amount || 0), 0), items };
-      } catch { return { total: 0, items: [] }; }
-    }
-    return { total: 0, items: [] };
-  }
-
-  ipcMain.handle('recon:compute', (_e, { companyId, accountId, asOfDate }: any) => {
-    try {
-      const account = db.getById('accounts', accountId);
-      if (!account) return { error: 'Account not found' };
-      const sub = _subLedgerForAccount(companyId, account, asOfDate);
-      const gl = _glBalanceFor(companyId, accountId, asOfDate);
-      const glDisplay = account.type === 'liability' ? -gl : gl;
-      return {
-        account, asOfDate,
-        sub_ledger_total: sub.total, gl_total: glDisplay,
-        variance: sub.total - glDisplay,
-        sub_ledger_items: sub.items,
-      };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('recon:auto-match', (_e, { companyId, accountId, asOfDate }: any) => {
-    try {
-      const account = db.getById('accounts', accountId);
-      if (!account) return { matches: [], suggestions: [] };
-      const sub = _subLedgerForAccount(companyId, account, asOfDate);
-      const glLines = db.getDb().prepare(
-        `SELECT jel.id, jel.debit, jel.credit, jel.description, je.entry_number, je.date
-         FROM journal_entry_lines jel
-         JOIN journal_entries je ON je.id = jel.journal_entry_id
-         WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */`
-      ).all(accountId, companyId, asOfDate) as any[];
-
-      const matches: any[] = [];
-      const suggestions: any[] = [];
-      for (const subItem of sub.items) {
-        const refMatch = glLines.find(g => subItem.reference && (g.entry_number === subItem.reference || (g.description || '').includes(subItem.reference)));
-        if (refMatch) { matches.push({ sub: subItem, gl: refMatch, reason: 'reference' }); continue; }
-        const subAmt = Math.abs(subItem.amount || 0);
-        const subDate = new Date(subItem.date).getTime();
-        const candidate = glLines.find(g => {
-          const glAmt = Math.abs((g.debit || 0) - (g.credit || 0));
-          const dayDiff = Math.abs((new Date(g.date).getTime() - subDate) / 86400000);
-          return Math.abs(glAmt - subAmt) <= 1 && dayDiff <= 3;
-        });
-        if (candidate) suggestions.push({ sub: subItem, gl: candidate, reason: 'amount+date' });
-      }
-      return { matches, suggestions };
-    } catch (err: any) { return { error: err?.message, matches: [], suggestions: [] }; }
-  });
-
-  ipcMain.handle('recon:save', (_e, data: any) => {
-    try {
-      const id = uuid();
-      db.getDb().prepare(
-        `INSERT INTO account_reconciliations
-         (id, company_id, account_id, as_of_date, sub_ledger_total, gl_total, variance, reconciled_at, reconciled_by, notes, matches)
-         VALUES (?,?,?,?,?,?,?,datetime('now'),?,?,?)`
-      ).run(
-        id, data.companyId, data.accountId, data.asOfDate,
-        data.subLedgerTotal || 0, data.glTotal || 0, data.variance || 0,
-        data.reconciledBy || '', data.notes || '', JSON.stringify(data.matches || [])
-      );
-      db.logAudit(data.companyId, 'account_reconciliation', id, 'create', { accountId: data.accountId, asOfDate: data.asOfDate });
-      scheduleAutoBackup();
-      return { id };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('recon:history', (_e, { companyId, accountId }: any) => {
-    try {
-      if (accountId) {
-        return db.getDb().prepare(
-          `SELECT r.*, a.code, a.name FROM account_reconciliations r LEFT JOIN accounts a ON a.id = r.account_id
-           WHERE r.company_id = ? AND r.account_id = ? ORDER BY r.as_of_date DESC`
-        ).all(companyId, accountId);
-      }
-      return db.getDb().prepare(
-        `SELECT r.*, a.code, a.name FROM account_reconciliations r LEFT JOIN accounts a ON a.id = r.account_id
-         WHERE r.company_id = ? ORDER BY r.as_of_date DESC`
-      ).all(companyId);
-    } catch { return []; }
-  });
-
-  ipcMain.handle('recon:intercompany', () => {
-    try {
-      return db.getDb().prepare(
-        `SELECT a.company_id, c.name AS company_name, a.id AS account_id, a.code, a.name,
-                SUM(COALESCE(jel.debit,0) - COALESCE(jel.credit,0)) AS balance
-         FROM accounts a
-         LEFT JOIN companies c ON c.id = a.company_id
-         LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
-         LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id AND je.is_posted = 1
-         WHERE LOWER(a.name) LIKE '%due to%' OR LOWER(a.name) LIKE '%due from%' OR LOWER(a.name) LIKE '%intercompany%'
-         GROUP BY a.id ORDER BY c.name, a.code`
-      ).all();
-    } catch { return []; }
-  });
 
   ipcMain.handle('compliance:account-audit', (_e, { companyId, accountId, limit = 200 }: any) => {
     try {
@@ -12622,292 +10288,6 @@ export function registerIpcHandlers(): void {
     } catch (err: any) { return { error: err?.message }; }
   });
 
-  // F8: Detect dormant accounts
-  ipcMain.handle('accounts:detect-dormant', (_e, { companyId, months }: { companyId: string; months?: number }) => {
-    try {
-      const m = months || 12;
-      const rows = db.getDb().prepare(
-        `SELECT a.id, a.code, a.name,
-          (SELECT MAX(je.date) FROM journal_entry_lines jel
-           JOIN journal_entries je ON jel.journal_entry_id = je.id
-           WHERE jel.account_id = a.id AND je.company_id = ?) as last_date
-         FROM accounts a WHERE a.company_id = ? AND COALESCE(a.deleted_at,'') = '' AND a.is_active = 1`
-      ).all(companyId, companyId) as any[];
-      const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - m);
-      const cutoffStr = cutoff.toISOString().slice(0, 10);
-      const dormant = rows.filter(r => !r.last_date || r.last_date < cutoffStr);
-      return { dormant: dormant.map(r => r.id), details: dormant };
-    } catch (err: any) { return { error: err?.message, dormant: [] }; }
-  });
-
-  // F11: QuickBooks IIF import (parse !ACCNT lines)
-  ipcMain.handle('accounts:parse-iif', (_e, { text }: { text: string }) => {
-    try {
-      const lines = text.split(/\r?\n/);
-      let header: string[] = [];
-      const out: Array<{ name: string; type: string; description?: string }> = [];
-      const typeMap: Record<string, string> = {
-        BANK: 'asset', AR: 'asset', AP: 'liability', OCASSET: 'asset', FIXASSET: 'asset',
-        OASSET: 'asset', CCARD: 'liability', OCLIAB: 'liability', LTLIAB: 'liability',
-        EQUITY: 'equity', INC: 'revenue', INCOME: 'revenue', OINC: 'revenue',
-        EXP: 'expense', EXPENSE: 'expense', OEXP: 'expense', COGS: 'expense',
-      };
-      for (const ln of lines) {
-        if (ln.startsWith('!ACCNT')) header = ln.split('\t');
-        else if (ln.startsWith('ACCNT') && header.length) {
-          const cells = ln.split('\t');
-          const get = (k: string) => cells[header.indexOf(k)] || '';
-          const name = get('NAME').trim();
-          const accntType = get('ACCNTTYPE').trim().toUpperCase();
-          if (!name) continue;
-          out.push({ name, type: typeMap[accntType] || 'asset', description: get('DESC') });
-        }
-      }
-      return { accounts: out };
-    } catch (err: any) { return { error: err?.message, accounts: [] }; }
-  });
-
-  // F11/F12: Bulk-create accounts from imported list
-  ipcMain.handle('accounts:bulk-create', (_e, { companyId, accounts }: { companyId: string; accounts: Array<any> }) => {
-    try {
-      const dbi = db.getDb();
-      const existing = new Set<string>(
-        (dbi.prepare('SELECT code FROM accounts WHERE company_id = ?').all(companyId) as any[]).map(r => r.code)
-      );
-      let created = 0; let skipped = 0;
-      const tx = dbi.transaction(() => {
-        for (const a of accounts) {
-          if (!a.code || !a.name) { skipped++; continue; }
-          if (existing.has(a.code)) { skipped++; continue; }
-          db.create('accounts', {
-            company_id: companyId, code: a.code, name: a.name,
-            type: a.type || 'asset', subtype: a.subtype || '',
-            description: a.description || '',
-          });
-          existing.add(a.code); created++;
-        }
-      });
-      tx();
-      if (created > 0) scheduleAutoBackup();
-      return { success: true, created, skipped };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // F13: TurboTax TXF export
-  ipcMain.handle('accounts:export-txf', (_e, { companyId, year }: { companyId: string; year: number }) => {
-    try {
-      const dbi = db.getDb();
-      const accts = dbi.prepare(
-        `SELECT a.id, a.code, a.name, a.type, a.tax_line FROM accounts a
-         WHERE a.company_id = ? AND a.type IN ('revenue','expense') AND COALESCE(a.tax_line,'') != ''`
-      ).all(companyId) as any[];
-      const start = `${year}-01-01`, end = `${year}-12-31`;
-      const lines: string[] = [];
-      lines.push(`V042`); lines.push(`ABusiness Accounting Pro`);
-      lines.push(`D ${localToday().replace(/-/g, '/')}`);
-      lines.push(`^`);
-      for (const a of accts) {
-        const balRow = dbi.prepare(
-          `SELECT COALESCE(SUM(jel.debit - jel.credit),0) as bal FROM journal_entry_lines jel
-           JOIN journal_entries je ON jel.journal_entry_id = je.id
-           WHERE jel.account_id = ? AND je.company_id = ? AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.`
-        ).get(a.id, companyId, start, end) as any;
-        const sign = a.type === 'revenue' ? -1 : 1;
-        const amt = sign * (Number(balRow?.bal) || 0);
-        if (Math.abs(amt) < 0.005) continue;
-        lines.push(`TS`);
-        lines.push(`N${a.tax_line}`);
-        lines.push(`C1`);
-        lines.push(`L1`);
-        lines.push(`$${amt.toFixed(2)}`);
-        lines.push(`X${a.code} ${a.name}`);
-        lines.push(`^`);
-      }
-      return { txf: lines.join('\n'), count: accts.length };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // F15: Merge preview
-  ipcMain.handle('accounts:merge-preview', (_e, { sourceId }: { sourceId: string }) => {
-    try {
-      const dbi = db.getDb();
-      const count = (sql: string) => {
-        try { const r = dbi.prepare(sql).get(sourceId) as any; return Number(r?.c) || 0; } catch { return 0; }
-      };
-      return {
-        journal_lines: count('SELECT COUNT(*) as c FROM journal_entry_lines WHERE account_id = ?'),
-        invoice_lines: count('SELECT COUNT(*) as c FROM invoice_line_items WHERE account_id = ?'),
-        bills: count('SELECT COUNT(*) as c FROM bills WHERE account_id = ?'),
-        expenses: count('SELECT COUNT(*) as c FROM expenses WHERE account_id = ?'),
-        children: count('SELECT COUNT(*) as c FROM accounts WHERE parent_id = ?'),
-      };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // F16: Account split
-  ipcMain.handle('accounts:split', (_e, { companyId, sourceAccountId, targetAccountId, dateFrom, dateTo, descriptionPattern }: { companyId: string; sourceAccountId: string; targetAccountId: string; dateFrom: string; dateTo: string; descriptionPattern: string }) => {
-    try {
-      const dbi = db.getDb();
-      const re = new RegExp(descriptionPattern || '.*', 'i');
-      const lines = dbi.prepare(
-        `SELECT jel.id, jel.description as ldesc, je.description as jdesc
-         FROM journal_entry_lines jel JOIN journal_entries je ON jel.journal_entry_id = je.id
-         WHERE jel.account_id = ? AND je.company_id = ? AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.`
-      ).all(sourceAccountId, companyId, dateFrom, dateTo) as any[];
-      const matchIds = lines.filter(l => re.test(String(l.ldesc || '')) || re.test(String(l.jdesc || ''))).map(l => l.id);
-      const stmt = dbi.prepare('UPDATE journal_entry_lines SET account_id = ? WHERE id = ?');
-      const tx = dbi.transaction((ids: string[]) => { for (const id of ids) stmt.run(targetAccountId, id); });
-      tx(matchIds);
-      db.logAudit(companyId, 'account', sourceAccountId, 'update', { _action: 'split', moved: matchIds.length, to: targetAccountId });
-      if (matchIds.length > 0) scheduleAutoBackup();
-      return { success: true, moved: matchIds.length };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // F17: Renumber with audit
-  ipcMain.handle('accounts:renumber', (_e, { companyId, accountId, newCode }: { companyId: string; accountId: string; newCode: string }) => {
-    try {
-      const dbi = db.getDb();
-      const acct = dbi.prepare('SELECT code FROM accounts WHERE id = ?').get(accountId) as any;
-      if (!acct) return { error: 'Account not found' };
-      dbi.prepare("UPDATE accounts SET code = ?, updated_at = datetime('now') WHERE id = ?").run(newCode, accountId);
-      db.logAudit(companyId, 'account', accountId, 'update', { _action: 'renumber', old_code: acct.code, new_code: newCode });
-      scheduleAutoBackup();
-      return { success: true };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // F18: Soft delete / restore
-  ipcMain.handle('accounts:soft-delete', (_e, { accountId }: { accountId: string }) => {
-    try {
-      db.getDb().prepare("UPDATE accounts SET deleted_at = datetime('now'), is_active = 0 WHERE id = ?").run(accountId);
-      scheduleAutoBackup();
-      return { success: true };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-  ipcMain.handle('accounts:restore', (_e, { accountId }: { accountId: string }) => {
-    try {
-      db.getDb().prepare("UPDATE accounts SET deleted_at = '', is_active = 1 WHERE id = ?").run(accountId);
-      scheduleAutoBackup();
-      return { success: true };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // F19: Opening balance from prior TB import
-  ipcMain.handle('accounts:import-opening-tb', (_e, { companyId, date, rows }: { companyId: string; date: string; rows: Array<{ code: string; balance: number }> }) => {
-    try {
-      const dbi = db.getDb();
-      let obe = dbi.prepare("SELECT * FROM accounts WHERE company_id = ? AND name = 'Opening Balance Equity' LIMIT 1").get(companyId) as any;
-      if (!obe) {
-        obe = db.create('accounts', { company_id: companyId, code: '3900', name: 'Opening Balance Equity', type: 'equity', subtype: "Owner's Equity" });
-      }
-      const jeId = uuid();
-      dbi.prepare(`
-        INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_adjusting)
-        VALUES (?, ?, ?, ?, ?, 0, 1)
-      `).run(jeId, companyId, `OB-TB-${date}`, date, `Opening trial balance import`);
-      let totalDr = 0, totalCr = 0, applied = 0, skipped = 0;
-      for (const r of rows) {
-        const a = dbi.prepare('SELECT * FROM accounts WHERE company_id = ? AND code = ?').get(companyId, r.code) as any;
-        if (!a) { skipped++; continue; }
-        const amt = Number(r.balance) || 0;
-        if (Math.abs(amt) < 0.005) continue;
-        const isDebitNormal = ['asset', 'expense'].includes(a.type);
-        const dr = (isDebitNormal && amt > 0) || (!isDebitNormal && amt < 0) ? Math.abs(amt) : 0;
-        const cr = dr > 0 ? 0 : Math.abs(amt);
-        db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: a.id, debit: dr, credit: cr, description: 'Opening TB' });
-        totalDr += dr; totalCr += cr; applied++;
-      }
-      const offset = totalDr - totalCr;
-      if (Math.abs(offset) > 0.005) {
-        db.create('journal_entry_lines', { journal_entry_id: jeId, account_id: obe.id, debit: offset < 0 ? -offset : 0, credit: offset > 0 ? offset : 0, description: 'OBE offset' });
-      }
-      dbi.prepare("UPDATE journal_entries SET is_posted = 1, updated_at = datetime('now') WHERE id = ?").run(jeId);
-      scheduleAutoBackup();
-      return { success: true, entry_id: jeId, applied, skipped };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // F25: Snapshot daily balances
-  ipcMain.handle('accounts:snapshot-balances', (_e, { companyId, date }: { companyId: string; date?: string }) => {
-    try {
-      const dbi = db.getDb();
-      const d = date || localToday();
-      const accts = dbi.prepare(
-        `SELECT a.id,
-          COALESCE((SELECT SUM(jel.debit - jel.credit) FROM journal_entry_lines jel
-            JOIN journal_entries je ON jel.journal_entry_id = je.id
-            WHERE jel.account_id = a.id AND je.company_id = ? AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */),0) as bal
-         FROM accounts a WHERE a.company_id = ? AND COALESCE(a.deleted_at,'') = ''`
-      ).all(companyId, d, companyId) as any[];
-      const upsert = dbi.prepare(
-        `INSERT INTO account_balance_history (id, date, account_id, balance) VALUES (?, ?, ?, ?)
-         ON CONFLICT(date, account_id) DO UPDATE SET balance = excluded.balance`
-      );
-      const tx = dbi.transaction(() => {
-        for (const a of accts) upsert.run(uuid(), d, a.id, Number(a.bal) || 0);
-      });
-      tx();
-      scheduleAutoBackup();
-      return { success: true, count: accts.length, date: d };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // F23: Natural-side check (warn helper)
-  ipcMain.handle('accounts:natural-side-check', (_e, { accountId, debit, credit }: { accountId: string; debit: number; credit: number }) => {
-    try {
-      const a = db.getDb().prepare('SELECT type FROM accounts WHERE id = ?').get(accountId) as any;
-      if (!a) return { warn: false };
-      const isDebitNormal = ['asset', 'expense'].includes(a.type);
-      const unusual = (isDebitNormal && credit > 0 && debit === 0) || (!isDebitNormal && debit > 0 && credit === 0);
-      return { warn: unusual, message: unusual ? `Unusual side for ${a.type} account` : '' };
-    } catch (err: any) { return { warn: false, error: err?.message }; }
-  });
-
-  // F24: Suggest account from description
-  ipcMain.handle('accounts:classify', (_e, { companyId, description }: { companyId: string; description: string }) => {
-    try {
-      const rules = db.getDb().prepare(
-        `SELECT pattern, account_id FROM account_classify_rules WHERE company_id = ?`
-      ).all(companyId) as any[];
-      for (const r of rules) {
-        try {
-          const re = new RegExp(r.pattern, 'i');
-          if (re.test(description || '')) return { account_id: r.account_id, matched: r.pattern };
-        } catch { /* invalid regex */ }
-      }
-      return { account_id: null };
-    } catch (err: any) { return { error: err?.message, account_id: null }; }
-  });
-
-  // F3: Watchlist threshold check (writes notification rows)
-  ipcMain.handle('accounts:watchlist-check', (_e, { companyId }: { companyId: string }) => {
-    try {
-      const dbi = db.getDb();
-      const watches = dbi.prepare('SELECT * FROM account_watches').all() as any[];
-      let triggered = 0;
-      for (const w of watches) {
-        const sumRow = dbi.prepare(
-          `SELECT COALESCE(SUM(ABS(jel.debit) + ABS(jel.credit)),0) as activity
-           FROM journal_entry_lines jel JOIN journal_entries je ON jel.journal_entry_id = je.id
-           WHERE jel.account_id = ? AND je.company_id = ? AND je.date >= date('now','-30 days')`
-        ).get(w.account_id, companyId) as any;
-        const activity = Number(sumRow?.activity) || 0;
-        if (w.threshold_amount > 0 && activity > w.threshold_amount) {
-          try {
-            db.create('notifications', {
-              company_id: companyId, user_id: w.user_id || '',
-              type: 'account_watch', message: `Account watch: 30-day activity ${activity.toFixed(2)} exceeds threshold ${Number(w.threshold_amount).toFixed(2)}`,
-              entity_type: 'account', entity_id: w.account_id, is_read: 0,
-            });
-          } catch { /* notifications schema may differ */ }
-          triggered++;
-        }
-      }
-      return { success: true, triggered };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
   ipcMain.handle('compliance:sod-report', (_e, { companyId, periodStart, periodEnd }: any) => {
     try {
       return db.getDb().prepare(
@@ -12920,575 +10300,7 @@ export function registerIpcHandlers(): void {
     } catch { return []; }
   });
 
-  // ─── JE round 2: undo recent N posted entries (creates reversing JEs) ──
-  ipcMain.handle('je:undo-recent', (_e, { companyId, n, userId }: { companyId: string; n: number; userId: string }) => {
-    try {
-      const dbInstance = db.getDb();
-      const rows = dbInstance.prepare(
-        `SELECT * FROM journal_entries
-         WHERE company_id = ? AND is_posted = 1
-           AND (posted_by = ? OR created_by = ?)
-         ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC
-         LIMIT ?`
-      ).all(companyId, userId, userId, Math.max(1, Math.min(n || 1, 50))) as any[];
-      let count = 0;
-      for (const je of rows) {
-        const lines = dbInstance.prepare(
-          `SELECT * FROM journal_entry_lines WHERE journal_entry_id = ?`
-        ).all(je.id) as any[];
-        const newId = uuid();
-        const today = localToday();
-        const numRow = dbInstance.prepare(
-          "SELECT entry_number FROM journal_entries WHERE company_id = ? ORDER BY CAST(SUBSTR(entry_number, INSTR(entry_number, '-') + 1) AS INTEGER) DESC LIMIT 1"
-        ).get(companyId) as any;
-        let nextNum = 'JE-1001';
-        if (numRow?.entry_number) {
-          const m = numRow.entry_number.match(/(\d+)$/);
-          if (m) nextNum = numRow.entry_number.slice(0, -m[1].length) + String(parseInt(m[1], 10) + 1).padStart(m[1].length, '0');
-        }
-        dbInstance.prepare(
-          `INSERT INTO journal_entries (id, company_id, entry_number, date, description, reference, is_posted, reversed_from_id)
-           VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
-        ).run(newId, companyId, nextNum, today, `Undo of ${je.entry_number}: ${(je.description || '').slice(0, 200)}`, je.reference || '', je.id);
-        for (let i = 0; i < lines.length; i++) {
-          const l = lines[i];
-          dbInstance.prepare(
-            `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`
-          ).run(uuid(), newId, l.account_id, l.credit || 0, l.debit || 0, l.description || '', i);
-        }
-        dbInstance.prepare("UPDATE journal_entries SET is_posted = 1 WHERE id = ?").run(newId);
-        count++;
-      }
-      if (count > 0) scheduleAutoBackup();
-      return { count };
-    } catch (err: any) { return { error: err?.message || 'undo failed' }; }
-  });
-
-  // ─── JE round 2: detect gaps in entry_number sequence ──
-  ipcMain.handle('je:gap-detect', (_e, { companyId }: { companyId: string }) => {
-    try {
-      const rows = db.getDb().prepare(
-        `SELECT entry_number FROM journal_entries WHERE company_id = ? ORDER BY entry_number ASC`
-      ).all(companyId) as any[];
-      const byPrefix: Record<string, Array<{ n: number; padLen: number }>> = {};
-      for (const r of rows) {
-        const m = (r.entry_number || '').match(/^(.*?)(\d+)$/);
-        if (m) (byPrefix[m[1]] ||= []).push({ n: parseInt(m[2], 10), padLen: m[2].length });
-      }
-      const gaps: string[] = [];
-      for (const [prefix, arr] of Object.entries(byPrefix)) {
-        arr.sort((a, b) => a.n - b.n);
-        for (let i = 1; i < arr.length; i++) {
-          for (let g = arr[i - 1].n + 1; g < arr[i].n; g++) {
-            gaps.push(`${prefix}${String(g).padStart(arr[i].padLen, '0')}`);
-            if (gaps.length >= 25) return { gaps };
-          }
-        }
-      }
-      return { gaps };
-    } catch (err: any) { return { gaps: [], error: err?.message }; }
-  });
-
-  // ─── JE round 2: snapshot a JE into je_history before edits ──
-  ipcMain.handle('je:snapshot', (_e, { jeId, userId }: { jeId: string; userId: string }) => {
-    try {
-      const dbi = db.getDb();
-      const je = dbi.prepare(`SELECT * FROM journal_entries WHERE id = ?`).get(jeId) as any;
-      if (!je) return { error: 'not found' };
-      const lines = dbi.prepare(`SELECT * FROM journal_entry_lines WHERE journal_entry_id = ? ORDER BY sort_order`).all(jeId) as any[];
-      const version = (je.version ?? 1) as number;
-      dbi.prepare(
-        `INSERT INTO je_history (id, je_id, version, snapshot_json, changed_by) VALUES (?, ?, ?, ?, ?)`
-      ).run(uuid(), jeId, version, JSON.stringify({ entry: je, lines }), userId || '');
-      dbi.prepare(`UPDATE journal_entries SET version = ? WHERE id = ?`).run(version + 1, jeId);
-      scheduleAutoBackup();
-      return { ok: true, version };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('je:history-list', (_e, { jeId }: { jeId: string }) => {
-    try {
-      return db.getDb().prepare(
-        `SELECT id, version, changed_at, changed_by FROM je_history WHERE je_id = ? ORDER BY version DESC`
-      ).all(jeId);
-    } catch { return []; }
-  });
-
-  ipcMain.handle('je:history-rollback', (_e, { historyId, userId }: { historyId: string; userId: string }) => {
-    try {
-      const dbi = db.getDb();
-      const h = dbi.prepare(`SELECT * FROM je_history WHERE id = ?`).get(historyId) as any;
-      if (!h) return { error: 'not found' };
-      const snap = JSON.parse(h.snapshot_json || '{}');
-      if (!snap?.entry) return { error: 'bad snapshot' };
-      const e = snap.entry;
-      const cur = dbi.prepare(`SELECT * FROM journal_entries WHERE id = ?`).get(h.je_id) as any;
-      if (cur) {
-        const curLines = dbi.prepare(`SELECT * FROM journal_entry_lines WHERE journal_entry_id = ? ORDER BY sort_order`).all(h.je_id) as any[];
-        dbi.prepare(`INSERT INTO je_history (id, je_id, version, snapshot_json, changed_by) VALUES (?, ?, ?, ?, ?)`)
-          .run(uuid(), h.je_id, cur.version ?? 1, JSON.stringify({ entry: cur, lines: curLines }), userId || '');
-      }
-      dbi.prepare(
-        `UPDATE journal_entries SET date=?, description=?, reference=?, class=?, version = COALESCE(version,1)+1 WHERE id=?`
-      ).run(e.date, e.description || '', e.reference || '', e.class || '', h.je_id);
-      dbi.prepare(`DELETE FROM journal_entry_lines WHERE journal_entry_id = ?`).run(h.je_id);
-      const lines = Array.isArray(snap.lines) ? snap.lines : [];
-      for (let i = 0; i < lines.length; i++) {
-        const l = lines[i];
-        dbi.prepare(
-          `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order, line_memo)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(uuid(), h.je_id, l.account_id, l.debit || 0, l.credit || 0, l.description || '', i, l.line_memo || '');
-      }
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
   // ═══ Round 2: Period Close + Reconciliation + Compliance (2026-04-23) ═══
-
-  // 1. Soft vs hard lock — supersede check-date-lock
-  ipcMain.handle('close:check-date-lock-v2', (_e, { companyId, date }: { companyId: string; date: string }) => {
-    try {
-      const row = db.getDb().prepare(
-        `SELECT id, period_start, period_end, reason, locked_through_date, COALESCE(lock_level, 'hard') AS lock_level
-         FROM period_locks
-         WHERE company_id = ? AND (unlocked_at IS NULL OR unlocked_at = '')
-           AND ((period_start != '' AND period_end != '' AND ? >= period_start AND ? <= period_end)
-                OR (locked_through_date != '' AND ? <= locked_through_date))
-         ORDER BY created_at DESC LIMIT 1`
-      ).get(companyId, date, date, date) as any;
-      if (!row) return { locked: false, level: 'none', lock: null };
-      return { locked: row.lock_level === 'hard', warn: row.lock_level === 'soft', level: row.lock_level, lock: row };
-    } catch (err: any) { return { locked: false, error: err?.message }; }
-  });
-
-  ipcMain.handle('close:lock-period-v2', (_e, { companyId, periodStart, periodEnd, lockedBy, reason, lockLevel }: any) => {
-    try {
-      const id = uuid();
-      db.getDb().prepare(
-        `INSERT INTO period_locks (id, company_id, period_start, period_end, locked_through_date, locked_by, reason, note, lock_level)
-         VALUES (?,?,?,?,?,?,?,?,?)`
-      ).run(id, companyId, periodStart || '', periodEnd || '', periodEnd || '', lockedBy || '', reason || '', reason || '',
-            lockLevel === 'soft' ? 'soft' : 'hard');
-      db.logAudit(companyId, 'period_lock', id, 'create', { periodStart, periodEnd, reason, lockLevel });
-      scheduleAutoBackup();
-      return { id };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // 2. Pre-close report bundle
-  ipcMain.handle('close:pre-close-bundle', (_e, { companyId, periodStart, periodEnd }: any) => {
-    try {
-      const tb = db.getDb().prepare(
-        `SELECT a.code, a.name, a.type,
-                SUM(COALESCE(jel.debit,0)) AS debit_sum,
-                SUM(COALESCE(jel.credit,0)) AS credit_sum
-         FROM accounts a
-         LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
-         LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
-           AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
-         WHERE a.company_id = ?
-         GROUP BY a.id ORDER BY a.code`
-      ).all(companyId, periodStart, periodEnd, companyId);
-      const recons = db.getDb().prepare(
-        `SELECT r.*, a.code, a.name FROM account_reconciliations r
-         LEFT JOIN accounts a ON a.id = r.account_id
-         WHERE r.company_id = ? AND r.as_of_date <= ? ORDER BY r.as_of_date DESC LIMIT 50`
-      ).all(companyId, periodEnd);
-      let openBills: any[] = [];
-      try {
-        openBills = db.getDb().prepare(
-          `SELECT bill_number, issue_date AS date, total - COALESCE(amount_paid,0) AS open_amount, status
-           FROM bills WHERE company_id = ? AND COALESCE(amount_paid,0) < total AND issue_date <= ?`
-        ).all(companyId, periodEnd) as any[];
-      } catch { /* table may not exist */ }
-      const openInvoices = db.getDb().prepare(
-        `SELECT invoice_number, date, total - COALESCE(amount_paid,0) AS open_amount, status
-         FROM invoices WHERE company_id = ? AND COALESCE(amount_paid,0) < total AND date <= ?`
-      ).all(companyId, periodEnd);
-      return { tb, recons, openBills, openInvoices };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // 3. Adjustment categorization breakdown
-  ipcMain.handle('close:adjustment-breakdown', (_e, { companyId, periodStart, periodEnd }: any) => {
-    try {
-      return db.getDb().prepare(
-        `SELECT COALESCE(NULLIF(adjustment_category,''),'uncategorized') AS category,
-                COUNT(*) AS count,
-                SUM((SELECT SUM(COALESCE(debit,0)) FROM journal_entry_lines WHERE journal_entry_id = je.id)) AS total_debit
-         FROM journal_entries je
-         WHERE company_id = ? AND is_posted = 1 AND date >= ? AND date <= ?
-         GROUP BY category ORDER BY total_debit DESC`
-      ).all(companyId, periodStart, periodEnd);
-    } catch { return []; }
-  });
-
-  // 4. Email digest
-  ipcMain.handle('close:email-digest', (_e, { companyId, logId }: any) => {
-    try {
-      const log = db.getDb().prepare(`SELECT * FROM period_close_log WHERE id = ?`).get(logId) as any;
-      if (!log) return { error: 'close log not found' };
-      const ps = log.period_start; const pe = log.period_end;
-      const totals = db.getDb().prepare(
-        `SELECT a.type, SUM(COALESCE(jel.credit,0) - COALESCE(jel.debit,0)) AS net
-         FROM journal_entry_lines jel
-         JOIN journal_entries je ON je.id = jel.journal_entry_id
-         JOIN accounts a ON a.id = jel.account_id
-         WHERE je.company_id = ? AND je.is_posted = 1 AND date(je.date) >= date(?) AND date(je.date) <= date(?) -- DATE: Item #7 — date() wrap so timestamp values match and end-day is inclusive.
-           AND a.type IN ('revenue','expense')
-         GROUP BY a.type`
-      ).all(companyId, ps, pe) as any[];
-      const rev = totals.find(t => t.type === 'revenue')?.net || 0;
-      const exp = -(totals.find(t => t.type === 'expense')?.net || 0);
-      const jeCount = (db.getDb().prepare(
-        `SELECT COUNT(*) AS c FROM journal_entries WHERE company_id = ? AND is_posted = 1 AND date >= ? AND date <= ?`
-      ).get(companyId, ps, pe) as any)?.c || 0;
-      const recipients = (db.getDb().prepare(
-        `SELECT value FROM settings WHERE key = 'period_close_notify_emails'`
-      ).get() as any)?.value || '';
-      const html = `<h1>Period Close Digest: ${ps} → ${pe}</h1>
-        <ul>
-          <li>Revenue: ${rev.toFixed(2)}</li>
-          <li>Expense: ${exp.toFixed(2)}</li>
-          <li>Net income: ${(rev - exp).toFixed(2)}</li>
-          <li>Posted JEs: ${jeCount}</li>
-          <li>Closed by: ${log.closed_by}</li>
-        </ul>
-        <p>Recipients: ${recipients}</p>`;
-      db.getDb().prepare(`UPDATE period_close_log SET digest_html = ? WHERE id = ?`).run(html, logId);
-      return { html, recipients, totals: { revenue: rev, expense: exp, netIncome: rev - exp, jeCount } };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // 5. Period roll-forward (idempotent)
-  ipcMain.handle('close:roll-forward', (_e, { companyId, logId }: any) => {
-    try {
-      const log = db.getDb().prepare(`SELECT * FROM period_close_log WHERE id = ?`).get(logId) as any;
-      if (!log) return { error: 'log not found' };
-      if (log.roll_forward_done) return { ok: true, alreadyDone: true };
-      const balances = db.getDb().prepare(
-        `SELECT a.id AS account_id,
-                SUM(COALESCE(jel.debit,0) - COALESCE(jel.credit,0)) AS balance
-         FROM accounts a
-         LEFT JOIN journal_entry_lines jel ON jel.account_id = a.id
-         LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id
-           AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */
-         WHERE a.company_id = ? GROUP BY a.id`
-      ).all(companyId, log.period_end, companyId) as any[];
-      let count = 0;
-      for (const b of balances) {
-        if (Math.abs(b.balance || 0) < 0.005) continue;
-        try {
-          db.getDb().prepare(
-            `INSERT INTO account_balance_history (id, company_id, account_id, as_of_date, balance, source)
-             VALUES (?,?,?,?,?,?)`
-          ).run(uuid(), companyId, b.account_id, log.period_end, b.balance, 'period_roll_forward');
-          count++;
-        } catch { /* table may not exist */ }
-      }
-      db.getDb().prepare(`UPDATE period_close_log SET roll_forward_done = 1 WHERE id = ?`).run(logId);
-      scheduleAutoBackup();
-      return { ok: true, snapshotCount: count };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // 6. Reopen preview / commit
-  ipcMain.handle('close:reopen-preview', (_e, { logId }: any) => {
-    try {
-      const log = db.getDb().prepare(`SELECT * FROM period_close_log WHERE id = ?`).get(logId) as any;
-      if (!log) return { error: 'log not found' };
-      const closingJe = log.closing_je_id ? db.getDb().prepare(
-        `SELECT je.id, je.entry_number, je.date,
-                (SELECT SUM(COALESCE(debit,0)) FROM journal_entry_lines WHERE journal_entry_id = je.id) AS total
-         FROM journal_entries je WHERE je.id = ?`
-      ).get(log.closing_je_id) : null;
-      return { log, closingJe };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('close:reopen-commit', (_e, { logId, reopenedBy, reason }: any) => {
-    try {
-      const log = db.getDb().prepare(`SELECT * FROM period_close_log WHERE id = ?`).get(logId) as any;
-      if (!log) return { error: 'log not found' };
-      if (log.closing_je_id) {
-        const lines = db.getDb().prepare(`SELECT * FROM journal_entry_lines WHERE journal_entry_id = ?`).all(log.closing_je_id) as any[];
-        if (lines.length) {
-          const newId = uuid();
-          db.getDb().prepare(
-            `INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted, is_closing, posted_by, reversed_from_id)
-             VALUES (?,?,?,?,?,0,1,?,?)`
-          ).run(newId, log.company_id, `REOPEN-${log.period_end}`, log.period_end,
-                `Reverse closing entry (period reopen: ${reason || ''})`, reopenedBy || '', log.closing_je_id);
-          let lineNo = 0;
-          for (const l of lines) {
-            db.getDb().prepare(
-              `INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description, sort_order)
-               VALUES (?,?,?,?,?,?,?)`
-            ).run(uuid(), newId, l.account_id, l.credit || 0, l.debit || 0, `Reverse: ${l.description || ''}`, lineNo++);
-          }
-          db.getDb().prepare("UPDATE journal_entries SET is_posted = 1 WHERE id = ?").run(newId);
-        }
-      }
-      db.getDb().prepare(
-        `UPDATE period_locks SET unlocked_at = datetime('now'), unlocked_by = ?, unlock_reason = ?
-         WHERE company_id = ? AND period_start = ? AND period_end = ? AND (unlocked_at IS NULL OR unlocked_at = '')`
-      ).run(reopenedBy || '', reason || 'period reopen', log.company_id, log.period_start, log.period_end);
-      db.getDb().prepare(
-        `UPDATE period_close_log SET reopened_at = datetime('now'), reopened_by = ? WHERE id = ?`
-      ).run(reopenedBy || '', logId);
-      db.logAudit(log.company_id, 'period_close', logId, 'reopen', { reason, reopenedBy });
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // 8. Short-period close
-  ipcMain.handle('close:short-period-commit', (_e, { companyId, periodStart, periodEnd, closedBy, reason }: any) => {
-    try {
-      const lockId = uuid();
-      db.getDb().prepare(
-        `INSERT INTO period_locks (id, company_id, period_start, period_end, locked_through_date, locked_by, reason, lock_level)
-         VALUES (?,?,?,?,?,?,?,?)`
-      ).run(lockId, companyId, periodStart, periodEnd, periodEnd, closedBy || '',
-            reason || `Short-period close ${periodStart} → ${periodEnd}`, 'hard');
-      const logId = uuid();
-      db.getDb().prepare(
-        `INSERT INTO period_close_log (id, company_id, period_start, period_end, closed_at, closed_by, net_income, is_short_period)
-         VALUES (?,?,?,?,datetime('now'),?,0,1)`
-      ).run(logId, companyId, periodStart, periodEnd, closedBy || '');
-      db.logAudit(companyId, 'period_close', logId, 'short_period_close', { periodStart, periodEnd, reason });
-      scheduleAutoBackup();
-      return { ok: true, logId };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // 9 & 10. Cycle dashboard / heat map
-  ipcMain.handle('close:cycle-dashboard', (_e, { companyId }: any) => {
-    try {
-      const closes = db.getDb().prepare(
-        `SELECT period_start, period_end, closed_at, closed_by, net_income, is_short_period, reopened_at
-         FROM period_close_log WHERE company_id = ? ORDER BY period_end DESC LIMIT 36`
-      ).all(companyId) as any[];
-      const locks = db.getDb().prepare(
-        `SELECT period_start, period_end, locked_through_date, COALESCE(lock_level,'hard') AS lock_level, unlocked_at
-         FROM period_locks WHERE company_id = ? ORDER BY created_at DESC LIMIT 60`
-      ).all(companyId) as any[];
-      const checklists = db.getDb().prepare(
-        `SELECT period_label, COUNT(*) AS total, SUM(CASE WHEN completed_at != '' THEN 1 ELSE 0 END) AS done
-         FROM period_close_checklist WHERE company_id = ? GROUP BY period_label`
-      ).all(companyId) as any[];
-      return { closes, locks, checklists };
-    } catch (err: any) { return { error: err?.message, closes: [], locks: [], checklists: [] }; }
-  });
-
-  // 11. Recon items
-  ipcMain.handle('recon:items-list', (_e, { companyId, accountId, asOfDate }: any) => {
-    try {
-      return db.getDb().prepare(
-        `SELECT * FROM account_reconciliation_items
-         WHERE company_id = ? AND account_id = ? AND as_of_date = ? ORDER BY created_at`
-      ).all(companyId, accountId, asOfDate);
-    } catch { return []; }
-  });
-
-  ipcMain.handle('recon:item-save', (_e, payload: any) => {
-    try {
-      const id = payload.id || uuid();
-      const existing = payload.id ? db.getDb().prepare(`SELECT id FROM account_reconciliation_items WHERE id = ?`).get(id) : null;
-      if (existing) {
-        db.getDb().prepare(
-          `UPDATE account_reconciliation_items SET note = ?, status = ?, updated_at = datetime('now') WHERE id = ?`
-        ).run(payload.note || '', payload.status || 'open', id);
-      } else {
-        db.getDb().prepare(
-          `INSERT INTO account_reconciliation_items
-           (id, company_id, account_id, as_of_date, transaction_id, transaction_kind, reference, amount, note, status, confidence, delta, rolled_from_id)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
-        ).run(id, payload.companyId, payload.accountId, payload.asOfDate || '',
-              payload.transactionId || '', payload.transactionKind || '', payload.reference || '',
-              payload.amount || 0, payload.note || '', payload.status || 'open',
-              payload.confidence || 0, payload.delta || 0, payload.rolledFromId || '');
-      }
-      scheduleAutoBackup();
-      return { id };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // 12 & 20. Auto-match v2 with confidence stars + delta
-  ipcMain.handle('recon:auto-match-v2', (_e, { companyId, accountId, asOfDate }: any) => {
-    try {
-      const account = db.getById('accounts', accountId);
-      if (!account) return { matches: [], suggestions: [] };
-      const subRes = db.getDb().prepare(
-        `SELECT id, invoice_number AS reference, date, total - COALESCE(amount_paid,0) AS amount
-         FROM invoices WHERE company_id = ? AND date <= ? AND COALESCE(amount_paid,0) < total`
-      ).all(companyId, asOfDate) as any[];
-      const glLines = db.getDb().prepare(
-        `SELECT jel.id, jel.debit, jel.credit, jel.description, je.entry_number, je.date
-         FROM journal_entry_lines jel
-         JOIN journal_entries je ON je.id = jel.journal_entry_id
-         WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */`
-      ).all(accountId, companyId, asOfDate) as any[];
-
-      const matches: any[] = [];
-      const suggestions: any[] = [];
-      for (const subItem of subRes) {
-        const subAmt = Math.abs(subItem.amount || 0);
-        const subDate = new Date(subItem.date).getTime();
-        let bestG: any = null; let bestStars = 0; let bestReason = '';
-        for (const g of glLines) {
-          const glAmt = Math.abs((g.debit || 0) - (g.credit || 0));
-          const exact = Math.abs(glAmt - subAmt) < 0.01;
-          const close = Math.abs(glAmt - subAmt) <= 1;
-          const dayDiff = Math.abs((new Date(g.date).getTime() - subDate) / 86400000);
-          const refMatch = subItem.reference && (g.entry_number === subItem.reference || (g.description || '').includes(subItem.reference));
-          let stars = 0; const reasons: string[] = [];
-          if (exact) { stars += 2; reasons.push('amount-exact'); }
-          else if (close) { stars += 1; reasons.push('amount-close'); }
-          if (dayDiff <= 1) { stars += 2; reasons.push('date-1d'); }
-          else if (dayDiff <= 7) { stars += 1; reasons.push('date-7d'); }
-          if (refMatch) { stars += 1; reasons.push('reference'); }
-          if (stars > bestStars) { bestStars = stars; bestG = g; bestReason = reasons.join('+'); }
-        }
-        if (bestG && bestStars >= 4) {
-          const glAmt = Math.abs((bestG.debit || 0) - (bestG.credit || 0));
-          matches.push({ sub: subItem, gl: bestG, reason: bestReason, confidence: Math.min(5, bestStars), delta: glAmt - subAmt });
-        } else if (bestG && bestStars >= 2) {
-          const glAmt = Math.abs((bestG.debit || 0) - (bestG.credit || 0));
-          suggestions.push({ sub: subItem, gl: bestG, reason: bestReason, confidence: Math.min(5, bestStars), delta: glAmt - subAmt });
-        }
-      }
-      return { matches, suggestions };
-    } catch (err: any) { return { error: err?.message, matches: [], suggestions: [] }; }
-  });
-
-  // 13. Import statement
-  ipcMain.handle('recon:import-statement', (_e, { companyId, accountId, asOfDate, statementBalance, rows, importedBy }: any) => {
-    try {
-      const id = uuid();
-      db.getDb().prepare(
-        `INSERT INTO recon_imports (id, company_id, account_id, as_of_date, statement_balance, rows_json, imported_by)
-         VALUES (?,?,?,?,?,?,?)`
-      ).run(id, companyId, accountId, asOfDate || '', statementBalance || 0, JSON.stringify(rows || []), importedBy || '');
-      scheduleAutoBackup();
-      return { id };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('recon:imports-list', (_e, { companyId, accountId }: any) => {
-    try {
-      return db.getDb().prepare(
-        `SELECT * FROM recon_imports WHERE company_id = ? AND account_id = ? ORDER BY imported_at DESC`
-      ).all(companyId, accountId);
-    } catch { return []; }
-  });
-
-  // 15. Multi-account recon
-  ipcMain.handle('recon:multi-compute', (_e, { companyId, asOfDate }: any) => {
-    try {
-      const accounts = db.getDb().prepare(
-        `SELECT id, code, name, type, subtype FROM accounts WHERE company_id = ?
-         AND (LOWER(name) LIKE '%receivable%' OR LOWER(name) LIKE '%payable%' OR LOWER(name) LIKE '%inventory%')
-         ORDER BY code`
-      ).all(companyId) as any[];
-      return accounts.map((a) => {
-        const gl = db.getDb().prepare(
-          `SELECT SUM(COALESCE(jel.debit,0) - COALESCE(jel.credit,0)) AS bal
-           FROM journal_entry_lines jel
-           JOIN journal_entries je ON je.id = jel.journal_entry_id
-           WHERE jel.account_id = ? AND je.company_id = ? AND je.is_posted = 1 AND date(je.date) <= date(?) /* DATE: Item #7 — wrap for inclusive end-of-day */`
-        ).get(a.id, companyId, asOfDate) as any;
-        const glBal = a.type === 'liability' ? -(gl?.bal || 0) : (gl?.bal || 0);
-        let subTotal = 0;
-        const n = (a.name || '').toLowerCase();
-        if (n.includes('receivable')) {
-          const r = db.getDb().prepare(
-            `SELECT SUM(total - COALESCE(amount_paid,0)) AS s FROM invoices WHERE company_id = ? AND date <= ? AND COALESCE(amount_paid,0) < total`
-          ).get(companyId, asOfDate) as any;
-          subTotal = r?.s || 0;
-        } else if (n.includes('payable')) {
-          try {
-            const r = db.getDb().prepare(
-              `SELECT SUM(total - COALESCE(amount_paid,0)) AS s FROM bills WHERE company_id = ? AND issue_date <= ? AND COALESCE(amount_paid,0) < total`
-            ).get(companyId, asOfDate) as any;
-            subTotal = r?.s || 0;
-          } catch { /* */ }
-        }
-        return { account_id: a.id, code: a.code, name: a.name, gl: glBal, sub: subTotal, variance: subTotal - glBal };
-      });
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  // 16. Recon schedule
-  ipcMain.handle('recon:schedule-list', (_e, { companyId }: any) => {
-    try {
-      return db.getDb().prepare(
-        `SELECT s.*, a.code, a.name FROM recon_schedule s
-         LEFT JOIN accounts a ON a.id = s.account_id
-         WHERE s.company_id = ? ORDER BY s.next_due`
-      ).all(companyId);
-    } catch { return []; }
-  });
-
-  ipcMain.handle('recon:schedule-save', (_e, data: any) => {
-    try {
-      const id = data.id || uuid();
-      const existing = data.id ? db.getDb().prepare(`SELECT id FROM recon_schedule WHERE id = ?`).get(id) : null;
-      const today = new Date();
-      const next = new Date(today);
-      const f = data.frequency || 'monthly';
-      if (f === 'weekly') next.setDate(next.getDate() + 7);
-      else if (f === 'quarterly') next.setMonth(next.getMonth() + 3);
-      else next.setMonth(next.getMonth() + 1);
-      const nextStr = next.toISOString().slice(0, 10);
-      if (existing) {
-        db.getDb().prepare(
-          `UPDATE recon_schedule SET frequency = ?, threshold = ?, next_due = ? WHERE id = ?`
-        ).run(f, data.threshold || 0, data.nextDue || nextStr, id);
-      } else {
-        db.getDb().prepare(
-          `INSERT INTO recon_schedule (id, company_id, account_id, frequency, threshold, next_due)
-           VALUES (?,?,?,?,?,?)`
-        ).run(id, data.companyId, data.accountId, f, data.threshold || 0, data.nextDue || nextStr);
-      }
-      scheduleAutoBackup();
-      return { id };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('recon:schedule-delete', (_e, { id }: any) => {
-    try { db.getDb().prepare(`DELETE FROM recon_schedule WHERE id = ?`).run(id); scheduleAutoBackup(); return { ok: true }; }
-    catch (err: any) { return { error: err?.message }; }
-  });
-
-  // 17. Variance threshold check
-  ipcMain.handle('recon:auto-approve-check', (_e, { companyId, accountId, variance }: any) => {
-    try {
-      const sched = db.getDb().prepare(
-        `SELECT threshold FROM recon_schedule WHERE company_id = ? AND account_id = ? LIMIT 1`
-      ).get(companyId, accountId) as any;
-      const threshold = sched?.threshold || 0;
-      return { autoApprove: threshold > 0 && Math.abs(variance) <= threshold, threshold };
-    } catch { return { autoApprove: false, threshold: 0 }; }
-  });
-
-  // 18 & 19. Prior-period link + rollover
-  ipcMain.handle('recon:prior-period', (_e, { companyId, accountId, asOfDate }: any) => {
-    try {
-      const prior = db.getDb().prepare(
-        `SELECT * FROM account_reconciliations WHERE company_id = ? AND account_id = ? AND as_of_date < ?
-         ORDER BY as_of_date DESC LIMIT 1`
-      ).get(companyId, accountId, asOfDate) as any;
-      if (!prior) return { prior: null, uncleared: [] };
-      const uncleared = db.getDb().prepare(
-        `SELECT * FROM account_reconciliation_items WHERE recon_id = ? AND status = 'open'`
-      ).all(prior.id);
-      return { prior, uncleared };
-    } catch (err: any) { return { error: err?.message, prior: null, uncleared: [] }; }
-  });
 
   // 21 & 22. SOX controls + tests
   ipcMain.handle('sox:controls-list', (_e, { companyId }: any) => {
@@ -13625,7 +10437,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('compliance:approve-je', (_e, { journalEntryId, approver, comment }: any) => {
     try {
-      const je = db.getById('journal_entries', journalEntryId) as any;
+      const je = db.getById('journal_entries', journalEntryId);
       if (!je) return { error: 'JE not found' };
       const lines = db.getDb().prepare(
         `SELECT SUM(COALESCE(debit,0)) AS total FROM journal_entry_lines WHERE journal_entry_id = ?`
@@ -13734,57 +10546,6 @@ export function registerIpcHandlers(): void {
     ],
   };
 
-  const DEFAULT_EMAIL_TEMPLATES: Record<string, { label: string; subject: string; body: string; tokens: string[] }> = {
-    invoice_send: {
-      label: 'Invoice — Send',
-      subject: 'Invoice {{invoice_number}} from {{company_name}}',
-      body: 'Hi {{client_name}},\n\nPlease find attached invoice **{{invoice_number}}** for **{{total_due}}** due on **{{due_date}}**.\n\nPay online: {{payment_link}}\n\nThanks,\n{{company_name}}',
-      tokens: ['client_name','invoice_number','total_due','due_date','company_name','payment_link'],
-    },
-    payment_reminder_1: {
-      label: 'Payment Reminder — First',
-      subject: 'Friendly reminder: Invoice {{invoice_number}}',
-      body: 'Hi {{client_name}},\n\nThis is a friendly reminder that invoice **{{invoice_number}}** for **{{total_due}}** was due on **{{due_date}}**.\n\nPay online: {{payment_link}}\n\nThanks,\n{{company_name}}',
-      tokens: ['client_name','invoice_number','total_due','due_date','company_name','payment_link'],
-    },
-    payment_reminder_2: {
-      label: 'Payment Reminder — Second',
-      subject: 'Past due: Invoice {{invoice_number}} — {{days_overdue}} days',
-      body: 'Hi {{client_name}},\n\nInvoice **{{invoice_number}}** for **{{total_due}}** is now **{{days_overdue}} days** past due.\n\nPlease remit payment as soon as possible: {{payment_link}}\n\nThanks,\n{{company_name}}',
-      tokens: ['client_name','invoice_number','total_due','due_date','days_overdue','company_name','payment_link'],
-    },
-    overdue_notice: {
-      label: 'Overdue Notice',
-      subject: 'OVERDUE: Invoice {{invoice_number}} — {{days_overdue}} days past due',
-      body: 'Dear {{client_name}},\n\nDespite previous reminders, invoice **{{invoice_number}}** for **{{total_due}}** remains unpaid and is now **{{days_overdue}} days** overdue.\n\nThis matter requires your immediate attention.\n\n{{company_name}}',
-      tokens: ['client_name','invoice_number','total_due','days_overdue','company_name'],
-    },
-    quote_send: {
-      label: 'Quote — Send',
-      subject: 'Quote {{invoice_number}} from {{company_name}}',
-      body: 'Hi {{client_name}},\n\nPlease find attached quote **{{invoice_number}}** for **{{total_due}}**.\n\nThis quote is valid until **{{due_date}}**.\n\nThanks,\n{{company_name}}',
-      tokens: ['client_name','invoice_number','total_due','due_date','company_name'],
-    },
-    statement: {
-      label: 'Account Statement',
-      subject: 'Statement of Account — {{client_name}}',
-      body: 'Hi {{client_name}},\n\nPlease find attached your statement showing a balance of **{{total_due}}**.\n\nThanks,\n{{company_name}}',
-      tokens: ['client_name','total_due','company_name'],
-    },
-    welcome: {
-      label: 'Welcome',
-      subject: 'Welcome to {{company_name}}',
-      body: 'Hi {{client_name}},\n\nThanks for choosing **{{company_name}}**. We look forward to working with you.\n\nBest,\n{{company_name}}',
-      tokens: ['client_name','company_name'],
-    },
-    demand_letter: {
-      label: 'Demand Letter',
-      subject: 'Final Demand — Invoice {{invoice_number}}',
-      body: 'Dear {{client_name}},\n\nThis is a **final demand** for payment of invoice **{{invoice_number}}** in the amount of **{{total_due}}**, currently **{{days_overdue}} days** overdue.\n\nFailure to pay within 10 days may result in legal action.\n\n{{company_name}}',
-      tokens: ['client_name','invoice_number','total_due','days_overdue','company_name'],
-    },
-  };
-
   function ensureDefaultStatuses(companyId: string) {
     for (const entityType of ENTITY_TYPES) {
       const existing = db.getDb().prepare(
@@ -13797,43 +10558,6 @@ export function registerIpcHandlers(): void {
            VALUES (?,?,?,?,?,?,?,?,?)`
         ).run(uuid(), companyId, entityType, s.key, s.label, s.color, s.icon, s.sort_order, s.is_terminal || 0);
       }
-    }
-  }
-
-  function ensureDefaultEmailTemplates(companyId: string) {
-    for (const [key, t] of Object.entries(DEFAULT_EMAIL_TEMPLATES)) {
-      const existing = db.getDb().prepare(
-        `SELECT id FROM email_templates WHERE company_id = ? AND key = ?`
-      ).get(companyId, key) as any;
-      if (existing) continue;
-      const defaultTo = 'client.email';
-      db.getDb().prepare(
-        `INSERT INTO email_templates (id, company_id, key, label, subject, body, body_format, available_tokens_json, default_to)
-         VALUES (?,?,?,?,?,?,?,?,?)`
-      ).run(uuid(), companyId, key, t.label, t.subject, t.body, 'markdown', JSON.stringify(t.tokens), defaultTo);
-    }
-  }
-
-  function ensureDefaultNumberSequences(companyId: string) {
-    const defaults: Record<string, { prefix: string; padding: number }> = {
-      invoice: { prefix: 'INV-{YYYY}-', padding: 5 },
-      bill: { prefix: 'BILL-{YYYY}-', padding: 5 },
-      journal_entry: { prefix: 'JE-{YYYY}-{MM}-', padding: 5 },
-      debt: { prefix: 'DEBT-', padding: 5 },
-      purchase_order: { prefix: 'PO-{YYYY}-', padding: 5 },
-      quote: { prefix: 'QT-{YYYY}-', padding: 5 },
-      expense: { prefix: 'EXP-', padding: 5 },
-      project: { prefix: 'PRJ-{YYYY}-', padding: 4 },
-    };
-    for (const [entityType, cfg] of Object.entries(defaults)) {
-      const existing = db.getDb().prepare(
-        `SELECT id FROM number_sequences WHERE company_id = ? AND entity_type = ?`
-      ).get(companyId, entityType) as any;
-      if (existing) continue;
-      db.getDb().prepare(
-        `INSERT INTO number_sequences (id, company_id, entity_type, prefix, suffix, padding, current_value, reset_frequency)
-         VALUES (?,?,?,?,?,?,?,?)`
-      ).run(uuid(), companyId, entityType, cfg.prefix, '', cfg.padding, 0, 'never');
     }
   }
 
@@ -13936,310 +10660,6 @@ export function registerIpcHandlers(): void {
     } catch (err: any) { return { error: err?.message }; }
   });
 
-  function resolveTokens(prefix: string, companyId: string): string {
-    const now = new Date();
-    const yyyy = String(now.getFullYear());
-    const yy = yyyy.slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const q = String(Math.floor(now.getMonth() / 3) + 1);
-    let companyAbbr = '';
-    try {
-      const c = db.getById('companies', companyId) as any;
-      companyAbbr = (c?.name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase();
-    } catch {}
-    return prefix
-      .replace(/\{YYYY\}/g, yyyy)
-      .replace(/\{YY\}/g, yy)
-      .replace(/\{MM\}/g, mm)
-      .replace(/\{Q\}/g, q)
-      .replace(/\{COMPANY\}/g, companyAbbr);
-  }
-
-  function shouldReset(seq: any): boolean {
-    if (!seq.last_reset_at || seq.reset_frequency === 'never') return false;
-    const last = new Date(seq.last_reset_at);
-    const now = new Date();
-    if (seq.reset_frequency === 'yearly') return last.getFullYear() !== now.getFullYear();
-    if (seq.reset_frequency === 'monthly') return last.getFullYear() !== now.getFullYear() || last.getMonth() !== now.getMonth();
-    if (seq.reset_frequency === 'quarterly') {
-      const lq = Math.floor(last.getMonth() / 3);
-      const nq = Math.floor(now.getMonth() / 3);
-      return last.getFullYear() !== now.getFullYear() || lq !== nq;
-    }
-    return false;
-  }
-
-  ipcMain.handle('numbering:list', (_e, { companyId }: any) => {
-    try {
-      ensureDefaultNumberSequences(companyId);
-      return db.getDb().prepare(
-        `SELECT * FROM number_sequences WHERE company_id = ? ORDER BY entity_type`
-      ).all(companyId);
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('numbering:save', (_e, { id, data }: any) => {
-    try {
-      if (id) db.update('number_sequences', id, data);
-      else db.create('number_sequences', data);
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('numbering:preview', (_e, { companyId, entityType }: any) => {
-    try {
-      ensureDefaultNumberSequences(companyId);
-      const seq = db.getDb().prepare(
-        `SELECT * FROM number_sequences WHERE company_id = ? AND entity_type = ?`
-      ).get(companyId, entityType) as any;
-      if (!seq) return { number: '' };
-      let next = (seq.current_value || 0) + 1;
-      if (shouldReset(seq)) next = 1;
-      const padded = String(next).padStart(seq.padding || 5, '0');
-      return { number: `${resolveTokens(seq.prefix || '', companyId)}${padded}${seq.suffix || ''}` };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('numbering:generate', (_e, { companyId, entityType, reserve }: any) => {
-    try {
-      ensureDefaultNumberSequences(companyId);
-      const seq = db.getDb().prepare(
-        `SELECT * FROM number_sequences WHERE company_id = ? AND entity_type = ?`
-      ).get(companyId, entityType) as any;
-      if (!seq) return { error: 'sequence not found' };
-      let current = seq.current_value || 0;
-      if (shouldReset(seq)) {
-        current = 0;
-        db.getDb().prepare(`UPDATE number_sequences SET last_reset_at = datetime('now') WHERE id = ?`).run(seq.id);
-      }
-      const next = current + 1;
-      db.getDb().prepare(`UPDATE number_sequences SET current_value = ?, updated_at = datetime('now') WHERE id = ?`).run(next, seq.id);
-      const padded = String(next).padStart(seq.padding || 5, '0');
-      const number = `${resolveTokens(seq.prefix || '', companyId)}${padded}${seq.suffix || ''}`;
-      if (reserve) {
-        const reserved = JSON.parse(seq.reserved_json || '[]');
-        reserved.push({ value: next, number, reserved_at: new Date().toISOString() });
-        db.getDb().prepare(`UPDATE number_sequences SET reserved_json = ? WHERE id = ?`).run(JSON.stringify(reserved), seq.id);
-      }
-      scheduleAutoBackup();
-      return { number, value: next };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('numbering:release', (_e, { companyId, entityType, value }: any) => {
-    try {
-      const seq = db.getDb().prepare(
-        `SELECT * FROM number_sequences WHERE company_id = ? AND entity_type = ?`
-      ).get(companyId, entityType) as any;
-      if (!seq) return { error: 'sequence not found' };
-      const reserved = JSON.parse(seq.reserved_json || '[]').filter((r: any) => r.value !== value);
-      let cv = seq.current_value || 0;
-      if (cv === value) cv -= 1;
-      db.getDb().prepare(`UPDATE number_sequences SET reserved_json = ?, current_value = ? WHERE id = ?`).run(JSON.stringify(reserved), cv, seq.id);
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  const NUMBER_TABLE_MAP: Record<string, { table: string; col: string }> = {
-    invoice: { table: 'invoices', col: 'invoice_number' },
-    bill: { table: 'bills', col: 'bill_number' },
-    quote: { table: 'quotes', col: 'quote_number' },
-    purchase_order: { table: 'purchase_orders', col: 'po_number' },
-    expense: { table: 'expenses', col: 'expense_number' },
-    debt: { table: 'debts', col: 'debt_number' },
-    journal_entry: { table: 'journal_entries', col: 'entry_number' },
-  };
-
-  ipcMain.handle('numbering:gaps', (_e, { companyId, entityType }: any) => {
-    try {
-      const t = NUMBER_TABLE_MAP[entityType];
-      if (!t) return { gaps: [], note: 'No table mapping' };
-      let rows: any[] = [];
-      try {
-        rows = db.getDb().prepare(
-          `SELECT ${t.col} AS num FROM ${t.table} WHERE company_id = ? AND ${t.col} IS NOT NULL AND ${t.col} != '' ORDER BY ${t.col}`
-        ).all(companyId);
-      } catch { return { gaps: [], note: 'Number column not present' }; }
-      const nums = rows.map((r: any) => {
-        const m = String(r.num).match(/(\d+)(?!.*\d)/);
-        return m ? parseInt(m[1], 10) : null;
-      }).filter((n): n is number => n !== null).sort((a, b) => a - b);
-      const gaps: number[] = [];
-      for (let i = 1; i < nums.length; i++) {
-        for (let g = nums[i - 1] + 1; g < nums[i]; g++) gaps.push(g);
-      }
-      return { gaps, total: nums.length, min: nums[0] || 0, max: nums[nums.length - 1] || 0 };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  ipcMain.handle('numbering:renumber', (_e, { companyId, entityType, dryRun }: any) => {
-    try {
-      const t = NUMBER_TABLE_MAP[entityType];
-      if (!t) return { error: 'No table mapping' };
-      const seq = db.getDb().prepare(
-        `SELECT * FROM number_sequences WHERE company_id = ? AND entity_type = ?`
-      ).get(companyId, entityType) as any;
-      if (!seq) return { error: 'sequence not found' };
-      let rows: any[] = [];
-      try {
-        rows = db.getDb().prepare(
-          `SELECT id, ${t.col} AS num FROM ${t.table} WHERE company_id = ? ORDER BY created_at`
-        ).all(companyId);
-      } catch { return { error: 'Renumber not supported for this entity' }; }
-      const changes: Array<{ id: string; from: string; to: string }> = [];
-      let n = 1;
-      for (const r of rows) {
-        const padded = String(n).padStart(seq.padding || 5, '0');
-        const newNum = `${resolveTokens(seq.prefix || '', companyId)}${padded}${seq.suffix || ''}`;
-        if (r.num !== newNum) changes.push({ id: r.id, from: r.num || '', to: newNum });
-        n++;
-      }
-      if (!dryRun) {
-        for (const c of changes) {
-          try {
-            db.getDb().prepare(`UPDATE ${t.table} SET ${t.col} = ? WHERE id = ?`).run(c.to, c.id);
-            db.logAudit(companyId, entityType, c.id, 'renumber', { from: c.from, to: c.to });
-          } catch {}
-        }
-        db.getDb().prepare(`UPDATE number_sequences SET current_value = ?, updated_at = datetime('now') WHERE id = ?`).run(n - 1, seq.id);
-      }
-      if (!dryRun && changes.length > 0) scheduleAutoBackup();
-      return { ok: true, changes, count: changes.length };
-    } catch (err: any) { return { error: err?.message }; }
-  });
-
-  function resolveTemplateTokens(body: string, ctx: Record<string, any>): string {
-    return body.replace(/\{\{\s*([\w_]+)\s*\}\}/g, (_m, key) => {
-      const v = ctx[key];
-      if (v === undefined || v === null) return `{{${key}}}`;
-      return String(v);
-    });
-  }
-
-  // Format an amount in a specific ISO 4217 currency (mirrors renderer's
-  // formatCurrency) so {{total_due}} reflects the document's currency
-  // rather than always defaulting to USD.
-  function fmtMoney(amount: number, currency?: string | null): string {
-    const code = (currency || 'USD').toString().trim().toUpperCase();
-    const n = Number.isFinite(amount) ? amount : 0;
-    try {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(n);
-    } catch {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
-    }
-  }
-
-  // Resolve the portal deep-link for an invoice — looks up the token in
-  // invoice_tokens (creating one would require side effects, so we just
-  // look it up). Returns empty string if no token exists yet.
-  //
-  // The base URL supports three formats so admins can swap portal
-  // endpoints without recompiling:
-  //   1. {token} placeholder substitution
-  //   2. /login → appends ?invoice=<token> query param
-  //   3. anything else → appends /<token> path segment
-  // Default points at https://rmpgutahps.us/client/login (RMPG Pro
-  // Services portal). Override per-tenant via the portal_base_url
-  // setting (settings table, key='portal_base_url').
-  function buildPortalUrl(base: string, token: string): string {
-    const url = (base || '').trim();
-    if (!url) return '';
-    if (url.includes('{token}')) return url.replace(/\{token\}/g, token);
-    const noTrail = url.replace(/\/$/, '');
-    if (/\/login$/i.test(noTrail)) return `${noTrail}?invoice=${encodeURIComponent(token)}`;
-    return `${noTrail}/${token}`;
-  }
-  function resolvePortalLink(invoiceId: string, fallbackBase: string = 'https://rmpgutahps.us/client/login'): string {
-    try {
-      // Allow per-company override via settings table
-      const companyId = db.getCurrentCompanyId();
-      let base = fallbackBase;
-      if (companyId) {
-        const setting = db.getDb().prepare(
-          "SELECT value FROM settings WHERE company_id = ? AND key = 'portal_base_url'"
-        ).get(companyId) as any;
-        if (setting?.value) base = setting.value;
-      }
-      const row = db.getDb().prepare(
-        `SELECT token FROM invoice_tokens WHERE invoice_id = ? AND expires_at > 0 ORDER BY expires_at DESC LIMIT 1`
-      ).get(invoiceId) as any;
-      if (row?.token) return buildPortalUrl(base, row.token);
-    } catch { /* ignore */ }
-    return '';
-  }
-
-  function buildTemplateContext(companyId: string, entityType: string, entityId: string): Record<string, any> {
-    const ctx: Record<string, any> = {};
-    try {
-      const co = db.getById('companies', companyId) as any;
-      ctx.company_name = co?.name || '';
-      ctx.company_email = co?.email || '';
-      ctx.company_phone = co?.phone || '';
-    } catch {}
-    try {
-      if (entityType === 'invoice') {
-        const inv = db.getById('invoices', entityId) as any;
-        if (inv) {
-          ctx.invoice_number = inv.invoice_number || '';
-          // Use real `total` field (schema correction) and honor currency
-          const totalNum = Number(inv.total ?? inv.total_amount ?? 0);
-          const paid = Number(inv.amount_paid ?? 0);
-          ctx.total_due = fmtMoney(totalNum, inv.currency);
-          ctx.balance_due = fmtMoney(Math.max(0, totalNum - paid), inv.currency);
-          ctx.amount_paid = fmtMoney(paid, inv.currency);
-          ctx.due_date = inv.due_date || '';
-          ctx.issue_date = inv.issue_date || '';
-          if (inv.due_date) {
-            const days = Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86400000);
-            ctx.days_overdue = String(Math.max(0, days));
-          }
-          if (inv.client_id) {
-            const client = db.getById('clients', inv.client_id) as any;
-            ctx.client_name = client?.name || '';
-            ctx.client_email = client?.email || '';
-            ctx.client_phone = client?.phone || '';
-          }
-          // Deep-link to the per-invoice portal page (capability URL)
-          ctx.payment_link = resolvePortalLink(inv.id);
-          ctx.portal_link = ctx.payment_link;
-        }
-      } else if (entityType === 'quote') {
-        const q = db.getById('quotes', entityId) as any;
-        if (q) {
-          ctx.invoice_number = q.quote_number || '';
-          const totalNum = Number(q.total ?? q.total_amount ?? 0);
-          ctx.total_due = fmtMoney(totalNum, q.currency);
-          ctx.due_date = q.valid_until || q.expires_at || '';
-          ctx.issue_date = q.issue_date || '';
-          if (q.client_id) {
-            const client = db.getById('clients', q.client_id) as any;
-            ctx.client_name = client?.name || '';
-            ctx.client_email = client?.email || '';
-          }
-        }
-      } else if (entityType === 'debt') {
-        const d = db.getById('debts', entityId) as any;
-        if (d) {
-          ctx.invoice_number = d.debt_number || d.invoice_number || '';
-          ctx.total_due = `$${Number(d.balance || d.original_amount || 0).toFixed(2)}`;
-          ctx.due_date = d.original_due_date || '';
-          if (d.original_due_date) {
-            const days = Math.floor((Date.now() - new Date(d.original_due_date).getTime()) / 86400000);
-            ctx.days_overdue = String(Math.max(0, days));
-          }
-          if (d.client_id) {
-            const client = db.getById('clients', d.client_id) as any;
-            ctx.client_name = client?.name || '';
-            ctx.client_email = client?.email || '';
-          }
-        }
-      }
-    } catch {}
-    return ctx;
-  }
-
   ipcMain.handle('email-tmpl:list', (_e, { companyId }: any) => {
     try {
       ensureDefaultEmailTemplates(companyId);
@@ -14252,7 +10672,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('email-tmpl:save', (_e, { id, data, changedBy }: any) => {
     try {
       if (id) {
-        const prev = db.getById('email_templates', id) as any;
+        const prev = db.getById('email_templates', id);
         if (prev) {
           const lastVer = db.getDb().prepare(
             `SELECT MAX(version) AS v FROM email_template_history WHERE template_id = ?`
@@ -14286,7 +10706,7 @@ export function registerIpcHandlers(): void {
       ).get(templateId, version) as any;
       if (!snap) return { error: 'Version not found' };
       const data = JSON.parse(snap.snapshot_json);
-      const current = db.getById('email_templates', templateId) as any;
+      const current = db.getById('email_templates', templateId);
       const lastVer = db.getDb().prepare(
         `SELECT MAX(version) AS v FROM email_template_history WHERE template_id = ?`
       ).get(templateId) as any;
@@ -15135,12 +11555,12 @@ export function registerIpcHandlers(): void {
         : '';
       return `<div class="signature-field"${label === 'Employer' ? ' style="margin-left:40px;"' : ''}>
         ${signed
-          ? `<div style="font-family:'Snell Roundhand','Apple Chancery','Brush Script MT',cursive;font-size:26px;color:#111;border-bottom:1px solid #374151;padding-bottom:6px;min-height:38px;line-height:1.1;">${esc(sig!.name)}</div>`
+          ? `<div style="font-family:'Snell Roundhand','Apple Chancery','Brush Script MT',cursive;font-size:26px;color:#111;border-bottom:1px solid #374151;padding-bottom:6px;min-height:38px;line-height:1.1;">${esc(sig.name)}</div>`
           : `<div class="signature-line">${label} Signature</div>`}
         <p style="margin-top:6px;font-size:10pt;color:#374151;font-weight:700;">${esc(party)}</p>
         ${roleLine}
         <p style="font-size:9pt;color:#6b7280;">${label} Signature</p>
-        <p style="font-size:10pt;color:#374151;margin-top:2px;">Date: ${signed ? `<strong>${fmt(sig!.date)}</strong>` : '_______________'}</p>
+        <p style="font-size:10pt;color:#374151;margin-top:2px;">Date: ${signed ? `<strong>${fmt(sig.date)}</strong>` : '_______________'}</p>
         ${signed ? `<p style="font-size:8pt;color:#9ca3af;margin-top:3px;">Electronically signed &amp; recorded &middot; cryptographically bound (SHA-256)</p>` : ''}
       </div>`;
     };
@@ -16730,7 +13150,7 @@ export function registerIpcHandlers(): void {
     }
 
     const apiMessages: Anthropic.Messages.MessageParam[] = messages.map(m => ({
-      role: m.role as 'user' | 'assistant',
+      role: m.role,
       content: m.content,
     }));
 

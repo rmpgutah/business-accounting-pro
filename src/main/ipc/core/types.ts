@@ -27,16 +27,40 @@ export interface IpcDeps {
   getLastLoginEmail(): string | null;
   setLastLoginEmail(email: string | null): void;
   findClosedPeriod(companyId: string, date: string): ClosedPeriod | null;
-  postJournalEntry(dbi: Database.Database, companyId: string, date: string, description: string, lines: JournalLine[]): void;
+  postJournalEntry(
+    dbi: Database.Database,
+    companyId: string,
+    date: string,
+    description: string,
+    lines: JournalLine[],
+  ): void;
   validateTable(table: string): boolean;
   cleanupReferencesBeforeDelete(table: string, id: string): void;
   isRawQueryAllowed(sql: string): { ok: boolean; reason?: string };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   buildInvoiceMetadata(invoice: any, company: any, client: any): PDFMetadata;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   buildBillMetadata(bill: any, company: any, vendor: any): PDFMetadata;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   buildPOMetadata(po: any, company: any, vendor: any): PDFMetadata;
+  scheduleReindex(table: string, id: string, op: 'upsert' | 'delete'): void;
+  logDebtAudit(
+    debtId: string,
+    action: string,
+    fieldName?: string,
+    oldValue?: string,
+    newValue?: string,
+    performedBy?: string,
+  ): void;
+  seedDefaultCategories(companyId: string): { seeded: boolean; count: number };
+  localToday(): string;
+  ensureDefaultEmailTemplates(companyId: string): void;
+  resolveTemplateTokens(body: string, ctx: Record<string, any>): string;
+  buildTemplateContext(
+    companyId: string,
+    entityType: string,
+    entityId: string,
+  ): Record<string, any>;
   VALID_TABLES: Set<string>;
   PROTECTED_TABLES: Set<string>;
 }
