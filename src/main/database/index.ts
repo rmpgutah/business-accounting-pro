@@ -103,7 +103,12 @@ function checkSchemaVersionOrThrow(database: Database.Database): void {
 }
 
 export function initDatabase(): Database.Database {
-  const dbPath = getDbPath();
+  return initDatabaseAt(getDbPath());
+}
+
+// Test/alt-path entry: identical to initDatabase but with an explicit path
+// (':memory:' in tests). Everything after opening the file is shared.
+export function initDatabaseAt(dbPath: string): Database.Database {
   db = new Database(dbPath);
   applyPerformancePragmas(db);
   checkSchemaVersionOrThrow(db);
