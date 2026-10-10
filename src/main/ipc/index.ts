@@ -145,6 +145,7 @@ export function registerIpcHandlers(): void {
     validateTable, cleanupReferencesBeforeDelete,
     scheduleReindex, logDebtAudit, seedDefaultCategories, localToday,
     ensureDefaultEmailTemplates, resolveTemplateTokens, buildTemplateContext,
+    getPortalExpiryDays, eu,
   } = deps;
 
   // Advanced System (2026-04-28) — register built-in commands for Cmd+K palette
@@ -2028,7 +2029,6 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('iz:summary', (_e, { lines }: any) => iz().summarizeLineSet(lines || []));
 
   // ─── Expense Upgrades Wave (F863-F892) — `eu:*` namespace ──
-  const eu = () => require('../services/expense-upgrades-features');
   // Batch EA: Bulk Operations
   ipcMain.handle('eu:bulk:approval', (_e, p: any) => eu().bulkSetApprovalStatus(p));
   ipcMain.handle('eu:bulk:recategorize', (_e, { expense_ids, category_id }: any) => eu().bulkRecategorize(expense_ids || [], category_id));
@@ -3652,22 +3652,6 @@ export function registerIpcHandlers(): void {
   // with client-generated HTML (see InvoiceDetail.handlePreview). That path
   // respects invoice_settings and payment_schedule; the old server template
   // did not.
-
-  // ─── Invoice Portal Token ──────────────────────────────
-  // PORTAL: token-expiry default is configurable via the
-  // `portal_token_expiry_days` setting (per-company). Falls back to 90.
-  // Settings UI may write any positive integer; we clamp to [1, 3650]
-  // to keep the math finite. Document this key alongside SYNC_SERVER.
-  function getPortalExpiryDays(companyId: string): number {
-    try {
-      const row = db.getDb().prepare(
-        "SELECT value FROM settings WHERE company_id = ? AND key = 'portal_token_expiry_days'"
-      ).get(companyId) as any;
-      const v = parseInt(row?.value ?? '', 10);
-      if (Number.isFinite(v) && v > 0) return Math.min(v, 3650);
-    } catch { /* fall through */ }
-    return 90;
-  }
 
   ipcMain.handle('invoice:generate-token', (_event, invoiceId: string) => {
     const dbInstance = db.getDb();
