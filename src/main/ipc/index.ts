@@ -1,10 +1,7 @@
-import { ipcMain, dialog, shell, app } from 'electron';
-import { v4 as uuid } from 'uuid';
+import { ipcMain, dialog, shell } from 'electron';
 import * as db from '../database';
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
-import { copyIntoDocumentsStore } from '../services/document-storage';
 import { registerStripeIpc } from '../integrations/stripe';
 import { registerEntityGraphIpc } from '../integrations/entity-graph';
 import { createIpcDeps } from './core/deps';
@@ -30,7 +27,6 @@ import { registerDebtWaveIpc } from './debt-wave';
 import { registerTaxIpc } from './tax';
 import { registerComplianceIpc } from './compliance';
 import { registerPayrollWaveIpc } from './payroll-wave';
-import { openPathInOS } from '../services/print-preview';
 import { bootstrapBuiltinCommands } from '../services/CommandRegistry';
 import { eventBus } from '../services/EventBus';
 import { workflowEngine } from '../services/WorkflowEngine';
@@ -38,72 +34,8 @@ import { workflowEngine } from '../services/WorkflowEngine';
 
 
 
-// ─── CSV Helpers (shared by import/export handlers) ──────
-function escapeCSVField(val: any): string {
-  if (val === null || val === undefined) return '';
-  const str = String(val);
-  return str.includes(',') || str.includes('"') || str.includes('\n')
-    ? `"${str.replace(/"/g, '""')}"`
-    : str;
-}
 
-function rowsToCSV(rows: any[]): string {
-  if (rows.length === 0) return '';
-  const headers = Object.keys(rows[0]);
-  return [
-    headers.join(','),
-    ...rows.map(row => headers.map(h => escapeCSVField(row[h])).join(',')),
-  ].join('\n');
-}
 
-function parseCSV(text: string): { headers: string[]; rows: string[][] } {
-  const lines: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === '"') {
-      if (inQuotes && text[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch === '\n' && !inQuotes) {
-      lines.push(current);
-      current = '';
-    } else if (ch === '\r' && !inQuotes) {
-      // skip carriage returns
-    } else {
-      current += ch;
-    }
-  }
-  if (current) lines.push(current);
-
-  const splitLine = (line: string): string[] => {
-    const fields: string[] = [];
-    let field = '';
-    let q = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        if (q && line[i + 1] === '"') { field += '"'; i++; }
-        else q = !q;
-      } else if (c === ',' && !q) {
-        fields.push(field);
-        field = '';
-      } else {
-        field += c;
-      }
-    }
-    fields.push(field);
-    return fields;
-  };
-
-  const headers = lines.length > 0 ? splitLine(lines[0]) : [];
-  const rows = lines.slice(1).filter(l => l.trim()).map(splitLine);
-  return { headers, rows };
-}
 
 
 
@@ -120,7 +52,7 @@ export function registerIpcHandlers(): void {
 
   const deps = createIpcDeps();
   const {
-    scheduleAutoBackup, findClosedPeriod, validateTable, cleanupReferencesBeforeDelete, localToday, eu,
+    scheduleAutoBackup, findClosedPeriod, eu,
   } = deps;
 
   // Advanced System (2026-04-28) — register built-in commands for Cmd+K palette
@@ -1448,43 +1380,7 @@ export function registerIpcHandlers(): void {
     return { path: filePath, name: path.basename(filePath), size: stats.size };
   });
 
-  // ─── Document Upload (copies file into app-managed storage) ──
-  ipcMain.handle('documents:upload', async (_event, args: {
-    companyId: string;
-    entityType: string;
-    entityId: string;
-    filters?: Array<{ name: string; extensions: string[] }>;
-  }) => {
-    const { companyId, entityType, entityId, filters } = args;
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: filters || [{ name: 'All Files', extensions: ['*'] }],
-    });
-    if (result.canceled || !result.filePaths.length) return null;
 
-    const sourcePath = result.filePaths[0];
-    const filename = path.basename(sourcePath);
-    const stored = copyIntoDocumentsStore(app.getPath('userData'), companyId, sourcePath);
-
-    const doc = db.create('documents', {
-      company_id: companyId,
-      filename,
-      file_path: stored.path,
-      file_size: stored.size,
-      mime_type: stored.mimeType,
-      entity_type: entityType,
-      entity_id: entityId,
-      tags: '',
-      uploaded_at: new Date().toISOString(),
-    });
-    scheduleAutoBackup();
-    return doc;
-  });
-
-  // ─── Open a stored document in the OS default app ────────────
-  ipcMain.handle('documents:open-path', async (_event, filePath: string) => {
-    return openPathInOS(filePath);
-  });
 
 
   function _buildExpenseMetadata(expense: any, company: any, vendor: any): import('../services/print-preview').PDFMetadata {
@@ -1532,228 +1428,16 @@ export function registerIpcHandlers(): void {
 
 
 
-  // ─── CSV Export ────────────────────────────────────────
-  // ─── Auth ──────────────────────────────────────────────
-
-  ipcMain.handle('export:csv', async (_event, { table, filters }: { table: string; filters?: Record<string, any> }) => {
-    if (!validateTable(table)) return { error: 'Invalid table' };
-    const rows = db.queryAll(table, filters || {});
-    if (rows.length === 0) return { error: 'No data to export' };
-
-    const csv = rowsToCSV(rows);
-
-    const { filePath } = await dialog.showSaveDialog({
-      defaultPath: `${table}-export.csv`,
-      filters: [{ name: 'CSV', extensions: ['csv'] }],
-    });
-
-    if (!filePath) return { cancelled: true };
-    fs.writeFileSync(filePath, csv, 'utf-8');
-    return { path: filePath };
-  });
-
-  // ─── Batch Update ──────────────────────────────────────
-  ipcMain.handle('batch:update', (_event, { table, ids, data }: { table: string; ids: string[]; data: Record<string, any> }) => {
-    const companyId = db.getCurrentCompanyId();
-    const results: any[] = [];
-    for (const id of ids) {
-      const old = db.getById(table, id);
-      const record = db.update(table, id, data);
-      if (companyId && old) {
-        const changes: Record<string, any> = {};
-        for (const key of Object.keys(data)) {
-          if (old[key] !== record[key]) {
-            changes[key] = { old: old[key], new: record[key] };
-          }
-        }
-        db.logAudit(companyId, table, id, 'update', changes);
-      }
-      results.push(record);
-    }
-    if (results.length) scheduleAutoBackup();
-    return results;
-  });
-
-  // ─── Batch Delete ──────────────────────────────────────
-  ipcMain.handle('batch:delete', (_event, { table, ids }: { table: string; ids: string[] }) => {
-    const companyId = db.getCurrentCompanyId();
-    const errors: Array<{ id: string; error: string }> = [];
-    let deleted = 0;
-    for (const id of ids) {
-      try {
-        if (companyId) db.logAudit(companyId, table, id, 'delete');
-        // Clean up FK references in related tables BEFORE the parent delete.
-        cleanupReferencesBeforeDelete(table, id);
-        db.remove(table, id);
-        deleted++;
-      } catch (err: any) {
-        errors.push({ id, error: err?.message || 'unknown error' });
-      }
-    }
-    if (deleted) scheduleAutoBackup();
-    if (errors.length) {
-      return { deleted, errors, error: `Deleted ${deleted} of ${ids.length}. ${errors.length} failed: ${errors.map(e => e.error).slice(0, 3).join('; ')}` };
-    }
-    return { deleted };
-  });
-
-  // ─── CSV Import: Preview ──────────────────────────────
-  ipcMain.handle('import:preview-csv', async () => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: [{ name: 'CSV', extensions: ['csv'] }],
-    });
-    if (result.canceled || !result.filePaths.length) return null;
-
-    const importPath = result.filePaths[0];
-    const content = fs.readFileSync(importPath, 'utf-8');
-    const { headers, rows } = parseCSV(content);
-
-    return {
-      filePath: importPath,
-      fileName: path.basename(importPath),
-      headers,
-      previewRows: rows.slice(0, 5),
-      totalRows: rows.length,
-    };
-  });
-
-  // ─── CSV Import: Execute ──────────────────────────────
-  ipcMain.handle('import:execute', (_event, {
-    filePath: importFilePath,
-    columnMapping,
-    targetTable,
-  }: {
-    filePath: string;
-    columnMapping: Record<string, string>;
-    targetTable: string;
-  }) => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { error: 'No company selected' };
-
-    const content = fs.readFileSync(importFilePath, 'utf-8');
-    const { headers, rows } = parseCSV(content);
-
-    let imported = 0;
-    let skipped = 0;
-    const importErrors: string[] = [];
-
-    for (let i = 0; i < rows.length; i++) {
-      try {
-        const row = rows[i];
-        const record: Record<string, any> = { company_id: companyId };
-
-        for (const [csvCol, dbCol] of Object.entries(columnMapping)) {
-          if (!dbCol || dbCol === '(skip)') continue;
-          const idx = headers.indexOf(csvCol);
-          if (idx === -1) continue;
-          record[dbCol] = row[idx] ?? '';
-        }
-
-        const hasData = Object.values(record).some(v => v !== '' && v !== companyId);
-        if (!hasData) { skipped++; continue; }
-
-        db.create(targetTable, record);
-        imported++;
-      } catch (err: any) {
-        skipped++;
-        importErrors.push(`Row ${i + 2}: ${err.message || 'Unknown error'}`);
-      }
-    }
-
-    if (imported > 0) scheduleAutoBackup();
-    return { imported, skipped, errors: importErrors.slice(0, 20), total: rows.length };
-  });
-
-  // ─── Full Backup: Export all tables as ZIP ─────────────
-  ipcMain.handle('export:full-backup', async () => {
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { error: 'No company selected' };
-
-    const { filePath: zipPath } = await dialog.showSaveDialog({
-      defaultPath: `backup-${localToday()}.zip`,
-      filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
-    });
 
-    if (!zipPath) return { cancelled: true };
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bap-backup-'));
 
-    // Tables with direct company_id column
-    const directTables = [
-      'clients', 'invoices', 'expenses', 'vendors', 'accounts',
-      'journal_entries', 'projects', 'employees', 'time_entries',
-      'categories', 'payments', 'budgets', 'bank_accounts', 'documents',
-      'recurring_templates', 'tax_categories', 'tax_payments', 'inventory_items',
-    ];
 
-    // Child tables without company_id — filter through parent FK
-    const childTableQueries: Record<string, string> = {
-      invoice_line_items: `SELECT li.* FROM invoice_line_items li
-        JOIN invoices i ON li.invoice_id = i.id WHERE i.company_id = ?`,
-      journal_entry_lines: `SELECT jl.* FROM journal_entry_lines jl
-        JOIN journal_entries je ON jl.journal_entry_id = je.id WHERE je.company_id = ?`,
-      pay_stubs: `SELECT ps.* FROM pay_stubs ps
-        JOIN payroll_runs pr ON ps.payroll_run_id = pr.id WHERE pr.company_id = ?`,
-      budget_lines: `SELECT bl.* FROM budget_lines bl
-        JOIN budgets b ON bl.budget_id = b.id WHERE b.company_id = ?`,
-      bank_transactions: `SELECT bt.* FROM bank_transactions bt
-        JOIN bank_accounts ba ON bt.bank_account_id = ba.id WHERE ba.company_id = ?`,
-    };
 
-    const exportedFiles: string[] = [];
-    const dbInstance = db.getDb();
 
-    // Export direct-company tables
-    for (const tbl of directTables) {
-      try {
-        const tblRows = db.queryAll(tbl, { company_id: companyId });
-        if (tblRows.length === 0) continue;
-        const csvContent = rowsToCSV(tblRows);
-        const csvFilePath = path.join(tmpDir, `${tbl}.csv`);
-        fs.writeFileSync(csvFilePath, csvContent, 'utf-8');
-        exportedFiles.push(csvFilePath);
-      } catch {
-        // Skip tables that error (schema mismatch, etc.)
-      }
-    }
 
-    // Export child tables filtered via parent join
-    for (const [tbl, sql] of Object.entries(childTableQueries)) {
-      try {
-        const tblRows = dbInstance.prepare(sql).all(companyId) as any[];
-        if (tblRows.length === 0) continue;
-        const csvContent = rowsToCSV(tblRows);
-        const csvFilePath = path.join(tmpDir, `${tbl}.csv`);
-        fs.writeFileSync(csvFilePath, csvContent, 'utf-8');
-        exportedFiles.push(csvFilePath);
-      } catch {
-        // Skip on error
-      }
-    }
 
-    if (exportedFiles.length === 0) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-      return { error: 'No data to export' };
-    }
 
-    try {
-      const { execFileSync } = require('child_process');
-      const fileNames = exportedFiles.map(f => path.basename(f));
-      execFileSync('zip', ['-j', zipPath, ...fileNames], { cwd: tmpDir });
-    } catch {
-      const fallbackDir = zipPath.replace('.zip', '-csvs');
-      if (!fs.existsSync(fallbackDir)) fs.mkdirSync(fallbackDir, { recursive: true });
-      for (const f of exportedFiles) {
-        fs.copyFileSync(f, path.join(fallbackDir, path.basename(f)));
-      }
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-      return { path: fallbackDir, format: 'folder' };
-    }
 
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-    return { path: zipPath, format: 'zip', tableCount: exportedFiles.length };
-  });
 
 
 
@@ -1816,83 +1500,6 @@ export function registerIpcHandlers(): void {
 
 
 
-
-
-
-
-
-  ipcMain.handle('record:clone', (_event, { table, id }: { table: string; id: string }) => {
-    const CLONEABLE_TABLES = ['invoices', 'expenses', 'bills'];
-    if (!CLONEABLE_TABLES.includes(table)) return { error: 'Invalid table' };
-    const companyId = db.getCurrentCompanyId();
-    if (!companyId) return { error: 'No active company' };
-    const dbInstance = db.getDb();
-    const original = dbInstance.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as Record<string, unknown> | undefined;
-    if (!original) return { error: 'Not found' };
-    const newId = uuid();
-    const today = new Date().toISOString().split('T')[0];
-    const clone: Record<string, unknown> = { ...original, id: newId, created_at: new Date().toISOString(), status: 'draft', rules_applied: '[]' };
-
-    if (table === 'invoices') {
-      // Generate next invoice number to satisfy NOT NULL + UNIQUE constraint
-      const lastInv = dbInstance.prepare(`SELECT invoice_number FROM invoices WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(companyId) as any;
-      let nextInvNumber = 'INV-1001';
-      if (lastInv?.invoice_number) {
-        const m = lastInv.invoice_number.match(/(\d+)$/);
-        if (m) {
-          const prefix = lastInv.invoice_number.slice(0, lastInv.invoice_number.length - m[1].length);
-          nextInvNumber = `${prefix}${String(parseInt(m[1], 10) + 1).padStart(m[1].length, '0')}`;
-        }
-      }
-      clone.invoice_number = nextInvNumber;
-      clone.issue_date = today;
-      delete clone.paid_date;
-      clone.amount_paid = 0;
-    }
-
-    if (table === 'bills') {
-      // Generate next bill number
-      const lastBill = dbInstance.prepare(`SELECT bill_number FROM bills WHERE company_id = ? ORDER BY created_at DESC LIMIT 1`).get(companyId) as any;
-      let nextBillNumber = 'BILL-1001';
-      if (lastBill?.bill_number) {
-        const m = lastBill.bill_number.match(/(\d+)$/);
-        if (m) {
-          const prefix = lastBill.bill_number.slice(0, lastBill.bill_number.length - m[1].length);
-          nextBillNumber = `${prefix}${String(parseInt(m[1], 10) + 1).padStart(m[1].length, '0')}`;
-        }
-      }
-      clone.bill_number = nextBillNumber;
-      clone.issue_date = today;
-      clone.amount_paid = 0;
-    }
-
-    if (table === 'expenses') { clone.date = today; }
-
-    const cloneTx = dbInstance.transaction(() => {
-      const cols = Object.keys(clone);
-      dbInstance.prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(c => '@' + c).join(',')})`).run(clone);
-
-      // Clone child line items
-      const LINE_ITEM_TABLES: Record<string, string> = {
-        invoices: 'invoice_line_items',
-        bills: 'bill_line_items',
-        expenses: 'expense_line_items',
-      };
-      const lineTable = LINE_ITEM_TABLES[table];
-      const parentCol = table === 'invoices' ? 'invoice_id' : table === 'bills' ? 'bill_id' : 'expense_id';
-      if (lineTable) {
-        const lines = dbInstance.prepare(`SELECT * FROM ${lineTable} WHERE ${parentCol} = ?`).all(id) as any[];
-        for (const line of lines) {
-          const newLine = { ...line, id: uuid(), [parentCol]: newId };
-          const lineCols = Object.keys(newLine);
-          dbInstance.prepare(`INSERT INTO ${lineTable} (${lineCols.join(',')}) VALUES (${lineCols.map(c => '@' + c).join(',')})`).run(newLine);
-        }
-      }
-    });
-    cloneTx();
-    scheduleAutoBackup();
-    return { id: newId };
-  });
 
   registerSyncBackupIpc(ipcMain, deps);
 
