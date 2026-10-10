@@ -43,4 +43,24 @@ describe('clients-vendors domain', () => {
     expect(rows).toHaveLength(1);
     expect(scheduleAutoBackup).toHaveBeenCalled();
   });
+
+  it('client:contacts-list returns an array for an unknown client', async () => {
+    const res = await ipc.invoke('client:contacts-list', 'no-such-client');
+    expect(Array.isArray(res)).toBe(true);
+  });
+
+  it('client:contacts-save persists the contacts', async () => {
+    const client = db.create('clients', { company_id: companyId, name: 'Acme' });
+    const res = await ipc.invoke('client:contacts-save', {
+      clientId: client.id,
+      contacts: [{ name: 'Pat', email: 'pat@acme.test', is_primary: true }],
+    });
+    expect(res?.error).toBeUndefined();
+    const rows = db
+      .getDb()
+      .prepare('SELECT name FROM client_contacts WHERE client_id = ?')
+      .all(client.id);
+    expect(rows).toHaveLength(1);
+    expect(scheduleAutoBackup).toHaveBeenCalled();
+  });
 });

@@ -145,63 +145,6 @@ export function registerIpcHandlers(): void {
 
   registerDbCrudIpc(ipcMain, deps);
 
-  // ─── Vendor delete (dedicated, reference-safe) ───────────────
-  // The generic db:delete soft-deletes vendors but SKIPS reference
-  // cleanup for soft-delete tables — so expenses/bills/POs keep
-  // pointing at a now-hidden vendor, and bank_rules.action_vendor_id
-  // (an enforced FK) blocks a hard delete entirely. This handler:
-  //   1. Counts what references the vendor (so the UI can warn).
-  //   2. Nulls EVERY reference (expenses, bills, purchase_orders,
-  //      bank_rules.action_vendor_id) regardless of soft/hard.
-  //   3. Soft-deletes (default → recoverable in Trash) or hard-deletes
-  //      when {hard:true}.
-  // Returns a clear { ok, unlinked } so the renderer can report it and
-  // never masks a failure.
-  ipcMain.handle('vendors:delete', (_event, { id, hard }: { id: string; hard?: boolean }) => {
-    try {
-      if (!id) return { error: 'No vendor id' };
-      const dbi = db.getDb();
-      const companyId = db.getCurrentCompanyId();
-      const vendor = db.getById('vendors', id);
-      if (!vendor) return { error: 'Vendor not found' };
-
-      // Count references for the response (best-effort per table).
-      const count = (sql: string): number => {
-        try { return (dbi.prepare(sql).get(id) as any)?.c || 0; } catch { return 0; }
-      };
-      const unlinked = {
-        expenses: count("SELECT COUNT(*) c FROM expenses WHERE vendor_id = ?"),
-        bills: count("SELECT COUNT(*) c FROM bills WHERE vendor_id = ?"),
-        purchase_orders: count("SELECT COUNT(*) c FROM purchase_orders WHERE vendor_id = ?"),
-        bank_rules: count("SELECT COUNT(*) c FROM bank_rules WHERE action_vendor_id = ?"),
-      };
-
-      const tx = dbi.transaction(() => {
-        const run = (sql: string) => { try { dbi.prepare(sql).run(id); } catch { /* table may not exist */ } };
-        // Null all enforced + soft FK references so nothing dangles.
-        run("DELETE FROM vendor_locations WHERE vendor_id = ?");
-        run("UPDATE expenses SET vendor_id = NULL, vendor_location_id = NULL WHERE vendor_id = ?");
-        run("UPDATE bills SET vendor_id = NULL WHERE vendor_id = ?");
-        run("UPDATE purchase_orders SET vendor_id = NULL WHERE vendor_id = ?");
-        run("UPDATE bank_rules SET action_vendor_id = NULL WHERE action_vendor_id = ?");
-
-        if (hard) {
-          dbi.prepare("DELETE FROM vendors WHERE id = ?").run(id);
-        } else {
-          // Soft delete → recoverable from Trash for 30 days.
-          dbi.prepare("UPDATE vendors SET deleted_at = datetime('now') WHERE id = ?").run(id);
-        }
-      });
-      tx();
-
-      if (companyId) { try { db.logAudit(companyId, 'vendors', id, 'delete'); } catch { /* non-fatal */ } }
-      try { scheduleAutoBackup(); } catch { /* non-fatal */ }
-
-      return { ok: true, hard: !!hard, unlinked, vendor_name: vendor.name };
-    } catch (err: any) {
-      return { error: err?.message || 'Delete failed' };
-    }
-  });
 
   registerClientsVendorsIpc(ipcMain, deps);
 
@@ -1602,21 +1545,6 @@ export function registerIpcHandlers(): void {
 
   registerPrintPdfIpc(ipcMain, deps);
 
-  // ─── B7: Client risk scoring ─────────────────────────
-  ipcMain.handle('clients:risk-score', (_event, opts?: { client_id?: string }) => {
-    try {
-      const cid = db.getCurrentCompanyId();
-      if (!cid) return [];
-      const { scoreOneClient, scoreAllClients } = require('../services/client-risk-scorer');
-      if (opts?.client_id) {
-        const r = scoreOneClient(cid, opts.client_id);
-        return r ? [r] : [];
-      }
-      return scoreAllClients(cid);
-    } catch (err: any) {
-      return { error: err?.message };
-    }
-  });
 
   // ─── B13: Tax deduction finder ─────────────────────────
   ipcMain.handle('tax:deduction-scan', (_event, opts?: { year?: number }) => {
@@ -1989,28 +1917,6 @@ export function registerIpcHandlers(): void {
 
   registerDebtCollectionIpc(ipcMain, deps);
 
-  // PORTAL: lets the renderer build the portal URL using the configured
-  // SYNC_SERVER without hard-coding the host. Returned here (rather than
-  // computed in the renderer) so a future env-driven override flows through.
-  ipcMain.handle('portal:base-url', () => {
-    // Returns the customer-facing portal URL — what we embed in QR codes
-    // and email merge variables. This is DIFFERENT from SYNC_SERVER:
-    //   • SYNC_SERVER  = backend API the desktop app talks to for sync
-    //   • portal URL   = where the recipient logs in / views their invoice
-    // The user can override per-company via settings table key
-    // 'portal_base_url'. Defaults to the RMPG Pro Services client portal.
-    const companyId = db.getCurrentCompanyId();
-    let baseUrl = 'https://rmpgutahps.us/client/login';
-    if (companyId) {
-      try {
-        const setting = db.getDb().prepare(
-          "SELECT value FROM settings WHERE company_id = ? AND key = 'portal_base_url'"
-        ).get(companyId) as any;
-        if (setting?.value) baseUrl = setting.value;
-      } catch { /* fall through to default */ }
-    }
-    return { baseUrl };
-  });
 
   // SECURITY: only http(s) URLs reach the OS shell; rejects mailto/file/etc.
   ipcMain.handle('shell:open-external', (_event, url: string) => {
@@ -2024,215 +1930,13 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  // ─── Client Portal Integration (rmpgutahps.us) ───────────
-  // The API key is encrypted with Electron's safeStorage (OS keychain
-  // backed) before being written to SQLite. Plaintext never touches
-  // disk — DB backups expose only ciphertext, which is undecryptable
-  // without the user's OS login.
-  //
-  // SECURITY NOTE: safeStorage availability depends on the OS keychain
-  // being unlocked. On macOS/Windows this is normally true after login;
-  // on Linux it requires libsecret. If safeStorage is unavailable, we
-  // refuse to store the key and surface a clear error to the UI rather
-  // than silently falling back to plaintext.
-  function ensurePortalIntegrationRow(companyId: string): void {
-    const existing = db.getDb().prepare(
-      `SELECT id FROM portal_integration_settings WHERE company_id = ?`
-    ).get(companyId) as any;
-    if (existing) return;
-    db.getDb().prepare(
-      `INSERT INTO portal_integration_settings (id, company_id) VALUES (?, ?)`
-    ).run(uuid(), companyId);
-  }
-
-  ipcMain.handle('portal-integration:get', (_event) => {
-    try {
-      const companyId = db.getCurrentCompanyId();
-      if (!companyId) return { error: 'No active company' };
-      ensurePortalIntegrationRow(companyId);
-      const row = db.getDb().prepare(
-        `SELECT * FROM portal_integration_settings WHERE company_id = ?`
-      ).get(companyId) as any;
-      // Never return the ciphertext to the renderer — only a boolean
-      // indicating whether a key is stored. Treats the API key as a
-      // write-only field; user must rotate by entering a new value.
-      return {
-        portal_base_url: row?.portal_base_url || 'https://rmpgutahps.us/client/login',
-        api_endpoint: row?.api_endpoint || 'https://rmpgutahps.us/api/v1',
-        auth_scheme: row?.auth_scheme || 'bearer',
-        health_check_path: row?.health_check_path ?? '/health',
-        auto_sync_invoices: !!row?.auto_sync_invoices,
-        api_key_set: !!row?.api_key_encrypted,
-        last_sync_at: row?.last_sync_at || null,
-        last_sync_status: row?.last_sync_status || null,
-        last_test_at: row?.last_test_at || null,
-        last_test_status: row?.last_test_status || null,
-        last_test_message: row?.last_test_message || '',
-      };
-    } catch (err: any) {
-      return { error: err?.message || 'Failed to load portal integration settings' };
-    }
-  });
-
-  ipcMain.handle('portal-integration:save', async (_event, payload: {
-    portal_base_url?: string;
-    api_endpoint?: string;
-    auth_scheme?: 'bearer' | 'apikey-header';
-    health_check_path?: string;
-    auto_sync_invoices?: boolean;
-    api_key?: string;          // plaintext — encrypted before storage
-    clear_api_key?: boolean;   // explicit signal to wipe the stored key
-  }) => {
-    try {
-      const companyId = db.getCurrentCompanyId();
-      if (!companyId) return { error: 'No active company' };
-      ensurePortalIntegrationRow(companyId);
-
-      const { safeStorage } = await import('electron');
-      const updates: Record<string, any> = {};
-      if (payload.portal_base_url !== undefined) updates.portal_base_url = payload.portal_base_url;
-      if (payload.api_endpoint !== undefined) updates.api_endpoint = payload.api_endpoint;
-      if (payload.auth_scheme !== undefined) updates.auth_scheme = payload.auth_scheme;
-      if (payload.health_check_path !== undefined) updates.health_check_path = payload.health_check_path;
-      if (payload.auto_sync_invoices !== undefined) updates.auto_sync_invoices = payload.auto_sync_invoices ? 1 : 0;
-      if (payload.clear_api_key) {
-        updates.api_key_encrypted = null;
-      } else if (payload.api_key !== undefined) {
-        if (!safeStorage.isEncryptionAvailable()) {
-          return { error: 'OS keychain is not available — cannot securely store API key. Unlock your keychain (macOS Keychain Access / Windows Credential Manager) and try again.' };
-        }
-        const cipher = safeStorage.encryptString(payload.api_key);
-        updates.api_key_encrypted = cipher.toString('base64');
-      }
-      updates.updated_at = new Date().toISOString();
-
-      const row = db.getDb().prepare(`SELECT id FROM portal_integration_settings WHERE company_id = ?`).get(companyId) as any;
-      if (row) db.update('portal_integration_settings', row.id, updates);
-      scheduleAutoBackup();
-      return { ok: true };
-    } catch (err: any) {
-      return { error: err?.message || 'Failed to save portal integration settings' };
-    }
-  });
-
-  // Decrypt the stored API key. Internal helper — NEVER expose this
-  // via IPC. Returns null if no key is stored or decryption fails.
-  async function getPortalApiKey(companyId: string): Promise<string | null> {
-    try {
-      const row = db.getDb().prepare(
-        `SELECT api_key_encrypted FROM portal_integration_settings WHERE company_id = ?`
-      ).get(companyId) as any;
-      if (!row?.api_key_encrypted) return null;
-      const { safeStorage } = await import('electron');
-      if (!safeStorage.isEncryptionAvailable()) return null;
-      const buf = Buffer.from(row.api_key_encrypted, 'base64');
-      return safeStorage.decryptString(buf);
-    } catch {
-      return null;
-    }
-  }
-
-  // Test the integration: makes an authenticated GET to the configured
-  // endpoint and reports back. Endpoint convention assumed:
-  //   GET <api_endpoint>/ping  → 200 OK with body { ok: true, ts }
-  // If your portal uses a different health-check path, configure it
-  // via api_endpoint (the path is appended to the base).
-  ipcMain.handle('portal-integration:test', async (_event) => {
-    try {
-      const companyId = db.getCurrentCompanyId();
-      if (!companyId) return { ok: false, error: 'No active company' };
-      ensurePortalIntegrationRow(companyId);
-      const row = db.getDb().prepare(
-        `SELECT api_endpoint, auth_scheme, health_check_path FROM portal_integration_settings WHERE company_id = ?`
-      ).get(companyId) as any;
-      const apiKey = await getPortalApiKey(companyId);
-      if (!apiKey) {
-        const msg = 'API key not configured';
-        db.update('portal_integration_settings', (db.getDb().prepare(`SELECT id FROM portal_integration_settings WHERE company_id = ?`).get(companyId) as any).id, {
-          last_test_at: new Date().toISOString(),
-          last_test_status: 'no_key',
-          last_test_message: msg,
-        });
-        return { ok: false, error: msg };
-      }
-      const endpoint = (row?.api_endpoint || 'https://rmpgutahps.us/api/v1').replace(/\/$/, '');
-      const headers: Record<string, string> = { 'Accept': 'application/json' };
-      if (row?.auth_scheme === 'apikey-header') {
-        headers['X-API-Key'] = apiKey;
-      } else {
-        headers['Authorization'] = `Bearer ${apiKey}`;
-      }
-      // Configurable health-check path so users can adapt to whatever
-      // endpoint their portal actually exposes (Laravel /health,
-      // Express /status, REST /api/v1, etc.). Empty string = base URL.
-      const rawPath = (row?.health_check_path ?? '/health').toString().trim();
-      const path = rawPath && !rawPath.startsWith('/') ? `/${rawPath}` : rawPath;
-      const url = `${endpoint}${path}`;
-      const start = Date.now();
-      const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(10_000) }).catch((err: any) => {
-        throw new Error(`Network error: ${err?.message || err}`);
-      });
-      const elapsed = Date.now() - start;
-      const txt = await res.text().catch(() => '');
-      const status = res.ok ? 'success' : `http_${res.status}`;
-      const message = res.ok
-        ? `Connected (${elapsed}ms)`
-        : `HTTP ${res.status} ${res.statusText} — ${txt.slice(0, 200)}`;
-      const updateRow = db.getDb().prepare(`SELECT id FROM portal_integration_settings WHERE company_id = ?`).get(companyId) as any;
-      if (updateRow) {
-        db.update('portal_integration_settings', updateRow.id, {
-          last_test_at: new Date().toISOString(),
-          last_test_status: status,
-          last_test_message: message,
-        });
-      }
-      return { ok: res.ok, status: res.status, elapsedMs: elapsed, message };
-    } catch (err: any) {
-      const message = err?.message || 'Test failed';
-      try {
-        const companyId = db.getCurrentCompanyId();
-        if (companyId) {
-          const r = db.getDb().prepare(`SELECT id FROM portal_integration_settings WHERE company_id = ?`).get(companyId) as any;
-          if (r) db.update('portal_integration_settings', r.id, {
-            last_test_at: new Date().toISOString(),
-            last_test_status: 'error',
-            last_test_message: message,
-          });
-        }
-      } catch { /* ignore */ }
-      return { ok: false, error: message };
-    }
-  });
 
 
-  // ─── Client Contacts ──────────────────────────────────
-  ipcMain.handle('client:contacts-list', (_event, clientId: string) => {
-    try {
-      return db.queryAll('client_contacts', { client_id: clientId }, { field: 'is_primary', dir: 'desc' });
-    } catch { return []; }
-  });
 
-  ipcMain.handle('client:contacts-save', (_event, { clientId, contacts }: { clientId: string; contacts: any[] }) => {
-    try {
-      const saveContacts = db.getDb().transaction(() => {
-        db.getDb().prepare('DELETE FROM client_contacts WHERE client_id = ?').run(clientId);
-        return contacts.map((c) => db.create('client_contacts', {
-          id: c.id || undefined,
-          client_id: clientId,
-          name: c.name || '',
-          title: c.title || '',
-          email: c.email || '',
-          phone: c.phone || '',
-          is_primary: c.is_primary ? 1 : 0,
-        }));
-      });
-      const inserted = saveContacts();
-      scheduleAutoBackup();
-      return inserted;
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : String(err) };
-    }
-  });
+
+
+
+
 
   // ─── CSV Export ────────────────────────────────────────
   // ─── Auth ──────────────────────────────────────────────
@@ -3676,36 +3380,6 @@ export function registerIpcHandlers(): void {
     return convertResult;
   });
 
-  // ─── Client Insights ─────────────────────────────────────
-  ipcMain.handle('client:insights', (_event, { clientId }: { clientId: string }) => {
-    const dbI = db.getDb();
-    const cid = db.getCurrentCompanyId();
-    if (!cid) return { total_invoiced: 0, total_paid: 0, outstanding: 0, avg_payment_days: 0, status_breakdown: [], payment_history: [], active_projects: 0, lifetime_value: 0 };
-
-    const invoiced = dbI.prepare('SELECT COALESCE(SUM(total), 0) as total FROM invoices WHERE client_id = ? AND company_id = ?').get(clientId, cid) as any;
-    const paid = dbI.prepare('SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE client_id = ? AND company_id = ?').get(clientId, cid) as any;
-    const outstanding = dbI.prepare("SELECT COALESCE(SUM(total - amount_paid), 0) as total FROM invoices WHERE client_id = ? AND company_id = ? AND status NOT IN ('paid','void','cancelled')").get(clientId, cid) as any;
-    const avgDays = dbI.prepare("SELECT AVG(julianday(updated_at) - julianday(issue_date)) as avg_days FROM invoices WHERE client_id = ? AND company_id = ? AND status = 'paid'").get(clientId, cid) as any;
-    const statusBreakdown = dbI.prepare('SELECT status, COUNT(*) as count FROM invoices WHERE client_id = ? AND company_id = ? GROUP BY status').all(clientId, cid);
-    const paymentHistory = dbI.prepare(`
-      SELECT strftime('%Y-%m', updated_at) as month, SUM(amount_paid) as total
-      FROM invoices WHERE client_id = ? AND company_id = ? AND status = 'paid'
-      GROUP BY month ORDER BY month DESC LIMIT 12
-    `).all(clientId, cid);
-    const projects = dbI.prepare("SELECT COUNT(*) as count FROM projects WHERE client_id = ? AND company_id = ? AND status != 'completed'").get(clientId, cid) as any;
-    const lifetime = dbI.prepare('SELECT COALESCE(SUM(amount_paid), 0) as total FROM invoices WHERE client_id = ? AND company_id = ?').get(clientId, cid) as any;
-
-    return {
-      total_invoiced: invoiced?.total || 0,
-      total_paid: paid?.total || 0,
-      outstanding: outstanding?.total || 0,
-      avg_payment_days: Math.round(avgDays?.avg_days || 0),
-      status_breakdown: statusBreakdown,
-      payment_history: paymentHistory,
-      active_projects: projects?.count || 0,
-      lifetime_value: lifetime?.total || 0,
-    };
-  });
 
   // ─── Project Profitability ───────────────────────────────
   ipcMain.handle('project:profitability', (_event, { projectId }: { projectId: string }) => {
