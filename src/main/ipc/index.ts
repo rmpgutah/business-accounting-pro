@@ -31,6 +31,7 @@ import { registerAccountingGlFeaturesFeat } from './feat/accounting-gl-features'
 import { registerAccountingAnalyticsFeaturesFeat } from './feat/accounting-analytics-features';
 import { registerDynamicSearchBulkFeaturesFeat } from './feat/dynamic-search-bulk-features';
 import { registerDynamicPowerFeaturesFeat } from './feat/dynamic-power-features';
+import { registerPayrollTaxConsolidationFeaturesFeat } from './feat/payroll-tax-consolidation-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -312,62 +313,15 @@ export function registerIpcHandlers(): void {
   // ═══════════════════════════════════════════════════════════════
   // WAVE 3: 90 features (F351-F440) — IPC handlers
   // ═══════════════════════════════════════════════════════════════
-  const ptc = () => require('../services/payroll-tax-consolidation-features');
+  registerPayrollTaxConsolidationFeaturesFeat(ipcMain, deps);
   const ptd = () => require('../services/portal-time-doc-features');
   const ci = () => require('../services/collab-integration-features');
 
   // Batch S — Payroll deep-dive
-  ipcMain.handle('feat:state-wh:upsert', (_e, t: any) => { try {  const _r = ptc().upsertStateWithholding(t); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:state-wh:calc', (_e, opts: any) => { try {  const _r = ptc().calcStateWithholding(opts); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:garn:upsert', (_e, g: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().upsertGarnishment({ ...g, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:garn:calc', (_e, { employee_id, disposable_earnings }: any) => { try {  const _r = ptc().calcGarnishmentDeductions(employee_id, disposable_earnings); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:garn:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ptc().listGarnishments(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:retire:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().upsertRetirement({ ...r, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:retire:calc', (_e, { employee_id, period_wages }: any) => { try {  const _r = ptc().calcRetirementContribution(employee_id, period_wages); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:s125:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().upsertSection125({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:s125:list', (_e, { employee_id }: any) => { try { return ptc().listSection125ForEmployee(employee_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:pto-rule:upsert', (_e, r: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().upsertPTORule({ ...r, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:pto-rule:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ptc().listPTORules(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:emp-state:set', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().setEmployeeStateAllocation({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:emp-state:get', (_e, { employee_id }: any) => { try { return ptc().getEmployeeStateAllocations(employee_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:wcomp:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().upsertWorkersCompClass({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:wcomp:calc', (_e, { state_code, class_code, payroll }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return 0; const _r = ptc().calcWorkersCompPremium(cid, state_code, class_code, payroll); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:recip:upsert', (_e, { work_state, resident_state, has_reciprocity, certificate_form }: any) => { try {  const _r = ptc().upsertReciprocity(work_state, resident_state, has_reciprocity, certificate_form); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:recip:check', (_e, { work_state, resident_state }: any) => { try { return ptc().hasReciprocity(work_state, resident_state); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:w2:run', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().createW2Run({ ...opts, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:dd-batch:build', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptc().buildNACHABatch({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:dd-batch:list', (_e, { limit }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ptc().listDirectDepositBatches(cid, limit); } catch (e: any) { return { error: e?.message }; } });
 
   // Batch T — Sales Tax Engine
-  ipcMain.handle('feat:nexus:upsert', (_e, n: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().upsertNexus({ ...n, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:nexus:evaluate', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ptc().evaluateNexus(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tax-juris:upsert', (_e, j: any) => { try {  const _r = ptc().upsertJurisdiction(j); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tax-juris:by-zip', (_e, { zip }: any) => { try { return ptc().lookupTaxRateByZip(zip); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:exempt-cert:upsert', (_e, c: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().upsertExemptionCert({ ...c, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:exempt-cert:check', (_e, { customer_id, state_code }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return false; return ptc().isCustomerExempt(cid, customer_id, state_code); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:exempt-cert:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ptc().listExemptionCerts(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:use-tax:record', (_e, u: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().recordUseTax({ ...u, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tax-sched:upsert', (_e, s: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().upsertFilingSchedule({ ...s, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tax-sched:upcoming', (_e, { days_ahead }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ptc().listUpcomingFilings(cid, days_ahead || 30); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tax-liab:record', (_e, l: any) => { try { const cid = db.getCurrentCompanyId(); const _r = ptc().recordSalesTaxLiability({ ...l, company_id: cid }); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tax-liab:mark-paid', (_e, { id, payment_je_id }: any) => { try {  const _r = { ok: ptc().markTaxPaid(id, payment_je_id) }; scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tax-liab:list', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ptc().listTaxLiability(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tax-holiday:upsert', (_e, h: any) => { try {  const _r = ptc().upsertSalesTaxHoliday(h); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:tax-holiday:active', (_e, { state_code }: any = {}) => { try { return ptc().listActiveSalesTaxHolidays(state_code); } catch (e: any) { return { error: e?.message }; } });
 
   // Batch U — Consolidation
-  ipcMain.handle('feat:entity:set-sub', (_e, { parent_id, child_id, ownership_pct, method, notes }: any) => { try {  const _r = ptc().setSubsidiary(parent_id, child_id, ownership_pct, method, notes); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:entity:hierarchy', (_e, { parent_id }: any) => { try { return ptc().getEntityHierarchy(parent_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:elim-rule:upsert', (_e, r: any) => { try {  const _r = ptc().upsertElimRule(r); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:elim-rule:list', (_e, { parent_id }: any) => { try { return ptc().listElimRules(parent_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:consol:generate', (_e, opts: any) => { try { return ptc().generateConsolidatedStatement(opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:fx-translation:record', (_e, t: any) => { try {  const _r = ptc().recordCurrencyTranslation(t); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:minority:calc', (_e, opts: any) => { try {  const _r = ptc().calcMinorityInterest(opts); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:goodwill:record', (_e, g: any) => { try {  const _r = ptc().recordGoodwill(g); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:goodwill:impair', (_e, { goodwill_id, impairment_amount }: any) => { try { return { ok: ptc().recordGoodwillImpairment(goodwill_id, impairment_amount) }; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:equity-inv:upsert', (_e, e: any) => { try {  const _r = ptc().upsertEquityInvestment(e); scheduleAutoBackup(); return _r; } catch (er: any) { return { error: er?.message }; } });
-  ipcMain.handle('feat:equity-inv:record-income', (_e, { investment_id, investee_income }: any) => { try {  const _r = ptc().recordEquityShareIncome(investment_id, investee_income); scheduleAutoBackup(); return _r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:equity-inv:list', (_e, { investor_company_id }: any) => { try { return ptc().listEquityInvestments(investor_company_id); } catch (e: any) { return { error: e?.message }; } });
 
   // Batch V — Customer Portal
   ipcMain.handle('feat:portal-cust:invite', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); return ptd().inviteCustomerPortalUser({ ...opts, company_id: cid }); } catch (e: any) { return { error: e?.message }; } });
