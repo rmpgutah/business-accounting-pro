@@ -37,4 +37,22 @@ describe('hr-payroll domain', () => {
     expect(rows).toHaveLength(1);
     expect(scheduleAutoBackup).toHaveBeenCalled();
   });
+
+  it('tax:get-utah-config returns null when no config exists for the year', async () => {
+    expect(await ipc.invoke('tax:get-utah-config', { year: 2026 })).toBeNull();
+  });
+
+  it('tax:save-utah-config persists the config and schedules a backup', async () => {
+    const res = await ipc.invoke('tax:save-utah-config', {
+      year: 2026,
+      config: { sui_rate: 0.02 },
+    });
+    expect(res.success).toBe(true);
+    const row = db
+      .getDb()
+      .prepare('SELECT sui_rate FROM utah_withholding_config WHERE company_id = ? AND tax_year = ?')
+      .get(companyId, 2026) as any;
+    expect(row.sui_rate).toBe(0.02);
+    expect(scheduleAutoBackup).toHaveBeenCalled();
+  });
 });
