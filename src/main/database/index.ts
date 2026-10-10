@@ -106,8 +106,10 @@ export function initDatabase(): Database.Database {
   return initDatabaseAt(getDbPath());
 }
 
-// Test/alt-path entry: identical to initDatabase but with an explicit path
-// (':memory:' in tests). Everything after opening the file is shared.
+// Opens (or creates) the database at an explicit path and runs the full
+// schema + migration list against it. `initDatabase()` delegates here with
+// the Electron userData path; tests call it directly with ':memory:' so the
+// migration list can be exercised on a fresh DB without Electron.
 export function initDatabaseAt(dbPath: string): Database.Database {
   db = new Database(dbPath);
   applyPerformancePragmas(db);
@@ -615,16 +617,10 @@ export function initDatabaseAt(dbPath: string): Database.Database {
   // optional and avoid the cascading-delete complexity.
   "ALTER TABLE expenses ADD COLUMN related_loan_id TEXT",
   "ALTER TABLE expenses ADD COLUMN related_loan_payment_id TEXT",
-  // Bidirectional link — loan_payment knows which expense was auto-created
-  // for its interest portion. Allows cascade-delete and edit-sync between
-  // the loan payment and the expense ledger.
-  "ALTER TABLE loan_payments ADD COLUMN related_expense_id TEXT",
-  // Second link for the PRINCIPAL-portion expense row. Each loan payment
-  // now spawns two linked expense rows: interest (deductible) +
-  // principal (non-deductible). Two named columns keep edit-sync
-  // unambiguous — interest_amount syncs related_expense_id, principal_amount
-  // syncs related_principal_expense_id.
-  "ALTER TABLE loan_payments ADD COLUMN related_principal_expense_id TEXT",
+  // NOTE: the two `ALTER TABLE loan_payments ADD COLUMN related_*_expense_id`
+  // migrations used to sit here, ~1000 lines BEFORE the loan_payments CREATE
+  // TABLE. On a fresh install they failed with "no such table" and the columns
+  // were never added. They now live directly after the CREATE TABLE below.
   // Tags an expense row with which loan-payment component it represents,
   // so reverse lookups + reports can filter.
   // Now: 'combined' for the single split-expense per payment (legacy
@@ -1126,8 +1122,12 @@ export function initDatabaseAt(dbPath: string): Database.Database {
     validation_json TEXT NOT NULL DEFAULT '{}',
     show_on_print INTEGER NOT NULL DEFAULT 0,
     deleted_at TEXT DEFAULT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
+  // Existing installs created this table before is_active existed; the
+  // idx_custom_fields_company_entity index (Batch 1, below) needs it.
+  "ALTER TABLE custom_field_definitions ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
   "CREATE UNIQUE INDEX IF NOT EXISTS uq_cfd_key ON custom_field_definitions(company_id, entity_type, key)",
   `CREATE TABLE IF NOT EXISTS custom_field_values (
     id TEXT PRIMARY KEY,
@@ -1713,10 +1713,22 @@ export function initDatabaseAt(dbPath: string): Database.Database {
     bank_transaction_id TEXT DEFAULT NULL,           -- linked imported bank line
     journal_entry_id TEXT DEFAULT NULL,              -- linked GL posting
     notes TEXT DEFAULT '',
+    related_expense_id TEXT,                         -- auto-created expense row (interest / combined)
+    related_principal_expense_id TEXT,               -- auto-created expense row (principal)
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )`,
   "CREATE INDEX IF NOT EXISTS idx_loan_payments_loan_date ON loan_payments(loan_id, payment_date DESC)",
+  // Bidirectional link — loan_payment knows which expense was auto-created
+  // for its interest portion. Allows cascade-delete and edit-sync between
+  // the loan payment and the expense ledger.
+  "ALTER TABLE loan_payments ADD COLUMN related_expense_id TEXT",
+  // Second link for the PRINCIPAL-portion expense row. Each loan payment
+  // now spawns two linked expense rows: interest (deductible) +
+  // principal (non-deductible). Two named columns keep edit-sync
+  // unambiguous — interest_amount syncs related_expense_id, principal_amount
+  // syncs related_principal_expense_id.
+  "ALTER TABLE loan_payments ADD COLUMN related_principal_expense_id TEXT",
 
   // Append-only audit / event log. Rate changes, refinances,
   // extensions, lump payoffs — anything that changes the loan's
@@ -2166,22 +2178,13 @@ export function initDatabaseAt(dbPath: string): Database.Database {
   // ─── Batch 1: 15 admin/settings features ────────────────────
 
   // F1-F3: Custom fields system (clients, vendors, invoices)
-  `CREATE TABLE IF NOT EXISTS custom_field_definitions (
-    id TEXT PRIMARY KEY,
-    company_id TEXT NOT NULL REFERENCES companies(id),
-    entity_type TEXT NOT NULL CHECK(entity_type IN ('client','vendor','invoice','expense','employee','project')),
-    field_key TEXT NOT NULL,
-    field_label TEXT NOT NULL,
-    field_type TEXT NOT NULL CHECK(field_type IN ('text','number','date','boolean','select','multiselect')),
-    options_json TEXT DEFAULT '[]',
-    required INTEGER DEFAULT 0,
-    display_order INTEGER DEFAULT 0,
-    is_active INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now')),
-    UNIQUE(company_id, entity_type, field_key)
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_custom_fields_company_entity ON custom_field_definitions(company_id, entity_type, is_active)`,
+  // NOTE: a second `CREATE TABLE IF NOT EXISTS custom_field_definitions` with a
+  // different column set (field_key/field_label/display_order/is_active) used to
+  // live here. It never ran, because the table is already created ~1000 lines
+  // above with key/label/sort_order/deleted_at. The index below used to target
+  // is_active (a column that never existed) and failed on every boot; it now
+  // covers the real soft-delete column.
+  `CREATE INDEX IF NOT EXISTS idx_custom_fields_company_entity ON custom_field_definitions(company_id, entity_type, deleted_at)`,
 
   // F4: Role permissions matrix (extends users table)
   "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'admin'",
