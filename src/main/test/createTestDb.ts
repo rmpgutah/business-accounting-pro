@@ -8,6 +8,14 @@ export interface TestDb {
   close(): void;
 }
 
+let active: TestDb | null = null;
+
+/** Closes the most recently created test DB; no-op if none is open. */
+export function closeTestDb(): void {
+  active?.close();
+  active = null;
+}
+
 export function createTestDb(): TestDb {
   const d = db.initDatabaseAt(':memory:');
   const companyId = uuid();
@@ -22,5 +30,12 @@ export function createTestDb(): TestDb {
   ).run(userId);
   db.switchCompany(companyId);
   db.setCurrentUser(userId, 'test@example.com');
-  return { db: d, companyId, userId, close: () => d.close() };
+  const t: TestDb = {
+    db: d,
+    companyId,
+    userId,
+    close: () => { if (d.open) d.close(); if (active === t) active = null; },
+  };
+  active = t;
+  return t;
 }

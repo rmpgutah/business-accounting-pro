@@ -2,9 +2,12 @@ import os from 'os';
 import path from 'path';
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown;
+// The mock can be instantiated twice (Vite-resolved import and native require via the
+// tsx hook), so ipcMain lives on globalThis to keep one registry and one identity.
+const g = globalThis as { __bapIpcMain?: typeof ipcMainImpl };
 const handlers = new Map<string, Handler>();
 
-export const ipcMain = {
+const ipcMainImpl = {
   handle(channel: string, fn: Handler) {
     if (handlers.has(channel)) throw new Error(`Attempted to register a second handler for '${channel}'`);
     handlers.set(channel, fn);
@@ -19,6 +22,7 @@ export const ipcMain = {
   channels(): string[] { return [...handlers.keys()]; },
   reset() { handlers.clear(); },
 };
+export const ipcMain = (g.__bapIpcMain ??= ipcMainImpl);
 
 export const app = {
   getPath: (_name: string) => path.join(os.tmpdir(), 'bap-test-userdata'),
