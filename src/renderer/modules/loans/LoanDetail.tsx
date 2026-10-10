@@ -59,9 +59,15 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
   // Recompute payoff scenario whenever extraPerPayment changes (debounced via blur)
   const computeScenario = useCallback(async () => {
     if (!data || extraPerPayment <= 0) { setScenario(null); return; }
-    const r = await api.loanPayoffScenario(loanId, extraPerPayment);
-    if (r?.error) { toast.error('Payoff scenario failed: ' + r.error); setScenario(null); return; }
-    setScenario(r);
+    try {
+      const r = await api.loanPayoffScenario(loanId, extraPerPayment);
+      if (r?.error) { toast.error('Payoff scenario failed: ' + r.error); setScenario(null); return; }
+      setScenario(r);
+    } catch (err: any) {
+      console.error('loanPayoffScenario failed', err);
+      toast.error('Payoff scenario failed: ' + (err?.message || 'Unknown error'));
+      setScenario(null);
+    }
   }, [data, extraPerPayment, loanId, toast]);
 
   if (loading) return <div style={{ padding: 24 }}>Loading…</div>;
@@ -96,9 +102,14 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
         </button>
         <button
           onClick={async () => {
-            const r = await api.loanExportPDF(loanId);
-            if (r?.error) toast.error('PDF export failed: ' + r.error);
-            else if (r?.path) toast.success('PDF saved to ' + r.path);
+            try {
+              const r = await api.loanExportPDF(loanId);
+              if (r?.error) toast.error('PDF export failed: ' + r.error);
+              else if (r?.path) toast.success('PDF saved to ' + r.path);
+            } catch (err: any) {
+              console.error('loanExportPDF failed', err);
+              toast.error('PDF export failed: ' + (err?.message || 'Unknown error'));
+            }
           }}
           className="block-btn flex items-center gap-1.5 text-xs"
           title="Export full amortization schedule as PDF"
@@ -107,19 +118,24 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
         </button>
         <button
           onClick={async () => {
-            const r = await api.loanRecompute(loanId);
-            if (r?.error) { toast.error('Repair failed: ' + r.error); return; }
-            const parts = [
-              `balance $${(r.totals?.current_balance || 0).toFixed(2)}`,
-              `interest $${(r.totals?.total_interest_paid || 0).toFixed(2)}`,
-              `principal $${(r.totals?.total_principal_paid || 0).toFixed(2)}`,
-            ];
-            if (r.schedule_payments) parts.push(`${r.schedule_payments} payments left`);
-            if (r.expenses_backfilled) parts.push(`${r.expenses_backfilled} expense rows backfilled`);
-            toast.success('Loan repaired · ' + parts.join(' · '));
-            // Reload loan + payments + schedule to reflect the repair
-            const fresh = await api.loanGet(loanId);
-            if (!fresh.error) setData(fresh);
+            try {
+              const r = await api.loanRecompute(loanId);
+              if (r?.error) { toast.error('Repair failed: ' + r.error); return; }
+              const parts = [
+                `balance $${(r.totals?.current_balance || 0).toFixed(2)}`,
+                `interest $${(r.totals?.total_interest_paid || 0).toFixed(2)}`,
+                `principal $${(r.totals?.total_principal_paid || 0).toFixed(2)}`,
+              ];
+              if (r.schedule_payments) parts.push(`${r.schedule_payments} payments left`);
+              if (r.expenses_backfilled) parts.push(`${r.expenses_backfilled} expense rows backfilled`);
+              toast.success('Loan repaired · ' + parts.join(' · '));
+              // Reload loan + payments + schedule to reflect the repair
+              const fresh = await api.loanGet(loanId);
+              if (!fresh.error) setData(fresh);
+            } catch (err: any) {
+              console.error('loanRecompute failed', err);
+              toast.error('Repair failed: ' + (err?.message || 'Unknown error'));
+            }
           }}
           className="block-btn flex items-center gap-1.5 text-xs"
           title="Repair this loan: re-split payments, fix interest/principal totals, regenerate the schedule from the current balance, and backfill linked expense rows"
@@ -132,9 +148,14 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
         <button
           onClick={async () => {
             if (!confirm('Delete this loan? Payment history will be retained for 30 days in Trash.')) return;
-            const r = await api.loanDelete(loanId);
-            if (r?.error) toast.error(r.error);
-            else { toast.success('Loan deleted'); onDeleted(); }
+            try {
+              const r = await api.loanDelete(loanId);
+              if (r?.error) toast.error(r.error);
+              else { toast.success('Loan deleted'); onDeleted(); }
+            } catch (err: any) {
+              console.error('loanDelete failed', err);
+              toast.error('Delete failed: ' + (err?.message || 'Unknown error'));
+            }
           }}
           className="block-btn flex items-center gap-1.5 text-xs"
           style={{ color: 'var(--color-accent-expense)', borderColor: 'var(--color-accent-expense)' }}
@@ -159,7 +180,7 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
             <span>{pctPaid.toFixed(1)}% paid down · {remainingPayments} payments remaining</span>
             <span>Total scheduled interest: {fmt$(totalScheduledInterest, cur)}</span>
           </div>
-          <div style={{ height: 8, background: 'var(--color-bg-secondary)', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{ height: 8, background: 'var(--color-bg-secondary)', borderRadius: 'var(--app-radius)', overflow: 'hidden' }}>
             <div style={{
               width: pctPaid + '%',
               height: '100%',
@@ -309,11 +330,16 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
                         <button
                           onClick={async () => {
                             if (!confirm(`Delete the ${fmt$(p.amount, cur)} payment on ${p.payment_date}? Loan totals will re-aggregate from remaining payments.`)) return;
-                            const r = await api.loanDeletePayment(p.id);
-                            if (r?.error) { toast.error('Delete failed: ' + r.error); return; }
-                            toast.success(`Payment deleted · balance now ${fmt$(r.totals?.current_balance || 0, cur)}`);
-                            const fresh = await api.loanGet(loanId);
-                            if (!fresh.error) setData(fresh);
+                            try {
+                              const r = await api.loanDeletePayment(p.id);
+                              if (r?.error) { toast.error('Delete failed: ' + r.error); return; }
+                              toast.success(`Payment deleted · balance now ${fmt$(r.totals?.current_balance || 0, cur)}`);
+                              const fresh = await api.loanGet(loanId);
+                              if (!fresh.error) setData(fresh);
+                            } catch (err: any) {
+                              console.error('loanDeletePayment failed', err);
+                              toast.error('Delete failed: ' + (err?.message || 'Unknown error'));
+                            }
                           }}
                           className="block-btn"
                           style={{ padding: '2px 6px', fontSize: 10, color: 'var(--color-accent-expense)', borderColor: 'var(--color-accent-expense)' }}
@@ -355,8 +381,12 @@ const LoanDetail: React.FC<Props> = ({ loanId, onBack, onEdit, onDeleted }) => {
           onClose={() => setEditPayment(null)}
           onSaved={async () => {
             setEditPayment(null);
-            const fresh = await api.loanGet(loanId);
-            if (!fresh.error) setData(fresh);
+            try {
+              const fresh = await api.loanGet(loanId);
+              if (!fresh.error) setData(fresh);
+            } catch (err: any) {
+              console.error('loanGet after edit failed', err);
+            }
           }}
           onError={(msg) => toast.error(msg)}
           onSuccess={(msg) => toast.success(msg)}
@@ -449,7 +479,7 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 8, maxWidth: 520, width: '100%', padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', maxWidth: 520, width: '100%', padding: 20 }}>
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Record Loan Payment</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <Field label="Payment Date">
@@ -529,7 +559,7 @@ const PaymentModal: React.FC<{ loanId: string; loan: any; onClose: () => void; o
               marginTop: 8, padding: '6px 8px',
               background: splitBalanced ? 'color-mix(in srgb, var(--color-accent-income) 8%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)',
               border: '1px solid ' + (splitBalanced ? 'color-mix(in srgb, var(--color-accent-income) 30%, transparent)' : 'color-mix(in srgb, var(--color-accent-expense) 30%, transparent)'),
-              borderRadius: 4, fontSize: 10,
+              borderRadius: 'var(--app-radius)', fontSize: 10,
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span style={{ fontFamily: 'SF Mono, Menlo, monospace' }}>
@@ -654,7 +684,7 @@ const PaymentEditModal: React.FC<{
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 8, maxWidth: 560, width: '100%', padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', maxWidth: 560, width: '100%', padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div style={{ fontSize: 16, fontWeight: 700 }}>Edit Payment</div>
           <button onClick={onClose} className="block-btn" style={{ padding: '4px 8px' }}><X size={14} /></button>
@@ -804,7 +834,7 @@ const SkipPaymentModal: React.FC<{
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 8, maxWidth: 480, width: '100%', padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', maxWidth: 480, width: '100%', padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <SkipForward size={16} style={{ color: 'var(--color-accent-warning)' }} />

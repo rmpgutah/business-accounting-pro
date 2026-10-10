@@ -81,11 +81,11 @@ const InventoryValuation: React.FC = () => {
   const statusBadge = (status: InventoryRow['status']) => {
     switch (status) {
       case 'in-stock':
-        return <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-accent-income/10 text-accent-income" style={{ borderRadius: '4px' }}>In Stock</span>;
+        return <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-accent-income/10 text-accent-income" style={{ borderRadius: 'var(--app-radius)' }}>In Stock</span>;
       case 'low-stock':
-        return <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-accent-warning/10 text-accent-warning" style={{ borderRadius: '4px' }}>Low Stock</span>;
+        return <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-accent-warning/10 text-accent-warning" style={{ borderRadius: 'var(--app-radius)' }}>Low Stock</span>;
       case 'out-of-stock':
-        return <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-accent-expense/10 text-accent-expense" style={{ borderRadius: '4px' }}>Out of Stock</span>;
+        return <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-accent-expense/10 text-accent-expense" style={{ borderRadius: 'var(--app-radius)' }}>Out of Stock</span>;
     }
   };
 

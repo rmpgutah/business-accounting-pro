@@ -1067,7 +1067,7 @@ const Misc1099View: React.FC<{ forms: any[] }> = ({ forms }) => {
                   {f.has_tin ? '•••' + (f.recipient_tin || '').slice(-4) : '⛔ missing'}
                 </td>
                 <td style={{ padding: '6px 10px', fontSize: 11 }}>
-                  <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: 'rgba(0,0,0,0.06)' }}>
+                  <span style={{ display: 'inline-block', padding: '2px 6px', borderRadius: 'var(--app-radius)', fontSize: 10, fontWeight: 700, background: 'rgba(0,0,0,0.06)' }}>
                     {f.primary_box.replace('box', 'Box ')}
                   </span>
                 </td>

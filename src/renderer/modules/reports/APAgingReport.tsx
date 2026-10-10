@@ -334,7 +334,7 @@ const APAgingReport: React.FC = () => {
               <div className="flex flex-wrap gap-4 mt-2">
                 {(Object.keys(BUCKET_LABELS) as BucketKey[]).map(k => (
                   <span key={k} className="flex items-center gap-1.5 text-[10px] text-text-muted">
-                    <span className="w-2.5 h-2.5 shrink-0" style={{ backgroundColor: BUCKET_COLORS[k], borderRadius: '2px' }} />
+                    <span className="w-2.5 h-2.5 shrink-0" style={{ backgroundColor: BUCKET_COLORS[k], borderRadius: 'var(--app-radius)' }} />
                     {BUCKET_LABELS[k]}: {formatCurrency(bucketTotals[k])}
                   </span>
                 ))}

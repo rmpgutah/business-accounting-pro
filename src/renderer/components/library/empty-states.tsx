@@ -40,14 +40,14 @@ function StateShell({
   return (
     <div
       className="block-card flex flex-col items-center justify-center text-center"
-      style={{ padding: '40px 28px', gap: 14, borderRadius: 6 }}
+      style={{ padding: '40px 28px', gap: 14, borderRadius: 'var(--app-radius)' }}
     >
       <div
         className="flex items-center justify-center"
         style={{
           width: 56,
           height: 56,
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           background: iconBg,
           border: '1px solid var(--color-border-secondary)',
         }}
@@ -258,7 +258,7 @@ export function ComingSoonState({
           letterSpacing: '0.04em',
           textTransform: 'uppercase',
           padding: '4px 10px',
-          borderRadius: 6,
+          borderRadius: 'var(--app-radius)',
           color: 'var(--color-accent-purple)',
           background: 'var(--color-accent-purple-bg)',
           border: '1px solid var(--color-border-secondary)',

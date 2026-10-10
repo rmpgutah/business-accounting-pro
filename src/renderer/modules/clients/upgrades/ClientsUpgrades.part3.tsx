@@ -1037,7 +1037,7 @@ const ClientsUpgradesPart3: React.FC = () => {
                         <button
                           onClick={() => toggleStar(c.id)}
                           title={starred.has(c.id) ? 'Unpin' : 'Pin to top'}
-                          style={{ color: starred.has(c.id) ? 'var(--color-accent-warning)' : 'var(--text-muted)' }}
+                          style={{ color: starred.has(c.id) ? 'var(--color-accent-warning)' : 'var(--color-text-muted)' }}
                         >
                           <Star size={13} fill={starred.has(c.id) ? 'currentColor' : 'none'} />
                         </button>

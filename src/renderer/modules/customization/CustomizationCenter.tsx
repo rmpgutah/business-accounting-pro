@@ -42,7 +42,7 @@ function Control({ opt }: { opt: CustomizationOption }) {
             left: on ? 18 : 2,
             width: 16,
             height: 16,
-            borderRadius: 4,
+            borderRadius: 'var(--app-radius)',
             background: '#fff',
             transition: 'left 0.15s',
           }}
@@ -130,7 +130,7 @@ function EditedPill({ onReset }: { onReset: () => void }) {
       onClick={onReset}
       className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5"
       style={{
-        borderRadius: 4,
+        borderRadius: 'var(--app-radius)',
         background: 'rgba(96,165,250,0.12)',
         color: 'var(--color-accent-blue)',
         border: '1px solid rgba(96,165,250,0.25)',
@@ -218,7 +218,7 @@ export default function CustomizationCenter() {
                 <span
                   className="text-[9px] font-bold px-1 py-0.5"
                   style={{
-                    borderRadius: 4,
+                    borderRadius: 'var(--app-radius)',
                     background: 'rgba(96,165,250,0.15)',
                     color: 'var(--color-accent-blue)',
                   }}

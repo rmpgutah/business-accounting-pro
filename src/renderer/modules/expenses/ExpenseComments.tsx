@@ -48,7 +48,7 @@ const ExpenseComments: React.FC<Props> = ({ expenseId }) => {
         {comments.length === 0 ? (
           <div className="text-xs text-text-muted">No comments yet.</div>
         ) : comments.map((c) => (
-          <div key={c.id} className="border border-border-primary p-2" style={{ borderRadius: 4 }}>
+          <div key={c.id} className="border border-border-primary p-2" style={{ borderRadius: 'var(--app-radius)' }}>
             <div className="flex items-center justify-between text-xs">
               <span className="font-bold text-text-primary">{c.user_name || c.user_id || 'user'}</span>
               <span className="text-text-muted font-mono">{formatDate(c.created_at)}</span>

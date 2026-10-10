@@ -1433,7 +1433,7 @@ const InvoiceDetail: React.FC<InvoiceDetailProps> = ({ invoiceId, onBack, onEdit
                   fontSize: 10,
                   fontWeight: 800,
                   padding: '2px 8px',
-                  borderRadius: 999,
+                  borderRadius: 'var(--app-radius)',
                   background: pageAnalysis.straddlers.length > 0 ? 'rgba(217, 119, 6, 0.15)' : 'rgba(22, 163, 74, 0.12)',
                   color: pageAnalysis.straddlers.length > 0 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)',
                   letterSpacing: '0.5px',

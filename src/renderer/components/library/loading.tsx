@@ -340,7 +340,7 @@ export function ProgressOverlay({
             style={{
               width: '100%',
               height: 8,
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               overflow: 'hidden',
               background: 'var(--color-bg-tertiary, #2e2e2e)',
             }}
@@ -350,7 +350,7 @@ export function ProgressOverlay({
                 style={{
                   width: '40%',
                   height: '100%',
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   background: SHIMMER_BG,
                   backgroundSize: '200% 100%',
                   animation: 'bapShimmer 1.2s ease-in-out infinite',
@@ -361,7 +361,7 @@ export function ProgressOverlay({
                 style={{
                   width: `${clamped}%`,
                   height: '100%',
-                  borderRadius: 6,
+                  borderRadius: 'var(--app-radius)',
                   background: 'var(--accent-primary)',
                   transition: 'width 0.3s ease',
                 }}

@@ -227,7 +227,7 @@ const SmartMatchView: React.FC = () => {
                     <div style={{
                       width: 40,
                       height: 40,
-                      borderRadius: 4,
+                      borderRadius: 'var(--app-radius)',
                       background: c.score >= 90 ? 'var(--color-accent-income)' : c.score >= 75 ? 'var(--color-accent-income)' : 'var(--color-accent-warning)',
                       color: 'white',
                       display: 'flex',

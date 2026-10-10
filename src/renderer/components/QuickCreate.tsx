@@ -44,7 +44,7 @@ export const QuickCreate: React.FC<Props> = ({ onNavigate, onClose }) => {
     >
       <div
         className="w-full max-w-md bg-bg-elevated border border-border-primary shadow-2xl"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
         onClick={e => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -81,7 +81,7 @@ export const QuickCreate: React.FC<Props> = ({ onNavigate, onClose }) => {
               }
             }}
           />
-          <button type="button" onClick={onClose} aria-label="Close quick create" style={{ borderRadius: '2px' }}>
+          <button type="button" onClick={onClose} aria-label="Close quick create" style={{ borderRadius: 'var(--app-radius)' }}>
             <X size={16} className="text-text-muted hover:text-text-primary" />
           </button>
         </div>

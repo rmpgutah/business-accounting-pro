@@ -143,7 +143,7 @@ const ReimbursementRun: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {balances.map((b) => (
               <button key={b.employee_id} onClick={() => setEmployeeId(b.employee_id)}
-                className="text-left border border-border-primary p-2 hover:border-accent-blue" style={{ borderRadius: 4 }}>
+                className="text-left border border-border-primary p-2 hover:border-accent-blue" style={{ borderRadius: 'var(--app-radius)' }}>
                 <div className="text-xs font-bold text-text-primary truncate">{b.employee_name}</div>
                 <div className="text-sm font-mono text-accent-expense">{formatCurrency(b.balance)}</div>
                 <div className="text-xs text-text-muted">{b.expense_count} expense{b.expense_count !== 1 ? 's' : ''}</div>

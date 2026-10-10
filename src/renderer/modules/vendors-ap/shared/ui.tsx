@@ -24,7 +24,7 @@ export const Section: React.FC<SectionProps> = ({ title, icon, count, right, chi
       {icon}
       <span className="text-xs font-bold uppercase tracking-wider text-text-muted">{title}</span>
       {count !== undefined && (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 ml-1" style={{ borderRadius: 4, background: 'color-mix(in srgb, var(--color-accent-blue) 14%, transparent)', color: TOK.blue }}>{count}</span>
+        <span className="text-[10px] font-bold px-1.5 py-0.5 ml-1" style={{ borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-blue) 14%, transparent)', color: TOK.blue }}>{count}</span>
       )}
       {right && <div className="ml-auto">{right}</div>}
     </div>
@@ -56,7 +56,7 @@ export const StatCard: React.FC<{ label: string; value: React.ReactNode; sub?: R
 export const MiniBar: React.FC<{ label: string; value: number; max: number; valueLabel: React.ReactNode; barColor?: string }> = ({ label, value, max, valueLabel, barColor }) => (
   <div className="flex items-center gap-2 text-[11px]">
     <span style={{ width: 96 }} className="text-text-muted truncate" title={label}>{label}</span>
-    <div style={{ flex: 1, height: 6, background: TOK.track, borderRadius: 3, overflow: 'hidden' }}>
+    <div style={{ flex: 1, height: 6, background: TOK.track, borderRadius: 'var(--app-radius)', overflow: 'hidden' }}>
       <div style={{ width: `${Math.min(100, (value / Math.max(1, max)) * 100)}%`, height: '100%', background: barColor || TOK.blue }} />
     </div>
     <span className="font-mono" style={{ width: 110, textAlign: 'right' }}>{valueLabel}</span>

@@ -962,7 +962,7 @@ const AssetForm: React.FC<AssetFormProps> = ({ assetId, onBack, onSaved }) => {
       }
       setLoading(false);
     };
-    init();
+    init().catch((err) => console.error('AssetForm init error:', err));
   }, [assetId, activeCompany]);
 
   const set = (k: string, v: string) => {

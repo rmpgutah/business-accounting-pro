@@ -291,7 +291,7 @@ const BalanceSheet: React.FC = () => {
       {/* Controls */}
       <div
         className="block-card p-4 flex items-center justify-between"
-        style={{ borderRadius: '2px' }}
+        style={{ borderRadius: 'var(--app-radius)' }}
       >
         <div className="flex items-center gap-3">
           <label className="text-xs text-text-muted font-semibold uppercase tracking-wider">
@@ -309,7 +309,7 @@ const BalanceSheet: React.FC = () => {
               setAsOfDate(format(endOfMonth(new Date()), 'yyyy-MM-dd'))
             }
             className="px-2 py-1 text-[10px] font-semibold bg-bg-tertiary text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
           >
             Today
           </button>
@@ -323,7 +323,7 @@ const BalanceSheet: React.FC = () => {
           )}
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Print"
             onClick={handlePrint}
           >
@@ -331,7 +331,7 @@ const BalanceSheet: React.FC = () => {
           </button>
           <button
             className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-            style={{ borderRadius: '2px' }}
+            style={{ borderRadius: 'var(--app-radius)' }}
             title="Export CSV"
             onClick={() => {
               const rows: any[] = [];
@@ -364,7 +364,7 @@ const BalanceSheet: React.FC = () => {
       ) : (
         <div
           className="block-card overflow-hidden"
-          style={{ borderRadius: '2px' }}
+          style={{ borderRadius: 'var(--app-radius)' }}
         >
           {/* Report header */}
           <div className="px-6 py-4 border-b border-border-primary bg-bg-tertiary/50 text-center">

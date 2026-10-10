@@ -147,7 +147,7 @@ const EmailTemplatesSettings: React.FC = () => {
               key={t.key}
               className="w-full text-left text-xs px-2 py-1.5 border"
               style={{
-                borderRadius: '4px',
+                borderRadius: 'var(--app-radius)',
                 background: t.key === selectedKey ? 'color-mix(in srgb, var(--color-accent-blue) 10%, transparent)' : 'transparent',
                 borderColor: t.key === selectedKey ? 'var(--color-accent-blue)' : 'var(--border-primary)',
                 color: t.key === selectedKey ? 'var(--color-accent-blue)' : 'inherit',
@@ -189,7 +189,7 @@ const EmailTemplatesSettings: React.FC = () => {
             <label className="block text-text-muted mb-1">Available tokens</label>
             <div className="flex flex-wrap gap-1">
               {tokens.map(tk => (
-                <code key={tk} className="px-1.5 py-0.5 text-[11px]" style={{ background: 'var(--bg-tertiary)', borderRadius: 3 }}>
+                <code key={tk} className="px-1.5 py-0.5 text-[11px]" style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--app-radius)' }}>
                   {`{{${tk}}}`}
                 </code>
               ))}
@@ -224,7 +224,7 @@ const EmailTemplatesSettings: React.FC = () => {
               <div className="space-y-1">
                 {history.length === 0 && <p className="text-text-muted">No prior versions.</p>}
                 {history.map(h => (
-                  <div key={h.id} className="flex items-center justify-between p-2 border border-border-primary" style={{ borderRadius: '4px' }}>
+                  <div key={h.id} className="flex items-center justify-between p-2 border border-border-primary" style={{ borderRadius: 'var(--app-radius)' }}>
                     <span>v{h.version} — {new Date(h.changed_at).toLocaleString()} {h.changed_by ? `(${h.changed_by})` : ''}</span>
                     <button className="block-btn text-xs flex items-center gap-1" onClick={() => rollback(h.version)}>
                       <RotateCcw size={11} /> Rollback

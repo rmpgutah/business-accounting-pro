@@ -283,7 +283,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ companyId, o
               <div className="flex items-center gap-2 mb-2">
                 <div
                   className="flex items-center justify-center"
-                  style={{ width: 32, height: 32, background: selected ? 'var(--color-accent-blue)' : 'var(--color-bg-tertiary)', borderRadius: 6 }}
+                  style={{ width: 32, height: 32, background: selected ? 'var(--color-accent-blue)' : 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)' }}
                 >
                   <Icon size={16} color={selected ? 'white' : 'var(--color-text-muted)'} />
                 </div>
@@ -491,7 +491,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ companyId, o
   const renderDoneStep = () => (
     <div>
       <div className="flex items-center gap-3 mb-4">
-        <div style={{ width: 44, height: 44, borderRadius: 8, background: 'rgba(34,197,94,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 44, height: 44, borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-income) 12%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Check size={22} className="text-accent-income" />
         </div>
         <div>
@@ -568,14 +568,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ companyId, o
           maxHeight: '90vh',
           background: 'var(--color-bg-primary-solid)',
           border: '1px solid var(--color-border-primary)',
-          borderRadius: 8,
+          borderRadius: 'var(--app-radius)',
           overflow: 'hidden',
         }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border-primary">
           <div className="flex items-center gap-3">
-            <div style={{ width: 32, height: 32, background: 'var(--color-accent-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
+            <div style={{ width: 32, height: 32, background: 'var(--color-accent-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--app-radius)' }}>
               <Sparkles size={16} color="white" />
             </div>
             <div>
@@ -598,7 +598,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ companyId, o
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5">
           {errorMsg && (
-            <div className="text-xs mb-3" style={{ padding: '8px 12px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171', borderRadius: 6 }}>
+            <div className="text-xs mb-3" style={{ padding: '8px 12px', background: 'color-mix(in srgb, var(--color-accent-expense) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent-expense) 25%, transparent)', color: 'var(--color-accent-expense)', borderRadius: 'var(--app-radius)' }}>
               {errorMsg}
             </div>
           )}

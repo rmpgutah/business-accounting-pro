@@ -48,21 +48,33 @@ const HrPortal: React.FC = () => {
 
   const loadWithholdings = useCallback(async (empId: string) => {
     if (!empId) { setWithholdings([]); return; }
-    const r = await api.hrWithholdingList({ employee_id: empId });
-    setWithholdings(Array.isArray(r) ? r : []);
+    try {
+      const r = await api.hrWithholdingList({ employee_id: empId });
+      setWithholdings(Array.isArray(r) ? r : []);
+    } catch {
+      setWithholdings([]);
+    }
   }, []);
 
   const loadDirectory = useCallback(async () => {
-    const r = await api.hrPortalDirectory();
-    if (Array.isArray(r)) {
-      setDirectory(r as DirectoryRow[]);
-      if (r.length > 0) setSelectedId((prev) => prev || (r[0] as any).id);
+    try {
+      const r = await api.hrPortalDirectory();
+      if (Array.isArray(r)) {
+        setDirectory(r as DirectoryRow[]);
+        if (r.length > 0) setSelectedId((prev) => prev || (r[0] as any).id);
+      }
+    } catch {
+      setDirectory([]);
     }
   }, []);
 
   const loadAnnouncements = useCallback(async () => {
-    const r = await api.hrAnnouncementsList();
-    if (Array.isArray(r)) setAnnouncements(r);
+    try {
+      const r = await api.hrAnnouncementsList();
+      if (Array.isArray(r)) setAnnouncements(r);
+    } catch {
+      // announcements are non-critical; silently fail
+    }
   }, []);
 
   useEffect(() => {
@@ -93,69 +105,97 @@ const HrPortal: React.FC = () => {
     if (raw == null) return;
     const amount = parseFloat(raw) || 0;
     if (amount <= 0) { toast.error('Amount must be positive'); return; }
-    const r = await api.hrWithholdingSave({
-      employee_id: selectedId, debt_id: debtId, per_pay_amount: amount,
-      start_date: new Date().toISOString().slice(0, 10),
-    });
-    if (r?.error) toast.error(r.error);
-    else { toast.success('Withholding agreement created'); loadWithholdings(selectedId); }
+    try {
+      const r = await api.hrWithholdingSave({
+        employee_id: selectedId, debt_id: debtId, per_pay_amount: amount,
+        start_date: new Date().toISOString().slice(0, 10),
+      });
+      if (r?.error) toast.error(r.error);
+      else { toast.success('Withholding agreement created'); loadWithholdings(selectedId); }
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to create withholding');
+    }
   };
 
   const recordDeduction = async (w: any) => {
     if (!confirm(`Record a ${formatCurrency(w.per_pay_amount)} payroll deduction against this debt?`)) return;
-    const r = await api.hrWithholdingRecordDeduction({ withholding_id: w.id });
-    if (r?.error) toast.error(r.error);
-    else {
-      toast.success(r.completed
-        ? `Final deduction of ${formatCurrency(r.applied || 0)} — debt cleared!`
-        : `Deducted ${formatCurrency(r.applied || 0)} · balance ${formatCurrency(r.new_balance || 0)}`);
-      await Promise.all([loadWithholdings(selectedId), loadSnapshot(selectedId)]);
-      api.hrEmployeeDebtSummary().then((s) => { if (s && !s.error) setDebtSummary(s); }).catch(() => {});
+    try {
+      const r = await api.hrWithholdingRecordDeduction({ withholding_id: w.id });
+      if (r?.error) toast.error(r.error);
+      else {
+        toast.success(r.completed
+          ? `Final deduction of ${formatCurrency(r.applied || 0)} — debt cleared!`
+          : `Deducted ${formatCurrency(r.applied || 0)} · balance ${formatCurrency(r.new_balance || 0)}`);
+        await Promise.all([loadWithholdings(selectedId), loadSnapshot(selectedId)]);
+        api.hrEmployeeDebtSummary().then((s) => { if (s && !s.error) setDebtSummary(s); }).catch(() => {});
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to record deduction');
     }
   };
 
   const printAgreement = async (w: any) => {
-    const data = await api.hrWithholdingAgreementData(w.id);
-    if (data?.error) { toast.error(data.error); return; }
-    const html = generateWageWithholdingAgreementHTML(data);
-    await api.printPreview(html, `Wage Withholding Agreement — ${data.employee?.name || ''}`);
+    try {
+      const data = await api.hrWithholdingAgreementData(w.id);
+      if (data?.error) { toast.error(data.error); return; }
+      const html = generateWageWithholdingAgreementHTML(data);
+      await api.printPreview(html, `Wage Withholding Agreement — ${data.employee?.name || ''}`);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to print agreement');
+    }
   };
 
   const printRecord = async () => {
     if (!selectedId) return;
-    const data = await api.hrEmployeeRecordData(selectedId);
-    if (data?.error) { toast.error(data.error); return; }
-    const html = generateEmployeeRecordHTML(data);
-    await api.printPreview(html, `Employee Record — ${data.employee?.name || ''}`);
+    try {
+      const data = await api.hrEmployeeRecordData(selectedId);
+      if (data?.error) { toast.error(data.error); return; }
+      const html = generateEmployeeRecordHTML(data);
+      await api.printPreview(html, `Employee Record — ${data.employee?.name || ''}`);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to print employee record');
+    }
   };
 
   const escalateAdvance = async (advanceId: string) => {
     if (!confirm('Escalate this pay advance into a formal debt-collection case? The outstanding balance becomes a receivable with the employee as debtor.')) return;
-    const r = await api.hrAdvanceToDebt(advanceId);
-    if (r?.error) toast.error(r.error);
-    else {
-      toast.success(r.already_linked ? 'Advance already has a debt case' : 'Debt case created');
-      await loadSnapshot(selectedId);
-      api.hrEmployeeDebtSummary().then((s) => { if (s && !s.error) setDebtSummary(s); }).catch(() => {});
+    try {
+      const r = await api.hrAdvanceToDebt(advanceId);
+      if (r?.error) toast.error(r.error);
+      else {
+        toast.success(r.already_linked ? 'Advance already has a debt case' : 'Debt case created');
+        await loadSnapshot(selectedId);
+        api.hrEmployeeDebtSummary().then((s) => { if (s && !s.error) setDebtSummary(s); }).catch(() => {});
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to escalate advance');
     }
   };
 
   const saveAnnouncement = async () => {
     if (!compose.title.trim()) { toast.error('Title required'); return; }
-    const r = await api.hrAnnouncementSave(compose);
-    if (r?.error) toast.error(r.error);
-    else {
-      setShowCompose(false);
-      setCompose({ title: '', body: '', category: 'general', priority: 'normal', requires_ack: false, pinned: false });
-      await loadAnnouncements();
+    try {
+      const r = await api.hrAnnouncementSave(compose);
+      if (r?.error) toast.error(r.error);
+      else {
+        setShowCompose(false);
+        setCompose({ title: '', body: '', category: 'general', priority: 'normal', requires_ack: false, pinned: false });
+        await loadAnnouncements();
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to post announcement');
     }
   };
 
   const ackAnnouncement = async (annId: string) => {
     if (!selectedId) { toast.error('Select an employee first'); return; }
-    await api.hrAnnouncementAck(annId, selectedId);
-    await loadAnnouncements();
-    toast.success('Acknowledged');
+    try {
+      await api.hrAnnouncementAck(annId, selectedId);
+      await loadAnnouncements();
+      toast.success('Acknowledged');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to acknowledge');
+    }
   };
 
   const emp = snapshot?.employee;
@@ -257,7 +297,7 @@ const HrPortal: React.FC = () => {
                   <div>
                     <span className="font-mono font-bold">{formatCurrency(a.balance)}</span>
                     <span className="text-text-muted"> balance on {formatCurrency(a.advance_amount)} advance ({formatDate(a.advance_date)})</span>
-                    {a.related_debt_id && <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5" style={{ borderRadius: 4, background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>IN COLLECTIONS</span>}
+                    {a.related_debt_id && <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5" style={{ borderRadius: 'var(--app-radius)', background: 'color-mix(in srgb, var(--color-accent-expense) 13%, transparent)', color: 'var(--color-accent-expense)' }}>IN COLLECTIONS</span>}
                   </div>
                   {!a.related_debt_id && (a.balance || 0) > 0 && (
                     <button className="block-btn text-[10px] flex items-center gap-1" onClick={() => escalateAdvance(a.id)} title="Create a debt-collection case for this advance">
@@ -304,7 +344,7 @@ const HrPortal: React.FC = () => {
                         <span className="font-mono font-bold">{formatCurrency(w.per_pay_amount)}</span>
                         <span className="text-text-muted">/paycheck · {formatCurrency(w.total_withheld)} withheld over {w.deduction_count || 0} deduction{(w.deduction_count || 0) !== 1 ? 's' : ''}</span>
                         <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5 uppercase" style={{
-                          borderRadius: 4,
+                          borderRadius: 'var(--app-radius)',
                           background: w.status === 'active' ? 'color-mix(in srgb, var(--color-accent-income) 13%, transparent)' : w.status === 'completed' ? 'var(--color-accent-blue-bg)' : 'color-mix(in srgb, var(--color-text-muted) 13%, transparent)',
                           color: w.status === 'active' ? 'var(--color-accent-income)' : w.status === 'completed' ? 'var(--color-accent-blue)' : 'var(--color-text-muted)',
                         }}>{w.status}</span>
@@ -319,8 +359,12 @@ const HrPortal: React.FC = () => {
                               className="block-btn text-[10px]"
                               onClick={async () => {
                                 if (!confirm('Stop this withholding agreement? The remaining debt stays open.')) return;
-                                await api.hrWithholdingStop(w.id);
-                                loadWithholdings(selectedId);
+                                try {
+                                  await api.hrWithholdingStop(w.id);
+                                  loadWithholdings(selectedId);
+                                } catch (err: any) {
+                                  toast.error(err?.message ?? 'Failed to stop withholding');
+                                }
                               }}
                             >
                               Stop
@@ -436,7 +480,7 @@ const HrPortal: React.FC = () => {
                     <div className="flex items-center gap-2 min-w-0">
                       {!!a.pinned && <Pin size={11} className="text-accent-blue shrink-0" />}
                       <span className="text-xs font-bold text-text-primary truncate">{a.title}</span>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 uppercase" style={{ borderRadius: 4, background: `color-mix(in srgb, ${PRIORITY_COLORS[a.priority] || 'var(--color-accent-blue)'} 13%, transparent)`, color: PRIORITY_COLORS[a.priority] || 'var(--color-accent-blue)' }}>{a.priority}</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 uppercase" style={{ borderRadius: 'var(--app-radius)', background: `color-mix(in srgb, ${PRIORITY_COLORS[a.priority] || 'var(--color-accent-blue)'} 13%, transparent)`, color: PRIORITY_COLORS[a.priority] || 'var(--color-accent-blue)' }}>{a.priority}</span>
                       <span className="text-[9px] text-text-muted uppercase">{a.category}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -450,7 +494,15 @@ const HrPortal: React.FC = () => {
                       )}
                       <button
                         className="text-text-muted hover:text-accent-expense"
-                        onClick={async () => { if (confirm('Delete this announcement?')) { await api.hrAnnouncementDelete(a.id); loadAnnouncements(); } }}
+                        onClick={async () => {
+                          if (!confirm('Delete this announcement?')) return;
+                          try {
+                            await api.hrAnnouncementDelete(a.id);
+                            loadAnnouncements();
+                          } catch (err: any) {
+                            toast.error(err?.message ?? 'Failed to delete announcement');
+                          }
+                        }}
                         title="Delete"
                       >
                         <Trash2 size={11} />

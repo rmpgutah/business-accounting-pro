@@ -308,17 +308,17 @@ const CompanySetup: React.FC = () => {
 
         {/* Skip setup — creates a placeholder company and goes straight to the app */}
         <div style={{ textAlign: 'center', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #1e1e1e' }}>
-          <span style={{ fontSize: '13px', color: '#5a5a5a' }}>Don't have details handy? </span>
+          <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Don't have details handy? </span>
           <button
             onClick={handleSkip}
             disabled={skipping || submitting}
-            style={{ background: 'none', border: 'none', color: '#5a5a5a', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline', opacity: skipping ? 0.5 : 1, transition: 'color 0.2s' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = '#a0a0a0'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = '#5a5a5a'; }}
+            style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline', opacity: skipping ? 0.5 : 1, transition: 'color 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}
           >
             {skipping ? 'Setting up...' : 'Skip setup'}
           </button>
-          <span style={{ fontSize: '12px', color: '#3a3a3a', display: 'block', marginTop: '4px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', display: 'block', marginTop: '4px' }}>
             You can fill in company details later in Settings
           </span>
         </div>

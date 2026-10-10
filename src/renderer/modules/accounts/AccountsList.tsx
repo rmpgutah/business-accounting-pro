@@ -264,9 +264,13 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
 
   const handleBulkActivate = async (active: boolean) => {
     if (selected.size === 0) return;
-    await api.accountsBulkToggleActive(Array.from(selected), active);
-    setSelected(new Set());
-    reload();
+    try {
+      await api.accountsBulkToggleActive(Array.from(selected), active);
+      setSelected(new Set());
+      reload();
+    } catch (err) {
+      console.error('[AccountsList] handleBulkActivate', err);
+    }
   };
 
   const handleExportCsv = () => {
@@ -292,20 +296,25 @@ const AccountsList: React.FC<AccountsListProps> = ({ onNewAccount, onEditAccount
     const target = accounts.find(a => a.id === targetId);
     if (!dragged || !target) return;
     if (dragged.is_locked) { alert('Cannot move locked account'); setDragId(null); return; }
-    if (asChild) {
-      // Reparent
-      if (target.type !== dragged.type) {
-        if (!confirm(`Reparent ${dragged.code} under ${target.code}? Note: types differ.`)) { setDragId(null); return; }
+    try {
+      if (asChild) {
+        // Reparent
+        if (target.type !== dragged.type) {
+          if (!confirm(`Reparent ${dragged.code} under ${target.code}? Note: types differ.`)) { setDragId(null); return; }
+        }
+        await api.update('accounts', dragId, { parent_id: targetId });
+      } else {
+        // Reorder: swap sort_order with target
+        const dSO = dragged.sort_order || 0, tSO = target.sort_order || 0;
+        await api.update('accounts', dragId, { sort_order: tSO });
+        await api.update('accounts', targetId, { sort_order: dSO });
       }
-      await api.update('accounts', dragId, { parent_id: targetId });
-    } else {
-      // Reorder: swap sort_order with target
-      const dSO = dragged.sort_order || 0, tSO = target.sort_order || 0;
-      await api.update('accounts', dragId, { sort_order: tSO });
-      await api.update('accounts', targetId, { sort_order: dSO });
+      setDragId(null);
+      reload();
+    } catch (err) {
+      console.error('[AccountsList] handleDrop', err);
+      setDragId(null);
     }
-    setDragId(null);
-    reload();
   };
 
   // Tree view structure
@@ -631,18 +640,18 @@ const AccountRow: React.FC<{
         <div className="flex items-center gap-1.5 flex-wrap">
           {account.name}
           {account.is_locked ? <Lock size={10} className="text-accent-expense" /> : null}
-          {account.is_1099_eligible ? <span className="text-[9px] bg-accent-blue/20 text-accent-blue px-1 py-0.5 font-bold" style={{ borderRadius: '3px' }}>1099</span> : null}
+          {account.is_1099_eligible ? <span className="text-[9px] bg-accent-blue/20 text-accent-blue px-1 py-0.5 font-bold" style={{ borderRadius: 'var(--app-radius)' }}>1099</span> : null}
           {account.requires_document ? <FileTextIcon size={10} className="text-accent-blue" /> : null}
           {account.currency && account.currency !== 'USD' && (
-            <span className="text-[9px] bg-yellow-500/20 text-yellow-500 px-1 py-0.5 font-bold font-mono" style={{ borderRadius: '3px' }}>{account.currency}</span>
+            <span className="text-[9px] bg-yellow-500/20 text-yellow-500 px-1 py-0.5 font-bold font-mono" style={{ borderRadius: 'var(--app-radius)' }}>{account.currency}</span>
           )}
           {account.subledger_type && account.subledger_type !== 'none' && (
-            <span className="text-[9px] bg-purple-500/20 text-purple-400 px-1 py-0.5 font-bold uppercase" style={{ borderRadius: '3px' }}>{account.subledger_type}</span>
+            <span className="text-[9px] bg-purple-500/20 text-purple-400 px-1 py-0.5 font-bold uppercase" style={{ borderRadius: 'var(--app-radius)' }}>{account.subledger_type}</span>
           )}
-          {account.bank_account_id ? <span className="text-[9px] bg-accent-blue/20 text-accent-blue px-1 py-0.5 font-bold" style={{ borderRadius: '3px' }}>BANK</span> : null}
+          {account.bank_account_id ? <span className="text-[9px] bg-accent-blue/20 text-accent-blue px-1 py-0.5 font-bold" style={{ borderRadius: 'var(--app-radius)' }}>BANK</span> : null}
           <ComplianceBadges tagsJson={account.compliance_tags} />
-          {isDormant && <span className="text-[9px] bg-accent-expense/20 text-accent-expense px-1 py-0.5 font-bold" style={{ borderRadius: '3px' }}>DORMANT</span>}
-          {account.deleted_at ? <span className="text-[9px] bg-accent-expense/20 text-accent-expense px-1 py-0.5 font-bold" style={{ borderRadius: '3px' }}>DELETED</span>
+          {isDormant && <span className="text-[9px] bg-accent-expense/20 text-accent-expense px-1 py-0.5 font-bold" style={{ borderRadius: 'var(--app-radius)' }}>DORMANT</span>}
+          {account.deleted_at ? <span className="text-[9px] bg-accent-expense/20 text-accent-expense px-1 py-0.5 font-bold" style={{ borderRadius: 'var(--app-radius)' }}>DELETED</span>
             : !account.is_active && <span className="ml-1 text-[10px] text-text-muted bg-bg-tertiary px-1.5 py-0.5" style={{ borderRadius: 'var(--app-radius)' }}>Archived</span>}
         </div>
         {(account.monthly_cap || 0) > 0 && <BudgetRibbon account={account as any} />}

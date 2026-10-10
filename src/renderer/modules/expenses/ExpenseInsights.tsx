@@ -33,7 +33,7 @@ const Section: React.FC<SectionProps> = ({ title, icon, count, children }) => (
       {icon}
       <span className="text-xs font-bold uppercase tracking-wider text-text-muted">{title}</span>
       {count !== undefined && (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 ml-1" style={{ borderRadius: 4, background: 'rgba(96,165,250,0.12)', color: 'var(--color-accent-blue)' }}>{count}</span>
+        <span className="text-[10px] font-bold px-1.5 py-0.5 ml-1" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(96,165,250,0.12)', color: 'var(--color-accent-blue)' }}>{count}</span>
       )}
     </div>
     {children}
@@ -227,7 +227,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
               {aging.map((b: any) => (
                 <div key={b.label} className="flex items-center gap-2 text-[11px]">
                   <span style={{ width: 70 }} className="text-text-muted">{b.label}</span>
-                  <div style={{ flex: 1, height: 6, background: 'var(--color-bg-tertiary)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ flex: 1, height: 6, background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)', overflow: 'hidden' }}>
                     <div style={{ width: `${Math.min(100, (b.count / Math.max(1, ...aging.map((x: any) => x.count))) * 100)}%`, height: '100%', background: b.label.startsWith('90') || b.label.startsWith('61') ? 'var(--color-accent-expense)' : 'var(--color-accent-blue)' }} />
                   </div>
                   <span className="font-mono" style={{ width: 90, textAlign: 'right' }}>{b.count} · {formatCurrency(b.total)}</span>
@@ -373,7 +373,7 @@ const ExpenseInsights: React.FC<InsightsProps> = ({ onViewExpense }) => {
               {byDay.map((d: any) => (
                 <div key={d.day_num} className="flex items-center gap-2 text-[11px]">
                   <span style={{ width: 76 }} className="text-text-muted">{d.day_name}</span>
-                  <div style={{ flex: 1, height: 6, background: 'var(--color-bg-tertiary)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ flex: 1, height: 6, background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)', overflow: 'hidden' }}>
                     <div style={{ width: `${(d.total / maxDayTotal) * 100}%`, height: '100%', background: 'var(--cust-series-expense, var(--color-accent-expense))' }} />
                   </div>
                   <span className="font-mono" style={{ width: 100, textAlign: 'right' }}>{formatCurrency(d.total)}</span>

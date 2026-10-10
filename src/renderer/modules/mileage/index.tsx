@@ -245,7 +245,7 @@ const MileageModule: React.FC = () => {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 8, maxWidth: 600, width: '100%', padding: 24 }}
+            style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', maxWidth: 600, width: '100%', padding: 24 }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700 }}>{editing.id ? 'Edit Trip' : 'Log Trip'}</h3>

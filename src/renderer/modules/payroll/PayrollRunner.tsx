@@ -1404,6 +1404,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
                 <button
                   className="block-btn-primary flex items-center gap-2 text-xs"
                   onClick={async () => {
+                    try {
                     const { generatePaycheckHTML, extractCheckBody, wrapBatchChecks } = await import('../../lib/payroll-check-template');
                     const stubs = await api.rawQuery(
                       'SELECT ps.*, e.name as employee_name FROM pay_stubs ps JOIN employees e ON ps.employee_id = e.id WHERE ps.payroll_run_id = ?',
@@ -1444,6 +1445,9 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
                       margins: { top: 0, bottom: 0, left: 0, right: 0 },
                       noPageNumbers: true,
                     });
+                    } catch (err: any) {
+                      setError(err?.message ?? 'Failed to print checks');
+                    }
                   }}
                 >
                   <Printer size={14} />
@@ -1455,6 +1459,7 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
               <button
                 className="block-btn flex items-center gap-2 text-xs"
                 onClick={async () => {
+                  try {
                   // Build a simple payroll register and print it
                   const rows = calculations.map(c =>
                     `<tr>
@@ -1497,6 +1502,9 @@ const PayrollRunner: React.FC<PayrollRunnerProps> = ({ onComplete, onBack, editR
                     </table>
                   </body></html>`;
                   await api.printPreview(registerHtml, 'Payroll Register');
+                  } catch (err: any) {
+                    setError(err?.message ?? 'Failed to print register');
+                  }
                 }}
               >
                 <FileText size={14} />

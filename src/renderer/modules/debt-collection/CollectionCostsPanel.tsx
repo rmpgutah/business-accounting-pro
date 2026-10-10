@@ -183,7 +183,7 @@ const CollectionCostsPanel: React.FC<Props> = ({ debtId, onBalanceChanged }) => 
                   <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
                     <td style={{ padding: '5px 8px', fontSize: 10, fontFamily: 'SF Mono, Menlo, monospace' }}>{c.date}</td>
                     <td style={{ padding: '5px 8px', fontSize: 10 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'rgba(96,165,250,0.12)', color: 'var(--color-accent-blue)' }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 'var(--app-radius)', background: 'rgba(96,165,250,0.12)', color: 'var(--color-accent-blue)' }}>
                         {COST_TYPE_LABELS[c.collection_cost_type] || 'Other'}
                       </span>
                     </td>

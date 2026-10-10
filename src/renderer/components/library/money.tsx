@@ -201,7 +201,7 @@ export function RunwayGauge({
   return (
     <div
       className={`block-card flex flex-col items-center ${className ?? ''}`}
-      style={{ padding: 16, borderRadius: 6 }}
+      style={{ padding: 16, borderRadius: 'var(--app-radius)' }}
     >
       <div className="flex items-center gap-2 self-start mb-2">
         <Wallet size={16} style={{ color: MUTED }} />
@@ -312,7 +312,7 @@ export function BurnRateTile({
   return (
     <div
       className={`block-card flex flex-col ${className ?? ''}`}
-      style={{ padding: 16, borderRadius: 6 }}
+      style={{ padding: 16, borderRadius: 'var(--app-radius)' }}
     >
       <div className="flex items-center gap-2 mb-2">
         <span
@@ -320,7 +320,7 @@ export function BurnRateTile({
           style={{
             width: 28,
             height: 28,
-            borderRadius: 6,
+            borderRadius: 'var(--app-radius)',
             background: 'var(--color-accent-expense-bg, rgba(248,113,113,0.12))',
           }}
         >
@@ -388,7 +388,7 @@ export function MrrTile({
   return (
     <div
       className={`block-card flex flex-col ${className ?? ''}`}
-      style={{ padding: 16, borderRadius: 6 }}
+      style={{ padding: 16, borderRadius: 'var(--app-radius)' }}
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
@@ -397,7 +397,7 @@ export function MrrTile({
             style={{
               width: 28,
               height: 28,
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               background: 'var(--color-accent-income-bg, rgba(52,211,153,0.12))',
             }}
           >

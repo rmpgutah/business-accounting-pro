@@ -173,7 +173,7 @@ export default function CustomReportsModule() {
           style={{
             background: '#2a1215',
             border: '1px solid var(--color-accent-expense)',
-            borderRadius: '2px',
+            borderRadius: 'var(--app-radius)',
             padding: '12px 16px',
             marginBottom: '16px',
           }}
@@ -219,7 +219,7 @@ export default function CustomReportsModule() {
                       ? 'bg-accent-blue text-white'
                       : 'bg-bg-tertiary text-text-secondary hover:bg-bg-hover border border-border-primary'
                   }`}
-                  style={{ borderRadius: '2px' }}
+                  style={{ borderRadius: 'var(--app-radius)' }}
                 >
                   {f}
                 </button>

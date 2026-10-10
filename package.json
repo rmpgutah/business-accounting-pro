@@ -25,7 +25,8 @@
     "start": "electron .",
     "deploy": "bash scripts/deploy.sh",
     "build:web": "vite build --config vite.web.config.ts",
-    "deploy:web": "npm run build:web && cd cloudflare-app && npx wrangler deploy --env=''"
+    "deploy:web": "npm run build:web && cd cloudflare-app && npx wrangler deploy --env=''",
+    "test:migrations": "npm run build:main && node scripts/test-migrations.cjs"
   },
   "keywords": [
     "accounting",

@@ -481,7 +481,11 @@ const PayrollModule: React.FC = () => {
 <div class="footer">Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} &mdash; ${companyName}</div>
 </body></html>`;
 
-    await api.printPreview(html, `Payroll Register — ${run.pay_date}`);
+    try {
+      await api.printPreview(html, `Payroll Register — ${run.pay_date}`);
+    } catch (err) {
+      console.error('[PayrollModule] printPreview failed:', err);
+    }
   };
 
   // ─── Export CSV ───────────────────────────────────────
@@ -1076,28 +1080,32 @@ const PayrollModule: React.FC = () => {
                                     className="block-btn flex items-center gap-1.5 text-[10px] px-3 py-1.5"
                                     onClick={async (e) => {
                                       e.stopPropagation();
-                                      const { generatePaycheckHTML, extractCheckBody, wrapBatchChecks } = await import('../../lib/payroll-check-template');
-                                      const runData = await api.get('payroll_runs', run.id);
-                                      const payYear = (run.pay_date || '').substring(0, 4) || new Date().getFullYear();
-                                      const bodies: string[] = [];
-                                      for (const s of stubs) {
-                                        const emp = await api.get('employees', s.employee_id);
-                                        let stubData = s;
-                                        if (!s.ytd_federal_tax && s.employee_id) {
-                                          try {
-                                            const ytd = await api.payrollYtd(s.employee_id, Number(payYear));
-                                            stubData = { ...s, ytd_federal_tax: ytd.ytd_federal_tax, ytd_state_tax: ytd.ytd_state_tax, ytd_social_security: ytd.ytd_social_security, ytd_medicare: ytd.ytd_medicare };
-                                          } catch { /* use stub as-is */ }
+                                      try {
+                                        const { generatePaycheckHTML, extractCheckBody, wrapBatchChecks } = await import('../../lib/payroll-check-template');
+                                        const runData = await api.get('payroll_runs', run.id);
+                                        const payYear = (run.pay_date || '').substring(0, 4) || new Date().getFullYear();
+                                        const bodies: string[] = [];
+                                        for (const s of stubs) {
+                                          const emp = await api.get('employees', s.employee_id);
+                                          let stubData = s;
+                                          if (!s.ytd_federal_tax && s.employee_id) {
+                                            try {
+                                              const ytd = await api.payrollYtd(s.employee_id, Number(payYear));
+                                              stubData = { ...s, ytd_federal_tax: ytd.ytd_federal_tax, ytd_state_tax: ytd.ytd_state_tax, ytd_social_security: ytd.ytd_social_security, ytd_medicare: ytd.ytd_medicare };
+                                            } catch { /* use stub as-is */ }
+                                          }
+                                          const checkHtml = generatePaycheckHTML(stubData, emp, activeCompany, runData);
+                                          bodies.push(extractCheckBody(checkHtml));
                                         }
-                                        const checkHtml = generatePaycheckHTML(stubData, emp, activeCompany, runData);
-                                        bodies.push(extractCheckBody(checkHtml));
+                                        const combined = wrapBatchChecks(bodies);
+                                        await api.printPreview(combined, `Payroll Checks — ${run.pay_date}`, {
+                                          pageSize: 'Letter',
+                                          margins: { top: 0, bottom: 0, left: 0, right: 0 },
+                                          noPageNumbers: true,
+                                        });
+                                      } catch (err) {
+                                        console.error('[PayrollModule] print checks failed:', err);
                                       }
-                                      const combined = wrapBatchChecks(bodies);
-                                      await api.printPreview(combined, `Payroll Checks — ${run.pay_date}`, {
-                                        pageSize: 'Letter',
-                                        margins: { top: 0, bottom: 0, left: 0, right: 0 },
-                                        noPageNumbers: true,
-                                      });
                                     }}
                                   >
                                     <Printer size={12} />

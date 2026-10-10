@@ -30,7 +30,7 @@ export const GlobalToolbar: React.FC = () => {
         alignItems: 'center',
         background: 'var(--color-bg-primary)',
         border: '1px solid var(--color-border-primary)',
-        borderRadius: 8,
+        borderRadius: 'var(--app-radius)',
         padding: 4,
         boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
       }}

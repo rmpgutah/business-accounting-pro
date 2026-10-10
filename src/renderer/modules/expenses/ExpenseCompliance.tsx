@@ -33,7 +33,7 @@ const Section: React.FC<{ title: string; icon: React.ReactNode; count?: number; 
       {icon}
       <span className="text-xs font-bold uppercase tracking-wider text-text-muted">{title}</span>
       {count !== undefined && (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 ml-1" style={{ borderRadius: 4, background: 'rgba(96,165,250,0.12)', color: 'var(--color-accent-blue)' }}>{count}</span>
+        <span className="text-[10px] font-bold px-1.5 py-0.5 ml-1" style={{ borderRadius: 'var(--app-radius)', background: 'rgba(96,165,250,0.12)', color: 'var(--color-accent-blue)' }}>{count}</span>
       )}
     </div>
     {children}
@@ -251,7 +251,7 @@ const ExpenseCompliance: React.FC<Props> = ({ onViewExpense }) => {
                 <span className="text-text-secondary">Deductible <strong className="font-mono">{formatCurrency(taxSplit.deductible)}</strong></span>
                 <span className="text-text-secondary">Non-deductible <strong className="font-mono">{formatCurrency(taxSplit.nonDeductible)}</strong></span>
               </div>
-              <div style={{ height: 10, background: 'var(--color-bg-tertiary)', borderRadius: 5, overflow: 'hidden', display: 'flex' }}>
+              <div style={{ height: 10, background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)', overflow: 'hidden', display: 'flex' }}>
                 <div style={{ width: `${taxSplit.deductiblePct}%`, background: 'var(--cust-series-positive, var(--color-accent-income))' }} />
                 <div style={{ flex: 1, background: 'var(--cust-series-neutral, var(--color-text-muted))' }} />
               </div>

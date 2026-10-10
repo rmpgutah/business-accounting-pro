@@ -144,7 +144,7 @@ const AgingBar: React.FC<{ aging: AgingData }> = ({ aging }) => {
 
   return (
     <div>
-      <div className="flex h-5 overflow-hidden" style={{ borderRadius: '4px' }}>
+      <div className="flex h-5 overflow-hidden" style={{ borderRadius: 'var(--app-radius)' }}>
         {segments.map((s) =>
           s.count > 0 ? (
             <div
@@ -659,13 +659,13 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
               {monthlyGoalPct}%
             </span>
           </div>
-          <div className="h-3 bg-bg-tertiary overflow-hidden mb-2" style={{ borderRadius: '4px' }}>
+          <div className="h-3 bg-bg-tertiary overflow-hidden mb-2" style={{ borderRadius: 'var(--app-radius)' }}>
             <div
               className="h-full transition-all duration-500"
               style={{
                 width: `${monthlyGoalPct}%`,
                 background: monthlyGoalPct >= 100 ? 'var(--color-accent-income)' : monthlyGoalPct >= 50 ? 'var(--color-accent-warning)' : 'var(--color-accent-expense)',
-                borderRadius: '4px',
+                borderRadius: 'var(--app-radius)',
               }}
             />
           </div>
@@ -1070,7 +1070,7 @@ const CollectorDashboard: React.FC<CollectorDashboardProps> = ({ onViewDebt }) =
                   onClick={() => onViewDebt(d.id)}
                 >
                   <span style={{ width: 34, textAlign: 'center', fontSize: 12, fontWeight: 800, fontFamily: 'SF Mono, Menlo, monospace', color }}>{d.score}</span>
-                  <div style={{ flex: 1, height: 4, background: 'var(--color-bg-tertiary)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ flex: 1, height: 4, background: 'var(--color-bg-tertiary)', borderRadius: 'var(--app-radius)', overflow: 'hidden' }}>
                     <div style={{ width: `${d.score}%`, height: '100%', background: color }} />
                   </div>
                   <span className="text-xs text-text-primary truncate" style={{ width: 160 }}>{d.debtor_name}</span>

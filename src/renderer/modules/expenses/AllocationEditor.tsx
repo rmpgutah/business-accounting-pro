@@ -186,7 +186,7 @@ const AllocationEditor: React.FC<Props> = ({ expenseTotal, rows, onChange, clien
               {showTemplates && (
                 <div className="absolute z-50 mt-1 block-card p-1" style={{ minWidth: 180, borderRadius: 'var(--app-radius)' }}>
                   {templates.map((t) => (
-                    <div key={t.id} className="flex items-center justify-between gap-1 px-2 py-1 hover:bg-bg-tertiary" style={{ borderRadius: 4 }}>
+                    <div key={t.id} className="flex items-center justify-between gap-1 px-2 py-1 hover:bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
                       <button type="button" className="text-xs text-text-primary text-left flex-1" onClick={() => applyTemplate(t)}>
                         {t.name}
                       </button>

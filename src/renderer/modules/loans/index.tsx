@@ -101,18 +101,23 @@ const LoansModule: React.FC = () => {
           <button
             className="block-btn flex items-center gap-2"
             onClick={async () => {
-              const r = await api.lkBackfillExpenses();
-              if (r?.error) { toast.error('Sync failed: ' + r.error); return; }
-              const created = r.created || 0;
-              const migrated = r.migrated || 0;
-              if (created === 0 && migrated === 0) toast.success('All loan payments are already synced to Expenses.');
-              else {
-                const bits = [];
-                if (created) bits.push(`${created} new`);
-                if (migrated) bits.push(`${migrated} migrated`);
-                toast.success(`Synced ${bits.join(' + ')} loan-payment expense${(created + migrated) === 1 ? '' : 's'} (one split row each) from ${r.payments_processed} payments.`);
+              try {
+                const r = await api.lkBackfillExpenses();
+                if (r?.error) { toast.error('Sync failed: ' + r.error); return; }
+                const created = r.created || 0;
+                const migrated = r.migrated || 0;
+                if (created === 0 && migrated === 0) toast.success('All loan payments are already synced to Expenses.');
+                else {
+                  const bits = [];
+                  if (created) bits.push(`${created} new`);
+                  if (migrated) bits.push(`${migrated} migrated`);
+                  toast.success(`Synced ${bits.join(' + ')} loan-payment expense${(created + migrated) === 1 ? '' : 's'} (one split row each) from ${r.payments_processed} payments.`);
+                }
+                load();
+              } catch (err: any) {
+                console.error('lkBackfillExpenses failed', err);
+                toast.error('Sync failed: ' + (err?.message || 'Unknown error'));
               }
-              load();
             }}
             title="Create one combined Interest+Principal split expense for any loan payment not yet in the Expenses ledger"
           >
@@ -163,7 +168,7 @@ const LoansModule: React.FC = () => {
                       padding: '4px 10px',
                       background: 'var(--color-bg-primary)',
                       border: '1px solid var(--color-accent-expense)',
-                      borderRadius: 4,
+                      borderRadius: 'var(--app-radius)',
                       color: 'var(--color-accent-expense)',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -198,7 +203,7 @@ const LoansModule: React.FC = () => {
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {aggregate.upcoming.slice(0, 6).map((p: any, i: number) => (
-                  <div key={i} style={{ fontSize: 10, padding: '3px 8px', background: 'var(--color-bg-primary)', borderRadius: 3, fontFamily: 'SF Mono, Menlo, monospace' }}>
+                  <div key={i} style={{ fontSize: 10, padding: '3px 8px', background: 'var(--color-bg-primary)', borderRadius: 'var(--app-radius)', fontFamily: 'SF Mono, Menlo, monospace' }}>
                     {p.due_date} · {p.loan_name} · {fmt$(p.scheduled_payment)}
                   </div>
                 ))}
@@ -273,7 +278,7 @@ const LoansModule: React.FC = () => {
                     <td style={{ padding: '8px 12px', fontSize: 11, textAlign: 'right', fontFamily: 'SF Mono, Menlo, monospace' }}>{fmt$(l.payment_amount, l.currency)}</td>
                     <td style={{ padding: '8px 12px', fontSize: 11, fontFamily: 'SF Mono, Menlo, monospace', color: 'var(--color-text-muted)' }}>{l.next_payment_due || '—'}</td>
                     <td style={{ padding: '8px 12px', minWidth: 100 }}>
-                      <div style={{ height: 4, background: 'var(--color-bg-secondary)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ height: 4, background: 'var(--color-bg-secondary)', borderRadius: 'var(--app-radius)', overflow: 'hidden' }}>
                         <div style={{ width: pct + '%', height: '100%', background: 'var(--color-accent-income)', transition: 'width 200ms' }} />
                       </div>
                       <div style={{ fontSize: 9, color: 'var(--color-text-muted)', textAlign: 'right', marginTop: 2, fontFamily: 'SF Mono, Menlo, monospace' }}>{pct.toFixed(1)}%</div>

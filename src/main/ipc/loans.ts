@@ -148,6 +148,7 @@ export function registerLoanIpc(ipcMain: IpcMain, deps: LoanIpcDeps): void {
         return loanId;
       });
       const id = tx();
+      scheduleAutoBackup();
       return db.getById('loans', id);
     } catch (err: any) {
       return { error: err?.message || 'Save failed' };
@@ -249,6 +250,7 @@ export function registerLoanIpc(ipcMain: IpcMain, deps: LoanIpcDeps): void {
         "UPDATE loans SET current_balance = ?, total_paid_to_date = ?, total_principal_paid = ?, total_interest_paid = ?, status = ?, updated_at = datetime('now') WHERE id = ?"
       ).run(newBalance, agg.paid, agg.principal, agg.interest, newStatus, existing.loan_id);
 
+      scheduleAutoBackup();
       return { ok: true, totals: { paid: agg.paid, principal: agg.principal, interest: agg.interest, current_balance: newBalance } };
     } catch (err: any) {
       return { error: err?.message || 'Update failed' };
@@ -311,6 +313,7 @@ export function registerLoanIpc(ipcMain: IpcMain, deps: LoanIpcDeps): void {
       ).run(newBalance, agg.paid, agg.principal, agg.interest,
         newBalance < 0.005 ? 'paid_off' : loan.status, existing.loan_id);
 
+      scheduleAutoBackup();
       return { ok: true, totals: { paid: agg.paid, principal: agg.principal, interest: agg.interest, current_balance: newBalance } };
     } catch (err: any) {
       return { error: err?.message || 'Delete failed' };
@@ -444,6 +447,7 @@ export function registerLoanIpc(ipcMain: IpcMain, deps: LoanIpcDeps): void {
         return backfilled;
       });
       const backfilledCount = tx();
+      scheduleAutoBackup();
       return {
         ok: true,
         totals: result.totals,
@@ -1101,6 +1105,7 @@ export function registerLoanIpc(ipcMain: IpcMain, deps: LoanIpcDeps): void {
       db.getDb().prepare(
         "UPDATE loans SET deleted_at = datetime('now') WHERE id = ?"
       ).run(id);
+      scheduleAutoBackup();
       return { ok: true };
     } catch (err: any) {
       return { error: err?.message };

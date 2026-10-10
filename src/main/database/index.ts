@@ -617,10 +617,10 @@ export function initDatabaseAt(dbPath: string): Database.Database {
   // optional and avoid the cascading-delete complexity.
   "ALTER TABLE expenses ADD COLUMN related_loan_id TEXT",
   "ALTER TABLE expenses ADD COLUMN related_loan_payment_id TEXT",
-  // NOTE: the matching loan_payments.related_expense_id /
-  // related_principal_expense_id columns live next to the
-  // `CREATE TABLE IF NOT EXISTS loan_payments` statement further down —
-  // an ALTER here would run before the table exists on a fresh install.
+  // NOTE: the two `ALTER TABLE loan_payments ADD COLUMN related_*_expense_id`
+  // migrations used to sit here, ~1000 lines BEFORE the loan_payments CREATE
+  // TABLE. On a fresh install they failed with "no such table" and the columns
+  // were never added. They now live directly after the CREATE TABLE below.
   // Tags an expense row with which loan-payment component it represents,
   // so reverse lookups + reports can filter.
   // Now: 'combined' for the single split-expense per payment (legacy
@@ -1721,10 +1721,7 @@ export function initDatabaseAt(dbPath: string): Database.Database {
   "CREATE INDEX IF NOT EXISTS idx_loan_payments_loan_date ON loan_payments(loan_id, payment_date DESC)",
   // Bidirectional link — loan_payment knows which expense was auto-created
   // for its interest portion. Allows cascade-delete and edit-sync between
-  // the loan payment and the expense ledger. The ALTERs below upgrade
-  // installs whose loan_payments table predates these columns; on a fresh
-  // install the CREATE above already has them and the ALTER no-ops with
-  // "duplicate column name".
+  // the loan payment and the expense ledger.
   "ALTER TABLE loan_payments ADD COLUMN related_expense_id TEXT",
   // Second link for the PRINCIPAL-portion expense row. Each loan payment
   // now spawns two linked expense rows: interest (deductible) +
@@ -2181,22 +2178,13 @@ export function initDatabaseAt(dbPath: string): Database.Database {
   // ─── Batch 1: 15 admin/settings features ────────────────────
 
   // F1-F3: Custom fields system (clients, vendors, invoices)
-  `CREATE TABLE IF NOT EXISTS custom_field_definitions (
-    id TEXT PRIMARY KEY,
-    company_id TEXT NOT NULL REFERENCES companies(id),
-    entity_type TEXT NOT NULL CHECK(entity_type IN ('client','vendor','invoice','expense','employee','project')),
-    field_key TEXT NOT NULL,
-    field_label TEXT NOT NULL,
-    field_type TEXT NOT NULL CHECK(field_type IN ('text','number','date','boolean','select','multiselect')),
-    options_json TEXT DEFAULT '[]',
-    required INTEGER DEFAULT 0,
-    display_order INTEGER DEFAULT 0,
-    is_active INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now')),
-    UNIQUE(company_id, entity_type, field_key)
-  )`,
-  `CREATE INDEX IF NOT EXISTS idx_custom_fields_company_entity ON custom_field_definitions(company_id, entity_type, is_active)`,
+  // NOTE: a second `CREATE TABLE IF NOT EXISTS custom_field_definitions` with a
+  // different column set (field_key/field_label/display_order/is_active) used to
+  // live here. It never ran, because the table is already created ~1000 lines
+  // above with key/label/sort_order/deleted_at. The index below used to target
+  // is_active (a column that never existed) and failed on every boot; it now
+  // covers the real soft-delete column.
+  `CREATE INDEX IF NOT EXISTS idx_custom_fields_company_entity ON custom_field_definitions(company_id, entity_type, deleted_at)`,
 
   // F4: Role permissions matrix (extends users table)
   "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'admin'",

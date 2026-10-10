@@ -200,11 +200,11 @@ const IncomeByMonth: React.FC = () => {
             </div>
             <div className="flex items-center gap-4 mt-3">
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-2 bg-accent-blue" style={{ borderRadius: '2px' }} />
+                <div className="w-3 h-2 bg-accent-blue" style={{ borderRadius: 'var(--app-radius)' }} />
                 <span className="text-[10px] text-text-muted">{year}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-2 bg-bg-tertiary" style={{ borderRadius: '2px' }} />
+                <div className="w-3 h-2 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }} />
                 <span className="text-[10px] text-text-muted">{year - 1}</span>
               </div>
             </div>

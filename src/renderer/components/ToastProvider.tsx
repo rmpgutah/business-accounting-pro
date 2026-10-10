@@ -110,10 +110,10 @@ const ToastBubble: React.FC<{ toast: Toast; onDismiss: () => void }> = ({ toast,
 
   const palette = (() => {
     switch (toast.kind) {
-      case 'success': return { bg: 'rgba(22, 163, 74, 0.12)', fg: '#16a34a', border: 'rgba(22, 163, 74, 0.4)', Icon: CheckCircle2 };
-      case 'error':   return { bg: 'rgba(220, 38, 38, 0.12)', fg: '#dc2626', border: 'rgba(220, 38, 38, 0.4)', Icon: AlertCircle };
-      case 'warning': return { bg: 'rgba(217, 119, 6, 0.12)', fg: '#d97706', border: 'rgba(217, 119, 6, 0.4)', Icon: AlertCircle };
-      default:        return { bg: 'rgba(37, 99, 235, 0.12)', fg: '#2563eb', border: 'rgba(37, 99, 235, 0.4)', Icon: Info };
+      case 'success': return { bg: 'color-mix(in srgb, var(--color-accent-income) 12%, transparent)', fg: 'var(--color-accent-income)', border: 'color-mix(in srgb, var(--color-accent-income) 40%, transparent)', Icon: CheckCircle2 };
+      case 'error':   return { bg: 'color-mix(in srgb, var(--color-accent-expense) 12%, transparent)', fg: 'var(--color-accent-expense)', border: 'color-mix(in srgb, var(--color-accent-expense) 40%, transparent)', Icon: AlertCircle };
+      case 'warning': return { bg: 'color-mix(in srgb, var(--color-accent-warning) 12%, transparent)', fg: 'var(--color-accent-warning)', border: 'color-mix(in srgb, var(--color-accent-warning) 40%, transparent)', Icon: AlertCircle };
+      default:        return { bg: 'color-mix(in srgb, var(--color-accent-blue) 12%, transparent)', fg: 'var(--color-accent-blue)', border: 'color-mix(in srgb, var(--color-accent-blue) 40%, transparent)', Icon: Info };
     }
   })();
   const Icon = palette.Icon;
@@ -128,7 +128,7 @@ const ToastBubble: React.FC<{ toast: Toast; onDismiss: () => void }> = ({ toast,
         background: 'var(--color-bg-primary, #1a1a1a)',
         border: '1px solid ' + palette.border,
         borderLeft: '3px solid ' + palette.fg,
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         padding: '10px 12px',
         display: 'flex',
         alignItems: 'flex-start',

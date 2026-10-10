@@ -393,10 +393,10 @@ const BudgetDetail: React.FC<BudgetDetailProps> = ({ budgetId, onBack, onEdit })
               <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Monthly Spend vs Budget</span>
               <span className="ml-auto flex items-center gap-3 text-xs text-text-muted">
                 <span className="flex items-center gap-1">
-                  <span style={{ display: 'inline-block', width: 8, height: 8, background: 'var(--color-accent-blue)', opacity: 0.5, borderRadius: 1 }} /> Budget
+                  <span style={{ display: 'inline-block', width: 8, height: 8, background: 'var(--color-accent-blue)', opacity: 0.5, borderRadius: 'var(--app-radius)' }} /> Budget
                 </span>
                 <span className="flex items-center gap-1">
-                  <span style={{ display: 'inline-block', width: 8, height: 8, background: 'var(--color-accent-income)', borderRadius: 1 }} /> Actual
+                  <span style={{ display: 'inline-block', width: 8, height: 8, background: 'var(--color-accent-income)', borderRadius: 'var(--app-radius)' }} /> Actual
                 </span>
               </span>
             </div>

@@ -50,7 +50,7 @@ export function HeroStat({
   return (
     <div
       className="block-card-elevated"
-      style={{ padding: 28, borderRadius: 6, position: 'relative', overflow: 'hidden' }}
+      style={{ padding: 28, borderRadius: 'var(--app-radius)', position: 'relative', overflow: 'hidden' }}
     >
       <div
         style={{
@@ -75,7 +75,7 @@ export function HeroStat({
           </span>
           <div
             className="flex items-center justify-center"
-            style={{ width: 40, height: 40, borderRadius: 6, background: a.bg }}
+            style={{ width: 40, height: 40, borderRadius: 'var(--app-radius)', background: a.bg }}
           >
             <Icon size={20} style={{ color: a.fg }} />
           </div>
@@ -115,10 +115,10 @@ export function FeatureCard({
 }: FeatureCardProps) {
   const a = accent(accentColor);
   return (
-    <div className="block-card" style={{ padding: 22, borderRadius: 6 }}>
+    <div className="block-card" style={{ padding: 22, borderRadius: 'var(--app-radius)' }}>
       <div
         className="flex items-center justify-center"
-        style={{ width: 44, height: 44, borderRadius: 6, background: a.bg }}
+        style={{ width: 44, height: 44, borderRadius: 'var(--app-radius)', background: a.bg }}
       >
         <Icon size={22} style={{ color: a.fg }} />
       </div>
@@ -131,7 +131,7 @@ export function FeatureCard({
             className="text-xs"
             style={{
               padding: '2px 8px',
-              borderRadius: 6,
+              borderRadius: 'var(--app-radius)',
               background: a.bg,
               color: a.fg,
               fontWeight: 600,
@@ -175,7 +175,7 @@ export function CtaBanner({
       className="block-card-elevated flex items-center justify-between"
       style={{
         padding: 24,
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         gap: 20,
         background: `linear-gradient(135deg, ${a.bg}, var(--color-bg-elevated))`,
       }}
@@ -183,7 +183,7 @@ export function CtaBanner({
       <div className="flex items-center" style={{ gap: 16 }}>
         <div
           className="flex items-center justify-center"
-          style={{ width: 48, height: 48, borderRadius: 6, background: a.bg, flexShrink: 0 }}
+          style={{ width: 48, height: 48, borderRadius: 'var(--app-radius)', background: a.bg, flexShrink: 0 }}
         >
           <Icon size={24} style={{ color: a.fg }} />
         </div>
@@ -265,7 +265,7 @@ export function MetricHero({
       className={`block-card${onClick ? ' cursor-pointer hover:bg-bg-hover hover:scale-[1.02] transition-all duration-200' : ''}`}
       // overflow:hidden clips the sparkline at the card edge instead of
       // letting it spill into the gutter when the card is narrow.
-      style={{ padding: 24, borderRadius: 6, overflow: 'hidden' }}
+      style={{ padding: 24, borderRadius: 'var(--app-radius)', overflow: 'hidden' }}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
@@ -300,7 +300,7 @@ export function MetricHero({
                 color: deltaColor,
                 fontWeight: 600,
                 padding: '2px 6px',
-                borderRadius: 6,
+                borderRadius: 'var(--app-radius)',
                 background: up ? 'var(--color-accent-income-bg)' : 'var(--color-accent-expense-bg)',
                 whiteSpace: 'nowrap',
               }}
@@ -368,14 +368,14 @@ export function WelcomeCard({
       className="block-card-elevated"
       style={{
         padding: 26,
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         background: `linear-gradient(135deg, ${a.bg}, var(--color-bg-elevated))`,
       }}
     >
       <div className="flex items-center" style={{ gap: 14 }}>
         <div
           className="flex items-center justify-center"
-          style={{ width: 46, height: 46, borderRadius: 6, background: a.bg, flexShrink: 0 }}
+          style={{ width: 46, height: 46, borderRadius: 'var(--app-radius)', background: a.bg, flexShrink: 0 }}
         >
           <Icon size={24} style={{ color: a.fg }} />
         </div>

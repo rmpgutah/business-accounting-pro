@@ -270,8 +270,8 @@ export const BudgetRibbon: React.FC<{ account: AccountLite }> = ({ account }) =>
     <div className="px-4 pb-1">
       <div className="flex items-center gap-2 text-[9px] text-text-muted">
         <span>{formatCurrency(actual)} / {formatCurrency(cap)}</span>
-        <div className="flex-1 h-1.5 bg-bg-tertiary" style={{ borderRadius: '2px' }}>
-          <div className={color} style={{ width: `${pct}%`, height: '100%', borderRadius: '2px' }} />
+        <div className="flex-1 h-1.5 bg-bg-tertiary" style={{ borderRadius: 'var(--app-radius)' }}>
+          <div className={color} style={{ width: `${pct}%`, height: '100%', borderRadius: 'var(--app-radius)' }} />
         </div>
         <span className="font-mono">{pct.toFixed(0)}%</span>
       </div>

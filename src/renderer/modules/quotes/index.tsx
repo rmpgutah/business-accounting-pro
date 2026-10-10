@@ -616,7 +616,7 @@ ${topClients
                               width: 8,
                               height: 8,
                               background: l.color,
-                              borderRadius: '2px',
+                              borderRadius: 'var(--app-radius)',
                               display: 'inline-block',
                             }}
                           />
@@ -835,7 +835,7 @@ const PipelineBoard: React.FC<PipelineBoardProps> = ({ onView, onNew, refreshKey
                       width: 8,
                       height: 8,
                       background: stage.color,
-                      borderRadius: '2px',
+                      borderRadius: 'var(--app-radius)',
                       display: 'inline-block',
                     }}
                   />

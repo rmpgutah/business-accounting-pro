@@ -991,7 +991,7 @@ const BillsList: React.FC<BillsListProps> = ({ onNew, onView }) => {
                         <span
                           className="text-[9px] font-semibold px-1.5 py-0.5"
                           style={{
-                            borderRadius: '4px',
+                            borderRadius: 'var(--app-radius)',
                             background: 'rgba(59,130,246,0.12)',
                             color: 'var(--color-accent-blue)',
                             border: '1px solid rgba(59,130,246,0.3)',

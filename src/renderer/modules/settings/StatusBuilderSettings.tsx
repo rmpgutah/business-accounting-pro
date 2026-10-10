@@ -152,7 +152,7 @@ const StatusBuilderSettings: React.FC = () => {
             <div key={s.id} className="p-2 border border-border-primary text-xs" style={{ borderRadius: 'var(--app-radius)' }}>
               <div className="grid grid-cols-12 gap-2 items-center">
                 <div className="col-span-2">
-                  <span className="inline-flex items-center gap-1 px-2 py-1" style={{ borderRadius: '4px', background: s.color + '22', color: s.color, border: `1px solid ${s.color}` }}>
+                  <span className="inline-flex items-center gap-1 px-2 py-1" style={{ borderRadius: 'var(--app-radius)', background: s.color + '22', color: s.color, border: `1px solid ${s.color}` }}>
                     {s.label}
                   </span>
                 </div>

@@ -1089,7 +1089,7 @@ export default function SettingsModule() {
       <SectionCard icon={Keyboard} title="Keyboard Shortcuts & Macros" description="Customize Cmd+K palette and record macros for repeated actions">
         <div className="space-y-3">
           <div className="text-xs text-text-secondary">
-            Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border-primary text-[10px] font-mono" style={{ borderRadius: '4px' }}>⌘K</kbd> anywhere in the app to open the command palette.
+            Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border-primary text-[10px] font-mono" style={{ borderRadius: 'var(--app-radius)' }}>⌘K</kbd> anywhere in the app to open the command palette.
           </div>
           <div>
             <button onClick={() => setMacroOpen(true)} className="block-btn-primary text-xs px-4 py-2 flex items-center gap-1.5" style={{ borderRadius: 'var(--app-radius)' }}>

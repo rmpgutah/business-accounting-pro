@@ -136,7 +136,7 @@ const AuthScreen: React.FC = () => {
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '14px 16px', fontSize: '14px',
     background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px', color: '#fff', outline: 'none',
+    borderRadius: 'var(--app-radius)', color: '#fff', outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
   };
   const inputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -150,7 +150,7 @@ const AuthScreen: React.FC = () => {
   const btnPrimary: React.CSSProperties = {
     width: '100%', padding: '14px', fontSize: '15px', fontWeight: 600,
     background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-    color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer',
+    color: 'white', border: 'none', borderRadius: 'var(--app-radius)', cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
     transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
   };
@@ -160,11 +160,11 @@ const AuthScreen: React.FC = () => {
     backdropFilter: 'blur(32px) saturate(1.6)',
     WebkitBackdropFilter: 'blur(32px) saturate(1.6)',
     border: '1px solid rgba(255,255,255,0.10)',
-    padding: '44px', borderRadius: '14px',
+    padding: '44px', borderRadius: 'var(--app-radius)',
     boxShadow: '0 32px 80px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.06) inset',
   };
   const linkBtn: React.CSSProperties = {
-    background: 'none', border: 'none', color: '#ef4444',
+    background: 'none', border: 'none', color: 'var(--color-accent-expense)',
     fontSize: '13px', cursor: 'pointer', fontWeight: 600,
   };
   const mutedLinkBtn: React.CSSProperties = {
@@ -174,7 +174,7 @@ const AuthScreen: React.FC = () => {
   const errorBox: React.CSSProperties = {
     padding: '12px 14px', marginBottom: '20px',
     background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
-    color: '#f87171', fontSize: '13px', borderRadius: '8px',
+    color: 'var(--color-accent-expense)', fontSize: '13px', borderRadius: 'var(--app-radius)',
   };
 
   if (hasExisting === null) {
@@ -250,7 +250,7 @@ const AuthScreen: React.FC = () => {
           height: '3px',
           background: 'linear-gradient(90deg, #b91c1c, #dc2626, #b91c1c)',
           margin: '16px auto 20px',
-          borderRadius: '2px',
+          borderRadius: 'var(--app-radius)',
         }} />
 
         {/* Subtitle */}
@@ -511,7 +511,7 @@ const AuthScreen: React.FC = () => {
                   </button>
                 </div>
                 {password.length > 0 && (
-                  <div style={{ fontSize: '12px', marginTop: '6px', color: password.length < 6 ? '#fbbf24' : '#34d399' }}>
+                  <div style={{ fontSize: '12px', marginTop: '6px', color: password.length < 6 ? 'var(--color-accent-warning)' : 'var(--color-accent-income)' }}>
                     {password.length < 6 ? 'Too short — min. 6 characters' : 'Looks good'}
                   </div>
                 )}

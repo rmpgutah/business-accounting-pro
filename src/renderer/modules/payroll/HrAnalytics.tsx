@@ -37,6 +37,8 @@ const HrAnalytics: React.FC = () => {
     setLoading(true);
     api.hrAnalytics(startDate, endDate).then((result: any) => {
       if (!cancelled) setData(result);
+    }).catch(() => {
+      if (!cancelled) setData(null);
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -74,7 +76,7 @@ const HrAnalytics: React.FC = () => {
             <div style={{ width: '100%', height: 240 }}>
               <ResponsiveContainer>
                 <BarChart data={data.byDepartment}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" />
                   <XAxis dataKey="department_name" stroke="var(--color-text-muted)" fontSize={11} />
                   <YAxis stroke="var(--color-text-muted)" fontSize={11} allowDecimals={false} />
                   <Tooltip

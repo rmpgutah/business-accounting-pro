@@ -131,7 +131,7 @@ export function DonutChart({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', justifyContent: 'center', maxWidth: size + 60 }}>
           {data.map((d, i) => (
             <span key={i} className="text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: TEXT_SECONDARY }}>
-              <span style={{ width: 9, height: 9, borderRadius: 6, backgroundColor: d.color, display: 'inline-block' }} />
+              <span style={{ width: 9, height: 9, borderRadius: 'var(--app-radius)', backgroundColor: d.color, display: 'inline-block' }} />
               {d.label}
             </span>
           ))}

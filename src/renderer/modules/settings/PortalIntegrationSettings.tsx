@@ -279,7 +279,7 @@ const PortalIntegrationSettings: React.FC = () => {
           )}
         </div>
         <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 10, lineHeight: 1.5 }}>
-          Calls <code style={{ background: 'var(--color-bg-secondary)', padding: '1px 6px', borderRadius: 3, fontSize: 10 }}>{apiEndpoint.replace(/\/$/, '')}/ping</code> with the configured auth header. 10-second timeout.
+          Calls <code style={{ background: 'var(--color-bg-secondary)', padding: '1px 6px', borderRadius: 'var(--app-radius)', fontSize: 10 }}>{apiEndpoint.replace(/\/$/, '')}/ping</code> with the configured auth header. 10-second timeout.
         </div>
       </div>
 

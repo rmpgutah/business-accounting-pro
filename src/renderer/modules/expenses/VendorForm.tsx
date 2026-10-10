@@ -639,7 +639,7 @@ const VendorForm: React.FC<VendorFormProps> = ({ vendorId, onClose, onSaved }) =
                 {form.additional_addresses.map(a => (
                   <div key={a.id} className="tform-address-card">
                     <div className="flex items-center gap-2 mb-1">
-                      <select className={`tform-address-type ${a.type}`} value={a.type} onChange={(e) => updateAddress(a.id, { type: e.target.value as VendorAddress['type'] })} style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 4, color: 'inherit', fontSize: 9, padding: '2px 6px' }}>
+                      <select className={`tform-address-type ${a.type}`} value={a.type} onChange={(e) => updateAddress(a.id, { type: e.target.value as VendorAddress['type'] })} style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-primary)', borderRadius: 'var(--app-radius)', color: 'inherit', fontSize: 9, padding: '2px 6px' }}>
                         <option value="billing">Billing</option>
                         <option value="shipping">Shipping</option>
                         <option value="remit">Remit-to</option>

@@ -227,7 +227,7 @@ export function PriorityFlag({ priority = 'high', label, className }: PriorityFl
         fontSize: 10,
         letterSpacing: '0.05em',
         padding: '3px 8px',
-        borderRadius: 6,
+        borderRadius: 'var(--app-radius)',
         color,
         backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`,
         border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,

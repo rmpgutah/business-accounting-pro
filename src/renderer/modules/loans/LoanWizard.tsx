@@ -118,16 +118,21 @@ export default function LoanWizard({ onSaved, onCancel }: Props) {
 
   async function runPrequal() {
     if (!form.principal || !form.interest_rate || !form.term_months) return;
-    const result = await (api as any).lfPrequal?.({
-      loan_type: typeKey,
-      requested_amount: form.principal,
-      estimated_rate_pct: form.interest_rate * 100,
-      term_months: form.term_months,
-      gross_monthly_income: extras.gross_monthly_income || 0,
-      existing_monthly_debt: extras.existing_monthly_debt || 0,
-      credit_score: extras.credit_score || 0,
-    });
-    setPrequal(result);
+    try {
+      const result = await (api as any).lfPrequal?.({
+        loan_type: typeKey,
+        requested_amount: form.principal,
+        estimated_rate_pct: form.interest_rate * 100,
+        term_months: form.term_months,
+        gross_monthly_income: extras.gross_monthly_income || 0,
+        existing_monthly_debt: extras.existing_monthly_debt || 0,
+        credit_score: extras.credit_score || 0,
+      });
+      setPrequal(result);
+    } catch (err: any) {
+      console.error('lfPrequal failed', err);
+      setPrequal({ error: err?.message || 'Pre-qualification failed' });
+    }
   }
 
   async function save() {
