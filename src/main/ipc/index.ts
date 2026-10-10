@@ -42,33 +42,12 @@ import { calculateFullPayroll } from '../services/TaxCalculationEngine';
 import { bootstrapBuiltinCommands } from '../services/CommandRegistry';
 import { eventBus } from '../services/EventBus';
 import { workflowEngine } from '../services/WorkflowEngine';
-import { reindexEntity, removeFromIndex } from '../services/intelligence/searchIndex';
-import { INDEXED_TABLES } from '../services/intelligence/indexConfig';
 import http from 'http';
 import https from 'https';
 
 
 // ─── B3 AI Copilot — active stream registry ──────────────
 const copilotStreams = new Map<string, AbortController>();
-
-
-// Coalesce rapid re-index calls per (table,id) onto a microtask-ish timer so
-// bulk writes don't thrash FTS. Best-effort; never throws into the write path.
-const reindexTimers = new Map<string, NodeJS.Timeout>();
-function scheduleReindex(table: string, id: string, op: 'upsert' | 'delete'): void {
-  if (!INDEXED_TABLES.has(table)) return;
-  const key = `${table}:${id}`;
-  const existing = reindexTimers.get(key);
-  if (existing) clearTimeout(existing);
-  reindexTimers.set(key, setTimeout(() => {
-    reindexTimers.delete(key);
-    try {
-      const d = db.getDb();
-      if (op === 'delete') removeFromIndex(d, table, id);
-      else reindexEntity(d, table, id);
-    } catch (e) { console.warn('[search-index] reindex failed', table, id, e); }
-  }, 150));
-}
 
 
 // Mirror of the server's sanitizeEmail (server/src/routes/backup.ts). Both
@@ -399,6 +378,7 @@ export function registerIpcHandlers(): void {
   const {
     scheduleAutoBackup, cancelAutoBackup, getLastLoginEmail, setLastLoginEmail, findClosedPeriod, postJournalEntry,
     validateTable, cleanupReferencesBeforeDelete, isRawQueryAllowed, buildInvoiceMetadata,
+    scheduleReindex, logDebtAudit,
     PROTECTED_TABLES,
   } = deps;
 
@@ -446,7 +426,7 @@ export function registerIpcHandlers(): void {
       // collision with an existing row. db.create() generates a uuid when id
       // is absent.
       if (data && typeof data === 'object' && 'id' in data) {
-        delete (data as any).id;
+        delete (data).id;
       }
       const payload = tablesWithoutCompanyId.has(table)
         ? { ...data }
@@ -529,8 +509,8 @@ export function registerIpcHandlers(): void {
       // Both are sometimes hydrated into form state and would silently mutate
       // primary keys / row provenance if echoed back through the patch payload.
       if (data && typeof data === 'object') {
-        delete (data as any).id;
-        delete (data as any).created_at;
+        delete (data).id;
+        delete (data).created_at;
       }
       const old = db.getById(table, id);
       const record = db.update(table, id, data);
@@ -548,10 +528,10 @@ export function registerIpcHandlers(): void {
       // Debt audit: log each changed field
       if (table === 'debts' && id && old) {
         try {
-          const newRow = db.getById('debts', id) as any;
+          const newRow = db.getById('debts', id);
           if (newRow) {
             for (const key of Object.keys(data)) {
-              const oldVal = String((old as any)[key] ?? '');
+              const oldVal = String((old)[key] ?? '');
               const newVal = String(newRow[key] ?? '');
               if (oldVal !== newVal) {
                 logDebtAudit(id, 'field_edit', key, oldVal, newVal);
@@ -584,7 +564,7 @@ export function registerIpcHandlers(): void {
         'debt_settlements', 'debt_disputes', 'debt_contacts', 'debt_promises', 'debt_notes'];
       if (DEBT_AUDIT_TABLES.includes(table)) {
         try {
-          const row = db.getById(table, id) as any;
+          const row = db.getById(table, id);
           if (row?.debt_id) logDebtAudit(row.debt_id, 'record_deleted', table, id, '');
         } catch (_) {}
       }
@@ -625,7 +605,7 @@ export function registerIpcHandlers(): void {
       if (!id) return { error: 'No vendor id' };
       const dbi = db.getDb();
       const companyId = db.getCurrentCompanyId();
-      const vendor = db.getById('vendors', id) as any;
+      const vendor = db.getById('vendors', id);
       if (!vendor) return { error: 'Vendor not found' };
 
       // Count references for the response (best-effort per table).
@@ -732,7 +712,7 @@ export function registerIpcHandlers(): void {
     try {
       if (!id) return { error: 'No asset id' };
       const companyId = db.getCurrentCompanyId();
-      const asset = db.getById('fixed_assets', id) as any;
+      const asset = db.getById('fixed_assets', id);
       if (!asset) return { error: 'Asset not found' };
 
       // Count depreciation rows that will be removed (for an honest UI message).
@@ -1148,7 +1128,7 @@ export function registerIpcHandlers(): void {
     try {
       const cid = db.getCurrentCompanyId();
       if (!cid) return { error: 'No active company' };
-      const period = db.getById('closed_periods', payload.id) as any;
+      const period = db.getById('closed_periods', payload.id);
       if (!period || period.company_id !== cid) return { error: 'Period not found' };
       if (!period.is_active) return { error: 'Period is already reopened' };
       db.update('closed_periods', payload.id, {
@@ -3092,7 +3072,7 @@ export function registerIpcHandlers(): void {
     try {
       const cid = db.getCurrentCompanyId();
       if (!cid) return { error: 'No active company' };
-      const company = db.getById('companies', cid) as any || {};
+      const company = db.getById('companies', cid) || {};
       const { form941HTML, scheduleCHTML, nec1099HTML, w2HTML, scheduleSEHTML, salesTaxHTML, w3HTML, form940HTML, misc1099HTML, form944HTML, form945HTML, schedule941BHTML, form945AHTML, int1099HTML, div1099HTML, r1099HTML, k1099HTML, b1099HTML, g1099HTML, c1099HTML, sa1099HTML, w2cHTML, form1096HTML, schedule1HTML, schedule2HTML, schedule3HTML, scheduleAHTML, scheduleBHTML, scheduleDHTML, form1040ESHTML, form8995HTML, form4562HTML, form8829HTML, form4797HTML, form7004HTML, form4868HTML, form1065HTML, form1120HTML, form1120SHTML, scheduleK1HTML, form1041HTML, form1094CHTML, form1095CHTML, formSS4HTML, form2553HTML, form8832HTML, form8822BHTML, tc40HTML, tc20HTML, tc20SHTML, tc65HTML, tc62MHTML, tc941HTML } = require('../services/tax-forms/pdf-templates');
       let html = '';
       let filename = 'tax-form.pdf';
@@ -3935,7 +3915,7 @@ export function registerIpcHandlers(): void {
       try {
         if (companyId) {
           if (isEdit && oldInvoice) {
-            const newInvoice = db.getById('invoices', savedId) as any;
+            const newInvoice = db.getById('invoices', savedId);
             const changes: Record<string, { old: any; new: any }> = {};
             for (const key of Object.keys(invoiceData)) {
               if (oldInvoice[key] !== newInvoice?.[key]) {
@@ -4214,7 +4194,7 @@ export function registerIpcHandlers(): void {
       try {
         if (companyId) {
           if (isEdit && oldExpense) {
-            const newExpense = db.getById('expenses', savedId) as any;
+            const newExpense = db.getById('expenses', savedId);
             const changes: Record<string, { old: any; new: any }> = {};
             for (const key of Object.keys(expenseData)) {
               if (oldExpense[key] !== newExpense?.[key]) {
@@ -5513,9 +5493,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('invoice:convert-to-debt', (_event, { invoiceId, companyId }: { invoiceId: string; companyId: string }) => {
     try {
-      const inv = db.getById('invoices', invoiceId) as any;
+      const inv = db.getById('invoices', invoiceId);
       if (!inv) return { error: 'Invoice not found' };
-      const client = inv.client_id ? db.getById('clients', inv.client_id) as any : null;
+      const client = inv.client_id ? db.getById('clients', inv.client_id) : null;
       const balance = (inv.total || 0) - (inv.amount_paid || 0);
 
       const debt = db.create('debts', {
@@ -5535,7 +5515,7 @@ export function registerIpcHandlers(): void {
         status: 'active',
         current_stage: 'reminder',
         priority: 'medium',
-      }) as any;
+      });
 
       db.create('debt_pipeline_stages', { debt_id: debt.id, stage: 'reminder' });
       db.create('invoice_debt_links', { invoice_id: invoiceId, debt_id: debt.id });
@@ -6436,7 +6416,7 @@ export function registerIpcHandlers(): void {
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(paymentId, companyId, invoiceId, amount, date, method || 'transfer', reference || '');
 
-      const invoice = (dbInstance as any).prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId) as any;
+      const invoice = (dbInstance as any).prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
       if (!invoice) throw new Error('Invoice not found');
 
       // INTEGRITY: roundCents prevents float-drift in amount_paid across
@@ -6537,7 +6517,7 @@ export function registerIpcHandlers(): void {
     // BUG 1: Check for duplicate payroll run
     const existingRun = (dbInstance as any).prepare(
       `SELECT id FROM payroll_runs WHERE company_id = ? AND pay_period_start = ? AND pay_period_end = ?`
-    ).get(companyId, periodStart, periodEnd) as any;
+    ).get(companyId, periodStart, periodEnd);
     if (existingRun) {
       return { error: 'A payroll run already exists for this period. Delete the existing run first to reprocess.' };
     }
@@ -6557,7 +6537,7 @@ export function registerIpcHandlers(): void {
       try {
         const lastCheck = (dbInstance as any).prepare(
           `SELECT check_number FROM pay_stubs WHERE check_number != '' ORDER BY CAST(check_number AS INTEGER) DESC LIMIT 1`
-        ).get() as any;
+        ).get();
         if (lastCheck?.check_number) {
           lastCheckNum = parseInt(lastCheck.check_number, 10) || 1000;
         }
@@ -6577,7 +6557,7 @@ export function registerIpcHandlers(): void {
                      COALESCE(SUM(ps.social_security), 0) AS ss, COALESCE(SUM(ps.medicare), 0) AS m
               FROM pay_stubs ps JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
               WHERE ps.employee_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ? AND pr.status != 'draft'
-            `).get(s.employeeId, `${payYear}-01-01`, `${payYear}-12-31`) as any;
+            `).get(s.employeeId, `${payYear}-01-01`, `${payYear}-12-31`);
             if (prior) { ytdFederal += prior.f || 0; ytdState += prior.st || 0; ytdSS += prior.ss || 0; ytdMedicare += prior.m || 0; }
           } catch { /* ignore */ }
         }
@@ -6721,7 +6701,7 @@ export function registerIpcHandlers(): void {
     // Verify run exists and belongs to this company
     const existing = (dbInstance as any).prepare(
       `SELECT id, pay_date, pay_period_start FROM payroll_runs WHERE id = ? AND company_id = ?`
-    ).get(runId, companyId) as any;
+    ).get(runId, companyId);
     if (!existing) return { error: 'Payroll run not found' };
 
     const tx = (dbInstance as any).transaction(() => {
@@ -6731,7 +6711,7 @@ export function registerIpcHandlers(): void {
       // 2. Delete the previously auto-posted journal entry for this run
       const oldJE = (dbInstance as any).prepare(
         `SELECT id FROM journal_entries WHERE company_id = ? AND description LIKE ?`
-      ).get(companyId, `Payroll - ${existing.pay_period_start}%`) as any;
+      ).get(companyId, `Payroll - ${existing.pay_period_start}%`);
       if (oldJE) {
         (dbInstance as any).prepare(`DELETE FROM journal_entry_lines WHERE journal_entry_id = ?`).run(oldJE.id);
         (dbInstance as any).prepare(`DELETE FROM journal_entries WHERE id = ?`).run(oldJE.id);
@@ -6748,7 +6728,7 @@ export function registerIpcHandlers(): void {
       try {
         const lastCheck = (dbInstance as any).prepare(
           `SELECT check_number FROM pay_stubs WHERE check_number != '' ORDER BY CAST(check_number AS INTEGER) DESC LIMIT 1`
-        ).get() as any;
+        ).get();
         if (lastCheck?.check_number) {
           lastCheckNum = parseInt(lastCheck.check_number, 10) || 1000;
         }
@@ -6768,7 +6748,7 @@ export function registerIpcHandlers(): void {
                      COALESCE(SUM(ps.social_security), 0) AS ss, COALESCE(SUM(ps.medicare), 0) AS m
               FROM pay_stubs ps JOIN payroll_runs pr ON ps.payroll_run_id = pr.id
               WHERE ps.employee_id = ? AND pr.pay_date >= ? AND pr.pay_date <= ? AND pr.status != 'draft' AND pr.id != ?
-            `).get(s.employeeId, `${payYear}-01-01`, `${payYear}-12-31`, runId) as any;
+            `).get(s.employeeId, `${payYear}-01-01`, `${payYear}-12-31`, runId);
             if (prior) { ytdFederal += prior.f || 0; ytdState += prior.st || 0; ytdSS += prior.ss || 0; ytdMedicare += prior.m || 0; }
           } catch { /* ignore */ }
         }
@@ -9440,26 +9420,6 @@ export function registerIpcHandlers(): void {
     return principal * rate * (days / 365);
   }
 
-  // ─── Audit Log Helper ──────────────────────────────────
-  // Immutable chain-of-custody logging. Called by every debt-mutating handler.
-  // MUST NEVER throw — audit is a side-effect, not a gate.
-  function logDebtAudit(
-    debtId: string,
-    action: string,
-    fieldName: string = '',
-    oldValue: string = '',
-    newValue: string = '',
-    performedBy: string = 'user'
-  ): void {
-    try {
-      const dbInstance = db.getDb();
-      dbInstance.prepare(`
-        INSERT INTO debt_audit_log (id, debt_id, action, field_name, old_value, new_value, performed_by, performed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      `).run(uuid(), debtId, action, fieldName, oldValue, newValue, performedBy);
-    } catch (_) { /* audit logging must never crash the primary operation */ }
-  }
-
   // ─── Debt: Audit Log Query ────────────────────────────
   ipcMain.handle('debt:audit-log', (_event, { debtId, limit }: { debtId: string; limit?: number }) => {
     try {
@@ -9733,7 +9693,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('debt:assign-collector', (_event, { debtId, collectorId }: { debtId: string; collectorId: string | null }) => {
     try {
-      const oldDebt = db.getById('debts', debtId) as any;
+      const oldDebt = db.getById('debts', debtId);
       db.update('debts', debtId, { assigned_collector_id: collectorId || null });
       logDebtAudit(debtId, 'assignment_change', 'assigned_collector_id', oldDebt?.assigned_collector_id || '', collectorId || '');
       scheduleAutoBackup();
@@ -10220,7 +10180,7 @@ export function registerIpcHandlers(): void {
         planId = plan.id;
         const freqDays: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30 };
         const days = freqDays[frequency] || 30;
-        let d = new Date(start_date + 'T12:00:00');
+        const d = new Date(start_date + 'T12:00:00');
         // CALC: Standard amortization. Each installment payment is constant
         // (= installment_amount). Per-installment interest = balance * rate
         // per period; principal = payment - interest; new balance = balance
@@ -10386,22 +10346,22 @@ export function registerIpcHandlers(): void {
       const now = new Date();
 
       for (const debt of debts) {
-        const stageIdx = STAGE_ORDER.indexOf((debt as any).current_stage);
+        const stageIdx = STAGE_ORDER.indexOf((debt).current_stage);
         if (stageIdx < 0 || stageIdx >= STAGE_ORDER.length - 1) continue;
 
-        const lastActivity = new Date((debt as any).updated_at || (debt as any).created_at);
+        const lastActivity = new Date((debt).updated_at || (debt).created_at);
         const daysSince = Math.floor((now.getTime() - lastActivity.getTime()) / 86400000);
 
         if (daysSince >= thresholdDays) {
           const nextStage = STAGE_ORDER[stageIdx + 1];
-          db.update('debts', (debt as any).id, { current_stage: nextStage });
-          db.create('debt_pipeline_stages', { debt_id: (debt as any).id, stage: nextStage, auto_advanced: 1, advanced_by: 'system' });
+          db.update('debts', (debt).id, { current_stage: nextStage });
+          db.create('debt_pipeline_stages', { debt_id: (debt).id, stage: nextStage, auto_advanced: 1, advanced_by: 'system' });
           db.create('debt_communications', {
-            debt_id: (debt as any).id,
+            debt_id: (debt).id,
             type: 'letter',
             direction: 'outbound',
             subject: 'Auto-advance notification',
-            body: `Auto-advanced from ${(debt as any).current_stage} to ${nextStage} after ${daysSince} days of inactivity.`,
+            body: `Auto-advanced from ${(debt).current_stage} to ${nextStage} after ${daysSince} days of inactivity.`,
             outcome: 'auto_advanced',
             logged_by: 'system',
           });
@@ -11488,7 +11448,7 @@ export function registerIpcHandlers(): void {
   // ─── State Tax Rate ───────────────────────────────────
   ipcMain.handle('payroll:state-tax-rate', (_event, { state, grossPay, allowances, periodsPerYear }: { state: string; grossPay: number; allowances: number; periodsPerYear: number }) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+       
       const { stateTaxEngine } = require('../services/StateTaxEngine');
       const withholding = stateTaxEngine.getStateWithholding(state, grossPay, allowances, periodsPerYear);
       const sdi = stateTaxEngine.getSdiWithholding(state, grossPay);
@@ -12087,7 +12047,7 @@ export function registerIpcHandlers(): void {
       }).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Account History — ${acct.code}</title>
         <style>body{font-family:system-ui,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin:0 0 4px}h2{font-size:13px;color:#666;font-weight:normal;margin:0 0 16px}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#f5f5f5;text-align:left;padding:6px 8px;border-bottom:2px solid #333}</style></head>
-        <body><h1>${(company as any).name || ''}</h1><h2>Account History — ${acct.code} ${acct.name}</h2>
+        <body><h1>${(company).name || ''}</h1><h2>Account History — ${acct.code} ${acct.name}</h2>
         <p style="font-size:11px;color:#555">Type: ${acct.type} • Subtype: ${acct.subtype || '—'} • Generated: ${localToday()}</p>
         <table><thead><tr><th>Date</th><th>Entry #</th><th>Description</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th><th style="text-align:right">Balance</th></tr></thead>
         <tbody>${rowHtml || '<tr><td colspan="6" style="padding:16px;text-align:center;color:#888">No transactions</td></tr>'}</tbody></table>
@@ -13625,7 +13585,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('compliance:approve-je', (_e, { journalEntryId, approver, comment }: any) => {
     try {
-      const je = db.getById('journal_entries', journalEntryId) as any;
+      const je = db.getById('journal_entries', journalEntryId);
       if (!je) return { error: 'JE not found' };
       const lines = db.getDb().prepare(
         `SELECT SUM(COALESCE(debit,0)) AS total FROM journal_entry_lines WHERE journal_entry_id = ?`
@@ -13944,7 +13904,7 @@ export function registerIpcHandlers(): void {
     const q = String(Math.floor(now.getMonth() / 3) + 1);
     let companyAbbr = '';
     try {
-      const c = db.getById('companies', companyId) as any;
+      const c = db.getById('companies', companyId);
       companyAbbr = (c?.name || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase();
     } catch {}
     return prefix
@@ -14173,14 +14133,14 @@ export function registerIpcHandlers(): void {
   function buildTemplateContext(companyId: string, entityType: string, entityId: string): Record<string, any> {
     const ctx: Record<string, any> = {};
     try {
-      const co = db.getById('companies', companyId) as any;
+      const co = db.getById('companies', companyId);
       ctx.company_name = co?.name || '';
       ctx.company_email = co?.email || '';
       ctx.company_phone = co?.phone || '';
     } catch {}
     try {
       if (entityType === 'invoice') {
-        const inv = db.getById('invoices', entityId) as any;
+        const inv = db.getById('invoices', entityId);
         if (inv) {
           ctx.invoice_number = inv.invoice_number || '';
           // Use real `total` field (schema correction) and honor currency
@@ -14196,7 +14156,7 @@ export function registerIpcHandlers(): void {
             ctx.days_overdue = String(Math.max(0, days));
           }
           if (inv.client_id) {
-            const client = db.getById('clients', inv.client_id) as any;
+            const client = db.getById('clients', inv.client_id);
             ctx.client_name = client?.name || '';
             ctx.client_email = client?.email || '';
             ctx.client_phone = client?.phone || '';
@@ -14206,7 +14166,7 @@ export function registerIpcHandlers(): void {
           ctx.portal_link = ctx.payment_link;
         }
       } else if (entityType === 'quote') {
-        const q = db.getById('quotes', entityId) as any;
+        const q = db.getById('quotes', entityId);
         if (q) {
           ctx.invoice_number = q.quote_number || '';
           const totalNum = Number(q.total ?? q.total_amount ?? 0);
@@ -14214,13 +14174,13 @@ export function registerIpcHandlers(): void {
           ctx.due_date = q.valid_until || q.expires_at || '';
           ctx.issue_date = q.issue_date || '';
           if (q.client_id) {
-            const client = db.getById('clients', q.client_id) as any;
+            const client = db.getById('clients', q.client_id);
             ctx.client_name = client?.name || '';
             ctx.client_email = client?.email || '';
           }
         }
       } else if (entityType === 'debt') {
-        const d = db.getById('debts', entityId) as any;
+        const d = db.getById('debts', entityId);
         if (d) {
           ctx.invoice_number = d.debt_number || d.invoice_number || '';
           ctx.total_due = `$${Number(d.balance || d.original_amount || 0).toFixed(2)}`;
@@ -14230,7 +14190,7 @@ export function registerIpcHandlers(): void {
             ctx.days_overdue = String(Math.max(0, days));
           }
           if (d.client_id) {
-            const client = db.getById('clients', d.client_id) as any;
+            const client = db.getById('clients', d.client_id);
             ctx.client_name = client?.name || '';
             ctx.client_email = client?.email || '';
           }
@@ -14252,7 +14212,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('email-tmpl:save', (_e, { id, data, changedBy }: any) => {
     try {
       if (id) {
-        const prev = db.getById('email_templates', id) as any;
+        const prev = db.getById('email_templates', id);
         if (prev) {
           const lastVer = db.getDb().prepare(
             `SELECT MAX(version) AS v FROM email_template_history WHERE template_id = ?`
@@ -14286,7 +14246,7 @@ export function registerIpcHandlers(): void {
       ).get(templateId, version) as any;
       if (!snap) return { error: 'Version not found' };
       const data = JSON.parse(snap.snapshot_json);
-      const current = db.getById('email_templates', templateId) as any;
+      const current = db.getById('email_templates', templateId);
       const lastVer = db.getDb().prepare(
         `SELECT MAX(version) AS v FROM email_template_history WHERE template_id = ?`
       ).get(templateId) as any;
@@ -15135,12 +15095,12 @@ export function registerIpcHandlers(): void {
         : '';
       return `<div class="signature-field"${label === 'Employer' ? ' style="margin-left:40px;"' : ''}>
         ${signed
-          ? `<div style="font-family:'Snell Roundhand','Apple Chancery','Brush Script MT',cursive;font-size:26px;color:#111;border-bottom:1px solid #374151;padding-bottom:6px;min-height:38px;line-height:1.1;">${esc(sig!.name)}</div>`
+          ? `<div style="font-family:'Snell Roundhand','Apple Chancery','Brush Script MT',cursive;font-size:26px;color:#111;border-bottom:1px solid #374151;padding-bottom:6px;min-height:38px;line-height:1.1;">${esc(sig.name)}</div>`
           : `<div class="signature-line">${label} Signature</div>`}
         <p style="margin-top:6px;font-size:10pt;color:#374151;font-weight:700;">${esc(party)}</p>
         ${roleLine}
         <p style="font-size:9pt;color:#6b7280;">${label} Signature</p>
-        <p style="font-size:10pt;color:#374151;margin-top:2px;">Date: ${signed ? `<strong>${fmt(sig!.date)}</strong>` : '_______________'}</p>
+        <p style="font-size:10pt;color:#374151;margin-top:2px;">Date: ${signed ? `<strong>${fmt(sig.date)}</strong>` : '_______________'}</p>
         ${signed ? `<p style="font-size:8pt;color:#9ca3af;margin-top:3px;">Electronically signed &amp; recorded &middot; cryptographically bound (SHA-256)</p>` : ''}
       </div>`;
     };
@@ -16730,7 +16690,7 @@ export function registerIpcHandlers(): void {
     }
 
     const apiMessages: Anthropic.Messages.MessageParam[] = messages.map(m => ({
-      role: m.role as 'user' | 'assistant',
+      role: m.role,
       content: m.content,
     }));
 

@@ -5,6 +5,8 @@ import http from 'http';
 import https from 'https';
 import { v4 as uuid } from 'uuid';
 import type { PDFMetadata } from '../../services/print-preview';
+import { reindexEntity, removeFromIndex } from '../../services/intelligence/searchIndex';
+import { INDEXED_TABLES } from '../../services/intelligence/indexConfig';
 import type { IpcDeps } from './types';
 
 // ─── Server Sync Config ──────────────────────────────────
@@ -22,7 +24,9 @@ function scheduleAutoBackup() {
     try {
       const dbPath = db.getDbPath();
       if (!fs.existsSync(dbPath)) return;
-      try { db.getDb().pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
+      try {
+        db.getDb().pragma('wal_checkpoint(TRUNCATE)');
+      } catch (_) {}
 
       // Perf: async read so other IPC handlers aren't blocked while the DB
       // file is loaded into memory for HMAC + upload (runs every 30s).
@@ -37,28 +41,31 @@ function scheduleAutoBackup() {
       const isHttps = url.protocol === 'https:';
       const transport = isHttps ? https : http;
 
-      const req = transport.request({
-        hostname: url.hostname,
-        port: url.port || (isHttps ? 443 : 80),
-        path: url.pathname,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': fileData.length,
-          'x-bap-signature': signature,
-          'x-bap-email': email,
+      const req = transport.request(
+        {
+          hostname: url.hostname,
+          port: url.port || (isHttps ? 443 : 80),
+          path: url.pathname,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': fileData.length,
+            'x-bap-signature': signature,
+            'x-bap-email': email,
+          },
         },
-      }, (res) => {
-        let body = '';
-        res.on('data', (chunk: string) => body += chunk);
-        res.on('end', () => {
-          if (res.statusCode === 200) {
-            console.log('Auto-backup uploaded successfully');
-          } else {
-            console.warn('Auto-backup response:', res.statusCode, body);
-          }
-        });
-      });
+        (res) => {
+          let body = '';
+          res.on('data', (chunk: string) => (body += chunk));
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              console.log('Auto-backup uploaded successfully');
+            } else {
+              console.warn('Auto-backup response:', res.statusCode, body);
+            }
+          });
+        },
+      );
       req.on('error', (err) => console.warn('Auto-backup failed (network):', err.message));
       req.write(fileData);
       req.end();
@@ -78,8 +85,12 @@ function cancelAutoBackup(): void {
 }
 
 let _lastLoginEmail: string | null = null;
-function setLastLoginEmail(email: string | null) { _lastLoginEmail = email; }
-function getLastLoginEmail(): string | null { return _lastLoginEmail; }
+function setLastLoginEmail(email: string | null) {
+  _lastLoginEmail = email;
+}
+function getLastLoginEmail(): string | null {
+  return _lastLoginEmail;
+}
 
 // ─── Journal Entry Auto-Poster ────────────────────────────
 // ─── Account Lookup (multi-strategy) ─────────────────────
@@ -89,79 +100,139 @@ function getLastLoginEmail(): string | null { return _lastLoginEmail; }
 // 3. Alias mapping (common name → default account names)
 // 4. Type + subtype fallback
 const ACCOUNT_ALIASES: Record<string, string[]> = {
-  'Cash':                  ['Cash', 'Checking Account', 'Bank Account'],
-  'Receivable':            ['Accounts Receivable', 'Trade Receivable', 'A/R'],
-  'Payable':               ['Accounts Payable', 'Trade Payable', 'A/P'],
-  'Wages Expense':         ['Wages & Salaries', 'Payroll Expense', 'Wages Expense', 'Salary Expense', 'Wage Expense'],
-  'Wages Payable':         ['Payroll Liabilities', 'Wages Payable', 'Salary Payable', 'Payroll Payable'],
-  'Federal Withholding':   ['Federal Tax Payable', 'Federal Withholding', 'Federal Income Tax Payable'],
-  'State Withholding':     ['State Tax Payable', 'State Withholding', 'State Income Tax Payable'],
-  'Social Security Payable': ['Payroll Liabilities', 'Social Security Payable', 'FICA Payable', 'Payroll Tax Expense — FICA'],
-  'Medicare Payable':      ['Payroll Liabilities', 'Medicare Payable', 'FICA Payable', 'Payroll Tax Expense — FICA'],
-  'FUTA Payable':          ['Payroll Liabilities', 'FUTA Payable', 'Payroll Tax Expense — FUTA', 'Federal Unemployment Payable'],
-  'SUI Payable':           ['Payroll Liabilities', 'SUI Payable', 'SUTA Payable', 'State Unemployment Payable', 'Payroll Tax Expense — SUTA'],
-  'Revenue':               ['Service Revenue', 'Sales Revenue', 'Revenue', 'Consulting Revenue', 'Project Revenue', 'Income'],
-  'Expense':               ['Cost of Services', 'Cost of Goods Sold', 'Office Supplies', 'Miscellaneous Expense', 'General Expense', 'Operating Expense'],
-  'Advertising':           ['Advertising & Marketing', 'Marketing', 'Advertising'],
-  'Bank Fees':             ['Bank Fees & Service Charges', 'Bank Fees', 'Bank Charges', 'Service Charges'],
-  'Contractors':           ['Contract Labor', 'Contractors', 'Subcontractors'],
-  'Insurance':             ['Insurance — General Liability', 'Insurance', 'Business Insurance'],
-  'Office Supplies':       ['Office Supplies', 'Supplies'],
-  'Professional Fees':     ['Legal Fees', 'Accounting & Tax Preparation', 'Professional Services — Other', 'Professional Fees', 'Legal & Professional'],
-  'Rent':                  ['Rent — Office / Workspace', 'Rent', 'Rent Expense', 'Office Rent'],
-  'Software':              ['Software & Subscriptions', 'Software', 'Subscriptions'],
-  'Travel':                ['Travel — Airfare', 'Travel — Lodging', 'Travel & Meals', 'Travel', 'Travel Expense'],
-  'Utilities':             ['Utilities — Electric', 'Utilities — Telephone / Internet', 'Utilities', 'Utility Expense'],
-  'Depreciation':          ['Depreciation Expense', 'Section 179 Expense', 'Amortization Expense'],
-  'Meals':                 ['Meals — Business (50% deductible)', 'Meals', 'Business Meals'],
-  'Vehicle':               ['Vehicle Expense', 'Auto Expense', 'Mileage'],
-  'Repairs':               ['Repairs & Maintenance', 'Repairs', 'Maintenance'],
-  'Interest':              ['Interest — Other Business Loans', 'Interest Expense', 'Loan Interest'],
-  'Taxes':                 ['Taxes — Business License & Permits', 'Taxes — Property', 'Business Taxes'],
-  'Education':             ['Education & Training', 'Training', 'Professional Development'],
-  'Dues':                  ['Dues & Memberships', 'Memberships', 'Professional Dues'],
-  'Bad Debts':             ['Bad Debts', 'Bad Debt Expense', 'Uncollectible Accounts'],
-  'Shipping':              ['Postage & Shipping', 'Shipping', 'Postage', 'Freight'],
-  'Processing Fees':       ['Stripe Processing Fees', 'Credit Card Processing Fees', 'Payment Processing'],
+  Cash: ['Cash', 'Checking Account', 'Bank Account'],
+  Receivable: ['Accounts Receivable', 'Trade Receivable', 'A/R'],
+  Payable: ['Accounts Payable', 'Trade Payable', 'A/P'],
+  'Wages Expense': [
+    'Wages & Salaries',
+    'Payroll Expense',
+    'Wages Expense',
+    'Salary Expense',
+    'Wage Expense',
+  ],
+  'Wages Payable': ['Payroll Liabilities', 'Wages Payable', 'Salary Payable', 'Payroll Payable'],
+  'Federal Withholding': [
+    'Federal Tax Payable',
+    'Federal Withholding',
+    'Federal Income Tax Payable',
+  ],
+  'State Withholding': ['State Tax Payable', 'State Withholding', 'State Income Tax Payable'],
+  'Social Security Payable': [
+    'Payroll Liabilities',
+    'Social Security Payable',
+    'FICA Payable',
+    'Payroll Tax Expense — FICA',
+  ],
+  'Medicare Payable': [
+    'Payroll Liabilities',
+    'Medicare Payable',
+    'FICA Payable',
+    'Payroll Tax Expense — FICA',
+  ],
+  'FUTA Payable': [
+    'Payroll Liabilities',
+    'FUTA Payable',
+    'Payroll Tax Expense — FUTA',
+    'Federal Unemployment Payable',
+  ],
+  'SUI Payable': [
+    'Payroll Liabilities',
+    'SUI Payable',
+    'SUTA Payable',
+    'State Unemployment Payable',
+    'Payroll Tax Expense — SUTA',
+  ],
+  Revenue: [
+    'Service Revenue',
+    'Sales Revenue',
+    'Revenue',
+    'Consulting Revenue',
+    'Project Revenue',
+    'Income',
+  ],
+  Expense: [
+    'Cost of Services',
+    'Cost of Goods Sold',
+    'Office Supplies',
+    'Miscellaneous Expense',
+    'General Expense',
+    'Operating Expense',
+  ],
+  Advertising: ['Advertising & Marketing', 'Marketing', 'Advertising'],
+  'Bank Fees': ['Bank Fees & Service Charges', 'Bank Fees', 'Bank Charges', 'Service Charges'],
+  Contractors: ['Contract Labor', 'Contractors', 'Subcontractors'],
+  Insurance: ['Insurance — General Liability', 'Insurance', 'Business Insurance'],
+  'Office Supplies': ['Office Supplies', 'Supplies'],
+  'Professional Fees': [
+    'Legal Fees',
+    'Accounting & Tax Preparation',
+    'Professional Services — Other',
+    'Professional Fees',
+    'Legal & Professional',
+  ],
+  Rent: ['Rent — Office / Workspace', 'Rent', 'Rent Expense', 'Office Rent'],
+  Software: ['Software & Subscriptions', 'Software', 'Subscriptions'],
+  Travel: ['Travel — Airfare', 'Travel — Lodging', 'Travel & Meals', 'Travel', 'Travel Expense'],
+  Utilities: [
+    'Utilities — Electric',
+    'Utilities — Telephone / Internet',
+    'Utilities',
+    'Utility Expense',
+  ],
+  Depreciation: ['Depreciation Expense', 'Section 179 Expense', 'Amortization Expense'],
+  Meals: ['Meals — Business (50% deductible)', 'Meals', 'Business Meals'],
+  Vehicle: ['Vehicle Expense', 'Auto Expense', 'Mileage'],
+  Repairs: ['Repairs & Maintenance', 'Repairs', 'Maintenance'],
+  Interest: ['Interest — Other Business Loans', 'Interest Expense', 'Loan Interest'],
+  Taxes: ['Taxes — Business License & Permits', 'Taxes — Property', 'Business Taxes'],
+  Education: ['Education & Training', 'Training', 'Professional Development'],
+  Dues: ['Dues & Memberships', 'Memberships', 'Professional Dues'],
+  'Bad Debts': ['Bad Debts', 'Bad Debt Expense', 'Uncollectible Accounts'],
+  Shipping: ['Postage & Shipping', 'Shipping', 'Postage', 'Freight'],
+  'Processing Fees': [
+    'Stripe Processing Fees',
+    'Credit Card Processing Fees',
+    'Payment Processing',
+  ],
 };
 
 const ACCOUNT_TYPE_FALLBACK: Record<string, { type: string; subtype?: string }> = {
-  'Cash':                  { type: 'asset', subtype: 'current' },
-  'Receivable':            { type: 'asset', subtype: 'current' },
-  'Payable':               { type: 'liability', subtype: 'current' },
-  'Wages Expense':         { type: 'expense', subtype: 'payroll' },
-  'Wages Payable':         { type: 'liability', subtype: 'current' },
-  'Federal Withholding':   { type: 'liability', subtype: 'current' },
-  'State Withholding':     { type: 'liability', subtype: 'current' },
+  Cash: { type: 'asset', subtype: 'current' },
+  Receivable: { type: 'asset', subtype: 'current' },
+  Payable: { type: 'liability', subtype: 'current' },
+  'Wages Expense': { type: 'expense', subtype: 'payroll' },
+  'Wages Payable': { type: 'liability', subtype: 'current' },
+  'Federal Withholding': { type: 'liability', subtype: 'current' },
+  'State Withholding': { type: 'liability', subtype: 'current' },
   'Social Security Payable': { type: 'liability', subtype: 'current' },
-  'Medicare Payable':      { type: 'liability', subtype: 'current' },
-  'FUTA Payable':          { type: 'liability', subtype: 'current' },
-  'SUI Payable':           { type: 'liability', subtype: 'current' },
+  'Medicare Payable': { type: 'liability', subtype: 'current' },
+  'FUTA Payable': { type: 'liability', subtype: 'current' },
+  'SUI Payable': { type: 'liability', subtype: 'current' },
   'Pre-tax Deductions Payable': { type: 'liability', subtype: 'current' },
   'Post-tax Deductions Payable': { type: 'liability', subtype: 'current' },
-  'Revenue':               { type: 'revenue' },
-  'Expense':               { type: 'expense', subtype: 'operating' },
-  'Advertising':           { type: 'expense', subtype: 'operating' },
-  'Bank Fees':             { type: 'expense', subtype: 'operating' },
-  'Contractors':           { type: 'expense', subtype: 'operating' },
-  'Insurance':             { type: 'expense', subtype: 'operating' },
-  'Office Supplies':       { type: 'expense', subtype: 'operating' },
-  'Professional Fees':     { type: 'expense', subtype: 'operating' },
-  'Rent':                  { type: 'expense', subtype: 'operating' },
-  'Software':              { type: 'expense', subtype: 'operating' },
-  'Travel':                { type: 'expense', subtype: 'operating' },
-  'Utilities':             { type: 'expense', subtype: 'operating' },
-  'Depreciation':          { type: 'expense', subtype: 'operating' },
-  'Meals':                 { type: 'expense', subtype: 'operating' },
-  'Vehicle':               { type: 'expense', subtype: 'operating' },
-  'Repairs':               { type: 'expense', subtype: 'operating' },
-  'Interest':              { type: 'expense', subtype: 'operating' },
-  'Taxes':                 { type: 'expense', subtype: 'taxes' },
-  'Education':             { type: 'expense', subtype: 'operating' },
-  'Dues':                  { type: 'expense', subtype: 'operating' },
-  'Bad Debts':             { type: 'expense', subtype: 'other' },
-  'Shipping':              { type: 'expense', subtype: 'operating' },
-  'Processing Fees':       { type: 'expense', subtype: 'operating' },
+  Revenue: { type: 'revenue' },
+  Expense: { type: 'expense', subtype: 'operating' },
+  Advertising: { type: 'expense', subtype: 'operating' },
+  'Bank Fees': { type: 'expense', subtype: 'operating' },
+  Contractors: { type: 'expense', subtype: 'operating' },
+  Insurance: { type: 'expense', subtype: 'operating' },
+  'Office Supplies': { type: 'expense', subtype: 'operating' },
+  'Professional Fees': { type: 'expense', subtype: 'operating' },
+  Rent: { type: 'expense', subtype: 'operating' },
+  Software: { type: 'expense', subtype: 'operating' },
+  Travel: { type: 'expense', subtype: 'operating' },
+  Utilities: { type: 'expense', subtype: 'operating' },
+  Depreciation: { type: 'expense', subtype: 'operating' },
+  Meals: { type: 'expense', subtype: 'operating' },
+  Vehicle: { type: 'expense', subtype: 'operating' },
+  Repairs: { type: 'expense', subtype: 'operating' },
+  Interest: { type: 'expense', subtype: 'operating' },
+  Taxes: { type: 'expense', subtype: 'taxes' },
+  Education: { type: 'expense', subtype: 'operating' },
+  Dues: { type: 'expense', subtype: 'operating' },
+  'Bad Debts': { type: 'expense', subtype: 'other' },
+  Shipping: { type: 'expense', subtype: 'operating' },
+  'Processing Fees': { type: 'expense', subtype: 'operating' },
 };
 
 function findAccount(dbInstance: any, companyId: string, nameHint: string): string | null {
@@ -170,29 +241,37 @@ function findAccount(dbInstance: any, companyId: string, nameHint: string): stri
   const typeFilter = expectedType ? ` AND type = '${expectedType}'` : '';
 
   // Strategy 1: Exact name match (type-filtered if known)
-  let acct = dbInstance.prepare(
-    `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ?${typeFilter} LIMIT 1`
-  ).get(companyId, nameHint) as any;
+  let acct = dbInstance
+    .prepare(
+      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ?${typeFilter} LIMIT 1`,
+    )
+    .get(companyId, nameHint);
   if (acct) return acct.id;
 
   // Strategy 1b: Exact name match without type filter
   if (typeFilter) {
-    acct = dbInstance.prepare(
-      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ? LIMIT 1`
-    ).get(companyId, nameHint) as any;
+    acct = dbInstance
+      .prepare(
+        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ? LIMIT 1`,
+      )
+      .get(companyId, nameHint);
     if (acct) return acct.id;
   }
 
   // Strategy 2: LIKE match (type-filtered to prevent cross-type matches like "Prepaid Expenses" for expense hint)
   if (typeFilter) {
-    acct = dbInstance.prepare(
-      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ?${typeFilter} ORDER BY code LIMIT 1`
-    ).get(companyId, `%${nameHint}%`) as any;
+    acct = dbInstance
+      .prepare(
+        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ?${typeFilter} ORDER BY code LIMIT 1`,
+      )
+      .get(companyId, `%${nameHint}%`);
     if (acct) return acct.id;
   } else {
-    acct = dbInstance.prepare(
-      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? ORDER BY code LIMIT 1`
-    ).get(companyId, `%${nameHint}%`) as any;
+    acct = dbInstance
+      .prepare(
+        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? ORDER BY code LIMIT 1`,
+      )
+      .get(companyId, `%${nameHint}%`);
     if (acct) return acct.id;
   }
 
@@ -200,15 +279,19 @@ function findAccount(dbInstance: any, companyId: string, nameHint: string): stri
   const aliases = ACCOUNT_ALIASES[nameHint];
   if (aliases) {
     for (const alias of aliases) {
-      acct = dbInstance.prepare(
-        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ? LIMIT 1`
-      ).get(companyId, alias) as any;
+      acct = dbInstance
+        .prepare(
+          `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name = ? LIMIT 1`,
+        )
+        .get(companyId, alias);
       if (acct) return acct.id;
     }
     for (const alias of aliases) {
-      acct = dbInstance.prepare(
-        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? ORDER BY code LIMIT 1`
-      ).get(companyId, `%${alias}%`) as any;
+      acct = dbInstance
+        .prepare(
+          `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND name LIKE ? ORDER BY code LIMIT 1`,
+        )
+        .get(companyId, `%${alias}%`);
       if (acct) return acct.id;
     }
   }
@@ -218,15 +301,19 @@ function findAccount(dbInstance: any, companyId: string, nameHint: string): stri
   if (fallback) {
     // Try with subtype first
     if (fallback.subtype) {
-      acct = dbInstance.prepare(
-        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? AND subtype = ? ORDER BY code LIMIT 1`
-      ).get(companyId, fallback.type, fallback.subtype) as any;
+      acct = dbInstance
+        .prepare(
+          `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? AND subtype = ? ORDER BY code LIMIT 1`,
+        )
+        .get(companyId, fallback.type, fallback.subtype);
       if (acct) return acct.id;
     }
     // Then try any account of that type
-    acct = dbInstance.prepare(
-      `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? ORDER BY code LIMIT 1`
-    ).get(companyId, fallback.type) as any;
+    acct = dbInstance
+      .prepare(
+        `SELECT id FROM accounts WHERE company_id = ? AND is_active = 1 AND type = ? ORDER BY code LIMIT 1`,
+      )
+      .get(companyId, fallback.type);
     if (acct) return acct.id;
   }
 
@@ -241,10 +328,10 @@ function postJournalEntry(
   companyId: string,
   date: string,
   description: string,
-  lines: Array<{ nameHint: string; debit: number; credit: number; note?: string }>
+  lines: Array<{ nameHint: string; debit: number; credit: number; note?: string }>,
 ): void {
   // Skip lines with zero amounts
-  const nonZero = lines.filter(l => l.debit > 0 || l.credit > 0);
+  const nonZero = lines.filter((l) => l.debit > 0 || l.credit > 0);
   if (nonZero.length === 0) return;
 
   const resolved: Array<{ accountId: string; debit: number; credit: number; note: string }> = [];
@@ -254,7 +341,9 @@ function postJournalEntry(
       // SAFETY: a missing account means the entry would be silently dropped,
       // which surfaces upstream as "saved but no ledger record." Log so we
       // can spot the missing-account case in the console.
-      console.warn(`[postJournalEntry] Could not resolve account for nameHint="${line.nameHint}". Skipping entire JE.`);
+      console.warn(
+        `[postJournalEntry] Could not resolve account for nameHint="${line.nameHint}". Skipping entire JE.`,
+      );
       return;
     }
     resolved.push({ accountId, debit: line.debit, credit: line.credit, note: line.note ?? '' });
@@ -268,9 +357,15 @@ function postJournalEntry(
   const totalDebit = Math.round(resolved.reduce((s, l) => s + (l.debit || 0), 0) * 100) / 100;
   const totalCredit = Math.round(resolved.reduce((s, l) => s + (l.credit || 0), 0) * 100) / 100;
   if (Math.abs(totalDebit - totalCredit) > 0.005) {
-    const lineSummary = resolved.map((l, i) => `  line ${i}: debit=${l.debit.toFixed(2)} credit=${l.credit.toFixed(2)}`).join('\n');
-    console.error(`[postJournalEntry] Unbalanced JE rejected before insert:\n  description="${description}"\n  total_debit=${totalDebit.toFixed(2)} total_credit=${totalCredit.toFixed(2)} diff=${(totalDebit - totalCredit).toFixed(4)}\n${lineSummary}`);
-    throw new Error(`Journal entry unbalanced: debits ${totalDebit.toFixed(2)} ≠ credits ${totalCredit.toFixed(2)} (diff ${(totalDebit - totalCredit).toFixed(2)}). Source: "${description}"`);
+    const lineSummary = resolved
+      .map((l, i) => `  line ${i}: debit=${l.debit.toFixed(2)} credit=${l.credit.toFixed(2)}`)
+      .join('\n');
+    console.error(
+      `[postJournalEntry] Unbalanced JE rejected before insert:\n  description="${description}"\n  total_debit=${totalDebit.toFixed(2)} total_credit=${totalCredit.toFixed(2)} diff=${(totalDebit - totalCredit).toFixed(4)}\n${lineSummary}`,
+    );
+    throw new Error(
+      `Journal entry unbalanced: debits ${totalDebit.toFixed(2)} ≠ credits ${totalCredit.toFixed(2)} (diff ${(totalDebit - totalCredit).toFixed(2)}). Source: "${description}"`,
+    );
   }
   // Round each line to cents to match the totals we just validated.
   for (const l of resolved) {
@@ -280,10 +375,12 @@ function postJournalEntry(
 
   // Find the highest entry number by extracting the numeric suffix.
   // Cannot rely on created_at (same timestamp during bulk operations like gl:rebuild).
-  const lastJE = (dbInstance as any).prepare(
-    `SELECT entry_number FROM journal_entries WHERE company_id = ?
-     ORDER BY CAST(SUBSTR(entry_number, INSTR(entry_number, '-') + 1) AS INTEGER) DESC LIMIT 1`
-  ).get(companyId) as any;
+  const lastJE = (dbInstance as any)
+    .prepare(
+      `SELECT entry_number FROM journal_entries WHERE company_id = ?
+     ORDER BY CAST(SUBSTR(entry_number, INSTR(entry_number, '-') + 1) AS INTEGER) DESC LIMIT 1`,
+    )
+    .get(companyId);
   let nextNum = 'JE-1001';
   if (lastJE?.entry_number) {
     const m = lastJE.entry_number.match(/(\d+)$/);
@@ -298,54 +395,135 @@ function postJournalEntry(
   // don't fire on the first line insert (which would see an unbalanced
   // single-sided entry). All lines are inserted first, then is_posted is
   // flipped to 1, which triggers trg_je_balanced_on_post to validate balance.
-  (dbInstance as any).prepare(`
+  (dbInstance as any)
+    .prepare(
+      `
     INSERT INTO journal_entries (id, company_id, entry_number, date, description, is_posted)
     VALUES (?, ?, ?, ?, ?, 0)
-  `).run(jeId, companyId, nextNum, date, description);
+  `,
+    )
+    .run(jeId, companyId, nextNum, date, description);
 
   for (const line of resolved) {
-    (dbInstance as any).prepare(`
+    (dbInstance as any)
+      .prepare(
+        `
       INSERT INTO journal_entry_lines (id, journal_entry_id, account_id, debit, credit, description)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(uuid(), jeId, line.accountId, line.debit, line.credit, line.note);
+    `,
+      )
+      .run(uuid(), jeId, line.accountId, line.debit, line.credit, line.note);
   }
 
-  (dbInstance as any).prepare(`
+  (dbInstance as any)
+    .prepare(
+      `
     UPDATE journal_entries SET is_posted = 1 WHERE id = ?
-  `).run(jeId);
+  `,
+    )
+    .run(jeId);
 }
 
 const VALID_TABLES = new Set([
-  'invoices', 'invoice_line_items', 'expenses', 'expense_line_items',
-  'clients', 'vendors', 'accounts', 'journal_entries', 'journal_entry_lines',
-  'projects', 'employees', 'employee_deductions', 'time_entries',
-  'categories', 'payments', 'budgets', 'budget_lines',
-  'bank_accounts', 'bank_transactions', 'bank_reconciliation_matches',
-  'documents', 'recurring_templates', 'tax_categories', 'tax_payments',
-  'inventory_items', 'inventory_movements', 'quotes', 'quote_line_items',
-  'quote_activity_log', 'quote_templates',
-  'bills', 'bill_line_items', 'bill_payments', 'purchase_orders', 'po_line_items',
-  'fixed_assets', 'asset_depreciation_entries',
-  'debts', 'debt_contacts', 'debt_communications', 'debt_payments',
-  'debt_pipeline_stages', 'debt_evidence', 'debt_legal_actions',
-  'debt_notes', 'debt_promises', 'debt_payment_plans', 'debt_plan_installments',
-  'debt_settlements', 'debt_compliance_log', 'debt_disputes', 'debt_audit_log',
-  'debt_payment_matches', 'debt_automation_rules', 'debt_templates',
-  'companies', 'users', 'user_companies', 'settings', 'notifications',
-  'audit_log', 'email_log', 'stripe_transactions',
-  'invoice_settings', 'invoice_catalog_items', 'invoice_reminders',
-  'invoice_payment_schedule', 'invoice_tokens', 'invoice_debt_links',
-  'client_contacts', 'credit_notes', 'credit_note_items',
-  'rules', 'rule_logs', 'saved_views', 'custom_field_defs',
-  'payroll_runs', 'pay_stubs', 'federal_payroll_constants',
-  'employee_equipment', 'equipment_penalties', 'employee_credentials',
-  'employee_checklist_items', 'employee_reviews', 'employee_disciplinary',
-  'pto_policies', 'pto_balances', 'pto_transactions', 'departments',
-  'state_tax_brackets', 'approval_queue',
+  'invoices',
+  'invoice_line_items',
+  'expenses',
+  'expense_line_items',
+  'clients',
+  'vendors',
+  'accounts',
+  'journal_entries',
+  'journal_entry_lines',
+  'projects',
+  'employees',
+  'employee_deductions',
+  'time_entries',
+  'categories',
+  'payments',
+  'budgets',
+  'budget_lines',
+  'bank_accounts',
+  'bank_transactions',
+  'bank_reconciliation_matches',
+  'documents',
+  'recurring_templates',
+  'tax_categories',
+  'tax_payments',
+  'inventory_items',
+  'inventory_movements',
+  'quotes',
+  'quote_line_items',
+  'quote_activity_log',
+  'quote_templates',
+  'bills',
+  'bill_line_items',
+  'bill_payments',
+  'purchase_orders',
+  'po_line_items',
+  'fixed_assets',
+  'asset_depreciation_entries',
+  'debts',
+  'debt_contacts',
+  'debt_communications',
+  'debt_payments',
+  'debt_pipeline_stages',
+  'debt_evidence',
+  'debt_legal_actions',
+  'debt_notes',
+  'debt_promises',
+  'debt_payment_plans',
+  'debt_plan_installments',
+  'debt_settlements',
+  'debt_compliance_log',
+  'debt_disputes',
+  'debt_audit_log',
+  'debt_payment_matches',
+  'debt_automation_rules',
+  'debt_templates',
+  'companies',
+  'users',
+  'user_companies',
+  'settings',
+  'notifications',
+  'audit_log',
+  'email_log',
+  'stripe_transactions',
+  'invoice_settings',
+  'invoice_catalog_items',
+  'invoice_reminders',
+  'invoice_payment_schedule',
+  'invoice_tokens',
+  'invoice_debt_links',
+  'client_contacts',
+  'credit_notes',
+  'credit_note_items',
+  'rules',
+  'rule_logs',
+  'saved_views',
+  'custom_field_defs',
+  'payroll_runs',
+  'pay_stubs',
+  'federal_payroll_constants',
+  'employee_equipment',
+  'equipment_penalties',
+  'employee_credentials',
+  'employee_checklist_items',
+  'employee_reviews',
+  'employee_disciplinary',
+  'pto_policies',
+  'pto_balances',
+  'pto_transactions',
+  'departments',
+  'state_tax_brackets',
+  'approval_queue',
   'je_comments',
   // Workflow + numbering + email templates (2026-04-23)
-  'custom_statuses', 'status_transitions', 'entity_status_history',
-  'number_sequences', 'email_templates', 'email_template_history',
+  'custom_statuses',
+  'status_transitions',
+  'entity_status_history',
+  'number_sequences',
+  'email_templates',
+  'email_template_history',
   'email_schedules',
 ]);
 
@@ -366,7 +544,11 @@ const PROTECTED_TABLES = new Set(['users']);
 // Each entry returns SQL statements to run BEFORE the parent delete.
 const cleanupReferencesBeforeDelete = (table: string, id: string): void => {
   const dbI = db.getDb();
-  const run = (sql: string) => { try { dbI.prepare(sql).run(id); } catch {} };
+  const run = (sql: string) => {
+    try {
+      dbI.prepare(sql).run(id);
+    } catch {}
+  };
   switch (table) {
     case 'invoices':
       // Delete payments (NOT NULL FK — can't null it)
@@ -409,11 +591,17 @@ const cleanupReferencesBeforeDelete = (table: string, id: string): void => {
       // pay_stubs has FK without cascade — but deleting an employee with
       // pay history would be destructive. Block with clear error if any.
       try {
-        const stubs = dbI.prepare(`SELECT COUNT(*) as c FROM pay_stubs WHERE employee_id = ?`).get(id) as any;
+        const stubs = dbI
+          .prepare(`SELECT COUNT(*) as c FROM pay_stubs WHERE employee_id = ?`)
+          .get(id) as any;
         if (stubs?.c > 0) {
-          throw new Error(`Cannot delete employee with ${stubs.c} pay stub(s). Mark inactive instead.`);
+          throw new Error(
+            `Cannot delete employee with ${stubs.c} pay stub(s). Mark inactive instead.`,
+          );
         }
-      } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
+      } catch (e: any) {
+        if (e.message?.includes('Cannot delete')) throw e;
+      }
       break;
     case 'bills':
       run(`DELETE FROM bill_payments WHERE bill_id = ?`);
@@ -446,33 +634,53 @@ const cleanupReferencesBeforeDelete = (table: string, id: string): void => {
     case 'accounts':
       // Accounts can't be deleted if they have journal entries — block
       try {
-        const lines = dbI.prepare(`SELECT COUNT(*) as c FROM journal_entry_lines WHERE account_id = ?`).get(id) as any;
+        const lines = dbI
+          .prepare(`SELECT COUNT(*) as c FROM journal_entry_lines WHERE account_id = ?`)
+          .get(id) as any;
         if (lines?.c > 0) {
-          throw new Error(`Cannot delete account with ${lines.c} journal entry line(s). Use soft delete (mark inactive) instead.`);
+          throw new Error(
+            `Cannot delete account with ${lines.c} journal entry line(s). Use soft delete (mark inactive) instead.`,
+          );
         }
-      } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
+      } catch (e: any) {
+        if (e.message?.includes('Cannot delete')) throw e;
+      }
       break;
     case 'departments':
       // Departments can't be deleted while employees are still assigned — block
       try {
-        const assigned = dbI.prepare(`SELECT COUNT(*) as c FROM employees WHERE department_id = ?`).get(id) as any;
+        const assigned = dbI
+          .prepare(`SELECT COUNT(*) as c FROM employees WHERE department_id = ?`)
+          .get(id) as any;
         if (assigned?.c > 0) {
-          throw new Error(`Cannot delete department with ${assigned.c} employee(s) assigned. Reassign them first.`);
+          throw new Error(
+            `Cannot delete department with ${assigned.c} employee(s) assigned. Reassign them first.`,
+          );
         }
-      } catch (e: any) { if (e.message?.includes('Cannot delete')) throw e; }
+      } catch (e: any) {
+        if (e.message?.includes('Cannot delete')) throw e;
+      }
       break;
   }
 };
 
 // Returns the active closed period covering the given date, or null.
-function findClosedPeriod(companyId: string, date: string): { id: string; period_start: string; period_end: string; close_reason: string } | null {
+function findClosedPeriod(
+  companyId: string,
+  date: string,
+): { id: string; period_start: string; period_end: string; close_reason: string } | null {
   if (!companyId || !date) return null;
   try {
-    return db.getDb().prepare(
-      "SELECT id, period_start, period_end, close_reason FROM closed_periods " +
-      "WHERE company_id = ? AND is_active = 1 AND period_start <= ? AND period_end >= ? LIMIT 1"
-    ).get(companyId, date, date) as any;
-  } catch { return null; }
+    return db
+      .getDb()
+      .prepare(
+        'SELECT id, period_start, period_end, close_reason FROM closed_periods ' +
+          'WHERE company_id = ? AND is_active = 1 AND period_start <= ? AND period_end >= ? LIMIT 1',
+      )
+      .get(companyId, date, date) as any;
+  } catch {
+    return null;
+  }
 }
 
 function isRawQueryAllowed(sql: string): { ok: boolean; reason?: string } {
@@ -491,16 +699,26 @@ function isRawQueryAllowed(sql: string): { ok: boolean; reason?: string } {
   const FORBIDDEN = /\b(DROP|ALTER|CREATE|ATTACH|DETACH|PRAGMA|VACUUM|REINDEX|TRUNCATE)\b/;
   if (FORBIDDEN.test(head)) return { ok: false, reason: 'Forbidden SQL verb' };
   const ALLOWED_LEAD = /^(SELECT|WITH|INSERT|UPDATE|DELETE|REPLACE)\b/;
-  if (!ALLOWED_LEAD.test(head)) return { ok: false, reason: 'Only SELECT/WITH/INSERT/UPDATE/DELETE/REPLACE allowed' };
+  if (!ALLOWED_LEAD.test(head))
+    return { ok: false, reason: 'Only SELECT/WITH/INSERT/UPDATE/DELETE/REPLACE allowed' };
   // SECURITY: Block writes to credential tables and *modifications* to
   // audit tables via raw SQL. INSERT/DELETE on audit_log remain permitted
   // so legitimate flows (logging new events, full company wipe) work, but
   // UPDATE/REPLACE would let the renderer alter audit history in place.
-  if (/^(UPDATE|REPLACE)\b/.test(head) && /\b(users|audit_log|debt_audit_log|debt_compliance_log)\b/.test(head)) {
-    return { ok: false, reason: 'UPDATE/REPLACE on credential/audit tables not allowed via raw SQL' };
+  if (
+    /^(UPDATE|REPLACE)\b/.test(head) &&
+    /\b(users|audit_log|debt_audit_log|debt_compliance_log)\b/.test(head)
+  ) {
+    return {
+      ok: false,
+      reason: 'UPDATE/REPLACE on credential/audit tables not allowed via raw SQL',
+    };
   }
   if (/^(INSERT|DELETE)\b/.test(head) && /\busers\b/.test(head)) {
-    return { ok: false, reason: 'INSERT/DELETE on users not allowed via raw SQL — use auth handlers' };
+    return {
+      ok: false,
+      reason: 'INSERT/DELETE on users not allowed via raw SQL — use auth handlers',
+    };
   }
   return { ok: true };
 }
@@ -514,8 +732,11 @@ function buildInvoiceMetadata(invoice: any, company: any, client: any): PDFMetad
   const cur = (invoice?.currency || 'USD').toUpperCase();
   const total = Number(invoice?.total ?? invoice?.total_amount ?? 0);
   const totalStr = (() => {
-    try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(total); }
-    catch { return `${cur} ${total.toFixed(2)}`; }
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(total);
+    } catch {
+      return `${cur} ${total.toFixed(2)}`;
+    }
   })();
   const due = invoice?.due_date || '';
   const isCredit = invoice?.invoice_type === 'credit_note';
@@ -542,8 +763,11 @@ function buildBillMetadata(bill: any, company: any, vendor: any): PDFMetadata {
   const cur = (bill?.currency || 'USD').toUpperCase();
   const total = Number(bill?.total ?? 0);
   const totalStr = (() => {
-    try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(total); }
-    catch { return `${cur} ${total.toFixed(2)}`; }
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(total);
+    } catch {
+      return `${cur} ${total.toFixed(2)}`;
+    }
   })();
   return {
     title: `Bill ${num}${vendor?.name ? ' — ' + vendor.name : ''}`,
@@ -566,6 +790,55 @@ function buildPOMetadata(po: any, company: any, vendor: any): PDFMetadata {
   };
 }
 
+// Coalesce rapid re-index calls per (table,id) onto a microtask-ish timer so
+// bulk writes don't thrash FTS. Best-effort; never throws into the write path.
+const reindexTimers = new Map<string, NodeJS.Timeout>();
+export function scheduleReindex(table: string, id: string, op: 'upsert' | 'delete'): void {
+  if (!INDEXED_TABLES.has(table)) return;
+  const key = `${table}:${id}`;
+  const existing = reindexTimers.get(key);
+  if (existing) clearTimeout(existing);
+  reindexTimers.set(
+    key,
+    setTimeout(() => {
+      reindexTimers.delete(key);
+      try {
+        const d = db.getDb();
+        if (op === 'delete') removeFromIndex(d, table, id);
+        else reindexEntity(d, table, id);
+      } catch (e) {
+        console.warn('[search-index] reindex failed', table, id, e);
+      }
+    }, 150),
+  );
+}
+
+// ─── Audit Log Helper ──────────────────────────────────
+// Immutable chain-of-custody logging. Called by every debt-mutating handler.
+// MUST NEVER throw — audit is a side-effect, not a gate.
+export function logDebtAudit(
+  debtId: string,
+  action: string,
+  fieldName: string = '',
+  oldValue: string = '',
+  newValue: string = '',
+  performedBy: string = 'user',
+): void {
+  try {
+    const dbInstance = db.getDb();
+    dbInstance
+      .prepare(
+        `
+      INSERT INTO debt_audit_log (id, debt_id, action, field_name, old_value, new_value, performed_by, performed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `,
+      )
+      .run(uuid(), debtId, action, fieldName, oldValue, newValue, performedBy);
+  } catch (_) {
+    /* audit logging must never crash the primary operation */
+  }
+}
+
 export function createIpcDeps(): IpcDeps {
   return Object.freeze({
     scheduleAutoBackup,
@@ -582,5 +855,7 @@ export function createIpcDeps(): IpcDeps {
     buildPOMetadata,
     VALID_TABLES,
     PROTECTED_TABLES,
+    scheduleReindex,
+    logDebtAudit,
   });
 }
