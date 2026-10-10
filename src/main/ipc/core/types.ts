@@ -61,6 +61,8 @@ export interface IpcDeps {
     entityType: string,
     entityId: string,
   ): Record<string, any>;
+  getPortalExpiryDays(companyId: string): number;
+  eu(): any;
   VALID_TABLES: Set<string>;
   PROTECTED_TABLES: Set<string>;
 }

@@ -1769,6 +1769,29 @@ export function buildTemplateContext(
   return ctx;
 }
 
+// ─── Invoice Portal Token ──────────────────────────────
+// PORTAL: token-expiry default is configurable via the
+// `portal_token_expiry_days` setting (per-company). Falls back to 90.
+// Settings UI may write any positive integer; we clamp to [1, 3650]
+// to keep the math finite. Document this key alongside SYNC_SERVER.
+function getPortalExpiryDays(companyId: string): number {
+  try {
+    const row = db
+      .getDb()
+      .prepare(
+        "SELECT value FROM settings WHERE company_id = ? AND key = 'portal_token_expiry_days'",
+      )
+      .get(companyId) as any;
+    const v = parseInt(row?.value ?? '', 10);
+    if (Number.isFinite(v) && v > 0) return Math.min(v, 3650);
+  } catch {
+    /* fall through */
+  }
+  return 90;
+}
+
+export const eu = () => require('../../services/expense-upgrades-features');
+
 export function createIpcDeps(): IpcDeps {
   return Object.freeze({
     scheduleAutoBackup,
@@ -1792,5 +1815,7 @@ export function createIpcDeps(): IpcDeps {
     ensureDefaultEmailTemplates,
     resolveTemplateTokens,
     buildTemplateContext,
+    getPortalExpiryDays,
+    eu,
   });
 }
