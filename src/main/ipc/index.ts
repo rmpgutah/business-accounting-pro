@@ -20,6 +20,7 @@ import { registerAdminSettingsIpc } from './domains/admin-settings';
 import { registerWorkflowsAutomationIpc } from './domains/workflows-automation';
 import { registerInvoiceExpenseFeaturesFeat } from './feat/invoice-expense-features';
 import { registerBankingPayrollFeaturesFeat } from './feat/banking-payroll-features';
+import { registerReportsAnalyticsFeaturesFeat } from './feat/reports-analytics-features';
 import { registerLoanIpc } from './loans';
 import { registerExpenseDebtIpc } from './expense-debt';
 import { registerHrPortalIpc } from './hr-portal';
@@ -139,21 +140,7 @@ export function registerIpcHandlers(): void {
   registerBankingPayrollFeaturesFeat(ipcMain, deps);
 
   // ─── Batch 4: Reports & Analytics features (10) ───────────────
-  const ra = () => require('../services/reports-analytics-features');
-  ipcMain.handle('feat:report:period-over-period', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ra().periodOverPeriod(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report:top-customers', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ra().topCustomers(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report:clv', (_e, { client_id }: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ra().customerLifetimeValue(cid, client_id); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report:churn-predict', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ra().predictChurn(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report:profit-by-service', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ra().profitMarginByService(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report:dept-pnl', (_e, opts: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ra().departmentPnL(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report:vendor-yoy', (_e, opts: any = {}) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ra().vendorSpendingYoY(cid, opts); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:collection-template:upsert', (_e, t: any) => { try { const cid = db.getCurrentCompanyId(); const r = ra().upsertCollectionTemplate({ ...t, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:collection-template:list', () => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ra().listCollectionTemplates(cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:collection-template:render', (_e, { template, invoice, client }: any) => { try { return ra().generateCollectionEmail(template, invoice, client); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:report:year-end-tax', (_e, { year }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return null; return ra().yearEndTaxSummary(cid, year); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:widgets:list', (_e, { user_id }: any) => { try { const cid = db.getCurrentCompanyId(); if (!cid) return []; return ra().listDashboardWidgets(user_id, cid); } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:widgets:upsert', (_e, w: any) => { try { const cid = db.getCurrentCompanyId(); const r = ra().upsertDashboardWidget({ ...w, company_id: cid }); scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
-  ipcMain.handle('feat:widgets:remove', (_e, { id }: any) => { try { const r = { ok: ra().removeDashboardWidget(id) }; scheduleAutoBackup(); return r; } catch (e: any) { return { error: e?.message }; } });
+  registerReportsAnalyticsFeaturesFeat(ipcMain, deps);
 
   // ─── Batch 5: Client/Vendor/Document features (10) ───────────
   const cvd = () => require('../services/client-vendor-doc-features');
