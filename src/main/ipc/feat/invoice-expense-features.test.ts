@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ipcMain } from 'electron';
 import { createTestDb } from '../../test/createTestDb';
 import { createIpcDeps } from '../core/deps';
-import { registerInvoiceExpenseFeaturesFeat } from './invoice-expense-features';
+import {
+  registerInvoiceExpenseFeaturesFeat,
+  INVOICE_EXPENSE_FEAT as TABLE,
+} from './invoice-expense-features';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 // The mock ipcMain exposes invoke/reset, which the real IpcMain type lacks.
 const ipc = ipcMain as unknown as {
@@ -10,25 +15,12 @@ const ipc = ipcMain as unknown as {
   reset(): void;
 };
 
-const MUTATES = [
-  'feat:invoice:late-fee:apply',
-  'feat:invoice:reminders:schedule',
-  'feat:invoice:reminders:mark-sent',
-  'feat:invoice:recalc-payment-state',
-  'feat:credit-memo:create',
-  'feat:credit-memo:apply',
-  'feat:invoice:templates:upsert',
-  'feat:invoice:exchange-rate',
-  'feat:invoice:deposit',
-  'feat:budget-alert:upsert',
-  'feat:expense:split:create',
-  'feat:reimbursement:create',
-  'feat:reimbursement:approve',
-  'feat:reimbursement:reject',
-  'feat:reimbursement:pay',
-  'feat:per-diem:upsert',
-];
-const READS = ['feat:invoice:late-fee:compute', 'feat:invoice:reminders:pending'];
+const MUTATES = Object.entries(TABLE)
+  .filter(([, e]) => e.mutates)
+  .map(([ch]) => ch);
+const READS = Object.keys(TABLE)
+  .filter((ch) => !TABLE[ch].mutates)
+  .slice(0, 2);
 
 describe('invoice-expense-features feat table', () => {
   const scheduleAutoBackup = vi.fn();
@@ -38,6 +30,12 @@ describe('invoice-expense-features feat table', () => {
     scheduleAutoBackup.mockClear();
     createTestDb();
     registerInvoiceExpenseFeaturesFeat(ipcMain, { ...createIpcDeps(), scheduleAutoBackup });
+  });
+
+  it('derived mutates list is non-empty and matches the source count', () => {
+    const src = readFileSync(join(__dirname, 'invoice-expense-features.ts'), 'utf8');
+    expect(MUTATES.length).toBeGreaterThan(0);
+    expect(MUTATES.length).toBe((src.match(/mutates: true/g) ?? []).length);
   });
 
   it('every mutating entry schedules a backup once per non-error result', async () => {
@@ -57,8 +55,9 @@ describe('invoice-expense-features feat table', () => {
 
   it('read entries do not throw', async () => {
     for (const channel of READS) {
-      await ipc.invoke(channel, {});
-      expect(true).toBe(true);
+      // Reads with a `{}` payload may legitimately return { error }; the invoke must still resolve.
+      const res = await ipc.invoke(channel, {});
+      expect(res, channel).toBeDefined();
     }
   });
 });

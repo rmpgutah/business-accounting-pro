@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ipcMain } from 'electron';
 import { createTestDb } from '../../test/createTestDb';
 import { createIpcDeps } from '../core/deps';
-import { registerReportsAnalyticsFeaturesFeat } from './reports-analytics-features';
+import {
+  registerReportsAnalyticsFeaturesFeat,
+  REPORTS_ANALYTICS_FEAT as TABLE,
+} from './reports-analytics-features';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 // The mock ipcMain exposes invoke/reset, which the real IpcMain type lacks.
 const ipc = ipcMain as unknown as {
@@ -10,8 +15,12 @@ const ipc = ipcMain as unknown as {
   reset(): void;
 };
 
-const MUTATES = ['feat:collection-template:upsert', 'feat:widgets:upsert', 'feat:widgets:remove'];
-const READS = ['feat:report:period-over-period', 'feat:report:top-customers'];
+const MUTATES = Object.entries(TABLE)
+  .filter(([, e]) => e.mutates)
+  .map(([ch]) => ch);
+const READS = Object.keys(TABLE)
+  .filter((ch) => !TABLE[ch].mutates)
+  .slice(0, 2);
 
 describe('reports-analytics-features feat table', () => {
   const scheduleAutoBackup = vi.fn();
@@ -21,6 +30,12 @@ describe('reports-analytics-features feat table', () => {
     scheduleAutoBackup.mockClear();
     createTestDb();
     registerReportsAnalyticsFeaturesFeat(ipcMain, { ...createIpcDeps(), scheduleAutoBackup });
+  });
+
+  it('derived mutates list is non-empty and matches the source count', () => {
+    const src = readFileSync(join(__dirname, 'reports-analytics-features.ts'), 'utf8');
+    expect(MUTATES.length).toBeGreaterThan(0);
+    expect(MUTATES.length).toBe((src.match(/mutates: true/g) ?? []).length);
   });
 
   it('every mutating entry schedules a backup once per non-error result', async () => {
@@ -40,8 +55,9 @@ describe('reports-analytics-features feat table', () => {
 
   it('read entries do not throw', async () => {
     for (const channel of READS) {
-      await ipc.invoke(channel, {});
-      expect(true).toBe(true);
+      // Reads with a `{}` payload may legitimately return { error }; the invoke must still resolve.
+      const res = await ipc.invoke(channel, {});
+      expect(res, channel).toBeDefined();
     }
   });
 });

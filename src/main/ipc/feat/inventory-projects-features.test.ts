@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ipcMain } from 'electron';
 import { createTestDb } from '../../test/createTestDb';
 import { createIpcDeps } from '../core/deps';
-import { registerInventoryProjectsFeaturesFeat } from './inventory-projects-features';
+import {
+  registerInventoryProjectsFeaturesFeat,
+  INVENTORY_PROJECTS_FEAT as TABLE,
+} from './inventory-projects-features';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 // The mock ipcMain exposes invoke/reset, which the real IpcMain type lacks.
 const ipc = ipcMain as unknown as {
@@ -10,38 +15,12 @@ const ipc = ipcMain as unknown as {
   reset(): void;
 };
 
-const MUTATES = [
-  'feat:stock-take:count',
-  'feat:warehouse:upsert',
-  'feat:location:upsert',
-  'feat:lot:upsert',
-  'feat:serial:upsert',
-  'feat:transfer:create',
-  'feat:transfer:ship',
-  'feat:transfer:receive',
-  'feat:adjustment:create',
-  'feat:adjustment:approve',
-  'feat:stock-take:start',
-  'feat:stock-take:complete',
-  'feat:low-stock:scan',
-  'feat:low-stock:ack',
-  'feat:valuation:set-method',
-  'feat:inv-value:capture',
-  'feat:task:upsert',
-  'feat:task:complete',
-  'feat:milestone:upsert',
-  'feat:resource:upsert',
-  'feat:proj-budget:upsert',
-  'feat:risk:upsert',
-  'feat:co:upsert',
-  'feat:co:approve',
-  'feat:timesheet:open',
-  'feat:timesheet:submit',
-  'feat:timesheet:approve',
-  'feat:billable-summary:rebuild',
-  'feat:profitability:capture',
-];
-const READS = ['feat:warehouse:list', 'feat:location:list'];
+const MUTATES = Object.entries(TABLE)
+  .filter(([, e]) => e.mutates)
+  .map(([ch]) => ch);
+const READS = Object.keys(TABLE)
+  .filter((ch) => !TABLE[ch].mutates)
+  .slice(0, 2);
 
 describe('inventory-projects-features feat table', () => {
   const scheduleAutoBackup = vi.fn();
@@ -51,6 +30,12 @@ describe('inventory-projects-features feat table', () => {
     scheduleAutoBackup.mockClear();
     createTestDb();
     registerInventoryProjectsFeaturesFeat(ipcMain, { ...createIpcDeps(), scheduleAutoBackup });
+  });
+
+  it('derived mutates list is non-empty and matches the source count', () => {
+    const src = readFileSync(join(__dirname, 'inventory-projects-features.ts'), 'utf8');
+    expect(MUTATES.length).toBeGreaterThan(0);
+    expect(MUTATES.length).toBe((src.match(/mutates: true/g) ?? []).length);
   });
 
   it('every mutating entry schedules a backup once per non-error result', async () => {
@@ -70,8 +55,9 @@ describe('inventory-projects-features feat table', () => {
 
   it('read entries do not throw', async () => {
     for (const channel of READS) {
-      await ipc.invoke(channel, {});
-      expect(true).toBe(true);
+      // Reads with a `{}` payload may legitimately return { error }; the invoke must still resolve.
+      const res = await ipc.invoke(channel, {});
+      expect(res, channel).toBeDefined();
     }
   });
 });

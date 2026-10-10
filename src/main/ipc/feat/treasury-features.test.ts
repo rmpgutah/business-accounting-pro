@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ipcMain } from 'electron';
 import { createTestDb } from '../../test/createTestDb';
 import { createIpcDeps } from '../core/deps';
-import { registerTreasuryFeaturesFeat } from './treasury-features';
+import { registerTreasuryFeaturesFeat, TREASURY_FEAT as TABLE } from './treasury-features';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 // The mock ipcMain exposes invoke/reset, which the real IpcMain type lacks.
 const ipc = ipcMain as unknown as {
@@ -10,31 +12,12 @@ const ipc = ipcMain as unknown as {
   reset(): void;
 };
 
-const MUTATES = [
-  'feat:cash-position:capture',
-  'feat:cash-forecast:rebuild',
-  'feat:fx-rate:upsert',
-  'feat:fx-revaluation:run',
-  'feat:wire-transfer:upsert',
-  'feat:ach-batch:create',
-  'feat:ach-batch:mark-submitted',
-  'feat:bank-fee-cat:upsert',
-  'feat:bank-match:log',
-  'feat:stop-payment:upsert',
-  'feat:pending-deposit:upsert',
-  'feat:petty-cash:log',
-  'feat:treasury:upsert',
-  'feat:loc:upsert',
-  'feat:covenant:upsert',
-  'feat:covenant:measure',
-  'feat:sweep:upsert',
-  'feat:inter-co:record',
-  'feat:cc-stmt:upsert',
-  'feat:cc-stmt:add-lines',
-  'feat:lockbox:import',
-  'feat:positive-pay:mark-submitted',
-];
-const READS = ['feat:cash-position:list', 'feat:cash-forecast:get'];
+const MUTATES = Object.entries(TABLE)
+  .filter(([, e]) => e.mutates)
+  .map(([ch]) => ch);
+const READS = Object.keys(TABLE)
+  .filter((ch) => !TABLE[ch].mutates)
+  .slice(0, 2);
 
 describe('treasury-features feat table', () => {
   const scheduleAutoBackup = vi.fn();
@@ -44,6 +27,12 @@ describe('treasury-features feat table', () => {
     scheduleAutoBackup.mockClear();
     createTestDb();
     registerTreasuryFeaturesFeat(ipcMain, { ...createIpcDeps(), scheduleAutoBackup });
+  });
+
+  it('derived mutates list is non-empty and matches the source count', () => {
+    const src = readFileSync(join(__dirname, 'treasury-features.ts'), 'utf8');
+    expect(MUTATES.length).toBeGreaterThan(0);
+    expect(MUTATES.length).toBe((src.match(/mutates: true/g) ?? []).length);
   });
 
   it('every mutating entry schedules a backup once per non-error result', async () => {
@@ -63,8 +52,9 @@ describe('treasury-features feat table', () => {
 
   it('read entries do not throw', async () => {
     for (const channel of READS) {
-      await ipc.invoke(channel, {});
-      expect(true).toBe(true);
+      // Reads with a `{}` payload may legitimately return { error }; the invoke must still resolve.
+      const res = await ipc.invoke(channel, {});
+      expect(res, channel).toBeDefined();
     }
   });
 });
